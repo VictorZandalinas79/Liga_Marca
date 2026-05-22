@@ -1,0 +1,62 @@
+{
+  "version": "1.0",
+  "game_name": "Custom Fantasy Opta",
+  "rules": {
+    "possession_and_passing": {
+      "pass_successful": { "points": 0.05, "typeId": 1, "outcome": 1 },
+      "assist": { "points": 3, "qualifierId": 210 },
+      "fantasy_assist": { "points": 2, "qualifierId": 280 },
+      "big_chance_created": { "points": 2, "qualifierId": 214 },
+      "take_on_successful": { "points": 1, "typeId": 3, "outcome": 1 }
+    },
+    "defense_and_goalkeeper": {
+      "clean_sheet": {
+        "Goalkeeper": 5,
+        "Defender": 4,
+        "Midfielder": 1,
+        "Forward": 0
+      },
+      "goal_conceded": {
+        "Goalkeeper": -1,
+        "Defender": -0.5,
+        "Midfielder": 0,
+        "Forward": 0
+      },
+      "save": { "points": 1, "typeId": 10, "Goalkeeper_only": true },
+      "penalty_save": { "points": 5, "typeId": 58, "qualifierId": 187 },
+      "interception": { "points": 0.5, "typeId": 8 },
+      "tackle_successful": { "points": 0.5, "typeId": 7, "outcome": 1 },
+      "error_leading_to_goal": { "points": -4, "typeId": 51, "qualifierId": 170 },
+      "error_leading_to_shot": { "points": -1, "typeId": 51, "qualifierId": 169 }
+    },
+    "attack_and_goals": {
+      "goal_scored": {
+        "Goalkeeper": 10,
+        "Defender": 6,
+        "Midfielder": 5,
+        "Forward": 4,
+        "typeId": 16
+      },
+      "shot_on_target": { "points": 1, "typeId": 15 },
+      "penalty_missed": { "points": -4, "qualifierId": 9, "outcome": 0 },
+      "own_goal": { "points": -6, "qualifierId": 28 },
+      "penalty_won": { "points": 2, "qualifierId": 9, "foul_won": true }
+    },
+    "discipline": {
+      "yellow_card": { "points": -2, "typeId": 17, "qualifierId": 31 },
+      "second_yellow_card": { "points": -4, "typeId": 17, "qualifierId": 32 },
+      "red_card": { "points": -6, "typeId": 17, "qualifierId": 33 },
+      "foul_committed": { "points": -0.5, "typeId": 4, "outcome": 0 }
+    },
+    "participation": {
+      "starting_eleven": { "points": 2 },
+      "substitute_played": { "points": 1 },
+      "more_than_60_mins": { "points": 1 }
+    },
+    "sanctions_manager": {
+      "empty_position": { "points": -10, "description": "No alinear a nadie en un hueco" },
+      "invalid_formation": { "points": -15, "description": "Formación no permitida" },
+      "negative_balance": { "points": -20, "description": "Estar en números rojos al inicio de jornada" }
+    }
+  }
+}
