@@ -732,7 +732,6 @@
       "shortFirstName": "Víctor",
       "shortLastName": "Muñoz",
       "gender": "Male",
-      "knownName": "Víctor Muñoz",
       "matchName": "Víctor Muñoz",
       "nationality": "Spain",
       "nationalityId": "49ih1pwv3ahshdf8uzrimi54c",
@@ -836,6 +835,7 @@
       "countryOfBirth": "Italy",
       "countryOfBirthId": "25f2cmb2r8mk5rj92tzer6kvv",
       "startDate": "2025-06-23Z",
+      "endDate": "2026-06-30Z",
       "status": "active",
       "active": "yes"
     },

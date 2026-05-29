@@ -801,6 +801,27 @@
       "active": "yes"
     },
     {
+      "id": "d5hiijc9w0pqcl00v411zl5hw",
+      "firstName": "Rúben",
+      "lastName": "Muñoz de Morales Portellano",
+      "shortFirstName": "Rúben",
+      "shortLastName": "Muñoz",
+      "gender": "Male",
+      "knownName": "Rubi",
+      "matchName": "Rúben Muñoz",
+      "nationality": "Spain",
+      "nationalityId": "49ih1pwv3ahshdf8uzrimi54c",
+      "position": "Defender",
+      "type": "player",
+      "dateOfBirth": "2007-03-21",
+      "countryOfBirth": "Spain",
+      "countryOfBirthId": "49ih1pwv3ahshdf8uzrimi54c",
+      "shirtNumber": 44,
+      "startDate": "2026-05-22Z",
+      "status": "active",
+      "active": "yes"
+    },
+    {
       "id": "d6kzekcwqw0q8fq6wt6rmyusq",
       "firstName": "Jesús",
       "lastName": "Vázquez Alcalde",
