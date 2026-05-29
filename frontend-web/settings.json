@@ -1,0 +1,14 @@
+{
+  "active_league": {
+    "id": "34pl8szyvrbwcmfkuocjm3r6t",
+    "name": "LaLiga",
+    "season_name": "2025/2026",
+    "season_id": "80zg2v1cuqcfhphn56u4qpyqc",
+    "is_active": true
+  },
+  "game_rules": {
+    "market_close_before_match_hours": 2,
+    "max_players_per_team": 35,
+    "starting_budget": 20000000
+  }
+}

@@ -1,0 +1,34 @@
+name: Sync Live Matches
+
+on:
+  schedule:
+    # Se ejecuta cada minuto
+    - cron: '* * * * *'
+  workflow_dispatch: # Permite ejecutar manualmente desde la UI de GitHub
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run sync script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SDAPI_OUTLET_KEY: ${{ secrets.SDAPI_OUTLET_KEY }}
+        run: |
+          python .github/scripts/run_sync.py
