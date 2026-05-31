@@ -1,0 +1,198 @@
+{
+    "matchInfo": {
+        "id": "8kmvxdfvwq3sx8hx5cb7qr1g4",
+        "coverageLevel": "13",
+        "date": "2026-05-31Z",
+        "time": "16:30:00Z",
+        "localDate": "2026-05-31",
+        "localTime": "18:30:00",
+        "week": "42",
+        "numberOfPeriods": 2,
+        "periodLength": 45,
+        "var": "1",
+        "lastUpdated": "2026-05-31T16:05:30Z",
+        "description": "Real Zaragoza vs Málaga",
+        "sport": {
+            "id": "289u5typ3vp4ifwh5thalohmq",
+            "name": "Soccer"
+        },
+        "ruleset": {
+            "id": "79plas4983031idr6vw83nuel",
+            "name": "Men"
+        },
+        "competition": {
+            "id": "3is4bkgf3loxv9qfg3hm8zfqb",
+            "name": "Segunda División",
+            "knownName": "Spanish Segunda Division",
+            "sponsorName": "LALIGA HYPERMOTION",
+            "competitionCode": "SED",
+            "competitionFormat": "Domestic league",
+            "country": {
+                "id": "49ih1pwv3ahshdf8uzrimi54c",
+                "name": "Spain"
+            }
+        },
+        "tournamentCalendar": {
+            "id": "dko0hzifl1xv9c51s3ai017v8",
+            "startDate": "2025-08-15Z",
+            "endDate": "2026-06-21Z",
+            "name": "2025/2026"
+        },
+        "stage": {
+            "id": "dlvqwarjddd8xzqli2h7jjcpg",
+            "formatId": "e2q01r9o9jwiq1fls93d1sslx",
+            "startDate": "2025-08-15Z",
+            "endDate": "2026-05-31Z",
+            "name": "Regular Season"
+        },
+        "contestant": [
+            {
+                "id": "6iwco2hhg7gp3bc9ywku4881k",
+                "name": "Real Zaragoza",
+                "shortName": "Zaragoza",
+                "officialName": "Real Zaragoza",
+                "code": "ZAR",
+                "position": "home",
+                "country": {
+                    "id": "49ih1pwv3ahshdf8uzrimi54c",
+                    "name": "Spain"
+                }
+            },
+            {
+                "id": "7012hpp3p5vg4fzyn3h0yvf09",
+                "name": "Málaga",
+                "shortName": "Málaga",
+                "officialName": "Málaga CF",
+                "code": "MAL",
+                "position": "away",
+                "country": {
+                    "id": "49ih1pwv3ahshdf8uzrimi54c",
+                    "name": "Spain"
+                }
+            }
+        ],
+        "venue": {
+            "id": "9312ttjad8o1bk96nv6vlev4k",
+            "neutral": "no",
+            "longName": "Ibercaja Estadio",
+            "shortName": "Ibercaja Estadio",
+            "latitude": "41.684110552",
+            "longitude": "-0.895763242"
+        }
+    },
+    "liveData": {
+        "matchDetails": {
+            "periodId": 16,
+            "matchStatus": "Fixture"
+        },
+        "event": [
+            {
+                "id": 2942949483,
+                "eventId": 1,
+                "typeId": 34,
+                "periodId": 16,
+                "timeMin": 0,
+                "timeSec": 0,
+                "contestantId": "6iwco2hhg7gp3bc9ywku4881k",
+                "outcome": 1,
+                "x": 0.0,
+                "y": 0.0,
+                "timeStamp": "2026-05-31T15:38:25.064Z",
+                "lastModified": "2026-05-31T16:05:24Z",
+                "qualifier": [
+                    {
+                        "id": 6446247861,
+                        "qualifierId": 30,
+                        "value": "9lzyhlz2mc7uwvv9nfcvl2tey, eagjsutb6blv83jcq481xas8a, ebazcy0x20885rn9qx2acoi6s, cqb913d1s6jg6zeeg6z5ypvc9, bddg8dtozkq12fzwiarhxxmok, ezb815xw3yx3r3ey51zovop91, 57zvw9jfkfbk79pzzf35q0e8k, 91te5xuankrla4g3s7as3htxx, czwpkn0tomppb4bdgd2bnb8wl, 30jru4rizkqobfinh8o2jw92h, dfnzcdcgl25zxg2glfzh3mfvt, emx31h94kp3t6c9n5zp6hp6hg, 9mbt2exog9k8qv2lflp4zlm38, 87trgpg0wudq5lkmx6ih67pck, dnsut9o8yr5zt97jyk3wft0d0, a7yukvb2q14p6ssdb1a57twr8, dfytsnxfl78jnug9trsa9qv3d, 2d5q8emajavaqvnofdqrccfoq, 6vvg5on86k2ldhs4pn2kua0vd, 4cdfdxpaa5wilf03zqdm74c0l, 8p18apn0gyufewdv9sndfhtxx, e8ngsxhzprxgzox0dn05wiycq, 8j0nqnzeeyaw7ij3v9jdqrlzo"
+                    },
+                    {
+                        "id": 6446247863,
+                        "qualifierId": 44,
+                        "value": "1, 2, 2, 3, 2, 2, 3, 3, 4, 4, 3, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5"
+                    },
+                    {
+                        "id": 6446247865,
+                        "qualifierId": 59,
+                        "value": "13, 2, 27, 8, 33, 16, 23, 6, 19, 9, 25, 36, 34, 31, 29, 26, 24, 22, 20, 17, 15, 3, 35"
+                    },
+                    {
+                        "id": 6446247867,
+                        "qualifierId": 130,
+                        "value": "2"
+                    },
+                    {
+                        "id": 6446247869,
+                        "qualifierId": 131,
+                        "value": "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0"
+                    },
+                    {
+                        "id": 6446247871,
+                        "qualifierId": 194,
+                        "value": "91te5xuankrla4g3s7as3htxx"
+                    },
+                    {
+                        "id": 6446247873,
+                        "qualifierId": 197,
+                        "value": "33633"
+                    },
+                    {
+                        "id": 6446247875,
+                        "qualifierId": 227,
+                        "value": "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0"
+                    }
+                ]
+            },
+            {
+                "id": 2942949949,
+                "eventId": 1,
+                "typeId": 34,
+                "periodId": 16,
+                "timeMin": 0,
+                "timeSec": 0,
+                "contestantId": "7012hpp3p5vg4fzyn3h0yvf09",
+                "outcome": 1,
+                "x": 0.0,
+                "y": 0.0,
+                "timeStamp": "2026-05-31T15:40:36.011Z",
+                "lastModified": "2026-05-31T15:40:36Z",
+                "qualifier": [
+                    {
+                        "id": 6446250613,
+                        "qualifierId": 30,
+                        "value": "cendh30xevkj4sknupwzz0amt, 9xo5ysik9fasf8vvpn5htwuay, 1jzo9gzmz9vxeejmsqw4hfh90, 5fysoe8mcuwt18kqd7mugslxw, 587ybaqcxd7tuumc4qww2fw4q, dh4bzqmzvt3ibl4l9ofp4n2l1, cygexa4wb2fr45rs9b0eodpii, 7hzgc5dobfw94q0s97ajrmtjo, cyo6sdiy84t6b9nk46snawq5m, 57t5u1nz5em7gvnhbgkamr310, 2hlrcg7bdv16hdpq9y7h769k9, ehrh3xjsbhfvgbugswntkjx1w, 8e3hmqk4yhxk68l0bykoyk1ec, 7easfcgs0wskan3sbb6g1gj6c, a0i7hc92p5ijqi4jqw8krh8x6, nyirn5d30yz5jwo74a3pyj8, eoff5impogft8zbx1n5uda5t5, alz61rdcwrd0zbcijeg4l4t0p, o9t40a2mw5i6vq62ok943bh1, dacbe0qju0g7q0lw4ariup9ii, 2blieqbs97320s2w64nhzh6ju, 3o41frgi9jxrms6rvc6ml1plh, 3wrsehog8l311156s2stsd444"
+                    },
+                    {
+                        "id": 6446250615,
+                        "qualifierId": 44,
+                        "value": "1, 2, 2, 3, 2, 2, 3, 3, 4, 4, 3, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5"
+                    },
+                    {
+                        "id": 6446250617,
+                        "qualifierId": 59,
+                        "value": "1, 3, 31, 23, 16, 4, 10, 22, 12, 9, 11, 37, 36, 35, 24, 21, 20, 17, 14, 7, 6, 5, 13"
+                    },
+                    {
+                        "id": 6446250619,
+                        "qualifierId": 130,
+                        "value": "2"
+                    },
+                    {
+                        "id": 6446250621,
+                        "qualifierId": 131,
+                        "value": "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0"
+                    },
+                    {
+                        "id": 6446250623,
+                        "qualifierId": 194,
+                        "value": "cendh30xevkj4sknupwzz0amt"
+                    },
+                    {
+                        "id": 6446250625,
+                        "qualifierId": 227,
+                        "value": "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0"
+                    }
+                ]
+            }
+        ]
+    }
+}

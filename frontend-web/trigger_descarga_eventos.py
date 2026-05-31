@@ -4,6 +4,9 @@ Script para descargar eventos de un partido específico y subirlos a Supabase.
 Se usa desde la UI cuando se hace click en "Sincronizar partido".
 
 Uso: python trigger_descarga_eventos.py <fixture_id> <match_id>
+
+El sistema de puntuación se carga desde scoring_rules.json en la raíz del proyecto.
+Modifica ese archivo para cambiar las puntuaciones sin tocar este código.
 """
 
 import os
@@ -28,85 +31,10 @@ BASE_OUTPUT_PATH = Path("./data/Partidos_Individuales")
 print(f"DEBUG: SUPABASE_URL={SUPABASE_URL}")
 print(f"DEBUG: SUPABASE_KEY present={bool(SUPABASE_KEY)}")
 
-# Sistema de puntuación
-BASE_SCORE = 6.5
+# Sistema de puntuación inicial
+BASE_SCORE = 0
 
-POINTS = {
-    'MIN_PLAYED':         {'POR': 0.02, 'DEF': 0.02, 'MED': 0.02, 'DEL': 0.02},
-    'GOAL':               {'POR': 12.0, 'DEF': 10.0, 'MED': 8.0,  'DEL': 6.0},
-    'GOAL_HEADER_BONUS':  {'POR': 0.5,  'DEF': 0.5,  'MED': 0.5,  'DEL': 0.5},
-    'GOAL_FREEKICK_BONUS':{'POR': 1.0,  'DEF': 1.0,  'MED': 1.0,  'DEL': 1.0},
-    'OWN_GOAL':           {'POR': -4.0, 'DEF': -4.0, 'MED': -4.0, 'DEL': -4.0},
-    'GOAL_CONCEDED':      {'POR': -1.5, 'DEF': -1.0, 'MED': -0.2, 'DEL': 0.0},
-    'CLEAN_SHEET':        {'POR': 4.0,  'DEF': 4.0,  'MED': 1.0,  'DEL': 0.0},
-    'ASSIST':             {'POR': 4.0,  'DEF': 4.0,  'MED': 4.0,  'DEL': 4.0},
-    'KEY_PASS':           {'POR': 1.0,  'DEF': 1.2,  'MED': 1.5,  'DEL': 1.2},
-    'SECOND_ASSIST':      {'POR': 1.0,  'DEF': 1.5,  'MED': 1.5,  'DEL': 1.2},
-    'INTENT_ASSIST':      {'POR': 0.5,  'DEF': 0.6,  'MED': 0.8,  'DEL': 0.6},
-    'SHOT_TARGET':        {'POR': 1.0,  'DEF': 1.0,  'MED': 1.0,  'DEL': 1.0},
-    'SHOT_OFF':           {'POR': 0.2,  'DEF': 0.2,  'MED': 0.2,  'DEL': 0.2},
-    'SHOT_POST':          {'POR': 1.5,  'DEF': 1.5,  'MED': 1.5,  'DEL': 1.5},
-    'BIG_CHANCE_CREATED': {'POR': 0.5,  'DEF': 0.5,  'MED': 0.5,  'DEL': 0.5},
-    'BIG_CHANCE_MISSED':  {'POR': -0.5, 'DEF': -0.5, 'MED': -0.5, 'DEL': -0.5},
-    'PENALTY_MISSED':     {'POR': -2.0, 'DEF': -2.0, 'MED': -2.0, 'DEL': -2.0},
-    'PENALTY_WON':        {'POR': 3.0,  'DEF': 3.0,  'MED': 3.0,  'DEL': 3.0},
-    'PENALTY_CONC':       {'POR': -3.0, 'DEF': -3.0, 'MED': -3.0, 'DEL': -3.0},
-    'SAVE':               {'POR': 0.6,  'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'PENALTY_SAVED':      {'POR': 6.0,  'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'CLAIM_OK':           {'POR': 0.4,  'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'CLAIM_FAIL':         {'POR': -0.5, 'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'FUMBLE':             {'POR': -0.5, 'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'CROSS_NOT_CLAIMED':  {'POR': -0.3, 'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'PUNCH_OK':           {'POR': 0.3,  'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'PUNCH_FAIL':         {'POR': -0.5, 'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'SMOTHER':            {'POR': 0.5,  'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'SWEEPER_OK':         {'POR': 0.4,  'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'SWEEPER_FAIL':       {'POR': -0.6, 'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'PARRY_SAFE':         {'POR': 0.2,  'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'PARRY_DANGER':       {'POR': -0.2, 'DEF': 0.0,  'MED': 0.0,  'DEL': 0.0},
-    'CLEARANCE':          {'POR': 0.1,  'DEF': 0.3,  'MED': 0.1,  'DEL': 0.1},
-    'CLEARANCE_LAST_LINE':{'POR': 0.5,  'DEF': 0.8,  'MED': 0.6,  'DEL': 0.4},
-    'BLOCKED_CROSS':      {'POR': 0.1,  'DEF': 0.3,  'MED': 0.2,  'DEL': 0.1},
-    'INTERCEPTION':       {'POR': 0.1,  'DEF': 0.3,  'MED': 0.3,  'DEL': 0.1},
-    'TACKLE_WON':         {'POR': 0.1,  'DEF': 0.4,  'MED': 0.4,  'DEL': 0.2},
-    'TACKLE_LOST':        {'POR': 0.0,  'DEF': -0.1, 'MED': -0.1, 'DEL': 0.0},
-    'BLOCK_SHOT':         {'POR': 0.2,  'DEF': 0.5,  'MED': 0.4,  'DEL': 0.2},
-    'BLOCK_PASS':         {'POR': 0.1,  'DEF': 0.2,  'MED': 0.2,  'DEL': 0.1},
-    'BALL_RECOVERY':      {'POR': 0.1,  'DEF': 0.2,  'MED': 0.2,  'DEL': 0.1},
-    'OFFSIDE_PROVOKED':   {'POR': 0.0,  'DEF': 0.2,  'MED': 0.1,  'DEL': 0.0},
-    'CHALLENGE_LOST':     {'POR': 0.0,  'DEF': -0.1, 'MED': -0.1, 'DEL': 0.0},
-    'ERROR_LED_SHOT':     {'POR': -1.5, 'DEF': -1.0, 'MED': -1.0, 'DEL': -0.5},
-    'ERROR_LED_GOAL':     {'POR': -4.0, 'DEF': -3.0, 'MED': -3.0, 'DEL': -2.0},
-    'PASS_OK':            {'POR': 0.02, 'DEF': 0.02, 'MED': 0.02, 'DEL': 0.02},
-    'PASS_FAIL':          {'POR': -0.02,'DEF': -0.02,'MED': -0.02,'DEL': -0.02},
-    'PASS_PROGRESSIVE':   {'POR': 0.1,  'DEF': 0.2,  'MED': 0.2,  'DEL': 0.15},
-    'PASS_FINAL_THIRD':   {'POR': 0.05, 'DEF': 0.15, 'MED': 0.15, 'DEL': 0.1},
-    'PASS_INTO_BOX':      {'POR': 0.1,  'DEF': 0.3,  'MED': 0.3,  'DEL': 0.2},
-    'THROUGH_BALL':       {'POR': 0.2,  'DEF': 0.4,  'MED': 0.5,  'DEL': 0.4},
-    'CROSS_OK':           {'POR': 0.1,  'DEF': 0.3,  'MED': 0.4,  'DEL': 0.3},
-    'CROSS_FAIL':         {'POR': 0.0,  'DEF': -0.05,'MED': -0.1, 'DEL': -0.05},
-    'SWITCH_PLAY':        {'POR': 0.1,  'DEF': 0.3,  'MED': 0.3,  'DEL': 0.1},
-    'PULL_BACK':          {'POR': 0.1,  'DEF': 0.3,  'MED': 0.4,  'DEL': 0.3},
-    'LONG_BALL_OK':       {'POR': 0.1,  'DEF': 0.15, 'MED': 0.15, 'DEL': 0.05},
-    'LAY_OFF':            {'POR': 0.05, 'DEF': 0.1,  'MED': 0.2,  'DEL': 0.2},
-    'PASS_BLOCKED':       {'POR': -0.05,'DEF': -0.1, 'MED': -0.1, 'DEL': -0.05},
-    'OFFSIDE_PASS':       {'POR': -0.05,'DEF': -0.1, 'MED': -0.1, 'DEL': -0.1},
-    'TAKEON_WON':         {'POR': 0.3,  'DEF': 0.4,  'MED': 0.5,  'DEL': 0.6},
-    'TAKEON_LOST':        {'POR': -0.1, 'DEF': -0.2, 'MED': -0.2,  'DEL': -0.2},
-    'TAKEON_OVERRUN':     {'POR': -0.2, 'DEF': -0.3, 'MED': -0.3, 'DEL': -0.3},
-    'GOOD_SKILL':         {'POR': 0.1,  'DEF': 0.2,  'MED': 0.2,  'DEL': 0.2},
-    'DISPOSSESSED':       {'POR': -0.2, 'DEF': -0.2, 'MED': -0.2, 'DEL': -0.2},
-    'BAD_TOUCH':          {'POR': -0.1, 'DEF': -0.1, 'MED': -0.1, 'DEL': -0.1},
-    'AERIAL_WON':         {'POR': 0.2,  'DEF': 0.3,  'MED': 0.2,  'DEL': 0.3},
-    'AERIAL_LOST':        {'POR': -0.1, 'DEF': -0.1, 'MED': -0.1, 'DEL': -0.1},
-    'FOUL_COMMITTED':     {'POR': -0.1, 'DEF': -0.1, 'MED': -0.1, 'DEL': -0.1},
-    'FOUL_WON':           {'POR': 0.05, 'DEF': 0.05, 'MED': 0.05, 'DEL': 0.05},
-    'YELLOW_CARD':        {'POR': -1.0, 'DEF': -1.0, 'MED': -1.0, 'DEL': -1.0},
-    'SECOND_YELLOW':      {'POR': -3.0, 'DEF': -3.0, 'MED': -3.0, 'DEL': -3.0},
-    'RED_CARD':           {'POR': -5.0, 'DEF': -5.0, 'MED': -5.0, 'DEL': -5.0},
-}
-
-# Qualifier IDs
+# Qualifier IDs (se mantienen para compatibilidad con el parsing de eventos)
 Q_LONG_BALL = 1
 Q_CROSS = 2
 Q_THROUGH_BALL = 4
@@ -142,11 +70,63 @@ Q_ERROR_LED_GOAL = 170
 Q_OVERRUN = 211
 
 
+def load_scoring_rules():
+    """Carga las reglas de puntuación desde scoring_rules.json"""
+    # Buscar el archivo en la raíz del proyecto
+    possible_paths = [
+        Path(__file__).parent.parent / 'scoring_rules.json',
+        Path(__file__).parent / 'scoring_rules.json',
+        Path('scoring_rules.json'),
+    ]
+
+    for path in possible_paths:
+        if path.exists():
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    rules = json.load(f)
+                print(f"✅ Reglas de puntuación cargadas desde: {path}")
+                print(f"   Versión: {rules.get('version', 'N/A')}")
+                return rules
+            except Exception as e:
+                print(f"⚠️ Error al cargar {path}: {e}")
+
+    # Si no se encuentra, devolver reglas por defecto
+    print("⚠️ No se encontró scoring_rules.json, usando reglas por defecto")
+    return {
+        "version": "default",
+        "participation": {"starter_bonus": 2, "substitute_bonus": 1, "minutes_threshold": 60},
+        "events": {
+            "goal": {"POR": 6, "DEF": 6, "MED": 5, "DEL": 4},
+            "own_goal": {"all": -2},
+            "assist": {"all": 3},
+            "fantasy_assist": {"all": 1},
+            "clean_sheet": {"POR": 4, "DEF": 4, "MED": 2, "DEL": 1, "min_minutes": 60},
+            "goal_conceded_per_2": {"POR": -2, "DEF": -2, "MED": -1, "DEL": -1},
+            "save_per_2": {"all": 1},
+            "penalty_save": {"all": 5},
+            "penalty_missed": {"all": -2},
+            "penalty_won": {"all": 2},
+            "yellow_card": {"all": -1},
+            "red_card": {"all": -3},
+            "shot_on_target_per_2": {"all": 1},
+            "lost_balls_per_8": {"all": -1},
+            "recoveries_per_5": {"all": 1},
+            "clearances_per_3": {"all": 1},
+        }
+    }
+
+
 class MatchEventDownloader:
     def __init__(self, fixture_id: str, match_id: str):
         self.fixture_id = fixture_id
         self.match_id = match_id
         self.supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+        # Cargar reglas de puntuación desde JSON
+        self.scoring_rules = load_scoring_rules()
+        self.participation_rules = self.scoring_rules.get('participation', {})
+        self.events_rules = self.scoring_rules.get('events', {})
+
         self.positions_table = {}
         self.players_team = {}
         self.player_names = {}
@@ -158,7 +138,16 @@ class MatchEventDownloader:
         self.stats = {}
         self.processed_events = set()
         self.team_goals_conceded = {}
+        self.team_goals_scored = {}
         self.player_positions_map = {}
+        self.home_team_id = None
+        self.away_team_id = None
+
+    def get_position_points(self, rule_key: str, position: str) -> int:
+        """Obtiene los puntos para una regla y posición específicas."""
+        rule = self.events_rules.get(rule_key, {})
+        # Primero buscar por posición específica, luego por 'all' como fallback
+        return rule.get(position, rule.get('all', 0))
 
     def load_headers(self):
         headers_path = Path('backend-engine/headers/headers.json')
@@ -178,67 +167,49 @@ class MatchEventDownloader:
         }
 
     def download_squads(self):
-        """Descarga squads de la API para este partido"""
         print(f"\n📥 Descargando squads para el partido {self.match_id}...")
-
         squads_dir = BASE_OUTPUT_PATH / self.match_id / "squads"
         squads_dir.mkdir(parents=True, exist_ok=True)
-
         headers = self.load_headers()
 
-        # Primero obtener info del partido para sacar season_id
         url_match = (f"https://api.performfeeds.com/soccerdata/matchevent/"
                      f"{SDAPI_OUTLET_KEY}/{self.match_id}"
                      f"?_fmt=jsonp&_rt=c&_lcl=en&sps=widgets&_clbk=callback")
-
         try:
             res = requests.get(url_match, headers=headers, timeout=15)
             content = res.text
             start = content.find('{')
             end = content.rfind('}')
             if start == -1 or end == -1:
-                print("❌ Respuesta malformada de la API")
+                # Intentar obtener equipos de la BD si falla la API
+                self.load_teams_from_db()
                 return False
 
             data = json.loads(content[start:end+1])
             if "errorCode" in data:
-                print(f"❌ Error de API: {data.get('errorCode')}")
+                # Intentar obtener equipos de la BD si falla la API
+                self.load_teams_from_db()
                 return False
 
             match_info = data.get('match', {})
-            home_team = match_info.get('home', {})
-            away_team = match_info.get('away', {})
-
-            season_id = None
-            if 'season' in match_info:
-                season_id = match_info.get('season', {}).get('id')
-            elif 'competition' in match_info:
-                season_id = match_info.get('competition', {}).get('currentSeason', {}).get('id')
-            elif 'tournamentSeasonId' in match_info:
-                season_id = match_info.get('tournamentSeasonId')
+            season_id = match_info.get('season', {}).get('id') or match_info.get('competition', {}).get('currentSeason', {}).get('id') or match_info.get('tournamentSeasonId')
 
             teams = []
-            if home_team.get('id'):
-                teams.append({'id': home_team['id'], 'name': home_team.get('name', 'Home')})
-            if away_team.get('id'):
-                teams.append({'id': away_team['id'], 'name': away_team.get('name', 'Away')})
+            if match_info.get('home', {}).get('id'):
+                teams.append({'id': match_info['home']['id'], 'name': match_info['home'].get('name', 'Home')})
+                self.home_team_id = match_info['home']['id']
+            if match_info.get('away', {}).get('id'):
+                teams.append({'id': match_info['away']['id'], 'name': match_info['away'].get('name', 'Away')})
+                self.away_team_id = match_info['away']['id']
 
             if not teams:
-                print("⚠️ No se pudieron obtener los equipos del partido")
+                self.load_teams_from_db()
                 return False
-
-            print(f"   🆚 {teams[0]['name']} vs {teams[1]['name']}")
-            if season_id:
-                print(f"   📅 Season ID: {season_id}")
-
         except Exception as e:
-            print(f"⚠️ Error al obtener info del partido: {e}")
+            self.load_teams_from_db()
             return False
 
-        # Descargar squads
-        if not season_id:
-            print("⚠️ No se pudo obtener season_id, usando team_id como fallback...")
-            season_id = teams[0]['id']
+        if not season_id: season_id = teams[0]['id']
 
         downloaded = 0
         page = 1
@@ -246,95 +217,63 @@ class MatchEventDownloader:
 
         while True:
             try:
-                url_squad = (f"https://api.performfeeds.com/soccerdata/squads/"
-                             f"{SDAPI_OUTLET_KEY}/"
-                             f"?_fmt=jsonp&_rt=c&_lcl=en&sps=widgets&_clbk=callback"
-                             f"&tmcl={season_id}&detailed=yes&_pgSz={page_size}&_pgNm={page}")
-
+                url_squad = (f"https://api.performfeeds.com/soccerdata/squads/{SDAPI_OUTLET_KEY}/"
+                             f"?_fmt=jsonp&_rt=c&_lcl=en&sps=widgets&_clbk=callback&tmcl={season_id}&detailed=yes&_pgSz={page_size}&_pgNm={page}")
                 res = requests.get(url_squad, headers=headers, timeout=15)
                 content = res.text
                 start = content.find('{')
                 end = content.rfind('}')
-                if start == -1 or end == -1:
-                    print("   ❌ Error JSONP")
-                    break
+                if start == -1 or end == -1: break
 
                 squad_data = json.loads(content[start:end+1])
-
-                items = []
-                for key in ['squad', 'person', 'contestant', 'teams']:
-                    if key in squad_data:
-                        items = squad_data[key]
-                        break
-
-                if not items:
-                    print(f"   ⚠️ No se encontró lista. Claves: {list(squad_data.keys())}")
-                    break
+                items = squad_data.get('squad') or squad_data.get('person') or squad_data.get('contestant') or squad_data.get('teams') or []
+                if not items: break
 
                 for item in items:
-                    team_name = "Unknown"
-                    team_id = None
-                    contestant_obj = {}
+                    team_name, team_id = "Unknown", None
                     if 'contestant' in item and isinstance(item['contestant'], dict):
-                        team_name = item['contestant'].get('name', 'Unknown')
-                        team_id = item['contestant'].get('id')
-                        contestant_obj = item['contestant']
+                        team_name, team_id = item['contestant'].get('name', 'Unknown'), item['contestant'].get('id')
                     elif 'contestantName' in item:
-                        team_name = item.get('contestantName')
-                        team_id = item.get('contestantId')
-                        contestant_obj = {'id': team_id, 'name': team_name}
-                    elif 'name' in item and 'id' in item:
-                        team_name = item.get('name')
-                        team_id = item.get('id')
-                        contestant_obj = {'id': team_id, 'name': team_name}
+                        team_name, team_id = item.get('contestantName'), item.get('contestantId')
 
-                    players = []
-                    for key in ['squad', 'person', 'players', 'athlete']:
-                        if key in item:
-                            players = item[key]
-                            break
+                    players = item.get('squad') or item.get('person') or item.get('players') or item.get('athlete') or []
 
-                    if team_id and team_name != 'Unknown':
-                        if any(t['id'] == team_id for t in teams):
-                            safe_name = team_name.replace('/', '-').replace('\\', '-')
-                            filename = f"{safe_name}_{team_id}.json"
-                            team_data = {"team": contestant_obj, "players": players}
+                    if team_id and team_name != 'Unknown' and any(t['id'] == team_id for t in teams):
+                        safe_name = team_name.replace('/', '-').replace('\\', '-')
+                        with open(squads_dir / f"{safe_name}_{team_id}.json", 'w', encoding='utf-8') as f:
+                            json.dump({"team": {"id": team_id, "name": team_name}, "players": players}, f, indent=2, ensure_ascii=False)
+                        downloaded += 1
 
-                            with open(squads_dir / filename, 'w', encoding='utf-8') as f:
-                                json.dump(team_data, f, indent=2, ensure_ascii=False)
-                            downloaded += 1
-                            print(f"   ✅ {team_name}: {len(players)} jugadores")
-
-                if len(items) < page_size:
-                    break
+                if len(items) < page_size: break
                 page += 1
-
-            except Exception as e:
-                print(f"   ⚠️ Error: {e}")
-                break
-
-        if downloaded == 0:
-            print("   ⚠️ No se descargaron squads, guardando datos crudos como fallback...")
-            with open(squads_dir / f"match_{self.match_id}.json", 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            except Exception: break
 
         print(f"\n✅ {downloaded} squads descargados en: {squads_dir}")
         return downloaded > 0
 
+    def load_teams_from_db(self):
+        """Obtiene los IDs de local y visitante desde la tabla fixtures en Supabase."""
+        print(f"   🔄 Obteniendo equipos desde la base de datos...")
+        try:
+            response = self.supabase.table('fixtures').select('home_team_id, away_team_id').eq('id', self.fixture_id).single().execute()
+            if response.data:
+                self.home_team_id = response.data['home_team_id']
+                self.away_team_id = response.data['away_team_id']
+                print(f"   ✅ Equipos cargados: Local={self.home_team_id}, Visitante={self.away_team_id}")
+            else:
+                print(f"   ⚠️ No se encontraron equipos para el fixture {self.fixture_id}")
+        except Exception as e:
+            print(f"   ⚠️ Error cargando equipos desde BD: {e}")
+
     def load_positions_from_squads(self):
-        """Carga las posiciones desde squads descargados"""
         pos_map = {
             'goalkeeper': 'POR', 'portero': 'POR', 'g': 'POR', 'gk': 'POR',
             'defender': 'DEF', 'defensa': 'DEF', 'd': 'DEF', 'df': 'DEF',
             'midfielder': 'MED', 'centrocampista': 'MED', 'm': 'MED', 'mf': 'MED',
-            'attacker': 'DEL', 'striker': 'DEL', 'forward': 'DEL',
-            'delantero': 'DEL', 'a': 'DEL', 'f': 'DEL', 'fw': 'DEL'
+            'attacker': 'DEL', 'striker': 'DEL', 'forward': 'DEL', 'delantero': 'DEL', 'a': 'DEL', 'f': 'DEL', 'fw': 'DEL'
         }
-
         squads_path = BASE_OUTPUT_PATH / self.match_id / "squads"
-        if not squads_path.exists():
-            print(f"⚠️ No se encontró la carpeta de squads: {squads_path}")
-            return False
+        if not squads_path.exists(): return False
 
         loaded = 0
         for squad_file in squads_path.glob("*.json"):
@@ -343,22 +282,17 @@ class MatchEventDownloader:
                     squad_data = json.load(f)
                 for player in squad_data.get('players', []):
                     pid = str(player.get('id'))
-                    raw_pos = player.get('position', '').lower().strip()
                     if pid:
-                        pos = pos_map.get(raw_pos, 'MED')
+                        pos = pos_map.get(player.get('position', '').lower().strip(), 'MED')
                         self.positions_table[pid] = pos
                         self.player_positions_map[pid] = pos
                         loaded += 1
-            except Exception as e:
-                print(f"⚠️ Error al leer {squad_file}: {e}")
-
-        print(f"✅ {loaded} jugadores cargados con posición")
+            except Exception: pass
         return loaded > 0
 
     def get_qualifier(self, event, qual_id):
         for q in event.get('qualifier', []):
-            if q.get('qualifierId') == qual_id:
-                return q.get('value', True)
+            if q.get('qualifierId') == qual_id: return q.get('value', True)
         return False
 
     def has_qualifier(self, event, qual_id):
@@ -366,52 +300,222 @@ class MatchEventDownloader:
 
     def get_qualifier_float(self, event, qual_id, default=None):
         val = self.get_qualifier(event, qual_id)
-        if val is False or val is True:
-            return default
-        try:
-            return float(val)
-        except (TypeError, ValueError):
-            return default
+        if val in [False, True]: return default
+        try: return float(val)
+        except (TypeError, ValueError): return default
+
+    def init_player_stats_if_none(self, player_id):
+        """Inicializa los contadores a 0 la primera vez que el jugador hace algo.
+        Usa los nombres de columnas reales de Supabase para evitar errores.
+        """
+        if player_id not in self.stats:
+            self.stats[player_id] = {
+                # Goles
+                'goals': 0, 'own_goals': 0,
+                # Asistencias
+                'assists': 0, 'fantasy_assist': 0,
+                # Penaltis
+                'penalties_missed': 0, 'penalties_saved': 0, 'penalties_won': 0, 'penalties_conceded': 0,
+                # Portería
+                'goals_conceded': 0, 'clean_sheet': 0, 'saves': 0,
+                # Tarjetas
+                'yellow_cards': 0, 'second_yellow_cards': 0, 'red_cards': 0,
+                # Tiros
+                'shots_on_target': 0, 'shots_off_target': 0, 'shots_hit_woodwork': 0,
+                'big_chances_created': 0, 'big_chances_missed': 0,
+                # Defensa
+                'clearances': 0, 'clearances_last_line': 0, 'blocked_crosses': 0,
+                'interceptions': 0, 'tackles_won': 0, 'tackles_lost': 0,
+                'blocked_shots': 0, 'blocked_passes': 0, 'ball_recoveries': 0,
+                'offsides_provoked': 0, 'challenges_lost': 0,
+                # Errores
+                'errors_leading_to_shot': 0, 'errors_leading_to_goal': 0,
+                # Pases
+                'passes_completed': 0, 'passes_attempted': 0,
+                'progressive_passes': 0, 'passes_into_final_third': 0,
+                'passes_into_box': 0, 'through_balls': 0,
+                'crosses_completed': 0, 'crosses_attempted': 0,
+                'switch_plays': 0, 'pull_backs': 0,
+                'long_balls_completed': 0, 'lay_offs': 0,
+                'offside_passes': 0,
+                # Regates
+                'takeons_won': 0, 'takeons_lost': 0, 'takeons_overrun': 0,
+                'good_skills': 0, 'dispossessed': 0, 'bad_touches': 0,
+                # Duelos aéreos
+                'aerials_won': 0, 'aerials_lost': 0,
+                # Faltas
+                'fouls_committed': 0, 'fouls_won': 0,
+                # Internos para cálculo de puntos (no se suben a BD)
+                'pass_opp_half': 0,  # Pases en campo contrario
+                'box_entries': 0,    # Entradas al área
+            }
+            if player_id not in self.points:
+                self.points[player_id] = BASE_SCORE
+
+    def apply_points(self, player_id, stat_key, multiplier=1, current_min=0):
+        """Suma al contador y automáticamente recalcula los puntos en tiempo real."""
+        self.init_player_stats_if_none(player_id)
+        
+        if stat_key != 'MIN_PLAYED':
+            self.stats[player_id][stat_key] = self.stats[player_id].get(stat_key, 0) + int(multiplier)
+            
+        self.recalculate_player_points(player_id, current_min)
+
+    def recalculate_player_points(self, player_id, current_min):
+        """Motor que calcula los puntos totales del jugador en tiempo real usando las reglas del JSON."""
+        stats = self.stats[player_id]
+        pos = self.player_positions_map.get(player_id, 'MED')
+
+        mins_played = self.total_minutes.get(player_id, 0)
+        if player_id in self.on_pitch:
+            mins_played += max(0, current_min - self.entry_minutes.get(player_id, current_min))
+
+        points = 0
+        rules = self.events_rules
+        part_rules = self.participation_rules
+
+        # --- PARTICIPACIÓN ---
+        if mins_played > 0:
+            threshold = part_rules.get('minutes_threshold', 60)
+            if mins_played > threshold:
+                points += part_rules.get('starter_bonus', 2)
+            else:
+                points += part_rules.get('substitute_bonus', 1)
+
+        # --- GOLES ---
+        goals = stats.get('goals', 0)
+        if goals > 0:
+            points += goals * self.get_position_points('goal', pos)
+
+        # Gol en propia puerta
+        own_goals = stats.get('own_goals', 0)
+        if own_goals > 0:
+            points += own_goals * self.get_position_points('own_goal', pos)
+
+        # --- ASISTENCIAS ---
+        assists = stats.get('assists', 0)
+        if assists > 0:
+            points += assists * self.get_position_points('assist', pos)
+
+        fantasy_assists = stats.get('fantasy_assist', 0)
+        if fantasy_assists > 0:
+            points += fantasy_assists * self.get_position_points('fantasy_assist', pos)
+
+        # --- PORTERÍA A CERO ---
+        goals_conc = stats.get('goals_conceded', 0)
+        clean_sheet_min = rules.get('clean_sheet', {}).get('min_minutes', 60)
+
+        if mins_played > clean_sheet_min and goals_conc == 0:
+            points += self.get_position_points('clean_sheet', pos)
+
+        # --- GOLES RECIBIDOS (cada 2) ---
+        if goals_conc > 0:
+            gc_rule = self.get_position_points('goal_conceded_per_2', pos)
+            points += (goals_conc // 2) * gc_rule
+
+        # --- PENALTIS ---
+        pen_missed = stats.get('penalties_missed', 0)
+        if pen_missed > 0:
+            points += pen_missed * self.get_position_points('penalty_missed', pos)
+
+        pen_saved = stats.get('penalties_saved', 0)
+        if pen_saved > 0:
+            points += pen_saved * self.get_position_points('penalty_save', pos)
+
+        pen_won = stats.get('penalties_won', 0)
+        if pen_won > 0:
+            points += pen_won * self.get_position_points('penalty_won', pos)
+
+        # --- TARJETAS ---
+        yellow = stats.get('yellow_cards', 0)
+        if yellow > 0:
+            points += yellow * self.get_position_points('yellow_card', pos)
+
+        second_yellow = stats.get('second_yellow_cards', 0)
+        if second_yellow > 0:
+            points += second_yellow * self.get_position_points('second_yellow_card', pos)
+
+        red = stats.get('red_cards', 0)
+        if red > 0:
+            points += red * self.get_position_points('red_card', pos)
+
+        # ============================================
+        # === PARADAS PORTERO (cada 2) ===
+        # ============================================
+        saves = stats.get('saves', 0)
+        if saves >= 2:
+            points += (saves // 2) * self.get_position_points('save_per_2', pos)
+
+        # ============================================
+        # === BONUS ATAQUE (cada 2) ===
+        # ============================================
+        bonus_ataque = self.scoring_rules.get('bonus_ataque_per_2', {})
+
+        # Remates a puerta: cada 2 = 1 punto
+        shots_on_target = stats.get('shots_on_target', 0)
+        if shots_on_target >= 2:
+            points += (shots_on_target // 2) * bonus_ataque.get('shots_on_target', 1)
+
+        # Regates logrados: cada 2 = 1 punto
+        takeons_won = stats.get('takeons_won', 0)
+        if takeons_won >= 2:
+            points += (takeons_won // 2) * bonus_ataque.get('takeons_won', 1)
+
+        # Llegadas al área: cada 2 = 1 punto
+        box_entries = stats.get('box_entries', 0)
+        if box_entries >= 2:
+            points += (box_entries // 2) * bonus_ataque.get('box_entries', 1)
+
+        # ============================================
+        # === BONUS DEFENSIVOS ===
+        # ============================================
+        bonus_def = self.scoring_rules.get('bonus_defensivos', {})
+
+        # Balones perdidos: cada 10 = -1 punto
+        lost_balls = stats.get('dispossessed', 0) + stats.get('bad_touches', 0)
+        if lost_balls >= 10:
+            points += (lost_balls // 10) * bonus_def.get('lost_balls_per_10', -1)
+
+        # Balones recuperados: cada 5 = 1 punto
+        recoveries = stats.get('ball_recoveries', 0)
+        if recoveries >= 5:
+            points += (recoveries // 5) * bonus_def.get('recoveries_per_5', 1)
+
+        # Despejes: cada 5 = 1 punto
+        clearances = stats.get('clearances', 0)
+        if clearances >= 5:
+            points += (clearances // 5) * bonus_def.get('clearances_per_5', 1)
+
+        # ============================================
+        # === BONUS PASES (cada 10 pases buenos = 1 pt) ===
+        # ============================================
+        bonus_pases = self.scoring_rules.get('bonus_pases_per_10', {})
+
+        passes_completed = stats.get('passes_completed', 0)
+        if passes_completed >= 10:
+            points += (passes_completed // 10) * bonus_pases.get('passes_completed', 1)
+
+        self.points[player_id] = points  # ENTERO, sin decimales
 
     def init_player(self, player_id, team_id, current_min):
         self.on_pitch.add(player_id)
         self.players_team[player_id] = team_id
         self.entry_minutes[player_id] = current_min
-        if player_id not in self.points:
-            self.points[player_id] = BASE_SCORE
-            self.total_minutes[player_id] = 0
-            self.stats[player_id] = {
-                'pass_ok': 0, 'pass_total': 0,
-                'aerial_won': 0, 'aerial_total': 0
-            }
+        self.apply_points(player_id, 'MIN_PLAYED', 0, current_min)
 
     def remove_player(self, player_id, current_min):
         if player_id in self.on_pitch:
             self.on_pitch.remove(player_id)
+            # Asegurar que el jugador está inicializado antes de acceder
+            self.init_player_stats_if_none(player_id)
             mins_played = max(0, current_min - self.entry_minutes.get(player_id, current_min))
+            self.total_minutes.setdefault(player_id, 0)
             self.total_minutes[player_id] += mins_played
-            self.apply_points(player_id, 'MIN_PLAYED', multiplier=mins_played)
-
-    def apply_points(self, player_id, action_key, multiplier=1):
-        if player_id not in self.points:
-            self.points[player_id] = BASE_SCORE
-            self.total_minutes[player_id] = 0
-            self.stats[player_id] = {
-                'pass_ok': 0, 'pass_total': 0,
-                'aerial_won': 0, 'aerial_total': 0
-            }
-
-        pos = self.player_positions_map.get(player_id, 'MED')
-        pts = POINTS.get(action_key, {}).get(pos, 0.0) * multiplier
-        if pts != 0:
-            self.points[player_id] += pts
-            if action_key not in ['MIN_PLAYED', 'PASS_OK', 'PASS_FAIL', 'AERIAL_WON', 'AERIAL_LOST']:
-                self.stats[player_id][action_key] = self.stats[player_id].get(action_key, 0) + 1
+            self.apply_points(player_id, 'MIN_PLAYED', 0, current_min)
 
     def process_event(self, event, current_min):
         event_id = event.get('id')
-        if event_id in self.processed_events:
-            return False
+        if event_id in self.processed_events: return False
         self.processed_events.add(event_id)
 
         type_id = event.get('typeId')
@@ -419,548 +523,501 @@ class MatchEventDownloader:
         if player_id and event.get('playerName'):
             self.player_names[player_id] = event['playerName']
 
+        # Procesar lineup primero para tener los equipos y jugadores cargados
         if type_id == 34:
-            return self._handle_lineup(event)
-        if type_id == 18:
-            return self._handle_sub_off(event, current_min)
-        if type_id == 19:
-            return self._handle_sub_on(event, current_min)
+            result = self._handle_lineup(event, current_min)
+            return result
 
-        if not player_id:
-            return False
+        # Si no hay equipos cargados aún, intentar cargarlos desde el evento
+        if not self.teams and self.home_team_id and self.away_team_id:
+            self.teams.add(self.home_team_id)
+            self.teams.add(self.away_team_id)
+            self.team_goals_conceded.setdefault(self.home_team_id, 0)
+            self.team_goals_conceded.setdefault(self.away_team_id, 0)
+            self.team_goals_scored.setdefault(self.home_team_id, 0)
+            self.team_goals_scored.setdefault(self.away_team_id, 0)
+            print(f"   📋 Equipos cargados desde BD: {self.home_team_id}, {self.away_team_id}")
+
+        if type_id == 18: return self._handle_sub_off(event, current_min)
+        if type_id == 19: return self._handle_sub_on(event, current_min)
+
+        if not player_id: return False
 
         handlers = {
             1: self._handle_pass,
-            2: self._handle_offside_pass,
             3: self._handle_takeon,
             4: self._handle_foul,
             7: self._handle_tackle,
             8: self._handle_interception,
             10: self._handle_save,
-            11: self._handle_claim,
             12: self._handle_clearance,
             13: self._handle_shot_miss,
             14: self._handle_shot_post,
             15: self._handle_shot_target,
             16: self._handle_goal,
             17: self._handle_card,
-            41: self._handle_punch,
-            42: self._handle_good_skill,
             44: self._handle_aerial,
-            45: self._handle_challenge,
             49: self._handle_recovery,
             50: self._handle_dispossessed,
-            51: self._handle_error,
-            54: self._handle_smother,
-            55: self._handle_offside_provoked,
             58: self._handle_penalty_faced,
-            59: self._handle_sweeper,
             61: self._handle_ball_touch,
-            74: self._handle_blocked_pass,
         }
         handler = handlers.get(type_id)
         if handler:
-            handler(event)
+            handler(event, current_min)
             return True
         return False
 
-    def _handle_lineup(self, event):
+    def _handle_lineup(self, event, current_min):
         team_id = event.get('contestantId')
         if team_id:
             self.teams.add(team_id)
             self.team_goals_conceded.setdefault(team_id, 0)
+            self.team_goals_scored.setdefault(team_id, 0)
         q30 = self.get_qualifier(event, Q_PLAYERS_INVOLVED)
         if q30 and isinstance(q30, str):
-            players = [p.strip() for p in q30.split(',')]
-            for pid in players[:11]:
+            for pid in [p.strip() for p in q30.split(',')][:11]:
                 self.init_player(pid, team_id, 0)
         return True
 
     def _handle_sub_off(self, event, current_min):
         pid = event.get('playerId')
-        if pid:
-            # Usamos el timeMin exacto del evento de sustitución
-            exit_min = event.get('timeMin', current_min)
-            self.remove_player(pid, exit_min)
+        if pid: self.remove_player(pid, event.get('timeMin', current_min))
         return True
 
     def _handle_sub_on(self, event, current_min):
         pid = event.get('playerId')
         team_id = event.get('contestantId')
-        if pid:
-            # Usamos el timeMin exacto del evento de sustitución
-            entry_min = event.get('timeMin', current_min)
-            self.init_player(pid, team_id, entry_min)
+        if pid: self.init_player(pid, team_id, event.get('timeMin', current_min))
         return True
 
-    def _handle_pass(self, event):
+    def _handle_pass(self, event, current_min):
         pid = event.get('playerId')
-        if pid not in self.stats:
-            self.init_player(pid, event.get('contestantId'), 0)
         outcome = event.get('outcome', 1)
-        self.stats[pid]['pass_total'] += 1
 
-        is_cross = self.has_qualifier(event, Q_CROSS)
-        is_long = self.has_qualifier(event, Q_LONG_BALL)
-        is_through = self.has_qualifier(event, Q_THROUGH_BALL)
-        is_pull_back = self.has_qualifier(event, Q_PULL_BACK)
-        is_switch = self.has_qualifier(event, Q_SWITCH_PLAY)
-        is_lay_off = self.has_qualifier(event, Q_LAY_OFF)
-        is_blocked = self.has_qualifier(event, Q_BLOCKED_PASS_QF)
+        self.apply_points(pid, 'passes_attempted', 1, current_min)
 
         if outcome == 1:
-            self.stats[pid]['pass_ok'] += 1
-            self.apply_points(pid, 'PASS_OK')
+            self.apply_points(pid, 'passes_completed', 1, current_min)
 
-            assist_q = self.get_qualifier(event, Q_ASSIST)
-            if assist_q:
-                if str(assist_q) == '16':
-                    self.apply_points(pid, 'ASSIST')
-                else:
-                    self.apply_points(pid, 'KEY_PASS')
+            end_x = self.get_qualifier_float(event, Q_PASS_END_X)
+            if end_x is not None and end_x >= 50:
+                self.apply_points(pid, 'pass_opp_half', 1, current_min)
 
-            if self.has_qualifier(event, Q_SECOND_ASSIST):
-                self.apply_points(pid, 'SECOND_ASSIST')
+            # Llegadas al área = Pases dentro del área
+            end_y = self.get_qualifier_float(event, Q_PASS_END_Y)
+            if end_x is not None and end_y is not None and end_x >= 83 and 21 <= end_y <= 79:
+                self.apply_points(pid, 'box_entries', 1, current_min)
 
-            if self.has_qualifier(event, Q_INTENT_ASSIST):
-                self.apply_points(pid, 'INTENT_ASSIST')
-
-            if is_through:
-                self.apply_points(pid, 'THROUGH_BALL')
-            if is_cross:
-                self.apply_points(pid, 'CROSS_OK')
-            if is_pull_back:
-                self.apply_points(pid, 'PULL_BACK')
-            if is_switch:
-                self.apply_points(pid, 'SWITCH_PLAY')
-            if is_lay_off:
-                self.apply_points(pid, 'LAY_OFF')
-            if is_long:
-                self.apply_points(pid, 'LONG_BALL_OK')
-
-            if self._pass_into_box(event):
-                self.apply_points(pid, 'PASS_INTO_BOX')
-            elif self._enters_final_third(event):
-                self.apply_points(pid, 'PASS_FINAL_THIRD')
-
-            if self._is_progressive_pass(event):
-                self.apply_points(pid, 'PASS_PROGRESSIVE')
+            if self.get_qualifier(event, Q_ASSIST):
+                self.apply_points(pid, 'assists', 1, current_min)
+            elif self.has_qualifier(event, Q_INTENT_ASSIST) or self.has_qualifier(event, Q_BIG_CHANCE):
+                self.apply_points(pid, 'fantasy_assist', 1, current_min)
         else:
-            self.apply_points(pid, 'PASS_FAIL')
-            if is_cross:
-                self.apply_points(pid, 'CROSS_FAIL')
-            if is_blocked:
-                self.apply_points(pid, 'PASS_BLOCKED')
+            self.apply_points(pid, 'dispossessed', 1, current_min)
 
-    def _is_progressive_pass(self, event):
-        x = event.get('x')
-        end_x = self.get_qualifier_float(event, Q_PASS_END_X)
-        if x is None or end_x is None:
-            return False
-        return (end_x - x) >= 25 and end_x >= 50
-
-    def _enters_final_third(self, event):
-        x = event.get('x')
-        end_x = self.get_qualifier_float(event, Q_PASS_END_X)
-        if x is None or end_x is None:
-            return False
-        return end_x >= 66 and x < 66
-
-    def _pass_into_box(self, event):
-        end_x = self.get_qualifier_float(event, Q_PASS_END_X)
-        end_y = self.get_qualifier_float(event, Q_PASS_END_Y)
-        if end_x is None or end_y is None:
-            return False
-        return end_x >= 83 and 21 <= end_y <= 79
-
-    def _handle_offside_pass(self, event):
-        self.apply_points(event.get('playerId'), 'OFFSIDE_PASS')
-
-    def _handle_takeon(self, event):
+    def _handle_takeon(self, event, current_min):
         pid = event.get('playerId')
-        outcome = event.get('outcome', 0)
-        if outcome == 1:
-            self.apply_points(pid, 'TAKEON_WON')
+        if event.get('outcome', 0) == 1:
+            self.apply_points(pid, 'takeons_won', 1, current_min)
         else:
-            if self.has_qualifier(event, Q_OVERRUN):
-                self.apply_points(pid, 'TAKEON_OVERRUN')
-            else:
-                self.apply_points(pid, 'TAKEON_LOST')
+            self.apply_points(pid, 'takeons_lost', 1, current_min)
 
-    def _handle_good_skill(self, event):
-        self.apply_points(event.get('playerId'), 'GOOD_SKILL')
+    def _handle_dispossessed(self, event, current_min):
+        self.apply_points(event.get('playerId'), 'dispossessed', 1, current_min)
 
-    def _handle_dispossessed(self, event):
-        self.apply_points(event.get('playerId'), 'DISPOSSESSED')
-
-    def _handle_ball_touch(self, event):
+    def _handle_ball_touch(self, event, current_min):
         if event.get('outcome', 1) == 0:
-            self.apply_points(event.get('playerId'), 'BAD_TOUCH')
+            self.apply_points(event.get('playerId'), 'bad_touches', 1, current_min)
 
-    def _handle_foul(self, event):
-        pid = event.get('playerId')
-        outcome = event.get('outcome', 0)
-        is_penalty = self.has_qualifier(event, Q_PENALTY)
-
-        if outcome == 1:
-            self.apply_points(pid, 'FOUL_WON')
-            if is_penalty:
-                self.apply_points(pid, 'PENALTY_WON')
-        else:
-            self.apply_points(pid, 'FOUL_COMMITTED')
-            if is_penalty:
-                self.apply_points(pid, 'PENALTY_CONC')
-
-    def _handle_tackle(self, event):
+    def _handle_foul(self, event, current_min):
         pid = event.get('playerId')
         if event.get('outcome', 0) == 1:
-            self.apply_points(pid, 'TACKLE_WON')
+            if self.has_qualifier(event, Q_PENALTY):
+                self.apply_points(pid, 'penalties_won', 1, current_min)
         else:
-            self.apply_points(pid, 'TACKLE_LOST')
+            self.apply_points(pid, 'fouls_committed', 1, current_min)
+            if self.has_qualifier(event, Q_PENALTY):
+                self.apply_points(pid, 'penalties_conceded', 1, current_min)
 
-    def _handle_interception(self, event):
-        self.apply_points(event.get('playerId'), 'INTERCEPTION')
-
-    def _handle_clearance(self, event):
-        pid = event.get('playerId')
-        if self.has_qualifier(event, Q_LAST_LINE):
-            self.apply_points(pid, 'CLEARANCE_LAST_LINE')
-        elif self.has_qualifier(event, Q_BLOCKED_CROSS):
-            self.apply_points(pid, 'BLOCKED_CROSS')
-        else:
-            self.apply_points(pid, 'CLEARANCE')
-
-    def _handle_blocked_pass(self, event):
-        self.apply_points(event.get('playerId'), 'BLOCK_PASS')
-
-    def _handle_recovery(self, event):
-        self.apply_points(event.get('playerId'), 'BALL_RECOVERY')
-
-    def _handle_challenge(self, event):
-        self.apply_points(event.get('playerId'), 'CHALLENGE_LOST')
-
-    def _handle_offside_provoked(self, event):
-        self.apply_points(event.get('playerId'), 'OFFSIDE_PROVOKED')
-
-    def _handle_error(self, event):
-        pid = event.get('playerId')
-        if self.has_qualifier(event, Q_ERROR_LED_GOAL):
-            self.apply_points(pid, 'ERROR_LED_GOAL')
-        elif self.has_qualifier(event, Q_ERROR_LED_SHOT):
-            self.apply_points(pid, 'ERROR_LED_SHOT')
-
-    def _handle_aerial(self, event):
-        pid = event.get('playerId')
-        if pid not in self.stats:
-            self.init_player(pid, event.get('contestantId'), 0)
-        self.stats[pid]['aerial_total'] += 1
-        if event.get('outcome', 0) == 1:
-            self.stats[pid]['aerial_won'] += 1
-            self.apply_points(pid, 'AERIAL_WON')
-        else:
-            self.apply_points(pid, 'AERIAL_LOST')
-
-    def _handle_save(self, event):
-        pid = event.get('playerId')
-        if self.has_qualifier(event, Q_DEF_BLOCK):
-            self.apply_points(pid, 'BLOCK_SHOT')
-            return
-        self.apply_points(pid, 'SAVE')
-        if self.has_qualifier(event, Q_PARRIED_SAFE):
-            self.apply_points(pid, 'PARRY_SAFE')
-        if self.has_qualifier(event, Q_PARRIED_DANGER):
-            self.apply_points(pid, 'PARRY_DANGER')
-        if self.has_qualifier(event, Q_FUMBLE):
-            self.apply_points(pid, 'FUMBLE')
-
-    def _handle_claim(self, event):
+    def _handle_tackle(self, event, current_min):
         pid = event.get('playerId')
         if event.get('outcome', 0) == 1:
-            self.apply_points(pid, 'CLAIM_OK')
+            self.apply_points(pid, 'tackles_won', 1, current_min)
         else:
-            self.apply_points(pid, 'CLAIM_FAIL')
+            self.apply_points(pid, 'tackles_lost', 1, current_min)
 
-    def _handle_punch(self, event):
+    def _handle_interception(self, event, current_min):
+        self.apply_points(event.get('playerId'), 'interceptions', 1, current_min)
+
+    def _handle_recovery(self, event, current_min):
+        self.apply_points(event.get('playerId'), 'ball_recoveries', 1, current_min)
+
+    def _handle_clearance(self, event, current_min):
+        self.apply_points(event.get('playerId'), 'clearances', 1, current_min)
+
+    def _handle_aerial(self, event, current_min):
         pid = event.get('playerId')
+        self.apply_points(pid, 'aerials_total', 1, current_min)
         if event.get('outcome', 0) == 1:
-            self.apply_points(pid, 'PUNCH_OK')
+            self.apply_points(pid, 'aerials_won', 1, current_min)
         else:
-            self.apply_points(pid, 'PUNCH_FAIL')
+            self.apply_points(pid, 'aerials_lost', 1, current_min)
 
-    def _handle_smother(self, event):
-        self.apply_points(event.get('playerId'), 'SMOTHER')
+    def _handle_save(self, event, current_min):
+        if not self.has_qualifier(event, Q_DEF_BLOCK):
+            self.apply_points(event.get('playerId'), 'saves', 1, current_min)
 
-    def _handle_sweeper(self, event):
-        pid = event.get('playerId')
-        if event.get('outcome', 0) == 1:
-            self.apply_points(pid, 'SWEEPER_OK')
-        else:
-            self.apply_points(pid, 'SWEEPER_FAIL')
-
-    def _handle_penalty_faced(self, event):
-        pid = event.get('playerId')
+    def _handle_penalty_faced(self, event, current_min):
         if self.has_qualifier(event, Q_PEN_SAVED):
-            self.apply_points(pid, 'PENALTY_SAVED')
+            self.apply_points(event.get('playerId'), 'penalties_saved', 1, current_min)
 
-    def _handle_shot_target(self, event):
-        pid = event.get('playerId')
-        self.apply_points(pid, 'SHOT_TARGET')
-        if self.has_qualifier(event, Q_BIG_CHANCE):
-            self.apply_points(pid, 'BIG_CHANCE_CREATED')
+    def _handle_shot_target(self, event, current_min):
+        self.apply_points(event.get('playerId'), 'shots_on_target', 1, current_min)
 
-    def _handle_shot_miss(self, event):
-        pid = event.get('playerId')
-        self.apply_points(pid, 'SHOT_OFF')
+    def _handle_shot_miss(self, event, current_min):
         if self.has_qualifier(event, Q_PENALTY):
-            self.apply_points(pid, 'PENALTY_MISSED')
-        if self.has_qualifier(event, Q_BIG_CHANCE):
-            self.apply_points(pid, 'BIG_CHANCE_MISSED')
+            self.apply_points(event.get('playerId'), 'penalties_missed', 1, current_min)
 
-    def _handle_shot_post(self, event):
-        pid = event.get('playerId')
-        self.apply_points(pid, 'SHOT_POST')
+    def _handle_shot_post(self, event, current_min):
         if self.has_qualifier(event, Q_PENALTY):
-            self.apply_points(pid, 'PENALTY_MISSED')
+            self.apply_points(event.get('playerId'), 'penalties_missed', 1, current_min)
 
-    def _handle_goal(self, event):
+    def _handle_goal(self, event, current_min):
         pid = event.get('playerId')
         team_id = event.get('contestantId')
+        player_name = event.get('playerName', 'Unknown')
         is_own_goal = self.has_qualifier(event, Q_OWN_GOAL)
 
         if is_own_goal:
-            self.apply_points(pid, 'OWN_GOAL')
+            self.apply_points(pid, 'own_goals', 1, current_min)
+            # En propia meta: el equipo que marca es el rival del que hizo la propia
+            scoring_team = next((t for t in self.teams if t != team_id), None)
+            if scoring_team:
+                self.team_goals_scored[scoring_team] = self.team_goals_scored.get(scoring_team, 0) + 1
+                print(f"   ⚽ GOLE EN PROPIA: {player_name} ({team_id}) → Gol para {scoring_team}")
+            else:
+                print(f"   ⚠️ GOLE EN PROPIA: No se encontró scoring_team. team_id={team_id}, teams={self.teams}")
+            # El equipo que hizo la propia recibe el gol en contra
+            self.team_goals_conceded[team_id] = self.team_goals_conceded.get(team_id, 0) + 1
         else:
-            self.apply_points(pid, 'GOAL')
-            if self.has_qualifier(event, Q_HEAD):
-                self.apply_points(pid, 'GOAL_HEADER_BONUS')
-            if self.has_qualifier(event, Q_FREE_KICK_SHOT):
-                self.apply_points(pid, 'GOAL_FREEKICK_BONUS')
+            self.apply_points(pid, 'goals', 1, current_min)
+            # Gol normal: el equipo que marca es el del jugador
+            self.team_goals_scored[team_id] = self.team_goals_scored.get(team_id, 0) + 1
+            print(f"   ⚽ GOL: {player_name} ({team_id}) → Goles marcados: {self.team_goals_scored[team_id]}")
+            # El equipo rival recibe el gol en contra
+            conceding_team = next((t for t in self.teams if t != team_id), None)
+            if conceding_team:
+                self.team_goals_conceded[conceding_team] = self.team_goals_conceded.get(conceding_team, 0) + 1
 
-        conceding_team = team_id if is_own_goal else next(
-            (t for t in self.teams if t != team_id), None)
-
+        # Actualizar puntos de todos los jugadores del equipo que recibe el gol
+        conceding_team = team_id if is_own_goal else next((t for t in self.teams if t != team_id), None)
         if conceding_team:
-            self.team_goals_conceded[conceding_team] = \
-                self.team_goals_conceded.get(conceding_team, 0) + 1
             for p_on in list(self.on_pitch):
                 if self.players_team.get(p_on) == conceding_team:
-                    self.apply_points(p_on, 'GOAL_CONCEDED')
+                    self.apply_points(p_on, 'goals_conceded', 1, current_min)
 
-    def _handle_card(self, event):
+    def _handle_card(self, event, current_min):
         pid = event.get('playerId')
-        t_min = event.get('timeMin', 0)
-        
+        t_min = event.get('timeMin', current_min)
         if self.has_qualifier(event, Q_RED):
-            self.apply_points(pid, 'RED_CARD')
-            self.remove_player(pid, t_min) # Aquí se cierra su tiempo por expulsión
+            self.apply_points(pid, 'red_cards', 1, current_min)
+            self.remove_player(pid, t_min)
         elif self.has_qualifier(event, Q_SECOND_YELLOW):
-            self.apply_points(pid, 'SECOND_YELLOW')
-            self.remove_player(pid, t_min) # Aquí se cierra su tiempo por doble amarilla
+            self.apply_points(pid, 'second_yellow_cards', 1, current_min)
+            self.remove_player(pid, t_min)
         elif self.has_qualifier(event, Q_YELLOW):
-            self.apply_points(pid, 'YELLOW_CARD')
-
-    def compute_clean_sheets(self, min_minutes_for_def=60):
-        for pid in list(self.points.keys()):
-            team_id = self.players_team.get(pid)
-            if not team_id:
-                continue
-            if self.team_goals_conceded.get(team_id, 0) == 0:
-                pos = self.player_positions_map.get(pid, 'MED')
-                if pos == 'DEF' and self.total_minutes.get(pid, 0) < min_minutes_for_def:
-                    continue
-                if pos == 'MED' and self.total_minutes.get(pid, 0) < min_minutes_for_def:
-                    continue
-                self.apply_points(pid, 'CLEAN_SHEET')
+            self.apply_points(pid, 'yellow_cards', 1, current_min)
 
     def get_player_position(self, player_id):
         return self.player_positions_map.get(player_id, 'MED')
 
+    def find_player_id(self, api_player_id: str, team_id: str, player_name: str):
+        """
+        Busca el ID real del jugador en la tabla players.
+        Como external_id está vacío en la BD, usamos coincidencia por nombre.
+        """
+        player_name_lower = player_name.lower().strip() if player_name else ''
+
+        # Estrategia 0: Si el api_player_id parece un ID local (empieza por 'cult_'), buscar directamente
+        if api_player_id.startswith('cult_'):
+            response = self.supabase.table('players').select('id, external_id, short_name').eq('id', api_player_id).execute()
+            if response.data and len(response.data) > 0:
+                print(f"      🔍 Encontrado por ID directo: {api_player_id} → {api_player_id}")
+                return api_player_id
+            # Buscar por external_id
+            response = self.supabase.table('players').select('id, external_id, short_name').eq('external_id', api_player_id.replace('cult_', '')).execute()
+            if response.data and len(response.data) > 0:
+                print(f"      🔍 Encontrado por external_id: {api_player_id.replace('cult_', '')} → {response.data[0]['id']}")
+                return response.data[0]['id']
+
+        if not player_name_lower:
+            print(f"      ⚠️ Sin nombre para player {api_player_id}")
+            return api_player_id
+
+        # Obtener todos los jugadores del equipo
+        response = self.supabase.table('players').select('id, first_name, last_name, short_name, team_id').eq('team_id', team_id).execute()
+        if not response.data:
+            print(f"      ⚠️ No hay jugadores en BD para team {team_id}")
+            return api_player_id
+
+        # Estrategia 1: Coincidencia exacta por short_name
+        short_name = player_name_lower.split()[-1] if player_name_lower else ''
+        for player in response.data:
+            if player.get('short_name', '').lower() == short_name:
+                print(f"      🔍 Encontrado por short_name exacto: {player['short_name']} → {player['id']}")
+                return player['id']
+
+        # Estrategia 2: Coincidencia por apellido (última palabra) en first_name o last_name
+        for player in response.data:
+            full_name = f"{player.get('first_name', '')} {player.get('last_name', '')}".lower().strip()
+            # Buscar si el apellido coincide con alguna parte del nombre completo
+            if short_name and short_name in full_name.split():
+                print(f"      🔍 Encontrado por apellido en nombre: {full_name} → {player['id']}")
+                return player['id']
+
+        # Estrategia 3: Coincidencia parcial (el nombre de la API contiene el nombre de la BD o viceversa)
+        for player in response.data:
+            full_name = f"{player.get('first_name', '')} {player.get('last_name', '')}".lower().strip()
+            short = player.get('short_name', '').lower()
+
+            # Verificar si hay coincidencia significativa
+            if player_name_lower in full_name or full_name in player_name_lower:
+                print(f"      🔍 Encontrado por coincidencia parcial: '{full_name}' ~ '{player_name}' → {player['id']}")
+                return player['id']
+
+            # Verificar con short_name
+            if short and (short in player_name_lower or player_name_lower.endswith(short)):
+                print(f"      🔍 Encontrado por short_name parcial: '{short}' en '{player_name}' → {player['id']}")
+                return player['id']
+
+        # Estrategia 4: Coincidencia fonética aproximada (primera y última letra + longitud similar)
+        for player in response.data:
+            full_name = f"{player.get('first_name', '')} {player.get('last_name', '')}".lower().strip()
+            if len(full_name) > 3 and len(player_name_lower) > 3:
+                # Mismo rango de longitud y primera letra similar
+                if abs(len(full_name) - len(player_name_lower)) <= 3 and full_name[0] == player_name_lower[0]:
+                    # Contar palabras comunes
+                    name_words = set(player_name_lower.split())
+                    full_words = set(full_name.split())
+                    common = name_words & full_words
+                    if len(common) >= 1:
+                        print(f"      🔍 Encontrado por aproximación: '{full_name}' ~ '{player_name}' → {player['id']}")
+                        return player['id']
+
+        # No se encontró
+        print(f"      ⚠️ No se encontró jugador: API='{player_name}', Team={team_id}, Options: {[p.get('short_name') for p in response.data[:5]]}")
+        return api_player_id
+
+    def update_match_score(self):
+        """Actualiza el marcador del partido en la tabla fixtures."""
+        print("\n📊 Actualizando marcador del partido...")
+
+        if not self.home_team_id or not self.away_team_id:
+            print("⚠️ No se pueden calcular goles: faltan IDs de equipos")
+            return
+
+        # Los goles de cada equipo son los que MARCÓ (no los que recibió)
+        home_goals = self.team_goals_scored.get(self.home_team_id, 0)
+        away_goals = self.team_goals_scored.get(self.away_team_id, 0)
+
+        print(f"   Marcador calculado: Local ({self.home_team_id}) {home_goals} - {away_goals} Visitante ({self.away_team_id})")
+        print(f"   (Local marcó: {home_goals}, Visitante marcó: {away_goals})")
+
+        # Actualizar la tabla fixtures
+        try:
+            response = self.supabase.table('fixtures').update({
+                'home_score': home_goals,
+                'away_score': away_goals,
+                'status': 'finished'
+            }).eq('id', self.fixture_id).execute()
+
+            if response.data:
+                print(f"   ✅ Marcador actualizado en fixtures")
+            else:
+                print(f"   ⚠️ No se pudo actualizar el marcador")
+        except Exception as e:
+            print(f"   ❌ Error actualizando marcador: {e}")
+
     def upload_to_supabase(self):
-        """Sube los player_scores a Supabase"""
+        """Sube los player_scores a Supabase usando los nombres de columnas correctos."""
         print("\n📤 Subiendo datos a Supabase...")
 
         for player_id, total_points in self.points.items():
             team_id = self.players_team.get(player_id)
-            if not team_id:
-                continue
+            if not team_id: continue
+
+            # Buscar el ID real del jugador en la BD
+            db_player_id = self.find_player_id(player_id, team_id, self.player_names.get(player_id, ''))
+
+            # Si no se encontró el jugador, saltar este registro
+            if db_player_id == player_id:
+                # Verificar si realmente existe en la BD
+                exists = self.supabase.table('players').select('id').eq('id', player_id).eq('team_id', team_id).execute()
+                if not exists.data:
+                    print(f"   ⚠️ Saltando {self.player_names.get(player_id, player_id)}: no encontrado en BD")
+                    continue
+                print(f"   ✓ Usando mismo ID: {player_id}")
 
             stats = self.stats.get(player_id, {})
             pos = self.get_player_position(player_id)
+            mins_played = self.total_minutes.get(player_id, 0)
 
-            passes_completed = stats.get('pass_ok', 0)
-            passes_attempted = stats.get('pass_total', 0)
+            # Pases: pass_ok -> passes_completed, pass_total -> passes_attempted
+            passes_completed = stats.get('passes_completed', 0)
+            passes_attempted = stats.get('passes_attempted', 0)
             pass_accuracy = (passes_completed / passes_attempted * 100) if passes_attempted > 0 else 0
 
-            aerials_won = stats.get('aerial_won', 0)
-            aerials_total = stats.get('aerial_total', 0)
+            # Duelos aéreos
+            aerials_won = stats.get('aerials_won', 0)
+            aerials_lost = stats.get('aerials_lost', 0)
+            aerials_total = aerials_won + aerials_lost
             aerial_success_rate = (aerials_won / aerials_total * 100) if aerials_total > 0 else 0
 
             is_starter = self.entry_minutes.get(player_id, 999) == 0
+            clean_sheet = mins_played > 60 and stats.get('goals_conceded', 0) == 0
 
             player_score_data = {
-                'player_id': player_id,
+                'player_id': db_player_id,  # Usar ID local mapeado
                 'fixture_id': self.fixture_id,
                 'match_id': self.match_id,
                 'team_id': team_id,
                 'position': pos,
                 'is_starter': is_starter,
-                'minutes_played': self.total_minutes.get(player_id, 0),
-                'total_points': round(total_points, 2),
+                'minutes_played': mins_played,
+                'total_points': int(total_points),
 
                 # Goles
-                'goals': stats.get('GOAL', 0),
-                'goal_header_bonus': stats.get('GOAL_HEADER_BONUS', 0),
-                'goal_freekick_bonus': stats.get('GOAL_FREEKICK_BONUS', 0),
-                'own_goals': stats.get('OWN_GOAL', 0),
-                'goals_conceded': stats.get('GOAL_CONCEDED', 0),
-                'clean_sheet': stats.get('CLEAN_SHEET', 0) > 0,
+                'goals': stats.get('goals', 0),
+                'own_goals': stats.get('own_goals', 0),
+                'goals_conceded': stats.get('goals_conceded', 0),
+                'clean_sheet': clean_sheet,
 
                 # Asistencias
-                'assists': stats.get('ASSIST', 0),
-                'key_passes': stats.get('KEY_PASS', 0),
-                'second_assists': stats.get('SECOND_ASSIST', 0),
-                'intent_assists': stats.get('INTENT_ASSIST', 0),
+                'assists': stats.get('assists', 0),
+                'intent_assists': stats.get('fantasy_assist', 0),
+                'second_assists': stats.get('second_assists', 0),
+                'key_passes': stats.get('key_passes', 0),
 
                 # Tiros
-                'shots_on_target': stats.get('SHOT_TARGET', 0),
-                'shots_off_target': stats.get('SHOT_OFF', 0),
-                'shots_hit_woodwork': stats.get('SHOT_POST', 0),
-                'big_chances_created': stats.get('BIG_CHANCE_CREATED', 0),
-                'big_chances_missed': stats.get('BIG_CHANCE_MISSED', 0),
-                'penalties_scored': stats.get('PENALTY_SCORED', 0),
-                'penalties_missed': stats.get('PENALTY_MISSED', 0),
-                'penalties_won': stats.get('PENALTY_WON', 0),
-                'penalties_conceded': stats.get('PENALTY_CONC', 0),
+                'shots_on_target': stats.get('shots_on_target', 0),
+                'shots_off_target': stats.get('shots_off_target', 0),
+                'shots_hit_woodwork': stats.get('shots_hit_woodwork', 0),
+                'big_chances_created': stats.get('big_chances_created', 0),
+                'big_chances_missed': stats.get('big_chances_missed', 0),
+
+                # Penaltis
+                'penalties_scored': stats.get('penalties_scored', 0),
+                'penalties_missed': stats.get('penalties_missed', 0),
+                'penalties_won': stats.get('penalties_won', 0),
+                'penalties_conceded': stats.get('penalties_conceded', 0),
 
                 # Portero
-                'saves': stats.get('SAVE', 0),
-                'penalty_saves': stats.get('PENALTY_SAVED', 0),
-                'claims_ok': stats.get('CLAIM_OK', 0),
-                'claims_fail': stats.get('CLAIM_FAIL', 0),
-                'fumbles': stats.get('FUMBLE', 0),
-                'crosses_not_claimed': stats.get('CROSS_NOT_CLAIMED', 0),
-                'punches_ok': stats.get('PUNCH_OK', 0),
-                'punches_fail': stats.get('PUNCH_FAIL', 0),
-                'smothers': stats.get('SMOTHER', 0),
-                'sweepers_ok': stats.get('SWEEPER_OK', 0),
-                'sweepers_fail': stats.get('SWEEPER_FAIL', 0),
-                'parries_safe': stats.get('PARRY_SAFE', 0),
-                'parries_danger': stats.get('PARRY_DANGER', 0),
+                'saves': stats.get('saves', 0),
+                'penalty_saves': stats.get('penalties_saved', 0),
+                'claims_ok': stats.get('claims_ok', 0),
+                'claims_fail': stats.get('claims_fail', 0),
+                'fumbles': stats.get('fumbles', 0),
+                'crosses_not_claimed': stats.get('crosses_not_claimed', 0),
+                'punches_ok': stats.get('punches_ok', 0),
+                'punches_fail': stats.get('punches_fail', 0),
+                'smothers': stats.get('smothers', 0),
+                'sweepers_ok': stats.get('sweepers_ok', 0),
+                'sweepers_fail': stats.get('sweepers_fail', 0),
+                'parries_safe': stats.get('parries_safe', 0),
+                'parries_danger': stats.get('parries_danger', 0),
 
                 # Defensa
-                'clearances': stats.get('CLEARANCE', 0),
-                'clearances_last_line': stats.get('CLEARANCE_LAST_LINE', 0),
-                'blocked_crosses': stats.get('BLOCKED_CROSS', 0),
-                'interceptions': stats.get('INTERCEPTION', 0),
-                'tackles_won': stats.get('TACKLE_WON', 0),
-                'tackles_lost': stats.get('TACKLE_LOST', 0),
-                'blocked_shots': stats.get('BLOCK_SHOT', 0),
-                'blocked_passes': stats.get('BLOCK_PASS', 0),
-                'ball_recoveries': stats.get('BALL_RECOVERY', 0),
-                'offsides_provoked': stats.get('OFFSIDE_PROVOKED', 0),
-                'challenges_lost': stats.get('CHALLENGE_LOST', 0),
-
-                # Errores
-                'errors_leading_to_shot': stats.get('ERROR_LED_SHOT', 0),
-                'errors_leading_to_goal': stats.get('ERROR_LED_GOAL', 0),
+                'clearances': stats.get('clearances', 0),
+                'clearances_last_line': stats.get('clearances_last_line', 0),
+                'blocked_crosses': stats.get('blocked_crosses', 0),
+                'interceptions': stats.get('interceptions', 0),
+                'tackles_won': stats.get('tackles_won', 0),
+                'tackles_lost': stats.get('tackles_lost', 0),
+                'blocked_shots': stats.get('blocked_shots', 0),
+                'blocked_passes': stats.get('blocked_passes', 0),
+                'ball_recoveries': stats.get('ball_recoveries', 0),
+                'offsides_provoked': stats.get('offsides_provoked', 0),
+                'challenges_lost': stats.get('challenges_lost', 0),
+                'errors_leading_to_shot': stats.get('errors_leading_to_shot', 0),
+                'errors_leading_to_goal': stats.get('errors_leading_to_goal', 0),
 
                 # Pases
                 'passes_completed': passes_completed,
                 'passes_attempted': passes_attempted,
                 'pass_accuracy': round(pass_accuracy, 2),
-                'progressive_passes': stats.get('PASS_PROGRESSIVE', 0),
-                'passes_into_final_third': stats.get('PASS_FINAL_THIRD', 0),
-                'passes_into_box': stats.get('PASS_INTO_BOX', 0),
-                'through_balls': stats.get('THROUGH_BALL', 0),
-                'crosses_completed': stats.get('CROSS_OK', 0),
-                'crosses_attempted': stats.get('CROSS_OK', 0) + stats.get('CROSS_FAIL', 0),
-                'switch_plays': stats.get('SWITCH_PLAY', 0),
-                'pull_backs': stats.get('PULL_BACK', 0),
-                'long_balls_completed': stats.get('LONG_BALL_OK', 0),
-                'lay_offs': stats.get('LAY_OFF', 0),
-                'offside_passes': stats.get('OFFSIDE_PASS', 0),
+                'progressive_passes': stats.get('progressive_passes', 0),
+                'passes_into_final_third': stats.get('passes_into_final_third', 0),
+                'passes_into_box': stats.get('passes_into_box', 0),
+                'through_balls': stats.get('through_balls', 0),
+                'crosses_completed': stats.get('crosses_completed', 0),
+                'crosses_attempted': stats.get('crosses_attempted', 0),
+                'switch_plays': stats.get('switch_plays', 0),
+                'pull_backs': stats.get('pull_backs', 0),
+                'long_balls_completed': stats.get('long_balls_completed', 0),
+                'lay_offs': stats.get('lay_offs', 0),
+                'offside_passes': stats.get('offside_passes', 0),
 
                 # Regates
-                'takeons_won': stats.get('TAKEON_WON', 0),
-                'takeons_lost': stats.get('TAKEON_LOST', 0),
-                'takeons_overrun': stats.get('TAKEON_OVERRUN', 0),
-                'good_skills': stats.get('GOOD_SKILL', 0),
-                'dispossessed': stats.get('DISPOSSESSED', 0),
-                'bad_touches': stats.get('BAD_TOUCH', 0),
+                'takeons_won': stats.get('takeons_won', 0),
+                'takeons_lost': stats.get('takeons_lost', 0),
+                'takeons_overrun': stats.get('takeons_overrun', 0),
+                'good_skills': stats.get('good_skills', 0),
+                'dispossessed': stats.get('dispossessed', 0),
+                'bad_touches': stats.get('bad_touches', 0),
 
-                # Aéreos
+                # Duelos aéreos
                 'aerials_won': aerials_won,
-                'aerials_lost': aerials_total - aerials_won,
+                'aerials_lost': aerials_lost,
                 'aerial_success_rate': round(aerial_success_rate, 2),
 
-                # Faltas
-                'fouls_committed': stats.get('FOUL_COMMITTED', 0),
-                'fouls_won': stats.get('FOUL_WON', 0),
-
-                # Tarjetas
-                'yellow_cards': stats.get('YELLOW_CARD', 0),
-                'second_yellow_cards': stats.get('SECOND_YELLOW', 0),
-                'red_cards': stats.get('RED_CARD', 0),
+                # Faltas y tarjetas
+                'fouls_committed': stats.get('fouls_committed', 0),
+                'fouls_won': stats.get('fouls_won', 0),
+                'yellow_cards': stats.get('yellow_cards', 0),
+                'second_yellow_cards': stats.get('second_yellow_cards', 0),
+                'red_cards': stats.get('red_cards', 0),
             }
 
             try:
-                existing = self.supabase.table('player_scores').select('id').eq('player_id', player_id).eq('fixture_id', self.fixture_id).execute()
-
+                existing = self.supabase.table('player_scores').select('id').eq('player_id', db_player_id).eq('fixture_id', self.fixture_id).execute()
                 if existing.data:
-                    response = self.supabase.table('player_scores').update(player_score_data).eq('player_id', player_id).eq('fixture_id', self.fixture_id).execute()
+                    response = self.supabase.table('player_scores').update(player_score_data).eq('player_id', db_player_id).eq('fixture_id', self.fixture_id).execute()
                 else:
                     response = self.supabase.table('player_scores').insert(player_score_data).execute()
 
                 if response.data:
                     player_name = self.player_names.get(player_id, player_id)
-                    print(f"  ✅ {player_name}: {total_points:.1f} pts ({self.total_minutes.get(player_id, 0)}')")
+                    print(f"  ✅ {player_name}: {int(total_points)} pts ({mins_played}')")
 
             except Exception as e:
                 print(f"  ❌ Error subiendo {player_id}: {e}")
 
     def run(self):
-        """Ejecuta la descarga completa"""
         print(f"\n{'='*60}")
         print(f"📥 DESCARGA DE EVENTOS - Partido {self.match_id}")
         print(f"{'='*60}")
 
-        # 1. Descargar squads
-        if not self.download_squads():
-            print("⚠️ No se pudieron descargar los squads, continuando...")
-
-        # 2. Cargar posiciones
+        if not self.download_squads(): print("⚠️ No se pudieron descargar los squads, continuando...")
         self.load_positions_from_squads()
-
-        # 3. Cargar headers
         headers = self.load_headers()
 
-        # 4. Obtener eventos
         print(f"\n⏳ Obteniendo eventos del partido...")
         current_minute = 0
         match_ended = False
 
-        url = (f"https://api.performfeeds.com/soccerdata/matchevent/"
-               f"{SDAPI_OUTLET_KEY}/{self.match_id}"
-               f"?_fmt=jsonp&_rt=c&_lcl=en&sps=widgets&_clbk=callback")
+        url = (f"https://api.performfeeds.com/soccerdata/matchevent/{SDAPI_OUTLET_KEY}/{self.match_id}?_fmt=jsonp&_rt=c&_lcl=en&sps=widgets&_clbk=callback")
 
         try:
             res = requests.get(url, headers=headers, timeout=30)
             content = res.text
             start = content.find('{')
             end = content.rfind('}')
+            if start == -1 or end == -1: return
 
-            if start == -1 or end == -1:
-                print("❌ Respuesta malformada de la API")
-                return
+            data = json.loads(content[start:end+1])
+            if "errorCode" in data: return
 
-            clean_json = content[start:end+1]
-            data = json.loads(clean_json)
-
-            if "errorCode" in data:
-                print(f"❌ Error de API: {data.get('errorCode')}")
-                return
-
-            # Guardar eventos en archivo
             events_dir = BASE_OUTPUT_PATH / self.match_id / "events"
             events_dir.mkdir(parents=True, exist_ok=True)
             archivo_salida = events_dir / f"{self.match_id}.json"
@@ -968,68 +1025,41 @@ class MatchEventDownloader:
             with open(archivo_salida, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
 
-            print(f"📁 Eventos guardados en: {archivo_salida}")
-
-            # Procesar eventos
             events = data.get('liveData', {}).get('event', [])
-            events.sort(key=lambda x: (x.get('periodId', 0),
-                                       x.get('timeMin', 0),
-                                       x.get('timeSec', 0),
-                                       x.get('id', 0)))
+            events.sort(key=lambda x: (x.get('periodId', 0), x.get('timeMin', 0), x.get('timeSec', 0), x.get('id', 0)))
 
             for event in events:
                 t_min = event.get('timeMin', 0)
-                if t_min > current_minute:
-                    current_minute = t_min
-
+                if t_min > current_minute: current_minute = t_min
                 self.process_event(event, current_minute)
-
-                # Si el evento 30 indica el final del partido
                 if event.get('typeId') == 30 and self.has_qualifier(event, 209):
                     match_ended = True
             
-            # --- NUEVA LÓGICA DE MINUTOS ---
-            # Si se terminaron de procesar los eventos (haya terminado o sea en vivo),
-            # le "cerramos" el minutaje a todos los que siguen en el campo usando 
-            # el minuto máximo alcanzado (current_minute).
             for pid in list(self.on_pitch):
                 self.remove_player(pid, current_minute)
 
-            # Aplicar clean sheets si terminó
-            if match_ended:
-                self.compute_clean_sheets()
-
-            # Subir a Supabase
             self.upload_to_supabase()
+
+            # Actualizar marcador del partido
+            self.update_match_score()
 
             print(f"\n{'='*60}")
             print(f"✅ Descarga completada - Minuto {current_minute}'")
-            if match_ended:
-                print("🏁 Partido finalizado")
+            if match_ended: print("🏁 Partido finalizado")
             print(f"{'='*60}")
 
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Error de conexión: {e}")
         except Exception as e:
+            import traceback
             print(f"❌ Error: {e}")
-
+            print(f"   Traceback: {traceback.format_exc()}")
 
 def main():
     if len(sys.argv) < 3:
         print("❌ Uso: python trigger_descarga_eventos.py <fixture_id> <match_id>")
-        print("\nEjemplo: python trigger_descarga_eventos.py abc123 8m6p1z")
         sys.exit(1)
 
-    fixture_id = sys.argv[1]
-    match_id = sys.argv[2]
-
-    print(f"\n🚀 Iniciando descarga de eventos...")
-    print(f"   Fixture ID: {fixture_id}")
-    print(f"   Match ID: {match_id}")
-
-    downloader = MatchEventDownloader(fixture_id, match_id)
+    downloader = MatchEventDownloader(sys.argv[1], sys.argv[2])
     downloader.run()
-
 
 if __name__ == "__main__":
     main()

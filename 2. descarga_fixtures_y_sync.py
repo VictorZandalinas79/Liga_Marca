@@ -326,14 +326,34 @@ def similarity_score(s1, s2):
     return SequenceMatcher(None, normalize_name(s1), normalize_name(s2)).ratio()
 
 def find_team_match(json_team_name, csv_teams):
+    norm_json = normalize_name(json_team_name)
+    json_words = set(norm_json.split())
+
+    # 1. Búsqueda por contención exacta (100% de las palabras coinciden)
+    # Ejemplo: CSV "Sporting" -> API "Real Sporting de Gijon"
+    for csv_team in csv_teams:
+        norm_csv = normalize_name(csv_team)
+        csv_words = set(norm_csv.split())
+        
+        # Evitamos que equipos de 1 sola palabra muy común ("fc", "cd") den falsos positivos
+        if not csv_words or (len(csv_words) == 1 and list(csv_words)[0] in ['fc', 'cd', 'ud', 'real']):
+            continue
+            
+        # Comprobamos si todas las palabras de un lado están totalmente incluidas en el otro
+        if csv_words.issubset(json_words) or json_words.issubset(csv_words):
+            return csv_team, 1.0  # Coincidencia 100%
+
+    # 2. Fallback original: Similitud por ratio (difflib) para fallos tipográficos
     best_match, best_score = None, 0.0
     for csv_team in csv_teams:
         score = similarity_score(json_team_name, csv_team)
         if score > best_score:
             best_score = score
             best_match = csv_team
-    if best_score > 0.6:
+            
+    if best_score > 0.55: # Límite permisivo si falla la contención exacta
         return best_match, best_score
+        
     return None, best_score
 
 def find_player_match(player_json, csv_players):

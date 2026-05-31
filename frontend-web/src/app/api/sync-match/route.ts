@@ -48,9 +48,11 @@ export async function POST(request: NextRequest) {
     // Cargar variables de entorno
     const envVars = loadEnv()
 
-    // Ejecutar el script usando el Python del venv (está en el directorio padre)
-    const pythonPath = path.join(process.cwd(), '..', 'venv', 'bin', 'python')
-    const scriptPath = path.join(process.cwd(), 'trigger_descarga_eventos.py')
+    // Ejecutar el script usando Python del sistema
+    // El venv tiene paquetes compilados para arquitectura incompatible (x86_64 vs arm64)
+    const frontendRoot = '/Users/victorzandal/Proyectos/Liga_Marca/frontend-web'
+    const pythonPath = '/Library/Frameworks/Python.framework/Versions/3.11/bin/python3'
+    const scriptPath = path.join(frontendRoot, 'trigger_descarga_eventos.py')
 
     const { stdout, stderr } = await execPromise(
       `"${pythonPath}" "${scriptPath}" ${fixture_id} ${match_id}`,
