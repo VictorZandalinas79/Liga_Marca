@@ -27,8 +27,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+
+def _clean(value):
+    """Quita espacios y comillas envolventes que se cuelan al pegar secrets."""
+    if value is None:
+        return None
+    return value.strip().strip('"').strip("'").strip()
+
+
+SUPABASE_URL = _clean(os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL"))
+SUPABASE_KEY = _clean(os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY"))
+SDAPI_OUTLET_KEY = _clean(os.environ.get("SDAPI_OUTLET_KEY"))
 
 SCRIPT = "trigger_descarga_eventos.py"
 
@@ -108,10 +117,17 @@ def sync_one(fixture):
     fixture_id = fixture["id"]
     match_id = fixture.get("match_id") or fixture_id
     log(f"⚽ Sincronizando fixture={fixture_id} match={match_id} (status={fixture.get('status')})")
+    # Reinyecta los valores ya saneados para que el script de puntuación reciba
+    # la URL/keys sin comillas ni espacios sobrantes.
+    child_env = {**os.environ}
+    child_env["SUPABASE_URL"] = SUPABASE_URL or ""
+    child_env["SUPABASE_SERVICE_ROLE_KEY"] = SUPABASE_KEY or ""
+    if SDAPI_OUTLET_KEY:
+        child_env["SDAPI_OUTLET_KEY"] = SDAPI_OUTLET_KEY
     try:
         result = subprocess.run(
             [sys.executable, SCRIPT, str(fixture_id), str(match_id)],
-            capture_output=True, text=True, timeout=300,
+            capture_output=True, text=True, timeout=300, env=child_env,
         )
         if result.returncode == 0:
             log(f"✅ OK fixture={fixture_id}")
