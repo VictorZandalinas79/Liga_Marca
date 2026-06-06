@@ -1,0 +1,51 @@
+name: Sync Live Matches
+
+on:
+  schedule:
+    # Cada 5 minutos. GitHub solo ejecuta crons sobre la rama por defecto.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      fixture_ids:
+        description: 'IDs de fixtures separados por coma (sincroniza solo esos)'
+        required: false
+        default: ''
+      matchday:
+        description: 'Jornada completa a sincronizar (número o nombre de fase)'
+        required: false
+        default: ''
+
+# Evita solapes si una ejecución tarda más que el intervalo del cron.
+concurrency:
+  group: sync-live
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: frontend-web/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run live sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SDAPI_OUTLET_KEY: ${{ secrets.SDAPI_OUTLET_KEY }}
+          SYNC_FIXTURE_IDS: ${{ github.event.inputs.fixture_ids }}
+          SYNC_MATCHDAY: ${{ github.event.inputs.matchday }}
+        run: python ci/run_live_sync.py

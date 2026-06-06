@@ -728,9 +728,9 @@ export default function PartidoDetallePage() {
       if (response.ok) {
         setSyncStatus({
           type: 'success',
-          message: `Partido sincronizado. ${result.output?.length || 0} jugadores actualizados.`
+          message: result.message || 'Sincronización lanzada. Los puntos aparecerán en 1-2 min; refresca.'
         })
-        // Recargar datos del partido
+        // Recargar datos del partido (los nuevos datos llegan en segundo plano)
         await fetchPartido()
       } else {
         setSyncStatus({

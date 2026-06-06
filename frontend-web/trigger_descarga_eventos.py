@@ -809,8 +809,14 @@ class MatchEventDownloader:
         print(f"      ⚠️ No se encontró jugador: API='{player_name}', Team={team_id}, Options: {[p.get('short_name') for p in response.data[:5]]}")
         return api_player_id
 
-    def update_match_score(self):
-        """Actualiza el marcador del partido en la tabla fixtures."""
+    def update_match_score(self, match_ended=False):
+        """Actualiza el marcador del partido en la tabla fixtures.
+
+        match_ended=True solo cuando la API ha emitido el evento de tiempo
+        completo. Mientras el partido sigue en juego dejamos status='live'
+        para que el sincronizador automático lo siga refrescando cada pocos
+        minutos; al terminar lo marcamos 'finished' y el cron deja de tocarlo.
+        """
         print("\n📊 Actualizando marcador del partido...")
 
         if not self.home_team_id or not self.away_team_id:
@@ -821,15 +827,16 @@ class MatchEventDownloader:
         home_goals = self.team_goals_scored.get(self.home_team_id, 0)
         away_goals = self.team_goals_scored.get(self.away_team_id, 0)
 
+        new_status = 'finished' if match_ended else 'live'
         print(f"   Marcador calculado: Local ({self.home_team_id}) {home_goals} - {away_goals} Visitante ({self.away_team_id})")
-        print(f"   (Local marcó: {home_goals}, Visitante marcó: {away_goals})")
+        print(f"   (Local marcó: {home_goals}, Visitante marcó: {away_goals}) → status='{new_status}'")
 
         # Actualizar la tabla fixtures
         try:
             response = self.supabase.table('fixtures').update({
                 'home_score': home_goals,
                 'away_score': away_goals,
-                'status': 'finished'
+                'status': new_status
             }).eq('id', self.fixture_id).execute()
 
             if response.data:
@@ -1040,8 +1047,8 @@ class MatchEventDownloader:
 
             self.upload_to_supabase()
 
-            # Actualizar marcador del partido
-            self.update_match_score()
+            # Actualizar marcador del partido (solo 'finished' si llegó el tiempo completo)
+            self.update_match_score(match_ended=match_ended)
 
             print(f"\n{'='*60}")
             print(f"✅ Descarga completada - Minuto {current_minute}'")
