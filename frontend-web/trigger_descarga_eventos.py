@@ -100,18 +100,15 @@ def load_scoring_rules():
             "own_goal": {"all": -2},
             "assist": {"all": 3},
             "fantasy_assist": {"all": 1},
-            "clean_sheet": {"POR": 4, "DEF": 4, "MED": 2, "DEL": 1, "min_minutes": 60},
+            "clean_sheet": {"POR": 4, "DEF": 3, "MED": 2, "DEL": 1, "min_minutes": 60},
             "goal_conceded_per_2": {"POR": -2, "DEF": -2, "MED": -1, "DEL": -1},
             "save_per_2": {"all": 1},
             "penalty_save": {"all": 5},
             "penalty_missed": {"all": -2},
             "penalty_won": {"all": 2},
+            "penalty_conceded": {"all": -2},
             "yellow_card": {"all": -1},
-            "red_card": {"all": -3},
-            "shot_on_target_per_2": {"all": 1},
-            "lost_balls_per_8": {"all": -1},
-            "recoveries_per_5": {"all": 1},
-            "clearances_per_3": {"all": 1},
+            "red_card": {"all": -3}
         }
     }
 
@@ -136,6 +133,7 @@ class MatchEventDownloader:
         self.teams = set()
         self.points = {}
         self.stats = {}
+        self.team_total_events = {} # NUEVO: Para calcular el % de participación
         self.processed_events = set()
         self.team_goals_conceded = {}
         self.team_goals_scored = {}
@@ -181,13 +179,11 @@ class MatchEventDownloader:
             start = content.find('{')
             end = content.rfind('}')
             if start == -1 or end == -1:
-                # Intentar obtener equipos de la BD si falla la API
                 self.load_teams_from_db()
                 return False
 
             data = json.loads(content[start:end+1])
             if "errorCode" in data:
-                # Intentar obtener equipos de la BD si falla la API
                 self.load_teams_from_db()
                 return False
 
@@ -305,32 +301,21 @@ class MatchEventDownloader:
         except (TypeError, ValueError): return default
 
     def init_player_stats_if_none(self, player_id):
-        """Inicializa los contadores a 0 la primera vez que el jugador hace algo.
-        Usa los nombres de columnas reales de Supabase para evitar errores.
-        """
+        """Inicializa los contadores a 0 la primera vez que el jugador hace algo."""
         if player_id not in self.stats:
             self.stats[player_id] = {
-                # Goles
                 'goals': 0, 'own_goals': 0,
-                # Asistencias
                 'assists': 0, 'fantasy_assist': 0,
-                # Penaltis
                 'penalties_missed': 0, 'penalties_saved': 0, 'penalties_won': 0, 'penalties_conceded': 0,
-                # Portería
                 'goals_conceded': 0, 'clean_sheet': 0, 'saves': 0,
-                # Tarjetas
                 'yellow_cards': 0, 'second_yellow_cards': 0, 'red_cards': 0,
-                # Tiros
                 'shots_on_target': 0, 'shots_off_target': 0, 'shots_hit_woodwork': 0,
                 'big_chances_created': 0, 'big_chances_missed': 0,
-                # Defensa
                 'clearances': 0, 'clearances_last_line': 0, 'blocked_crosses': 0,
                 'interceptions': 0, 'tackles_won': 0, 'tackles_lost': 0,
                 'blocked_shots': 0, 'blocked_passes': 0, 'ball_recoveries': 0,
                 'offsides_provoked': 0, 'challenges_lost': 0,
-                # Errores
                 'errors_leading_to_shot': 0, 'errors_leading_to_goal': 0,
-                # Pases
                 'passes_completed': 0, 'passes_attempted': 0,
                 'progressive_passes': 0, 'passes_into_final_third': 0,
                 'passes_into_box': 0, 'through_balls': 0,
@@ -338,16 +323,18 @@ class MatchEventDownloader:
                 'switch_plays': 0, 'pull_backs': 0,
                 'long_balls_completed': 0, 'lay_offs': 0,
                 'offside_passes': 0,
-                # Regates
                 'takeons_won': 0, 'takeons_lost': 0, 'takeons_overrun': 0,
                 'good_skills': 0, 'dispossessed': 0, 'bad_touches': 0,
-                # Duelos aéreos
                 'aerials_won': 0, 'aerials_lost': 0,
-                # Faltas
                 'fouls_committed': 0, 'fouls_won': 0,
-                # Internos para cálculo de puntos (no se suben a BD)
-                'pass_opp_half': 0,  # Pases en campo contrario
-                'box_entries': 0,    # Entradas al área
+                # Internos y Puntos RELEVO
+                'pass_opp_half': 0,  
+                'box_entries': 0,
+                'total_events': 0,
+                'pass_opp_half_attempted': 0,
+                'pass_opp_half_completed': 0,
+                'shots_total': 0,
+                'relevo_points': 0
             }
             if player_id not in self.points:
                 self.points[player_id] = BASE_SCORE
@@ -360,6 +347,66 @@ class MatchEventDownloader:
             self.stats[player_id][stat_key] = self.stats[player_id].get(stat_key, 0) + int(multiplier)
             
         self.recalculate_player_points(player_id, current_min)
+
+    def calculate_relevo_points(self, player_id):
+        """Calcula los Puntos RELEVO (0 a 4) basados en estadísticas y porcentajes"""
+        stats = self.stats[player_id]
+        team_id = self.players_team.get(player_id)
+        if not team_id: return 0
+        
+        rules = self.scoring_rules.get('relevo_rules', {})
+        # Evitamos dividir por cero. Asegurar al menos 1
+        team_events = max(1, self.team_total_events.get(team_id, 1))
+        player_events = stats.get('total_events', 0)
+        
+        relevo = 0
+        
+        # 1. PARTICIPACIÓN (% de eventos del equipo)
+        pct_participacion = (player_events / team_events) * 100
+        step = rules.get('participation_step_percent', 5)
+        relevo += int(pct_participacion // step) * rules.get('participation_points_per_step', 1)
+        
+        # 2. PASES (% de acierto global)
+        passes_att = stats.get('passes_attempted', 0)
+        if passes_att >= rules.get('min_passes', 10):
+            pass_acc = (stats.get('passes_completed', 0) / passes_att) * 100
+            if pass_acc >= rules.get('pass_accuracy_excel', 92): relevo += 2
+            elif pass_acc >= rules.get('pass_accuracy_high', 85): relevo += 1
+            elif pass_acc < rules.get('pass_accuracy_low', 65): relevo -= 1
+            
+        # 3. PASES CAMPO RIVAL (% de acierto)
+        opp_att = stats.get('pass_opp_half_attempted', 0)
+        if opp_att >= rules.get('min_opp_half_passes', 10):
+            opp_acc = (stats.get('pass_opp_half_completed', 0) / opp_att) * 100
+            if opp_acc >= rules.get('opp_half_accuracy_high', 75): relevo += 1
+            
+        # 4. TIROS (% a puerta)
+        total_shots = stats.get('shots_total', 0)
+        if total_shots >= rules.get('min_shots', 2):
+            # Goles + tiros a puerta sobre total de tiros
+            on_target_total = stats.get('shots_on_target', 0) + stats.get('goals', 0)
+            shot_acc = (on_target_total / total_shots) * 100
+            if shot_acc >= rules.get('shot_accuracy_high', 50): relevo += 1
+            elif shot_acc == 0: relevo -= 1
+            
+        # 5. DUELOS (Ganados vs Perdidos)
+        duels_won = stats.get('tackles_won', 0) + stats.get('takeons_won', 0) + stats.get('fouls_won', 0)
+        duels_lost = stats.get('tackles_lost', 0) + stats.get('takeons_lost', 0) + stats.get('fouls_committed', 0) + stats.get('dispossessed', 0) + stats.get('challenges_lost', 0)
+        total_duels = duels_won + duels_lost
+        if total_duels >= rules.get('min_duels', 5):
+            duel_acc = (duels_won / total_duels) * 100
+            if duel_acc >= rules.get('duels_won_high', 60): relevo += 1
+            elif duel_acc < rules.get('duels_won_low', 30): relevo -= 1
+            
+        # 6. DUELOS AÉREOS
+        aerials_total = stats.get('aerials_won', 0) + stats.get('aerials_lost', 0)
+        if aerials_total >= rules.get('min_aerials', 3):
+            aer_acc = (stats.get('aerials_won', 0) / aerials_total) * 100
+            if aer_acc >= rules.get('aerials_won_high', 60): relevo += 1
+            elif aer_acc < rules.get('aerials_won_low', 30): relevo -= 1
+            
+        # GARANTIZAR LÍMITE (De 0 a 4 Puntos)
+        return max(0, min(4, relevo))
 
     def recalculate_player_points(self, player_id, current_min):
         """Motor que calcula los puntos totales del jugador en tiempo real usando las reglas del JSON."""
@@ -425,6 +472,10 @@ class MatchEventDownloader:
         pen_won = stats.get('penalties_won', 0)
         if pen_won > 0:
             points += pen_won * self.get_position_points('penalty_won', pos)
+            
+        pen_conceded = stats.get('penalties_conceded', 0)
+        if pen_conceded > 0:
+            points += pen_conceded * self.get_position_points('penalty_conceded', pos)
 
         # --- TARJETAS ---
         yellow = stats.get('yellow_cards', 0)
@@ -439,61 +490,55 @@ class MatchEventDownloader:
         if red > 0:
             points += red * self.get_position_points('red_card', pos)
 
-        # ============================================
-        # === PARADAS PORTERO (cada 2) ===
-        # ============================================
+        # --- PARADAS PORTERO (cada 2) ---
         saves = stats.get('saves', 0)
         if saves >= 2:
             points += (saves // 2) * self.get_position_points('save_per_2', pos)
 
         # ============================================
-        # === BONUS ATAQUE (cada 2) ===
+        # === BONUS ATAQUE y DEFENSIVOS (Desde JSON) ===
         # ============================================
-        bonus_ataque = self.scoring_rules.get('bonus_ataque_per_2', {})
+        bonuses = self.scoring_rules.get('bonuses_per_X', {})
+        
+        def apply_bonus(stat_name, bonus_config):
+            val = stats.get(stat_name, 0)
+            req = bonus_config.get('required', 999)
+            if val >= req:
+                return (val // req) * bonus_config.get('points', 0)
+            return 0
 
-        # Remates a puerta: cada 2 = 1 punto
-        shots_on_target = stats.get('shots_on_target', 0)
-        if shots_on_target >= 2:
-            points += (shots_on_target // 2) * bonus_ataque.get('shots_on_target', 1)
+        points += apply_bonus('shots_on_target', bonuses.get('shots_on_target', {}))
+        points += apply_bonus('takeons_won', bonuses.get('takeons_won', {}))
+        points += apply_bonus('box_entries', bonuses.get('box_entries', {}))
+        points += apply_bonus('ball_recoveries', bonuses.get('recoveries', {}))
+        points += apply_bonus('clearances', bonuses.get('clearances', {}))
 
-        # Regates logrados: cada 2 = 1 punto
-        takeons_won = stats.get('takeons_won', 0)
-        if takeons_won >= 2:
-            points += (takeons_won // 2) * bonus_ataque.get('takeons_won', 1)
-
-        # Llegadas al área: cada 2 = 1 punto
-        box_entries = stats.get('box_entries', 0)
-        if box_entries >= 2:
-            points += (box_entries // 2) * bonus_ataque.get('box_entries', 1)
-
-        # ============================================
-        # === BONUS DEFENSIVOS ===
-        # ============================================
-        bonus_def = self.scoring_rules.get('bonus_defensivos', {})
-
-        # Balones perdidos: cada 10 = -1 punto
-        lost_balls = stats.get('dispossessed', 0) + stats.get('bad_touches', 0)
-        if lost_balls >= 10:
-            points += (lost_balls // 10) * bonus_def.get('lost_balls_per_10', -1)
-
-        # Balones recuperados: cada 5 = 1 punto
-        recoveries = stats.get('ball_recoveries', 0)
-        if recoveries >= 5:
-            points += (recoveries // 5) * bonus_def.get('recoveries_per_5', 1)
-
-        # Despejes: cada 5 = 1 punto
-        clearances = stats.get('clearances', 0)
-        if clearances >= 5:
-            points += (clearances // 5) * bonus_def.get('clearances_per_5', 1)
-
-        # ============================================
-        # === BONUS PASES (cada 10 pases buenos = 1 pt) ===
-        # ============================================
+        # Pases completados (Bonus normal)
         bonus_pases = self.scoring_rules.get('bonus_pases_per_10', {})
-
         passes_completed = stats.get('passes_completed', 0)
         if passes_completed >= 10:
             points += (passes_completed // 10) * bonus_pases.get('passes_completed', 1)
+
+        # ============================================
+        # === PENALIZACIONES POSICIONALES ===
+        # ============================================
+        lost_balls = stats.get('dispossessed', 0) + stats.get('bad_touches', 0)
+        penalties_rules = self.scoring_rules.get('penalties_per_X', {}).get('lost_balls', {})
+        
+        # Obtener regla para la posición o usar por defecto MED(10)
+        rule_pos = penalties_rules.get(pos, {"required": 10, "points": -1})
+        if lost_balls >= rule_pos.get('required', 10):
+            points += (lost_balls // rule_pos.get('required', 10)) * rule_pos.get('points', -1)
+
+        # ============================================
+        # === APLICAR PUNTOS RELEVO AL TOTAL ===
+        # ============================================
+        relevo_points = self.calculate_relevo_points(player_id)
+        # Guardamos en stats para subirlo opcionalmente a base de datos
+        self.stats[player_id]['relevo_points'] = relevo_points 
+        
+        # Sumar los puntos Relevo al total
+        points += relevo_points
 
         self.points[player_id] = points  # ENTERO, sin decimales
 
@@ -542,6 +587,14 @@ class MatchEventDownloader:
         if type_id == 19: return self._handle_sub_on(event, current_min)
 
         if not player_id: return False
+
+        # --- Contabilizador de eventos para % de participación ---
+        self.init_player_stats_if_none(player_id)
+        self.stats[player_id]['total_events'] += 1
+        team_id = event.get('contestantId') or self.players_team.get(player_id)
+        if team_id:
+            self.team_total_events[team_id] = self.team_total_events.get(team_id, 0) + 1
+        # ---------------------------------------------------------
 
         handlers = {
             1: self._handle_pass,
@@ -597,8 +650,18 @@ class MatchEventDownloader:
 
         self.apply_points(pid, 'passes_attempted', 1, current_min)
 
+        # Detectar si el pase inicia en campo contrario (eje X >= 50)
+        x_coord = event.get('x', 0)
+        is_opp_half = x_coord >= 50
+
+        if is_opp_half:
+            self.apply_points(pid, 'pass_opp_half_attempted', 1, current_min)
+
         if outcome == 1:
             self.apply_points(pid, 'passes_completed', 1, current_min)
+            
+            if is_opp_half:
+                self.apply_points(pid, 'pass_opp_half_completed', 1, current_min)
 
             end_x = self.get_qualifier_float(event, Q_PASS_END_X)
             if end_x is not None and end_x >= 50:
@@ -633,6 +696,7 @@ class MatchEventDownloader:
     def _handle_foul(self, event, current_min):
         pid = event.get('playerId')
         if event.get('outcome', 0) == 1:
+            self.apply_points(pid, 'fouls_won', 1, current_min)
             if self.has_qualifier(event, Q_PENALTY):
                 self.apply_points(pid, 'penalties_won', 1, current_min)
         else:
@@ -673,13 +737,16 @@ class MatchEventDownloader:
             self.apply_points(event.get('playerId'), 'penalties_saved', 1, current_min)
 
     def _handle_shot_target(self, event, current_min):
+        self.apply_points(event.get('playerId'), 'shots_total', 1, current_min)
         self.apply_points(event.get('playerId'), 'shots_on_target', 1, current_min)
 
     def _handle_shot_miss(self, event, current_min):
+        self.apply_points(event.get('playerId'), 'shots_total', 1, current_min)
         if self.has_qualifier(event, Q_PENALTY):
             self.apply_points(event.get('playerId'), 'penalties_missed', 1, current_min)
 
     def _handle_shot_post(self, event, current_min):
+        self.apply_points(event.get('playerId'), 'shots_total', 1, current_min)
         if self.has_qualifier(event, Q_PENALTY):
             self.apply_points(event.get('playerId'), 'penalties_missed', 1, current_min)
 
@@ -688,6 +755,10 @@ class MatchEventDownloader:
         team_id = event.get('contestantId')
         player_name = event.get('playerName', 'Unknown')
         is_own_goal = self.has_qualifier(event, Q_OWN_GOAL)
+        
+        # Todo gol cuenta como tiro total (excepto si es propia puerta)
+        if not is_own_goal:
+            self.apply_points(pid, 'shots_total', 1, current_min)
 
         if is_own_goal:
             self.apply_points(pid, 'own_goals', 1, current_min)
@@ -984,6 +1055,9 @@ class MatchEventDownloader:
                 'yellow_cards': stats.get('yellow_cards', 0),
                 'second_yellow_cards': stats.get('second_yellow_cards', 0),
                 'red_cards': stats.get('red_cards', 0),
+                
+                # RELEVO Points
+                'relevo_points': stats.get('relevo_points', 0),
             }
 
             try:
@@ -995,7 +1069,8 @@ class MatchEventDownloader:
 
                 if response.data:
                     player_name = self.player_names.get(player_id, player_id)
-                    print(f"  ✅ {player_name}: {int(total_points)} pts ({mins_played}')")
+                    relevo_pts = stats.get('relevo_points', 0)
+                    print(f"  ✅ {player_name}: {int(total_points)} pts (Relevo: {relevo_pts}) ({mins_played}')")
 
             except Exception as e:
                 print(f"  ❌ Error subiendo {player_id}: {e}")
