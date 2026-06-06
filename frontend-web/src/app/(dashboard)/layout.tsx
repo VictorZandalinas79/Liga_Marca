@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
-import { Trophy, Users, Calendar, LogOut, Home, CircleDot, Lock } from 'lucide-react'
+import { Trophy, Users, Calendar, LogOut, Home, CircleDot, Lock, Gauge } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 
@@ -13,6 +13,7 @@ const navigation = [
   { name: 'Partidos', href: '/partidos', icon: CircleDot },
   { name: 'Jornada', href: '/jornada', icon: Calendar },
   { name: 'Clasificación', href: '/clasificacion', icon: Trophy },
+  { name: 'Puntuación', href: '/puntuacion', icon: Gauge },
 ]
 
 export default function DashboardLayout({
