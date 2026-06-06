@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/use-auth'
-import { Trophy, Mail, Lock, User } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { Trophy, Mail, Lock, User, UserX } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -27,8 +28,27 @@ export default function LoginPage() {
         if (error) throw error
         alert('¡Cuenta creada! Revisa tu email.')
       } else {
-        const { error } = await signIn(email, password)
-        if (error) throw error
+        const { data: authData, error: authError } = await signIn(email, password)
+        if (authError) throw authError
+
+        // Verificar si el usuario tiene equipo en user_teams
+        if (authData?.user) {
+          const supabase = createClient()
+          const { data: teamData } = await supabase
+            .from('user_teams')
+            .select('id')
+            .eq('user_id', authData.user.id)
+            .maybeSingle()
+
+          if (!teamData) {
+            // Usuario NO tiene equipo - mostrar mensaje y redirigir a registro
+            setError('No estás registrado. Regístrate por favor para crear tu equipo.')
+            await supabase.auth.signOut()
+            setIsSignUp(true) // Cambiar a modo registro
+            return
+          }
+        }
+
         router.push('/dashboard')
       }
     } catch (err) {
@@ -90,6 +110,14 @@ export default function LoginPage() {
                 minLength={6}
               />
             </div>
+
+            {!isSignUp && (
+              <div className="text-right">
+                <Link href="/recuperar" className="text-sm text-emerald-600 hover:text-emerald-700 hover:underline">
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
+            )}
 
             {error && <p className="text-sm text-red-600">{error}</p>}
 

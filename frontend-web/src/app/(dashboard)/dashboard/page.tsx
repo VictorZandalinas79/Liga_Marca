@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock } from 'lucide-react'
+import { Save, X, Check, Search, Lock, UserPlus } from 'lucide-react'
 
 interface Player {
   id: string
@@ -40,9 +40,12 @@ export default function DashboardPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([])
   const [savedPlayers, setSavedPlayers] = useState<string[]>([])
+  // Alineación de la jornada ANTERIOR: sirve de base para resaltar los cambios
+  const [basePlayers, setBasePlayers] = useState<string[]>([])
   const [changeHistory, setChangeHistory] = useState<Array<{outId: string, inId: string}>>([])
   const [formation, setFormation] = useState<Formation>(FORMATIONS[1])
   const [userTeamId, setUserTeamId] = useState<string | null>(null)
+  const [isRegistered, setIsRegistered] = useState<boolean>(false)
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
   const [showSaveSuccess, setShowSaveSuccess] = useState(false)
   const [currentMatchday, setCurrentMatchday] = useState<number>(1)
@@ -50,7 +53,7 @@ export default function DashboardPage() {
   const [searchFilter, setSearchFilter] = useState('')
   const [positionFilter, setPositionFilter] = useState<string>('ALL')
   const supabase = createClient()
-  const { isUnlockWindowOpen, timeUntilLock, unlockTime, lockTime, currentMatchday: activeMatchday } = useMatchdayLock()
+  const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento } = useMatchdayLock()
 
   const getPositionCode = (position: string): string => {
     const posLower = position.toLowerCase()
@@ -100,7 +103,7 @@ export default function DashboardPage() {
     return colorValues[code] || '#64748b'
   }
 
-  const selectRandomPlayers = async (allPlayers: Player[], formation: Formation, autoSave: boolean = false, matchdayToSave: number = 0) => {
+  const selectRandomPlayers = async (allPlayers: Player[], formation: Formation, autoSave: boolean = false, matchdayToSave: number = 0, teamIdParam: string | null = null) => {
     const goalkeepers = allPlayers.filter(p => getPositionCode(p.position) === 'GK')
     const defenders = allPlayers.filter(p => getPositionCode(p.position) === 'DEF')
     const midfielders = allPlayers.filter(p => getPositionCode(p.position) === 'MID')
@@ -118,11 +121,14 @@ export default function DashboardPage() {
     setSelectedPlayers(selected)
     setSavedPlayers(selected)
 
-    // Si es autoSave, guardar automáticamente en la base de datos
-    if (autoSave && userTeamId) {
+    // Si es autoSave, guardar automáticamente en la base de datos.
+    // Usamos el teamId explícito porque el estado userTeamId puede no estar
+    // actualizado todavía en esta misma pasada.
+    const tid = teamIdParam ?? userTeamId
+    if (autoSave && tid) {
       console.log('[AUTO-GUARDAR] Guardando equipo inicial en matchday', matchdayToSave)
       const teamPlayers = selected.map((playerId, index) => ({
-        team_id: userTeamId,
+        team_id: tid,
         player_id: playerId,
         is_starter: true,
         is_captain: index === 0,
@@ -150,76 +156,33 @@ export default function DashboardPage() {
         return
       }
 
-      // Obtener o crear equipo del usuario
+      // Obtener equipo del usuario (NO crear automáticamente)
       let { data: teamData } = await supabase
         .from('user_teams')
         .select('id')
         .eq('user_id', user.id)
         .single()
 
-      // Si no existe equipo, crearlo
+      // Si no existe equipo, el usuario NO está registrado
       if (!teamData) {
-        console.log('[CARGAR] Equipo no encontrado, creando uno nuevo...')
-        const { data: newTeam, error: teamError } = await supabase
-          .from('user_teams')
-          .insert({ user_id: user.id, name: 'Mi Equipo' })
-          .select('id')
-          .single()
-
-        if (newTeam) {
-          teamData = newTeam
-          console.log('[CARGAR] Equipo creado:', newTeam.id)
-        } else {
-          console.error('[CARGAR] Error creando equipo:', teamError)
-          setLoading(false)
-          return
-        }
+        console.log('[CARGAR] Usuario no tiene equipo - no está registrado')
+        setIsRegistered(false)
+        setLoading(false)
+        return
       }
 
+      // El usuario SÍ está registrado
+      setIsRegistered(true)
       setUserTeamId(teamData.id)
       console.log('[CARGAR] teamId:', teamData.id)
 
-      // Verificar si el usuario YA tiene un equipo inicial guardado (matchday 0)
-      const { data: initialTeamPlayers } = await supabase
-        .from('team_players')
-        .select('player_id')
-        .eq('team_id', teamData.id)
-        .eq('is_starter', true)
-        .eq('matchday', 0)
-        .limit(11)
-
-      let savedPlayerIds: string[] = []
-      let hasInitialTeam = false
-
-      if (initialTeamPlayers && initialTeamPlayers.length === 11) {
-        // El usuario ya tiene un equipo inicial permanente, usar ese
-        hasInitialTeam = true
-        savedPlayerIds = initialTeamPlayers.map(tp => tp.player_id)
-        setSelectedPlayers(savedPlayerIds)
-        setSavedPlayers(savedPlayerIds)
-        console.log('[CARGAR] Equipo base permanente cargado:', savedPlayerIds.length)
-      } else {
-        // No tiene equipo inicial, verificar jornada activa
-        const { data: teamPlayers } = await supabase
-          .from('team_players')
-          .select('player_id')
-          .eq('team_id', teamData.id)
-          .eq('is_starter', true)
-          .eq('matchday', matchday)
-
-        if (teamPlayers && teamPlayers.length === 11) {
-          savedPlayerIds = teamPlayers.map(tp => tp.player_id)
-          setSelectedPlayers(savedPlayerIds)
-          setSavedPlayers(savedPlayerIds)
-          console.log('[CARGAR] Jugadores cargados de jornada:', savedPlayerIds.length)
-        }
-      }
-
+      // 1. Cargar el catálogo de jugadores (para pintar el equipo)
       const { data: playersData } = await supabase
         .from('players')
         .select('*')
         .order('short_name', { ascending: true })
 
+      let playersWithTeam: Player[] = []
       if (playersData) {
         const teamIds = [...new Set(playersData.map(p => p.team_id).filter(Boolean))]
         const { data: teamsData } = await supabase
@@ -227,26 +190,81 @@ export default function DashboardPage() {
           .select('id, name, logo_url')
           .in('id', teamIds)
         const teamsMap = new Map(teamsData?.map(t => [t.id, t]) || [])
-
-        const playersWithTeam = playersData.map(p => ({
-          ...p,
-          team: teamsMap.get(p.team_id) || null
-        }))
+        playersWithTeam = playersData.map(p => ({ ...p, team: teamsMap.get(p.team_id) || null }))
         setPlayers(playersWithTeam)
+      }
 
-        // Si no tiene equipo inicial, generar uno aleatorio AHORA
-        if (!hasInitialTeam && savedPlayerIds.length === 0) {
-          console.log('[CARGAR] Generando equipo inicial PERMANENTE (matchday 0)...')
-          await selectRandomPlayers(playersWithTeam, formation, true, 0)
-        }
+      // 2. Alineación de la JORNADA ANTERIOR (base para resaltar cambios)
+      const { data: prevPlayers } = await supabase
+        .from('team_players')
+        .select('player_id, matchday, order')
+        .eq('team_id', teamData.id)
+        .eq('is_starter', true)
+        .lt('matchday', matchday)
+        .order('matchday', { ascending: false })
+
+      let baseIds: string[] = []
+      if (prevPlayers && prevPlayers.length > 0) {
+        const prevMd = prevPlayers[0].matchday
+        baseIds = prevPlayers
+          .filter(tp => tp.matchday === prevMd)
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          .map(tp => tp.player_id)
+      }
+      setBasePlayers(baseIds)
+
+      // 3. Alineación de la JORNADA ACTIVA
+      const { data: currentPlayers } = await supabase
+        .from('team_players')
+        .select('player_id, order')
+        .eq('team_id', teamData.id)
+        .eq('is_starter', true)
+        .eq('matchday', matchday)
+
+      if (currentPlayers && currentPlayers.length > 0) {
+        // Ya tiene equipo para esta jornada: usarlo tal cual (NO regenerar)
+        const ids = currentPlayers
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          .map(tp => tp.player_id)
+        setSelectedPlayers(ids)
+        setSavedPlayers(ids)
+        setLoading(false)
+        return
+      }
+
+      // 4. No tiene equipo para la jornada activa pero SÍ de una anterior:
+      //    heredar esos mismos 11 y persistirlos en la jornada activa.
+      if (baseIds.length > 0) {
+        const rows = baseIds.map((pid, index) => ({
+          team_id: teamData.id,
+          player_id: pid,
+          is_starter: true,
+          is_captain: index === 0,
+          order: index,
+          matchday,
+        }))
+        const { error } = await supabase.from('team_players').insert(rows)
+        if (error) console.error('[CARGAR] Error heredando alineación:', error)
+        setSelectedPlayers(baseIds)
+        setSavedPlayers(baseIds)
+        setLoading(false)
+        return
+      }
+
+      // 5. No tiene NINGÚN equipo guardado: generar uno aleatorio (una sola vez)
+      //    y guardarlo en la jornada activa.
+      if (playersWithTeam.length > 0) {
+        await selectRandomPlayers(playersWithTeam, formation, true, matchday, teamData.id)
+        setBasePlayers([]) // equipo inicial => nada se marca como "cambio"
       }
 
       setLoading(false)
     }
 
     // Esperar a que el hook calcule la jornada activa
-    if (activeMatchday && activeMatchday > 0) {
-      fetchInitialData(activeMatchday)
+    if (activeMatchday !== undefined && activeMatchday !== null) {
+      const matchdayToLoad = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+      fetchInitialData(matchdayToLoad)
     }
   }, [user?.id, activeMatchday])
 
@@ -302,26 +320,28 @@ export default function DashboardPage() {
       }
     }
 
-    // Eliminar equipo anterior (solo matchday 0, que es el equipo base)
-    console.log('[GUARDAR] Eliminando equipo anterior en matchday 0')
+    const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+
+    // Eliminar equipo anterior de la jornada actual para poder sobreescribirlo
+    console.log(`[GUARDAR] Eliminando equipo anterior en matchday ${matchdayToSave}`)
     const { error: deleteError } = await supabase
       .from('team_players')
       .delete()
       .eq('team_id', teamIdToUse)
-      .eq('matchday', 0)
+      .eq('matchday', matchdayToSave)
     if (deleteError) {
       console.error('[GUARDAR] Error eliminando:', deleteError)
     }
 
     if (selectedPlayers.length > 0) {
-      // Guardar SOLO en matchday 0 (equipo base permanente)
+      // Guardar el equipo en la jornada activa correspondiente
       const teamPlayers = selectedPlayers.map((playerId, index) => ({
         team_id: teamIdToUse,
         player_id: playerId,
         is_starter: true,
         is_captain: index === 0,
         order: index,
-        matchday: 0, // Equipo base permanente
+        matchday: matchdayToSave, 
       }))
 
       console.log('[GUARDAR] Insertando jugadores en matchday 0')
@@ -420,6 +440,32 @@ export default function DashboardPage() {
     return <div className="text-center py-8 text-slate-500">Cargando...</div>
   }
 
+  // Si el usuario no está registrado (no tiene equipo en user_teams)
+  if (!isRegistered) {
+    return (
+      <Card className="border-2 border-red-200 bg-red-50">
+        <CardContent className="py-12 text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <X className="w-8 h-8 text-red-600" />
+          </div>
+          <h3 className="text-xl font-bold text-red-900 mb-2">
+            No estás registrado
+          </h3>
+          <p className="text-red-700 mb-6 max-w-md mx-auto">
+            Aún no tienes un equipo en la liga. Debes registrarte para poder participar.
+          </p>
+          <button
+            onClick={() => window.location.href = '/registro'}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
+          >
+            <UserPlus className="w-5 h-5" />
+            Registrarme ahora
+          </button>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <div className="space-y-4 pb-20">
       {/* Mensaje de bloqueo durante tramo de jornada */}
@@ -444,10 +490,31 @@ export default function DashboardPage() {
       <div className={`flex items-center justify-between sticky top-0 bg-white z-20 py-2 ${isUnlockWindowOpen ? 'opacity-50 pointer-events-none' : ''}`}>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Mi Equipo</h1>
-          <p className="text-sm text-slate-600">Jornada {activeMatchday}</p>
+          <p className="text-sm text-slate-600">
+            {currentMomento ? `${currentMomento} (J${activeMatchday})` : `Jornada ${activeMatchday}`}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          {changedCount > 0 && (
+        <div className="flex flex-col items-end gap-1">
+          {/* Cronómetro de cuenta atrás */}
+          {!isUnlockWindowOpen && timeUntilUnlock && (
+            <div className="bg-black text-white px-4 py-2 rounded-lg mb-2">
+              <div className="text-xs text-gray-400 text-center mb-1">Tiempo para cambios</div>
+              <div className="text-2xl font-mono font-bold tracking-wider">
+                {timeUntilUnlock}
+              </div>
+            </div>
+          )}
+          {isUnlockWindowOpen && timeUntilLock && timeUntilLock !== 'Finalizada' && (
+            <div className="bg-black text-white px-4 py-2 rounded-lg mb-2">
+              <div className="text-xs text-gray-400 text-center mb-1">Cierra en</div>
+              <div className="text-2xl font-mono font-bold tracking-wider">
+                {timeUntilLock}
+              </div>
+            </div>
+          )}
+          </div>
+          <div className="flex items-center gap-2">
+            {changedCount > 0 && (
             <>
               <button
                 onClick={undoLastChange}
@@ -482,7 +549,11 @@ export default function DashboardPage() {
           {/* Grid responsive: 2 columnas en móvil, 3 en tablet, 4-5 en desktop */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {selectedPlayersData.map((player, idx) => {
-              const isChanged = changeHistory.some(ch => ch.inId === player.id)
+              // "Cambio" = lo has cambiado en esta sesión, o difiere de tu
+              // alineación de la jornada anterior (se mantiene tras guardar)
+              const isChanged =
+                changeHistory.some(ch => ch.inId === player.id) ||
+                (basePlayers.length > 0 && !basePlayers.includes(player.id))
               return (
                 <div
                   key={player.id}
@@ -546,14 +617,16 @@ export default function DashboardPage() {
       <Card className="!bg-slate-800 border-slate-700">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-white">Jornada {activeMatchday}</h2>
+            <h2 className="text-lg font-bold text-white">
+              {currentMomento ? `${currentMomento} (J${activeMatchday})` : `Jornada ${activeMatchday}`}
+            </h2>
             {isUnlockWindowOpen ? (
-              <Badge className="bg-amber-500 text-white">
+              <Badge className="bg-amber-500 text-black">
                 <Lock className="w-3 h-3 mr-1" />
                 Tramo activo
               </Badge>
             ) : (
-              <Badge className="bg-emerald-500 text-white">
+              <Badge className="bg-emerald-500 text-black">
                 <Check className="w-3 h-3 mr-1" />
                 Abierta
               </Badge>
@@ -671,7 +744,7 @@ export default function DashboardPage() {
                             />
                           )}
                         </div>
-                        <Badge className={`${getPositionColor(player.position)} text-sm px-3 py-1 w-full text-center font-semibold`}>
+                        <Badge className={`${getPositionColor(player.position)} !text-black text-sm px-3 py-1 w-full text-center font-semibold`}>
                           {getPositionLabel(player.position)}
                         </Badge>
                         <p className="text-sm font-bold text-slate-900 truncate w-full text-center">
@@ -699,7 +772,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <h3 className="text-xl font-bold mb-2">¿Guardar equipo?</h3>
             <p className="text-slate-600 mb-4">
-              Jornada {currentMatchday}
+              Jornada {activeMatchday || 1}
             </p>
 
             {changedCount > 0 ? (

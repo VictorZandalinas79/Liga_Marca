@@ -9,6 +9,7 @@ interface MatchdayLockState {
   timeUntilUnlock: string
   timeUntilLock: string
   currentMatchday: number
+  currentMomento: string | null
 }
 
 export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
@@ -20,6 +21,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
     timeUntilUnlock: '',
     timeUntilLock: '',
     currentMatchday: 1,
+    currentMomento: null,
   })
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       // Obtener todos los fixtures ordenados por fecha
       const { data: allFixtures } = await supabase
         .from('fixtures')
-        .select('matchday, start_time')
+        .select('matchday, momento, start_time')
         .order('start_time', { ascending: true })
 
       if (!allFixtures || allFixtures.length === 0) {
@@ -37,68 +39,159 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         return
       }
 
-      // Encontrar la jornada activa (la que contiene hoy en su ventana)
-      const now = new Date()
-      let targetMatchday: number
+      // Calcular el matchday numérico máximo
+      const numericMatchdays = allFixtures
+        .filter(f => f.matchday && f.matchday > 0)
+        .map(f => f.matchday as number)
+      const maxNumericMatchday = numericMatchdays.length > 0 ? Math.max(...numericMatchdays) : 0
 
-      if (currentMatchday) {
-        targetMatchday = currentMatchday
-      } else {
-        // Agrupar fixtures por jornada
-        const matchdayFixtures = new Map<number, typeof allFixtures>()
-        for (const fixture of allFixtures) {
-          if (!matchdayFixtures.has(fixture.matchday)) {
-            matchdayFixtures.set(fixture.matchday, [])
-          }
-          matchdayFixtures.get(fixture.matchday)!.push(fixture)
+      // Crear lista de "jornadas" unificadas: numèriques + moments especials
+      // Cada jornada té: matchday (number), momento (string | null), start_time
+      const jornadasMap = new Map<string, { matchday: number; momento: string | null; start_time: string; fixtures: typeof allFixtures }>()
+
+      for (const fixture of allFixtures) {
+        let key: string
+        let logicalMatchday: number
+
+        if (fixture.matchday && fixture.matchday > 0) {
+          // Jornada numèrica: usar el mateix número
+          key = `md-${fixture.matchday}`
+          logicalMatchday = fixture.matchday
+        } else {
+          // Moment especial (matchday = 0): agrupar per nom de momento
+          const momentoName = fixture.momento || 'Unknown'
+          key = `momento-${momentoName}`
+          // El número lògic es calcularà després
+          logicalMatchday = 0 // Placeholder
         }
 
-        // Buscar la jornada cuya ventana (unlock-lock) contenga el momento actual
-        let activeMatchday: number | null = null
-        for (const [matchday, fixtures] of matchdayFixtures.entries()) {
-          const firstMatchTime = new Date(fixtures[0].start_time)
-          const lastMatchTime = new Date(fixtures[fixtures.length - 1].start_time)
-          const unlockTime = firstMatchTime.getTime() - 60 * 60 * 1000 // 1h antes
-          const lockTime = lastMatchTime.getTime() + 2 * 60 * 60 * 1000 // 2h después
-
-          if (now.getTime() >= unlockTime && now.getTime() <= lockTime) {
-            activeMatchday = matchday
-            break
-          }
+        if (!jornadasMap.has(key)) {
+          const momentoName = fixture.momento || 'Unknown'
+          jornadasMap.set(key, {
+            matchday: logicalMatchday,
+            momento: fixture.momento,
+            start_time: fixture.start_time,
+            fixtures: []
+          })
         }
-
-        // Si no hay jornada activa, usar la última jornada
-        targetMatchday = activeMatchday || Math.max(...matchdayFixtures.keys())
+        jornadasMap.get(key)!.fixtures.push(fixture)
       }
 
-      // Filtrar fixtures de la jornada objetivo
-      const journeyFixtures = allFixtures.filter(f => f.matchday === targetMatchday)
+      // Convertir a array i calcular dates mínimes
+      const jornadas = Array.from(jornadasMap.values()).map(j => ({
+        ...j,
+        start_time: j.fixtures.length > 0
+          ? j.fixtures.reduce((min, f) => f.start_time < min ? f.start_time : min, j.fixtures[0].start_time)
+          : j.start_time
+      }))
 
-      if (journeyFixtures.length === 0) {
+      // Separar numèriques i moments
+      const numericJornadas = jornadas.filter(j => j.matchday > 0).sort((a, b) => a.matchday - b.matchday)
+      const momentJornadas = jornadas
+        .filter(j => j.matchday === 0)
+        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+
+      // Assignar números correlatius als moments: maxNumeric + 1, maxNumeric + 2, ...
+      const momentJornadasWithNumbers = momentJornadas.map((j, index) => ({
+        ...j,
+        matchday: maxNumericMatchday + 1 + index
+      }))
+
+      // Unir: primer numèriques, després moments
+      const allJornadas = [...numericJornadas, ...momentJornadasWithNumbers]
+
+      if (allJornadas.length === 0) {
         setState(s => ({ ...s, isLocked: true, isUnlockWindowOpen: false }))
         return
       }
 
-      const firstMatchTime = new Date(journeyFixtures[0].start_time)
-      const lastMatchTime = new Date(journeyFixtures[journeyFixtures.length - 1].start_time)
+      const now = new Date()
+      let targetMatchday: number = 1
+      let targetMomento: string | null = null
 
-      // El tramo de jornada abre 1 hora antes del primer partido
-      // y cierra al finalizar el último partido (asumimos 2h de partido)
+      if (currentMatchday) {
+        targetMatchday = typeof currentMatchday === 'string' ? parseInt(currentMatchday) : currentMatchday
+      } else {
+        // Buscar jornada activa (dins de la finestra de temps)
+        let activeJornada: typeof allJornadas[0] | null = null
+
+        for (const jornada of allJornadas) {
+          const fixtures = jornada.fixtures.sort((a, b) =>
+            new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+          )
+
+          const firstMatchTime = new Date(fixtures[0].start_time)
+          const lastMatchTime = new Date(fixtures[fixtures.length - 1].start_time)
+          const unlockTime = firstMatchTime.getTime() - 60 * 60 * 1000
+          const lockTime = lastMatchTime.getTime() + 2 * 60 * 60 * 1000
+
+          if (now.getTime() >= unlockTime && now.getTime() <= lockTime) {
+            activeJornada = jornada
+            break
+          }
+        }
+
+        if (activeJornada) {
+          targetMatchday = activeJornada.matchday
+          targetMomento = activeJornada.momento || null
+        } else {
+          // Buscar la PRÒXIMA jornada (la primera amb unlockTime > now)
+          let nextJornada: typeof allJornadas[0] | null = null
+
+          for (const jornada of allJornadas) {
+            const fixtures = jornada.fixtures.sort((a, b) =>
+              new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+            )
+
+            const firstMatchTime = new Date(fixtures[0].start_time)
+            const unlockTime = firstMatchTime.getTime() - 60 * 60 * 1000
+
+            if (unlockTime > now.getTime()) {
+              nextJornada = jornada
+              break
+            }
+          }
+
+          if (nextJornada) {
+            targetMatchday = nextJornada.matchday
+            targetMomento = nextJornada.momento || null
+          } else {
+            // Usar l'última jornada disponible
+            const lastJornada = allJornadas[allJornadas.length - 1]
+            targetMatchday = lastJornada.matchday
+            targetMomento = lastJornada.momento || null
+          }
+        }
+      }
+
+      // Trobar la jornada objectiu per obtindre els fixtures
+      const targetJornada = allJornadas.find(j => j.matchday === targetMatchday)
+
+      if (!targetJornada || targetJornada.fixtures.length === 0) {
+        setState(s => ({ ...s, isLocked: true, isUnlockWindowOpen: false }))
+        return
+      }
+
+      const fixtures = targetJornada.fixtures.sort((a, b) =>
+        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      )
+
+      const firstMatchTime = new Date(fixtures[0].start_time)
+      const lastMatchTime = new Date(fixtures[fixtures.length - 1].start_time)
+
       const unlockTimeDate = new Date(firstMatchTime.getTime() - 60 * 60 * 1000)
       const lockTimeDate = new Date(lastMatchTime.getTime() + 2 * 60 * 60 * 1000)
 
-      // Determinar estado
       const isUnlockWindowOpen = now.getTime() >= unlockTimeDate.getTime() && now.getTime() <= lockTimeDate.getTime()
       const isLocked = !isUnlockWindowOpen
 
-      // Debug log
       console.log('[useMatchdayLock] Jornada:', targetMatchday)
+      console.log('[useMatchdayLock] Momento:', targetMomento)
       console.log('[useMatchdayLock] Ahora:', now.toISOString())
       console.log('[useMatchdayLock] unlockTime:', unlockTimeDate.toISOString())
       console.log('[useMatchdayLock] lockTime:', lockTimeDate.toISOString())
       console.log('[useMatchdayLock] isUnlockWindowOpen:', isUnlockWindowOpen)
 
-      // Calcular tiempos restantes
       let timeUntilUnlock = ''
       let timeUntilLock = ''
 
@@ -116,6 +209,8 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         timeUntilLock = `${diffHours}h ${diffMins}min`
       }
 
+      const shouldShowMomento = targetMomento !== null
+
       setState({
         isLocked,
         isUnlockWindowOpen,
@@ -124,12 +219,12 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         timeUntilUnlock,
         timeUntilLock,
         currentMatchday: targetMatchday,
+        currentMomento: shouldShowMomento ? targetMomento : null,
       })
     }
 
     fetchMatchdayTimes()
 
-    // Actualizar cada minuto
     const interval = setInterval(fetchMatchdayTimes, 60 * 1000)
     return () => clearInterval(interval)
   }, [currentMatchday])

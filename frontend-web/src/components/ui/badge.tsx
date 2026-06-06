@@ -1,4 +1,4 @@
-import { clsx } from 'clsx'
+import { cn } from '@/lib/utils'
 
 interface BadgeProps {
   children: React.ReactNode
@@ -16,7 +16,7 @@ export function Badge({ children, className, variant = 'default' }: BadgeProps) 
   }
 
   return (
-    <span className={clsx('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium', variants[variant], className)}>
+    <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium', variants[variant], className)}>
       {children}
     </span>
   )
