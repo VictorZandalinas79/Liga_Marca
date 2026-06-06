@@ -35,8 +35,14 @@ SEASON_ID = config['active_league'].get('season_id')
 SDAPI_OUTLET_KEY = os.environ.get("SDAPI_OUTLET_KEY", "ft1tiv1inq7v1sk3y9tv12yh5")
 
 # Supabase
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+def _clean_env(value):
+    """Quita espacios y comillas envolventes que se cuelan al pegar secrets."""
+    if value is None:
+        return None
+    return value.strip().strip('"').strip("'").strip()
+
+SUPABASE_URL = _clean_env(os.environ.get("SUPABASE_URL"))
+SUPABASE_KEY = _clean_env(os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY"))
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def load_headers():
@@ -245,24 +251,71 @@ def upload_fixtures_to_supabase(matches):
         full_timestamp = f"{start_date}T{start_time}"
 
         contestants = info.get('contestant', [{}, {}])
+        
+        # Capturamos el matchday (0 por defecto si no existe)
+        raw_week = info.get('week')
+        matchday = int(raw_week) if raw_week else 0
 
         fixtures_payload.append({
             "id": info.get('id'),
-            "matchday": int(info.get('week', 0) if info.get('week') else 0),
+            "matchday": matchday,
+            "momento": info.get('stage', {}).get('name'),
             "home_team_id": contestants[0].get('id') if len(contestants) > 0 else None,
             "away_team_id": contestants[1].get('id') if len(contestants) > 1 else None,
             "start_time": full_timestamp,
             "status": info.get('status', 'scheduled')
-            # ELIMINAMOS LA LÍNEA "raw_data": m
         })
 
-    if fixtures_payload:
-        result = supabase.table("fixtures").upsert(fixtures_payload).execute()
-        print(f"✅ {len(fixtures_payload)} fixtures subidos a Supabase")
-        return True
-    else:
+    if not fixtures_payload:
         print(f"⚠️ No hay fixtures para subir de la liga {ACTIVE_LEAGUE_ID}")
         return False
+
+    # --- NUEVA LÓGICA: Corregir matchday = 0 ---
+    # 1. Encontrar la jornada máxima actual
+    max_matchday = max([f['matchday'] for f in fixtures_payload if f['matchday'] and f['matchday'] > 0], default=0)
+
+    # 2. Filtrar los partidos que tienen matchday 0
+    zero_matchdays = [f for f in fixtures_payload if not f['matchday'] or f['matchday'] == 0]
+
+    if zero_matchdays:
+        # Diccionario para guardar la fecha más temprana de cada "momento"
+        momento_dates = {}
+        for f in zero_matchdays:
+            momento = f['momento'] or "Fase Desconocida"
+            f['momento'] = momento # Asegurarnos de que no sea None
+            
+            # Formato YYYY-MM-DDTHH:MM:SS es perfectamente ordenable por string
+            if momento not in momento_dates or f['start_time'] < momento_dates[momento]:
+                momento_dates[momento] = f['start_time']
+
+        # 3. Ordenar los momentos cronológicamente según su fecha de inicio más temprana
+        sorted_momentos = sorted(momento_dates.keys(), key=lambda m: momento_dates[m])
+
+        # 4. Crear un mapa para asignar el nuevo matchday a cada momento
+        momento_to_matchday = {}
+        current_new_matchday = max_matchday + 1
+        for momento in sorted_momentos:
+            momento_to_matchday[momento] = current_new_matchday
+            current_new_matchday += 1
+
+        # 5. Aplicar los nuevos matchdays al payload final
+        for f in fixtures_payload:
+            if not f['matchday'] or f['matchday'] == 0:
+                f['matchday'] = momento_to_matchday[f['momento']]
+                
+        print(f"   🔄 Se asignaron jornadas {max_matchday + 1} a {current_new_matchday - 1} a fases eliminatorias.")
+    # --- FIN NUEVA LÓGICA ---
+
+    # Subir a Supabase
+    try:
+        # Usamos UPSERT: Actualiza la fecha/jornada si ya existe, y crea si es nuevo.
+        result = supabase.table("fixtures").upsert(fixtures_payload).execute()
+        print(f"✅ {len(fixtures_payload)} fixtures actualizados/insertados en Supabase")
+        return True
+    except Exception as e:
+        print(f"❌ Error insertando los nuevos fixtures: {e}")
+        return False
+
 
 def upload_teams_to_supabase(squads_data):
     """Sube los equipos a la tabla real_teams de Supabase con su escudo."""
