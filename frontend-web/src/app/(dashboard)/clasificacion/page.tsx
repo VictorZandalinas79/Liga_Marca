@@ -425,19 +425,20 @@ export default function ClasificacionPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-700">
-                  <th className="text-left text-sm font-semibold text-slate-300 p-4">Pos</th>
-                  <th className="text-left text-sm font-semibold text-slate-300 p-4">Jugador</th>
+                  <th className="text-left text-xs sm:text-sm font-semibold text-slate-300 p-2 sm:p-4">Pos</th>
+                  <th className="text-left text-xs sm:text-sm font-semibold text-slate-300 p-2 sm:p-4">Jugador</th>
                   <th
-                    className="text-right text-sm font-semibold text-slate-300 p-4 cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs sm:text-sm font-semibold text-slate-300 p-2 sm:p-4 cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('total_points')}
                   >
                     <div className="flex items-center justify-end gap-1">
-                      Puntos Totales
+                      <span className="sm:hidden">Pts</span>
+                      <span className="hidden sm:inline">Puntos Totales</span>
                       <SortIcon field="total_points" />
                     </div>
                   </th>
                   <th
-                    className="text-right text-sm font-semibold text-slate-300 p-4 cursor-pointer hover:bg-slate-700"
+                    className="hidden sm:table-cell text-right text-sm font-semibold text-slate-300 p-4 cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('average_points')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -446,7 +447,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-right text-sm font-semibold text-slate-300 p-4 cursor-pointer hover:bg-slate-700"
+                    className="hidden md:table-cell text-right text-sm font-semibold text-slate-300 p-4 cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('last_3_jornadas_points')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -454,9 +455,9 @@ export default function ClasificacionPage() {
                       <SortIcon field="last_3_jornadas_points" />
                     </div>
                   </th>
-                  <th className="text-center text-sm font-semibold text-slate-300 p-4">Tendencia</th>
+                  <th className="hidden sm:table-cell text-center text-sm font-semibold text-slate-300 p-4">Tendencia</th>
                   <th
-                    className="text-right text-sm font-semibold text-slate-300 p-4 cursor-pointer hover:bg-slate-700"
+                    className="hidden lg:table-cell text-right text-sm font-semibold text-slate-300 p-4 cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('best_change_score')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -472,43 +473,45 @@ export default function ClasificacionPage() {
                     key={standing.user_id}
                     className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors"
                   >
-                    <td className="p-4">
+                    <td className="p-2 sm:p-4">
                       {getPositionMedal(standing.current_position)}
                     </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center">
+                    <td className="p-2 sm:p-4">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="hidden sm:flex w-8 h-8 rounded-full bg-slate-600 items-center justify-center shrink-0">
                           <User className="w-4 h-4 text-slate-300" />
                         </div>
-                        <div>
-                          <p className="font-semibold text-white">{standing.user_name}</p>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-white text-sm sm:text-base truncate">{standing.user_name}</p>
                           <p className="text-xs text-slate-400">
                             {standing.teams_count} equipo{standing.teams_count !== 1 ? 's' : ''}
                           </p>
                         </div>
                       </div>
                     </td>
-                    <td className="p-4 text-right">
-                      <span className="text-2xl font-bold text-emerald-400">
+                    <td className="p-2 sm:p-4 text-right">
+                      <span className="text-xl sm:text-2xl font-bold text-emerald-400">
                         {standing.total_points}
                       </span>
-                      <span className="text-xs text-slate-400 ml-1">pts</span>
+                      <span className="hidden sm:inline text-xs text-slate-400 ml-1">pts</span>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="hidden sm:table-cell p-4 text-right">
                       <span className="text-lg font-semibold text-slate-200">
                         {standing.average_points}
                       </span>
                       <span className="text-xs text-slate-400 ml-1">pts/jor</span>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="hidden md:table-cell p-4 text-right">
                       <span className="text-lg font-semibold text-blue-400">
                         {standing.last_3_jornadas_points}
                       </span>
                     </td>
-                    <td className="p-4 flex justify-center">
-                      {getTrendIcon(standing.last_3_trend)}
+                    <td className="hidden sm:table-cell p-4">
+                      <div className="flex justify-center">
+                        {getTrendIcon(standing.last_3_trend)}
+                      </div>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="hidden lg:table-cell p-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <span className={`text-lg font-bold ${
                           standing.best_change_score >= 70 ? 'text-emerald-400' :

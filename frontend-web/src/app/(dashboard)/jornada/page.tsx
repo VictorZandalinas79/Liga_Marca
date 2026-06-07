@@ -458,10 +458,10 @@ export default function JornadaPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200">
-                    <th className="text-left py-2 px-3 text-sm font-semibold text-slate-600">Pos</th>
-                    <th className="text-left py-2 px-3 text-sm font-semibold text-slate-600">Usuario</th>
-                    <th className="text-left py-2 px-3 text-sm font-semibold text-slate-600">Equipo</th>
-                    <th className="text-right py-2 px-3 text-sm font-semibold text-slate-600">Puntos</th>
+                    <th className="text-left py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Pos</th>
+                    <th className="text-left py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Usuario</th>
+                    <th className="hidden sm:table-cell text-left py-2 px-3 text-sm font-semibold text-slate-600">Equipo</th>
+                    <th className="text-right py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Puntos</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -477,14 +477,15 @@ export default function JornadaPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="py-3 px-3">
+                      <td className="py-3 px-2 sm:px-3">
                         <span className="font-medium text-slate-900">{team.user_name}</span>
+                        <span className="block sm:hidden text-xs text-slate-500 truncate">{team.team_name}</span>
                       </td>
-                      <td className="py-3 px-3">
+                      <td className="hidden sm:table-cell py-3 px-3">
                         <span className="text-sm text-slate-600">{team.team_name}</span>
                       </td>
-                      <td className="py-3 px-3 text-right">
-                        <Badge className="bg-emerald-600 text-white text-sm px-3 py-1">
+                      <td className="py-3 px-2 sm:px-3 text-right">
+                        <Badge className="bg-emerald-600 text-white text-xs sm:text-sm px-2 sm:px-3 py-1 whitespace-nowrap">
                           {team.puntos_totales} pts
                         </Badge>
                       </td>
