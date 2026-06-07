@@ -187,16 +187,36 @@ class MatchEventDownloader:
                 self.load_teams_from_db()
                 return False
 
-            match_info = data.get('match', {})
-            season_id = match_info.get('season', {}).get('id') or match_info.get('competition', {}).get('currentSeason', {}).get('id') or match_info.get('tournamentSeasonId')
+            # El feed matchevent usa la clave 'matchInfo' (no 'match') y los
+            # equipos vienen en 'contestant' con position 'home'/'away'.
+            match_info = data.get('matchInfo') or data.get('match', {})
+            season_id = (
+                match_info.get('tournamentCalendar', {}).get('id')
+                or match_info.get('season', {}).get('id')
+                or match_info.get('competition', {}).get('currentSeason', {}).get('id')
+                or match_info.get('tournamentSeasonId')
+            )
 
             teams = []
-            if match_info.get('home', {}).get('id'):
-                teams.append({'id': match_info['home']['id'], 'name': match_info['home'].get('name', 'Home')})
-                self.home_team_id = match_info['home']['id']
-            if match_info.get('away', {}).get('id'):
-                teams.append({'id': match_info['away']['id'], 'name': match_info['away'].get('name', 'Away')})
-                self.away_team_id = match_info['away']['id']
+            # Estructura nueva: matchInfo.contestant = [{id, name, position}]
+            for c in match_info.get('contestant', []):
+                cid = c.get('id')
+                if not cid:
+                    continue
+                teams.append({'id': cid, 'name': c.get('name', 'Unknown')})
+                if c.get('position') == 'home':
+                    self.home_team_id = cid
+                elif c.get('position') == 'away':
+                    self.away_team_id = cid
+
+            # Estructura antigua (fallback): matchInfo.home / matchInfo.away
+            if not teams:
+                if match_info.get('home', {}).get('id'):
+                    teams.append({'id': match_info['home']['id'], 'name': match_info['home'].get('name', 'Home')})
+                    self.home_team_id = match_info['home']['id']
+                if match_info.get('away', {}).get('id'):
+                    teams.append({'id': match_info['away']['id'], 'name': match_info['away'].get('name', 'Away')})
+                    self.away_team_id = match_info['away']['id']
 
             if not teams:
                 self.load_teams_from_db()
