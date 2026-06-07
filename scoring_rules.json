@@ -1,7 +1,7 @@
 {
-  "version": "2.0 - MARCA",
-  "game_name": "Biwenger MARCA",
-  "description": "Sistema oficial de puntuación MARCA. Todos los bonus son por TRAMOS (división entera).",
+  "version": "3.0 - RELEVO",
+  "game_name": "Biwenger RELEVO Avanzado",
+  "description": "Sistema oficial de puntuación adaptado con penalizaciones posicionales y Puntos RELEVO.",
   "participation": {
     "starter_bonus": 2,
     "substitute_bonus": 1,
@@ -14,10 +14,6 @@
     "DEL": "Delantero"
   },
   "events": {
-    "participation": {
-      "more_than_60_min": 2,
-      "less_than_60_min": 1
-    },
     "goal": {
       "POR": 6,
       "DEF": 6,
@@ -30,12 +26,12 @@
     "assist": {
       "all": 3
     },
-    "assist_no_goal": {
+    "fantasy_assist": {
       "all": 1
     },
     "clean_sheet": {
       "POR": 4,
-      "DEF": 4,
+      "DEF": 3,
       "MED": 2,
       "DEL": 1,
       "min_minutes": 60
@@ -58,6 +54,9 @@
     "penalty_won": {
       "all": 2
     },
+    "penalty_conceded": {
+      "all": -2
+    },
     "yellow_card": {
       "all": -1
     },
@@ -68,18 +67,68 @@
       "all": -3
     }
   },
-  "bonus_ataque_per_2": {
-    "shots_on_target": 1,
-    "takeons_won": 1,
-    "box_entries": 1
-  },
-  "bonus_defensivos": {
-    "lost_balls_per_10": -1,
-    "recoveries_per_5": 1,
-    "clearances_per_5": 1
+  "bonuses_per_X": {
+    "shots_on_target": {
+      "required": 2,
+      "points": 1
+    },
+    "takeons_won": {
+      "required": 2,
+      "points": 1
+    },
+    "box_entries": {
+      "required": 2,
+      "points": 1
+    },
+    "recoveries": {
+      "required": 5,
+      "points": 1
+    },
+    "clearances": {
+      "required": 3,
+      "points": 1
+    }
   },
   "bonus_pases_per_10": {
     "passes_completed": 1
+  },
+  "penalties_per_X": {
+    "lost_balls": {
+      "POR": {
+        "required": 8,
+        "points": -1
+      },
+      "DEF": {
+        "required": 8,
+        "points": -1
+      },
+      "MED": {
+        "required": 10,
+        "points": -1
+      },
+      "DEL": {
+        "required": 12,
+        "points": -1
+      }
+    }
+  },
+  "relevo_rules": {
+    "participation_step_percent": 5,
+    "participation_points_per_step": 1,
+    "min_passes": 10,
+    "pass_accuracy_high": 85,
+    "pass_accuracy_excel": 92,
+    "pass_accuracy_low": 65,
+    "min_opp_half_passes": 10,
+    "opp_half_accuracy_high": 75,
+    "min_shots": 2,
+    "shot_accuracy_high": 50,
+    "min_duels": 5,
+    "duels_won_high": 60,
+    "duels_won_low": 30,
+    "min_aerials": 3,
+    "aerials_won_high": 60,
+    "aerials_won_low": 30
   },
   "typeId_mapping": {
     "1": "pass",
