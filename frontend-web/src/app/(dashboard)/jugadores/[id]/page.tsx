@@ -33,6 +33,8 @@ interface PlayerScore {
   total_points: number
   minutes_played: number
   is_starter: boolean
+  position: string
+  relevo_points: number
 
   // Goles
   goals: number
@@ -280,523 +282,298 @@ export default function JugadorDetallePage() {
   const matchesPlayed = scores.length
   const avgPoints = matchesPlayed > 0 ? Math.round((totalStats.total_points / matchesPlayed) * 10) / 10 : 0
 
-  const getMetricBreakdown = (score: PlayerScore): MetricBreakdown[] => {
-    const breakdowns: MetricBreakdown[] = []
+  // ============================================================
+  // Reglas de puntuación v3.0 - RELEVO (espejo de scoring_rules.json)
+  // Deben coincidir EXACTAMENTE con trigger_descarga_eventos.py
+  // ============================================================
+  type Pos = 'POR' | 'DEF' | 'MED' | 'DEL'
 
-    // Goles y Portería
+  const SR = {
+    participation: { starter_bonus: 2, substitute_bonus: 1, minutes_threshold: 60 },
+    goal: { POR: 6, DEF: 6, MED: 5, DEL: 4 } as Record<Pos, number>,
+    own_goal: -2,
+    assist: 3,
+    fantasy_assist: 1,
+    clean_sheet: { POR: 4, DEF: 3, MED: 2, DEL: 1 } as Record<Pos, number>,
+    goal_conceded_per_2: { POR: -2, DEF: -2, MED: -1, DEL: -1 } as Record<Pos, number>,
+    save_per_2: 1,
+    penalty_save: 5,
+    penalty_missed: -2,
+    penalty_won: 2,
+    penalty_conceded: -2,
+    yellow_card: -1,
+    second_yellow_card: -1,
+    red_card: -3,
+    bonuses_per_X: {
+      shots_on_target: { required: 2, points: 1 },
+      takeons_won: { required: 2, points: 1 },
+      recoveries: { required: 5, points: 1 },
+      clearances: { required: 3, points: 1 },
+    },
+    passes_per_10: 1,
+    lost_balls: {
+      POR: { required: 8, points: -1 },
+      DEF: { required: 8, points: -1 },
+      MED: { required: 10, points: -1 },
+      DEL: { required: 12, points: -1 },
+    } as Record<Pos, { required: number; points: number }>,
+  }
+
+  const normPos = (position?: string): Pos => {
+    const p = (position || '').toUpperCase()
+    if (p === 'POR' || p === 'DEF' || p === 'MED' || p === 'DEL') return p
+    return getPositionLabel(position || '') as Pos
+  }
+
+  // Desglose de puntos REAL: replica el motor v3.0. Cada métrica suma
+  // exactamente los puntos que aporta al total_points oficial.
+  const getMetricBreakdown = (score: PlayerScore): MetricBreakdown[] => {
+    const pos = normPos(score.position)
+    const breakdowns: MetricBreakdown[] = []
+    const floorDiv = (v: number, d: number) => Math.floor(v / d)
+
+    // --- Participación ---
+    const partMetrics = []
+    if (score.minutes_played > 0) {
+      const titular = score.minutes_played > SR.participation.minutes_threshold
+      partMetrics.push({
+        name: titular ? 'Participación (+60 min)' : 'Participación (suplente)',
+        value: score.minutes_played,
+        points: titular ? SR.participation.starter_bonus : SR.participation.substitute_bonus,
+        icon: '⏱️',
+        description: titular ? 'Bonus por jugar más de 60 minutos' : 'Bonus por participar (menos de 60 min)',
+      })
+    }
+    if (partMetrics.length > 0) breakdowns.push({ category: 'Participación', metrics: partMetrics })
+
+    // --- Goles y Portería ---
     const goalMetrics = []
     if (score.goals > 0) goalMetrics.push({
       name: 'Goles',
       value: score.goals,
-      points: score.goals * 6,
+      points: score.goals * SR.goal[pos],
       icon: '⚽',
-      description: 'Puntos base por gol (varía según posición)'
-    })
-    if (score.goal_header_bonus > 0) goalMetrics.push({
-      name: 'Gol de cabeza',
-      value: score.goal_header_bonus,
-      points: score.goal_header_bonus * 0.5,
-      icon: '🗣️',
-      description: 'Bonus extra por gol de cabeza'
-    })
-    if (score.goal_freekick_bonus > 0) goalMetrics.push({
-      name: 'Gol de falta directa',
-      value: score.goal_freekick_bonus,
-      points: score.goal_freekick_bonus * 1,
-      icon: '🎯',
-      description: 'Bonus extra por gol de falta'
+      description: `Gol como ${pos}: ${SR.goal[pos]} pts cada uno`,
     })
     if (score.own_goals > 0) goalMetrics.push({
       name: 'Autogol',
       value: score.own_goals,
-      points: score.own_goals * -4,
+      points: score.own_goals * SR.own_goal,
       icon: '🤦',
-      description: 'Penalización por autogol'
-    })
-    if (score.goals_conceded > 0 && score.goals_conceded < 10) goalMetrics.push({
-      name: 'Goles encajados',
-      value: score.goals_conceded,
-      points: score.goals_conceded * -1,
-      icon: '🥅',
-      description: 'Penalización por gol encajado (solo afecta a POR y DEF)'
+      description: 'Penalización por gol en propia puerta',
     })
     if (score.clean_sheet) goalMetrics.push({
       name: 'Portería a cero',
       value: 1,
-      points: 4,
+      points: SR.clean_sheet[pos],
       icon: '🔒',
-      description: 'Bonus por no encajar goles (titulares con +60 min)'
+      description: `Sin encajar (+60 min). Como ${pos}: ${SR.clean_sheet[pos]} pts`,
+    })
+    if (score.goals_conceded >= 2) goalMetrics.push({
+      name: 'Goles encajados',
+      value: score.goals_conceded,
+      points: floorDiv(score.goals_conceded, 2) * SR.goal_conceded_per_2[pos],
+      icon: '🥅',
+      description: `Penalización cada 2 goles encajados (${SR.goal_conceded_per_2[pos]} pts por tramo, solo POR/DEF penaliza más)`,
     })
     if (goalMetrics.length > 0) breakdowns.push({ category: 'Goles y Portería', metrics: goalMetrics })
 
-    // Asistencias
+    // --- Asistencias ---
     const assistMetrics = []
     if (score.assists > 0) assistMetrics.push({
       name: 'Asistencias',
       value: score.assists,
-      points: score.assists * 4,
+      points: score.assists * SR.assist,
       icon: '🅰️',
-      description: 'Puntos por asistencia de gol'
-    })
-    if (score.key_passes > 0) assistMetrics.push({
-      name: 'Pases clave',
-      value: score.key_passes,
-      points: score.key_passes * 1.5,
-      icon: '🔑',
-      description: 'Pases que generan ocasión clara'
-    })
-    if (score.second_assists > 0) assistMetrics.push({
-      name: 'Segundas asistencias',
-      value: score.second_assists,
-      points: score.second_assists * 1.5,
-      icon: '🥈',
-      description: 'Asistencia de la asistencia'
+      description: 'Asistencia de gol',
     })
     if (score.intent_assists > 0) assistMetrics.push({
       name: 'Intento de asistencia',
       value: score.intent_assists,
-      points: score.intent_assists * 0.8,
+      points: score.intent_assists * SR.fantasy_assist,
       icon: '💭',
-      description: 'Pase que casi genera gol'
+      description: 'Pase que genera ocasión clara (fantasy assist)',
     })
     if (assistMetrics.length > 0) breakdowns.push({ category: 'Asistencias', metrics: assistMetrics })
 
-    // Tiros
+    // --- Tiros (bonus por tramos) ---
     const shotMetrics = []
-    if (score.shots_on_target > 0) shotMetrics.push({
+    if (score.shots_on_target >= SR.bonuses_per_X.shots_on_target.required) shotMetrics.push({
       name: 'Tiros a puerta',
       value: score.shots_on_target,
-      points: score.shots_on_target * 1,
+      points: floorDiv(score.shots_on_target, SR.bonuses_per_X.shots_on_target.required) * SR.bonuses_per_X.shots_on_target.points,
       icon: '🏹',
-      description: 'Tiros entre los tres palos'
-    })
-    if (score.shots_off_target > 0) shotMetrics.push({
-      name: 'Tiros fuera',
-      value: score.shots_off_target,
-      points: score.shots_off_target * 0.2,
-      icon: '💨',
-      description: 'Tiros desviados'
-    })
-    if (score.shots_hit_woodwork > 0) shotMetrics.push({
-      name: 'Tiros al palo',
-      value: score.shots_hit_woodwork,
-      points: score.shots_hit_woodwork * 1.5,
-      icon: '🪵',
-      description: 'Impactos en el larguero o postes'
-    })
-    if (score.big_chances_created > 0) shotMetrics.push({
-      name: 'Ocasiones creadas',
-      value: score.big_chances_created,
-      points: score.big_chances_created * 0.5,
-      icon: '✨',
-      description: 'Ocasiones claras de gol creadas'
-    })
-    if (score.big_chances_missed > 0) shotMetrics.push({
-      name: 'Ocasiones falladas',
-      value: score.big_chances_missed,
-      points: score.big_chances_missed * -0.5,
-      icon: '😭',
-      description: 'Ocasiones claras de gol falladas'
-    })
-    if (score.penalties_scored > 0) shotMetrics.push({
-      name: 'Penaltis marcados',
-      value: score.penalties_scored,
-      points: score.penalties_scored * 6,
-      icon: '🎯',
-      description: 'Penaltis transformados'
-    })
-    if (score.penalties_missed > 0) shotMetrics.push({
-      name: 'Penaltis fallados',
-      value: score.penalties_missed,
-      points: score.penalties_missed * -2,
-      icon: '❌',
-      description: 'Penaltis fallados'
+      description: `+${SR.bonuses_per_X.shots_on_target.points} pt por cada ${SR.bonuses_per_X.shots_on_target.required} tiros a puerta`,
     })
     if (shotMetrics.length > 0) breakdowns.push({ category: 'Tiros', metrics: shotMetrics })
 
-    // Penaltis
+    // --- Penaltis ---
     const penaltyMetrics = []
+    if (score.penalties_missed > 0) penaltyMetrics.push({
+      name: 'Penaltis fallados',
+      value: score.penalties_missed,
+      points: score.penalties_missed * SR.penalty_missed,
+      icon: '❌',
+      description: 'Penaltis fallados',
+    })
     if (score.penalties_won > 0) penaltyMetrics.push({
       name: 'Penaltis ganados',
       value: score.penalties_won,
-      points: score.penalties_won * 3,
+      points: score.penalties_won * SR.penalty_won,
       icon: '🎁',
-      description: 'Faltas dentro del área que generan penalti'
+      description: 'Penaltis provocados',
     })
     if (score.penalties_conceded > 0) penaltyMetrics.push({
       name: 'Penaltis concedidos',
       value: score.penalties_conceded,
-      points: score.penalties_conceded * -3,
+      points: score.penalties_conceded * SR.penalty_conceded,
       icon: '💔',
-      description: 'Faltas dentro del área que resultan en penalti en contra'
+      description: 'Penaltis cometidos',
+    })
+    if (score.penalty_saves > 0) penaltyMetrics.push({
+      name: 'Penaltis parados',
+      value: score.penalty_saves,
+      points: score.penalty_saves * SR.penalty_save,
+      icon: '💪',
+      description: 'Penaltis detenidos',
     })
     if (penaltyMetrics.length > 0) breakdowns.push({ category: 'Penaltis', metrics: penaltyMetrics })
 
-    // Portero
+    // --- Portero (paradas por tramos) ---
     const keeperMetrics = []
-    if (score.saves > 0) keeperMetrics.push({
+    if (score.saves >= 2) keeperMetrics.push({
       name: 'Paradas',
       value: score.saves,
-      points: score.saves * 0.6,
+      points: floorDiv(score.saves, 2) * SR.save_per_2,
       icon: '🧤',
-      description: 'Paradas realizadas'
-    })
-    if (score.penalty_saves > 0) keeperMetrics.push({
-      name: 'Penaltis parados',
-      value: score.penalty_saves,
-      points: score.penalty_saves * 6,
-      icon: '💪🧤',
-      description: 'Penaltis detenidos'
-    })
-    if (score.claims_ok > 0) keeperMetrics.push({
-      name: 'Balones cogidos',
-      value: score.claims_ok,
-      points: score.claims_ok * 0.4,
-      icon: '🙌',
-      description: 'Centros capturados con seguridad'
-    })
-    if (score.claims_fail > 0) keeperMetrics.push({
-      name: 'Balones fallados',
-      value: score.claims_fail,
-      points: score.claims_fail * -0.5,
-      icon: '😱',
-      description: 'Centros que no pudo capturar'
-    })
-    if (score.fumbles > 0) keeperMetrics.push({
-      name: 'Fallos',
-      value: score.fumbles,
-      points: score.fumbles * -0.5,
-      icon: '🫳',
-      description: 'Balones que se le escapan de las manos'
-    })
-    if (score.smothers > 0) keeperMetrics.push({
-      name: 'Cierres',
-      value: score.smothers,
-      points: score.smothers * 0.5,
-      icon: '🛬',
-      description: 'Balones cubiertos saliendo del área'
-    })
-    if (score.sweepers_ok > 0) keeperMetrics.push({
-      name: 'Acciones de portero líbero',
-      value: score.sweepers_ok,
-      points: score.sweepers_ok * 0.4,
-      icon: '🚀',
-      description: 'Intervenciones exitosas fuera del área'
-    })
-    if (score.sweepers_fail > 0) keeperMetrics.push({
-      name: 'Acciones fallidas fuera del área',
-      value: score.sweepers_fail,
-      points: score.sweepers_fail * -0.6,
-      icon: '⚠️',
-      description: 'Intervenciones fallidas fuera del área'
-    })
-    if (score.punches_ok > 0) keeperMetrics.push({
-      name: 'Punches exitosos',
-      value: score.punches_ok,
-      points: score.punches_ok * 0.3,
-      icon: '👊',
-      description: 'Balones despejados con los puños correctamente'
-    })
-    if (score.punches_fail > 0) keeperMetrics.push({
-      name: 'Punches fallidos',
-      value: score.punches_fail,
-      points: score.punches_fail * -0.5,
-      icon: '⚠️',
-      description: 'Punches que no despejan bien el balón'
-    })
-    if (score.parries_safe > 0) keeperMetrics.push({
-      name: 'Paradas con desvío seguro',
-      value: score.parries_safe,
-      points: score.parries_safe * 0.2,
-      icon: '✅',
-      description: 'Paradas que desvían el balón de forma controlada'
-    })
-    if (score.parries_danger > 0) keeperMetrics.push({
-      name: 'Paradas con desvío peligroso',
-      value: score.parries_danger,
-      points: score.parries_danger * -0.2,
-      icon: '⚠️',
-      description: 'Paradas que desvían el balón de forma peligrosa'
+      description: `+${SR.save_per_2} pt por cada 2 paradas`,
     })
     if (keeperMetrics.length > 0) breakdowns.push({ category: 'Portero', metrics: keeperMetrics })
 
-    // Defensa
-    const defenseMetrics = []
-    if (score.clearances > 0) defenseMetrics.push({
-      name: 'Despejes',
-      value: score.clearances,
-      points: score.clearances * 0.3,
-      icon: '🛡️',
-      description: 'Balones despejados de la defensa'
+    // --- Bonus por tramos (ataque/defensa) ---
+    const bonusMetrics = []
+    if (score.takeons_won >= SR.bonuses_per_X.takeons_won.required) bonusMetrics.push({
+      name: 'Regates completados',
+      value: score.takeons_won,
+      points: floorDiv(score.takeons_won, SR.bonuses_per_X.takeons_won.required) * SR.bonuses_per_X.takeons_won.points,
+      icon: '🌀',
+      description: `+${SR.bonuses_per_X.takeons_won.points} pt por cada ${SR.bonuses_per_X.takeons_won.required} regates`,
     })
-    if (score.clearances_last_line > 0) defenseMetrics.push({
-      name: 'Despejes de última línea',
-      value: score.clearances_last_line,
-      points: score.clearances_last_line * 0.8,
-      icon: '🦸',
-      description: 'Despejes que evitan gol seguro'
-    })
-    if (score.blocked_crosses > 0) defenseMetrics.push({
-      name: 'Centros bloqueados',
-      value: score.blocked_crosses,
-      points: score.blocked_crosses * 0.3,
-      icon: '🚫',
-      description: 'Centros interceptados'
-    })
-    if (score.interceptions > 0) defenseMetrics.push({
-      name: 'Intercepciones',
-      value: score.interceptions,
-      points: score.interceptions * 0.3,
-      icon: '🧲',
-      description: 'Balones robados por anticipación'
-    })
-    if (score.tackles_won > 0) defenseMetrics.push({
-      name: 'Entradas ganadas',
-      value: score.tackles_won,
-      points: score.tackles_won * 0.4,
-      icon: '⚔️',
-      description: 'Entradas que recuperan el balón'
-    })
-    if (score.tackles_lost > 0) defenseMetrics.push({
-      name: 'Entradas fallidas',
-      value: score.tackles_lost,
-      points: score.tackles_lost * -0.1,
-      icon: '🗡️',
-      description: 'Entradas que no recuperan el balón'
-    })
-    if (score.blocked_shots > 0) defenseMetrics.push({
-      name: 'Tiros bloqueados',
-      value: score.blocked_shots,
-      points: score.blocked_shots * 0.5,
-      icon: '🧱',
-      description: 'Tiros interceptados con el cuerpo'
-    })
-    if (score.blocked_passes > 0) defenseMetrics.push({
-      name: 'Pases bloqueados',
-      value: score.blocked_passes,
-      points: score.blocked_passes * 0.2,
-      icon: '🚧',
-      description: 'Pases interceptados'
-    })
-    if (score.ball_recoveries > 0) defenseMetrics.push({
+    if (score.ball_recoveries >= SR.bonuses_per_X.recoveries.required) bonusMetrics.push({
       name: 'Recuperaciones',
       value: score.ball_recoveries,
-      points: score.ball_recoveries * 0.2,
+      points: floorDiv(score.ball_recoveries, SR.bonuses_per_X.recoveries.required) * SR.bonuses_per_X.recoveries.points,
       icon: '♻️',
-      description: 'Balones recuperados'
+      description: `+${SR.bonuses_per_X.recoveries.points} pt por cada ${SR.bonuses_per_X.recoveries.required} recuperaciones`,
     })
-    if (score.offsides_provoked > 0) defenseMetrics.push({
-      name: 'Fueras de juego provocados',
-      value: score.offsides_provoked,
-      points: score.offsides_provoked * 0.2,
-      icon: '🚩',
-      description: 'Rivales puestos en fuera de juego'
+    if (score.clearances >= SR.bonuses_per_X.clearances.required) bonusMetrics.push({
+      name: 'Despejes',
+      value: score.clearances,
+      points: floorDiv(score.clearances, SR.bonuses_per_X.clearances.required) * SR.bonuses_per_X.clearances.points,
+      icon: '🛡️',
+      description: `+${SR.bonuses_per_X.clearances.points} pt por cada ${SR.bonuses_per_X.clearances.required} despejes`,
     })
-    if (score.challenges_lost > 0) defenseMetrics.push({
-      name: 'Duelos perdidos',
-      value: score.challenges_lost,
-      points: score.challenges_lost * -0.1,
-      icon: '⚠️',
-      description: 'Duelos físicos perdidos'
-    })
-    if (defenseMetrics.length > 0) breakdowns.push({ category: 'Defensa', metrics: defenseMetrics })
+    if (bonusMetrics.length > 0) breakdowns.push({ category: 'Bonus Ataque y Defensa', metrics: bonusMetrics })
 
-    // Errores
-    const errorMetrics = []
-    if (score.errors_leading_to_shot > 0) errorMetrics.push({
-      name: 'Errores que llevan a tiro',
-      value: score.errors_leading_to_shot,
-      points: score.errors_leading_to_shot * -1.5,
-      icon: '😬',
-      description: 'Fallos que permiten tiro rival'
-    })
-    if (score.errors_leading_to_goal > 0) errorMetrics.push({
-      name: 'Errores que llevan a gol',
-      value: score.errors_leading_to_goal,
-      points: score.errors_leading_to_goal * -4,
-      icon: '🚨',
-      description: 'Fallos que resultan en gol'
-    })
-    if (errorMetrics.length > 0) breakdowns.push({ category: 'Errores', metrics: errorMetrics })
-
-    // Pases
+    // --- Pases (bonus por tramos de 10) ---
     const passMetrics = []
-    if (score.passes_completed > 0) passMetrics.push({
+    if (score.passes_completed >= 10) passMetrics.push({
       name: 'Pases completados',
       value: score.passes_completed,
-      points: Math.round(score.passes_completed * 0.02 * 10) / 10,
+      points: floorDiv(score.passes_completed, 10) * SR.passes_per_10,
       icon: '✅',
-      description: 'Pases correctos (0.02 pts cada uno)'
-    })
-    if (score.progressive_passes > 0) passMetrics.push({
-      name: 'Pases progresivos',
-      value: score.progressive_passes,
-      points: score.progressive_passes * 0.2,
-      icon: '⏩',
-      description: 'Pases que avanzan +25m hacia portería rival'
-    })
-    if (score.passes_into_final_third > 0) passMetrics.push({
-      name: 'Pases a último tercio',
-      value: score.passes_into_final_third,
-      points: score.passes_into_final_third * 0.15,
-      icon: '➡️',
-      description: 'Pases que entran en el último tercio del campo'
-    })
-    if (score.passes_into_box > 0) passMetrics.push({
-      name: 'Pases al área',
-      value: score.passes_into_box,
-      points: score.passes_into_box * 0.3,
-      icon: '📦',
-      description: 'Pases que penetran el área rival'
-    })
-    if (score.through_balls > 0) passMetrics.push({
-      name: 'Pases al hueco',
-      value: score.through_balls,
-      points: score.through_balls * 0.5,
-      icon: '🎯',
-      description: 'Pases que rompen líneas defensivas'
-    })
-    if (score.crosses_completed > 0) passMetrics.push({
-      name: 'Centros completados',
-      value: score.crosses_completed,
-      points: score.crosses_completed * 0.3,
-      icon: '↗️',
-      description: 'Centros que encuentran compañero'
-    })
-    if (score.switch_plays > 0) passMetrics.push({
-      name: 'Cambios de juego',
-      value: score.switch_plays,
-      points: score.switch_plays * 0.3,
-      icon: '🔄',
-      description: 'Pases largos de banda a banda'
-    })
-    if (score.pull_backs > 0) passMetrics.push({
-      name: 'Pases hacia atrás',
-      value: score.pull_backs,
-      points: score.pull_backs * 0.3,
-      icon: '↩️',
-      description: 'Centros hacia atrás desde línea de fondo'
-    })
-    if (score.long_balls_completed > 0) passMetrics.push({
-      name: 'Balones largos',
-      value: score.long_balls_completed,
-      points: score.long_balls_completed * 0.15,
-      icon: '🏹',
-      description: 'Pases largos completados'
-    })
-    if (score.lay_offs > 0) passMetrics.push({
-      name: 'Pases de apoyo',
-      value: score.lay_offs,
-      points: score.lay_offs * 0.2,
-      icon: '🔁',
-      description: 'Pases cortos de apoyo tras control'
+      description: `+${SR.passes_per_10} pt por cada 10 pases completados`,
     })
     if (passMetrics.length > 0) breakdowns.push({ category: 'Pases', metrics: passMetrics })
 
-    // Regates
-    const skillMetrics = []
-    if (score.takeons_won > 0) skillMetrics.push({
-      name: 'Regates completados',
-      value: score.takeons_won,
-      points: score.takeons_won * 0.6,
-      icon: '🌀',
-      description: 'Regates que superan al rival'
-    })
-    if (score.takeons_lost > 0) skillMetrics.push({
-      name: 'Regates fallidos',
-      value: score.takeons_lost,
-      points: score.takeons_lost * -0.2,
-      icon: '💫',
-      description: 'Regates que pierden el balón'
-    })
-    if (score.takeons_overrun > 0) skillMetrics.push({
-      name: 'Desbordado',
-      value: score.takeons_overrun,
-      points: score.takeons_overrun * -0.3,
-      icon: '⚠️',
-      description: 'Rival que lo supera en el 1vs1'
-    })
-    if (score.good_skills > 0) skillMetrics.push({
-      name: 'Buenas habilidades',
-      value: score.good_skills,
-      points: score.good_skills * 0.2,
-      icon: '🪄',
-      description: 'Toques de calidad técnica'
-    })
-    if (score.dispossessed > 0) skillMetrics.push({
+    // --- Penalización por balones perdidos (posicional) ---
+    const lostMetrics = []
+    const lostBalls = (score.dispossessed || 0) + (score.bad_touches || 0)
+    const lostRule = SR.lost_balls[pos]
+    if (lostBalls >= lostRule.required) lostMetrics.push({
       name: 'Balones perdidos',
-      value: score.dispossessed,
-      points: score.dispossessed * -0.2,
+      value: lostBalls,
+      points: floorDiv(lostBalls, lostRule.required) * lostRule.points,
       icon: '😵',
-      description: 'Veces que le quitan el balón'
+      description: `Pérdidas + malos controles. ${lostRule.points} pt por cada ${lostRule.required} como ${pos}`,
     })
-    if (score.bad_touches > 0) skillMetrics.push({
-      name: 'Malos controles',
-      value: score.bad_touches,
-      points: score.bad_touches * -0.1,
-      icon: '👟',
-      description: 'Controles defectuosos'
-    })
-    if (skillMetrics.length > 0) breakdowns.push({ category: 'Regates y Técnica', metrics: skillMetrics })
+    if (lostMetrics.length > 0) breakdowns.push({ category: 'Pérdidas', metrics: lostMetrics })
 
-    // Aéreos
-    const aerialMetrics = []
-    if (score.aerials_won > 0) aerialMetrics.push({
-      name: 'Duelos aéreos ganados',
-      value: score.aerials_won,
-      points: score.aerials_won * 0.3,
-      icon: '🆙',
-      description: 'Balones ganados por arriba'
-    })
-    if (score.aerials_lost > 0) aerialMetrics.push({
-      name: 'Duelos aéreos perdidos',
-      value: score.aerials_lost,
-      points: score.aerials_lost * -0.1,
-      icon: '⬇️',
-      description: 'Balones perdidos por arriba'
-    })
-    if (aerialMetrics.length > 0) breakdowns.push({ category: 'Juego Aéreo', metrics: aerialMetrics })
-
-    // Faltas y Tarjetas
-    const foulMetrics = []
-    if (score.fouls_won > 0) foulMetrics.push({
-      name: 'Faltas ganadas',
-      value: score.fouls_won,
-      points: score.fouls_won * 0.05,
-      icon: '🎯',
-      description: 'Faltas que le cometen'
-    })
-    if (score.fouls_committed > 0) foulMetrics.push({
-      name: 'Faltas cometidas',
-      value: score.fouls_committed,
-      points: score.fouls_committed * -0.1,
-      icon: '🚫',
-      description: 'Faltas que comete'
-    })
-    if (score.yellow_cards > 0) foulMetrics.push({
+    // --- Tarjetas ---
+    const cardMetrics = []
+    if (score.yellow_cards > 0) cardMetrics.push({
       name: 'Tarjetas amarillas',
       value: score.yellow_cards,
-      points: score.yellow_cards * -1,
+      points: score.yellow_cards * SR.yellow_card,
       icon: '🟨',
-      description: 'Amonestaciones'
+      description: 'Amonestaciones',
     })
-    if (score.second_yellow_cards > 0) foulMetrics.push({
+    if (score.second_yellow_cards > 0) cardMetrics.push({
       name: 'Segunda amarilla',
       value: score.second_yellow_cards,
-      points: score.second_yellow_cards * -3,
+      points: score.second_yellow_cards * SR.second_yellow_card,
       icon: '🟧',
-      description: 'Expulsión por doble amarilla'
+      description: 'Expulsión por doble amarilla',
     })
-    if (score.red_cards > 0) foulMetrics.push({
+    if (score.red_cards > 0) cardMetrics.push({
       name: 'Tarjetas rojas',
       value: score.red_cards,
-      points: score.red_cards * -5,
+      points: score.red_cards * SR.red_card,
       icon: '🟥',
-      description: 'Expulsiones directas'
+      description: 'Expulsión directa',
     })
-    if (foulMetrics.length > 0) breakdowns.push({ category: 'Faltas y Tarjetas', metrics: foulMetrics })
+    if (cardMetrics.length > 0) breakdowns.push({ category: 'Tarjetas', metrics: cardMetrics })
+
+    // --- Puntos RELEVO (0 a 4) ---
+    if (score.relevo_points) breakdowns.push({
+      category: 'Puntos RELEVO',
+      metrics: [{
+        name: 'Bonus RELEVO',
+        value: score.relevo_points,
+        points: score.relevo_points,
+        icon: '🔁',
+        description: 'Bonus por rendimiento global (participación, precisión de pase, duelos…)',
+      }],
+    })
 
     return breakdowns
+  }
+
+  // Suma de puntos del desglose (debe aproximarse a total_points)
+  const sumBreakdownPoints = (score: PlayerScore): number =>
+    getMetricBreakdown(score).reduce(
+      (acc, cat) => acc + cat.metrics.reduce((a, m) => a + m.points, 0),
+      0
+    )
+
+  // Estadísticas informativas (sin puntos directos) para dar detalle completo
+  const getInfoStats = (score: PlayerScore): Array<{ label: string; value: number }> => {
+    const items: Array<{ label: string; value: number }> = [
+      { label: 'Pases intentados', value: score.passes_attempted },
+      { label: 'Pases progresivos', value: score.progressive_passes },
+      { label: 'Pases al área', value: score.passes_into_box },
+      { label: 'Pases al último tercio', value: score.passes_into_final_third },
+      { label: 'Pases al hueco', value: score.through_balls },
+      { label: 'Centros completados', value: score.crosses_completed },
+      { label: 'Pases clave', value: score.key_passes },
+      { label: 'Tiros fuera', value: score.shots_off_target },
+      { label: 'Tiros al palo', value: score.shots_hit_woodwork },
+      { label: 'Ocasiones creadas', value: score.big_chances_created },
+      { label: 'Ocasiones falladas', value: score.big_chances_missed },
+      { label: 'Penaltis marcados', value: score.penalties_scored },
+      { label: 'Entradas ganadas', value: score.tackles_won },
+      { label: 'Intercepciones', value: score.interceptions },
+      { label: 'Tiros bloqueados', value: score.blocked_shots },
+      { label: 'Despejes última línea', value: score.clearances_last_line },
+      { label: 'Duelos aéreos ganados', value: score.aerials_won },
+      { label: 'Duelos aéreos perdidos', value: score.aerials_lost },
+      { label: 'Faltas recibidas', value: score.fouls_won },
+      { label: 'Faltas cometidas', value: score.fouls_committed },
+      { label: 'Regates fallidos', value: score.takeons_lost },
+      { label: 'Malos controles', value: score.bad_touches },
+      { label: 'Errores que llevan a gol', value: score.errors_leading_to_goal },
+    ]
+    return items.filter(i => (i.value || 0) > 0)
   }
 
   const formatDate = (dateString: string) => {
@@ -1139,6 +916,54 @@ export default function JugadorDetallePage() {
                 <p className="text-slate-500 text-center py-4">
                   No hay métricas destacadas en este partido
                 </p>
+              )}
+
+              {/* Reconciliación: el desglose debe cuadrar con el total oficial */}
+              {(() => {
+                const desglose = sumBreakdownPoints(selectedMatch)
+                const oficial = selectedMatch.total_points || 0
+                const otros = Math.round((oficial - desglose) * 10) / 10
+                return (
+                  <div className="mt-2 space-y-2 border-t border-slate-200 pt-4">
+                    <div className="flex items-center justify-between text-sm text-slate-600">
+                      <span>Suma del desglose</span>
+                      <span className="font-semibold">{Math.round(desglose * 10) / 10} pts</span>
+                    </div>
+                    {otros !== 0 && (
+                      <div className="flex items-center justify-between p-2 bg-slate-50 rounded">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">➕</span>
+                          <div>
+                            <p className="font-medium text-slate-900">Otros / ajustes</p>
+                            <p className="text-xs text-slate-500">Métricas sin detalle almacenado (entradas al área, etc.) y redondeos</p>
+                          </div>
+                        </div>
+                        <p className={`text-sm ${otros >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {otros >= 0 ? '+' : ''}{otros} pts
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 p-3">
+                      <span className="font-bold text-emerald-800">Total oficial</span>
+                      <span className="text-2xl font-bold text-emerald-600">{oficial} pts</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Estadísticas informativas (no puntúan directamente) */}
+              {getInfoStats(selectedMatch).length > 0 && (
+                <div className="border-t border-slate-200 pt-4">
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">Otras estadísticas</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {getInfoStats(selectedMatch).map((stat, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded text-sm">
+                        <span className="text-slate-600">{stat.label}</span>
+                        <span className="font-bold text-slate-900">{stat.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           </div>
