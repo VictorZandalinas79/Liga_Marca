@@ -240,15 +240,15 @@ export default function JornadaPage() {
         .select('player_id, total_points')
         .eq('matchday', info.rawMatchday)
         .in('player_id', playerIds)
-      scoresData = res.data as typeof scoresData
+      scoresData = res.data as { player_id: string; total_points: number }[] | null
     }
-    if ((!scoresData || scoresData?.length === 0) && info && info.fixtureIds.length > 0) {
+    if ((!scoresData || scoresData.length === 0) && info && info.fixtureIds.length > 0) {
       const res = await supabase
         .from('player_scores')
         .select('player_id, total_points')
         .in('fixture_id', info.fixtureIds)
         .in('player_id', playerIds)
-      scoresData = res.data as typeof scoresData
+      scoresData = res.data as { player_id: string; total_points: number }[] | null
     }
 
     const playerPointsMap = new Map<string, number>()
