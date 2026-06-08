@@ -101,10 +101,14 @@ interface PlayerScore {
   passes_into_box: number
   through_balls: number
   crosses_completed: number
+  crosses_attempted: number
   switch_plays: number
   pull_backs: number
   long_balls_completed: number
   lay_offs: number
+  forward_passes: number
+  set_pieces_taken: number
+  successful_crosses: number
 
   // Regates
   takeons_won: number
@@ -292,15 +296,15 @@ export default function JugadorDetallePage() {
     participation: { starter_bonus: 2, substitute_bonus: 1, minutes_threshold: 60 },
     goal: { POR: 6, DEF: 6, MED: 5, DEL: 4 } as Record<Pos, number>,
     own_goal: -2,
-    assist: 3,
-    fantasy_assist: 1,
+    assist_goal: 3,        // Asistencia que acaba en gol
+    assist_no_goal: 1,     // Asistencia que no acaba en gol (intento)
     clean_sheet: { POR: 4, DEF: 3, MED: 2, DEL: 1 } as Record<Pos, number>,
-    goal_conceded_per_2: { POR: -2, DEF: -2, MED: -1, DEL: -1 } as Record<Pos, number>,
+    goal_conceded: { POR: -2, DEF: -2, MED: -1, DEL: -1 } as Record<Pos, number>, // Por gol encajado
     save_per_2: 1,
     penalty_save: 5,
     penalty_missed: -2,
-    penalty_won: 2,
-    penalty_conceded: -2,
+    penalty_won: 1,        // Cambiado de 2 a 1
+    penalty_conceded: -1,  // Cambiado de -2 a -1
     yellow_card: -1,
     second_yellow_card: -1,
     red_card: -3,
@@ -309,6 +313,9 @@ export default function JugadorDetallePage() {
       takeons_won: { required: 2, points: 1 },
       recoveries: { required: 5, points: 1 },
       clearances: { required: 3, points: 1 },
+      forward_passes: { required: 10, points: 1 },      // Nuevo: pases hacia adelante
+      set_pieces_taken: { required: 5, points: 1 },     // Nuevo: faltas/córners
+      successful_crosses: { required: 3, points: 1 },   // Nuevo: centros completados
     },
     passes_per_10: 1,
     lost_balls: {
@@ -369,30 +376,30 @@ export default function JugadorDetallePage() {
       icon: '🔒',
       description: `Sin encajar (+60 min). Como ${pos}: ${SR.clean_sheet[pos]} pts`,
     })
-    if (score.goals_conceded >= 2) goalMetrics.push({
+    if (score.goals_conceded > 0) goalMetrics.push({
       name: 'Goles encajados',
       value: score.goals_conceded,
-      points: floorDiv(score.goals_conceded, 2) * SR.goal_conceded_per_2[pos],
+      points: score.goals_conceded * SR.goal_conceded[pos],
       icon: '🥅',
-      description: `Penalización cada 2 goles encajados (${SR.goal_conceded_per_2[pos]} pts por tramo, solo POR/DEF penaliza más)`,
+      description: `Penalización por gol encajado (${SR.goal_conceded[pos]} pts cada uno, solo POR/DEF penalizan más)`,
     })
     if (goalMetrics.length > 0) breakdowns.push({ category: 'Goles y Portería', metrics: goalMetrics })
 
     // --- Asistencias ---
     const assistMetrics = []
     if (score.assists > 0) assistMetrics.push({
-      name: 'Asistencias',
+      name: 'Asistencias de gol',
       value: score.assists,
-      points: score.assists * SR.assist,
+      points: score.assists * SR.assist_goal,
       icon: '🅰️',
-      description: 'Asistencia de gol',
+      description: `Asistencia que acaba en gol: ${SR.assist_goal} pts cada una`,
     })
     if (score.intent_assists > 0) assistMetrics.push({
-      name: 'Intento de asistencia',
+      name: 'Asistencias sin gol',
       value: score.intent_assists,
-      points: score.intent_assists * SR.fantasy_assist,
+      points: score.intent_assists * SR.assist_no_goal,
       icon: '💭',
-      description: 'Pase que genera ocasión clara (fantasy assist)',
+      description: `Asistencia que no acaba en gol: ${SR.assist_no_goal} pts cada una`,
     })
     if (assistMetrics.length > 0) breakdowns.push({ category: 'Asistencias', metrics: assistMetrics })
 
@@ -414,28 +421,28 @@ export default function JugadorDetallePage() {
       value: score.penalties_missed,
       points: score.penalties_missed * SR.penalty_missed,
       icon: '❌',
-      description: 'Penaltis fallados',
+      description: 'Penaltis fallados (-2 pts cada uno)',
     })
     if (score.penalties_won > 0) penaltyMetrics.push({
       name: 'Penaltis ganados',
       value: score.penalties_won,
       points: score.penalties_won * SR.penalty_won,
       icon: '🎁',
-      description: 'Penaltis provocados',
+      description: `Penaltis provocados (+${SR.penalty_won} pts cada uno)`,
     })
     if (score.penalties_conceded > 0) penaltyMetrics.push({
       name: 'Penaltis concedidos',
       value: score.penalties_conceded,
       points: score.penalties_conceded * SR.penalty_conceded,
       icon: '💔',
-      description: 'Penaltis cometidos',
+      description: `Penaltis cometidos (${SR.penalty_conceded} pts cada uno)`,
     })
     if (score.penalty_saves > 0) penaltyMetrics.push({
       name: 'Penaltis parados',
       value: score.penalty_saves,
       points: score.penalty_saves * SR.penalty_save,
       icon: '💪',
-      description: 'Penaltis detenidos',
+      description: 'Penaltis detenidos (+5 pts cada uno)',
     })
     if (penaltyMetrics.length > 0) breakdowns.push({ category: 'Penaltis', metrics: penaltyMetrics })
 
@@ -472,6 +479,31 @@ export default function JugadorDetallePage() {
       points: floorDiv(score.clearances, SR.bonuses_per_X.clearances.required) * SR.bonuses_per_X.clearances.points,
       icon: '🛡️',
       description: `+${SR.bonuses_per_X.clearances.points} pt por cada ${SR.bonuses_per_X.clearances.required} despejes`,
+    })
+    // Nuevos bonus v3.0
+    const forwardPasses = score.forward_passes || 0
+    if (forwardPasses >= SR.bonuses_per_X.forward_passes.required) bonusMetrics.push({
+      name: 'Pases hacia adelante',
+      value: forwardPasses,
+      points: floorDiv(forwardPasses, SR.bonuses_per_X.forward_passes.required) * SR.bonuses_per_X.forward_passes.points,
+      icon: '⏩',
+      description: `+${SR.bonuses_per_X.forward_passes.points} pt por cada ${SR.bonuses_per_X.forward_passes.required} pases hacia adelante`,
+    })
+    const setPieces = score.set_pieces_taken || 0
+    if (setPieces >= SR.bonuses_per_X.set_pieces_taken.required) bonusMetrics.push({
+      name: 'Lanzamientos a balón parado',
+      value: setPieces,
+      points: floorDiv(setPieces, SR.bonuses_per_X.set_pieces_taken.required) * SR.bonuses_per_X.set_pieces_taken.points,
+      icon: '🎯',
+      description: `+${SR.bonuses_per_X.set_pieces_taken.points} pt por cada ${SR.bonuses_per_X.set_pieces_taken.required} faltas/córners`,
+    })
+    const successfulCrosses = score.successful_crosses || 0
+    if (successfulCrosses >= SR.bonuses_per_X.successful_crosses.required) bonusMetrics.push({
+      name: 'Centros completados',
+      value: successfulCrosses,
+      points: floorDiv(successfulCrosses, SR.bonuses_per_X.successful_crosses.required) * SR.bonuses_per_X.successful_crosses.points,
+      icon: '✈️',
+      description: `+${SR.bonuses_per_X.successful_crosses.points} pt por cada ${SR.bonuses_per_X.successful_crosses.required} centros`,
     })
     if (bonusMetrics.length > 0) breakdowns.push({ category: 'Bonus Ataque y Defensa', metrics: bonusMetrics })
 
@@ -551,26 +583,35 @@ export default function JugadorDetallePage() {
     const items: Array<{ label: string; value: number }> = [
       { label: 'Pases intentados', value: score.passes_attempted },
       { label: 'Pases progresivos', value: score.progressive_passes },
+      { label: 'Pases hacia adelante', value: score.forward_passes || 0 },
       { label: 'Pases al área', value: score.passes_into_box },
       { label: 'Pases al último tercio', value: score.passes_into_final_third },
       { label: 'Pases al hueco', value: score.through_balls },
       { label: 'Centros completados', value: score.crosses_completed },
+      { label: 'Centros intentados', value: score.crosses_attempted || 0 },
       { label: 'Pases clave', value: score.key_passes },
+      { label: 'Lanzamientos a balón parado', value: score.set_pieces_taken || 0 },
+      { label: 'Segundas asistencias', value: score.second_assists || 0 },
       { label: 'Tiros fuera', value: score.shots_off_target },
       { label: 'Tiros al palo', value: score.shots_hit_woodwork },
       { label: 'Ocasiones creadas', value: score.big_chances_created },
       { label: 'Ocasiones falladas', value: score.big_chances_missed },
       { label: 'Penaltis marcados', value: score.penalties_scored },
       { label: 'Entradas ganadas', value: score.tackles_won },
+      { label: 'Entradas fallidas', value: score.tackles_lost || 0 },
       { label: 'Intercepciones', value: score.interceptions },
       { label: 'Tiros bloqueados', value: score.blocked_shots },
+      { label: 'Pases bloqueados', value: score.blocked_passes || 0 },
       { label: 'Despejes última línea', value: score.clearances_last_line },
       { label: 'Duelos aéreos ganados', value: score.aerials_won },
       { label: 'Duelos aéreos perdidos', value: score.aerials_lost },
       { label: 'Faltas recibidas', value: score.fouls_won },
       { label: 'Faltas cometidas', value: score.fouls_committed },
+      { label: 'Regates ganados', value: score.takeons_won },
       { label: 'Regates fallidos', value: score.takeons_lost },
       { label: 'Malos controles', value: score.bad_touches },
+      { label: 'Balones recuperados', value: score.ball_recoveries },
+      { label: 'Errores que llevan a tiro', value: score.errors_leading_to_shot || 0 },
       { label: 'Errores que llevan a gol', value: score.errors_leading_to_goal },
     ]
     return items.filter(i => (i.value || 0) > 0)
@@ -615,29 +656,29 @@ export default function JugadorDetallePage() {
 
       {/* Cabecera del jugador */}
       <Card className="!bg-slate-800 border-slate-700">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-6">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col items-center text-center sm:flex-row sm:items-center sm:text-left gap-4 sm:gap-6">
             {player.photo ? (
               <img
                 src={player.photo}
                 alt={player.short_name || ''}
-                className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
+                className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-white shadow-lg shrink-0"
               />
             ) : (
-              <div className="w-32 h-32 rounded-full bg-slate-700 flex items-center justify-center text-4xl font-bold text-slate-400 border-4 border-slate-600">
+              <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-slate-700 flex items-center justify-center text-4xl font-bold text-slate-400 border-4 border-slate-600 shrink-0">
                 {player.shirt_number || '?'}
               </div>
             )}
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-white">
+              <div className="flex items-center justify-center sm:justify-start gap-3 mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-white">
                   {player.first_name} {player.last_name}
                 </h1>
                 <Badge className={getPositionColor(player.position)}>
                   {getPositionLabel(player.position)}
                 </Badge>
               </div>
-              <div className="flex items-center gap-4 text-slate-300">
+              <div className="flex items-center justify-center sm:justify-start gap-4 text-slate-300">
                 {player.team?.logo_url && (
                   <img src={player.team.logo_url} alt={player.team.name} className="w-6 h-6 object-contain" />
                 )}
@@ -646,7 +687,7 @@ export default function JugadorDetallePage() {
                   <span className="text-slate-400">#{player.shirt_number}</span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-4 mt-4 text-sm text-slate-400">
+              <div className="flex flex-wrap justify-center sm:justify-start gap-4 mt-4 text-sm text-slate-400">
                 {player.nationality && (
                   <div className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
@@ -664,8 +705,8 @@ export default function JugadorDetallePage() {
                 {player.foot && <span>Pie: {player.foot.toUpperCase()}</span>}
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-5xl font-bold text-emerald-400">{player.precio ? `${player.precio}M` : '-'}</div>
+            <div className="text-center sm:text-right shrink-0">
+              <div className="text-4xl sm:text-5xl font-bold text-emerald-400">{player.precio ? `${player.precio}M` : '-'}</div>
               <p className="text-slate-400 text-sm">Precio</p>
             </div>
           </div>
@@ -866,7 +907,7 @@ export default function JugadorDetallePage() {
             </div>
 
             {/* Resumen */}
-            <div className="p-6 grid grid-cols-4 gap-4 bg-slate-50">
+            <div className="p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 bg-slate-50">
               <div className="text-center">
                 <p className="text-3xl font-bold text-emerald-600">{selectedMatch.total_points}</p>
                 <p className="text-xs text-slate-600">Puntos</p>

@@ -23,24 +23,49 @@
     "own_goal": {
       "all": -2
     },
-    "assist": {
-      "all": 3
+    "assist_goal": {
+      "all": 3,
+      "typeId": 1,
+      "qualifierId": 210,
+      "qualifierValues": [16]
     },
-    "fantasy_assist": {
-      "all": 1
+    "assist_no_goal": {
+      "all": 1,
+      "typeId": 1,
+      "qualifierId": 210,
+      "qualifierValues": [13, 14, 15]
+    },
+    "penalty_won": {
+      "all": 1,
+      "typeId": 4,
+      "outcome": 1,
+      "qualifierId": 9,
+      "description": "Falta recibida (typeId 4, outcome 1) que resulta en penalti (qualifier 9)"
+    },
+    "penalty_conceded": {
+      "all": -1,
+      "typeId": 4,
+      "outcome": 0,
+      "qualifierId": 9,
+      "description": "Falta cometida (typeId 4, outcome 0) que resulta en penalti (qualifier 9)"
+    },
+    "goal_conceded": {
+      "POR": -2,
+      "DEF": -2,
+      "MED": -1,
+      "DEL": -1,
+      "typeId": 16,
+      "logic": "contestantId != player_contestantId OR qualifierId == 28",
+      "description": "Gol del equipo rival (contestantId distinto al del jugador) o gol en propia (qualifier 28) mientras el jugador está en el campo"
     },
     "clean_sheet": {
       "POR": 4,
       "DEF": 3,
       "MED": 2,
       "DEL": 1,
-      "min_minutes": 60
-    },
-    "goal_conceded_per_2": {
-      "POR": -2,
-      "DEF": -2,
-      "MED": -1,
-      "DEL": -1
+      "min_minutes": 60,
+      "requires_zero": "goal_conceded",
+      "description": "Otorgar si juega >= 60 min y suma 0 en goal_conceded"
     },
     "save_per_2": {
       "all": 1
@@ -72,6 +97,14 @@
       "required": 2,
       "points": 1
     },
+    "forward_passes": {
+      "required": 10,
+      "points": 1,
+      "typeId": 1,
+      "outcome": 1,
+      "logic": "qualifier_140_value > event_x",
+      "description": "1 punto cada 10 pases completados donde la coordenada X final (qualifier 140) sea mayor que la coordenada X inicial del evento"
+    },
     "takeons_won": {
       "required": 2,
       "points": 1
@@ -87,6 +120,20 @@
     "clearances": {
       "required": 3,
       "points": 1
+    },
+    "set_pieces_taken": {
+      "required": 5,
+      "points": 1,
+      "logic": "qualifierId == 5 OR qualifierId == 6",
+      "description": "1 punto cada 5 lanzamientos de falta (qualifier 5) o córner (qualifier 6)"
+    },
+    "successful_crosses": {
+      "required": 3,
+      "points": 1,
+      "typeId": 1,
+      "outcome": 1,
+      "qualifierId": 2,
+      "description": "1 punto cada 3 centros buenos (Pase exitoso con qualifier 2)"
     }
   },
   "bonus_pases_per_10": {

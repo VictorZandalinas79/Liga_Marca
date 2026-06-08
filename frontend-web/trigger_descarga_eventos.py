@@ -62,6 +62,8 @@ Q_BLOCKED_CROSS = 185
 Q_PARRIED_SAFE = 173
 Q_PARRIED_DANGER = 174
 Q_FUMBLE = 381
+Q_CORNER = 6
+Q_FREE_KICK = 5
 Q_PEN_SCORED = 186
 Q_PEN_SAVED = 187
 Q_PEN_MISSED = 188
@@ -140,6 +142,7 @@ class MatchEventDownloader:
         self.player_positions_map = {}
         self.home_team_id = None
         self.away_team_id = None
+        self.matchday = None
 
     def get_position_points(self, rule_key: str, position: str) -> int:
         """Obtiene los puntos para una regla y posición específicas."""
@@ -271,11 +274,12 @@ class MatchEventDownloader:
         """Obtiene los IDs de local y visitante desde la tabla fixtures en Supabase."""
         print(f"   🔄 Obteniendo equipos desde la base de datos...")
         try:
-            response = self.supabase.table('fixtures').select('home_team_id, away_team_id').eq('id', self.fixture_id).single().execute()
+            response = self.supabase.table('fixtures').select('home_team_id, away_team_id, matchday').eq('id', self.fixture_id).single().execute()
             if response.data:
                 self.home_team_id = response.data['home_team_id']
                 self.away_team_id = response.data['away_team_id']
-                print(f"   ✅ Equipos cargados: Local={self.home_team_id}, Visitante={self.away_team_id}")
+                self.matchday = response.data.get('matchday')
+                print(f"   ✅ Equipos cargados: Local={self.home_team_id}, Visitante={self.away_team_id} (jornada {self.matchday})")
             else:
                 print(f"   ⚠️ No se encontraron equipos para el fixture {self.fixture_id}")
         except Exception as e:
@@ -343,12 +347,16 @@ class MatchEventDownloader:
                 'switch_plays': 0, 'pull_backs': 0,
                 'long_balls_completed': 0, 'lay_offs': 0,
                 'offside_passes': 0,
+                # Nuevas métricas v3.0 RELEVO
+                'forward_passes': 0,
+                'set_pieces_taken': 0,
+                'successful_crosses': 0,
                 'takeons_won': 0, 'takeons_lost': 0, 'takeons_overrun': 0,
                 'good_skills': 0, 'dispossessed': 0, 'bad_touches': 0,
                 'aerials_won': 0, 'aerials_lost': 0,
                 'fouls_committed': 0, 'fouls_won': 0,
                 # Internos y Puntos RELEVO
-                'pass_opp_half': 0,  
+                'pass_opp_half': 0,
                 'box_entries': 0,
                 'total_events': 0,
                 'pass_opp_half_attempted': 0,
@@ -677,13 +685,22 @@ class MatchEventDownloader:
         if is_opp_half:
             self.apply_points(pid, 'pass_opp_half_attempted', 1, current_min)
 
+        # Centro intentado: cualquier pase con qualifier cross (2)
+        if self.has_qualifier(event, Q_CROSS):
+            self.apply_points(pid, 'crosses_attempted', 1, current_min)
+
         if outcome == 1:
             self.apply_points(pid, 'passes_completed', 1, current_min)
-            
+
             if is_opp_half:
                 self.apply_points(pid, 'pass_opp_half_completed', 1, current_min)
 
             end_x = self.get_qualifier_float(event, Q_PASS_END_X)
+
+            # Forward pass: pase hacia adelante (end_x > start_x)
+            if end_x is not None and end_x > x_coord:
+                self.apply_points(pid, 'forward_passes', 1, current_min)
+
             if end_x is not None and end_x >= 50:
                 self.apply_points(pid, 'pass_opp_half', 1, current_min)
 
@@ -691,6 +708,14 @@ class MatchEventDownloader:
             end_y = self.get_qualifier_float(event, Q_PASS_END_Y)
             if end_x is not None and end_y is not None and end_x >= 83 and 21 <= end_y <= 79:
                 self.apply_points(pid, 'box_entries', 1, current_min)
+
+            # Centro completado: pase con qualifier cross (2) completado
+            if self.has_qualifier(event, Q_CROSS):
+                self.apply_points(pid, 'successful_crosses', 1, current_min)
+
+            # Set piece taken: córner (6) o falta (5)
+            if self.has_qualifier(event, Q_CORNER) or self.has_qualifier(event, Q_FREE_KICK):
+                self.apply_points(pid, 'set_pieces_taken', 1, current_min)
 
             if self.get_qualifier(event, Q_ASSIST):
                 self.apply_points(pid, 'assists', 1, current_min)
@@ -979,6 +1004,7 @@ class MatchEventDownloader:
                 'player_id': db_player_id,  # Usar ID local mapeado
                 'fixture_id': self.fixture_id,
                 'match_id': self.match_id,
+                'matchday': self.matchday,
                 'team_id': team_id,
                 'position': pos,
                 'is_starter': is_starter,
@@ -1055,6 +1081,10 @@ class MatchEventDownloader:
                 'long_balls_completed': stats.get('long_balls_completed', 0),
                 'lay_offs': stats.get('lay_offs', 0),
                 'offside_passes': stats.get('offside_passes', 0),
+                # Nuevas métricas v3.0 RELEVO
+                'forward_passes': stats.get('forward_passes', 0),
+                'set_pieces_taken': stats.get('set_pieces_taken', 0),
+                'successful_crosses': stats.get('successful_crosses', 0),
 
                 # Regates
                 'takeons_won': stats.get('takeons_won', 0),

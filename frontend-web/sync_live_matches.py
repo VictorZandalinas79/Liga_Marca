@@ -650,6 +650,15 @@ class LiveMatchSync:
         """Sube los player_scores a Supabase"""
         print("\n📤 Subiendo datos a Supabase...")
 
+        # Obtener la jornada del fixture para guardarla en cada player_score
+        matchday = None
+        try:
+            fx = self.supabase.table('fixtures').select('matchday').eq('id', self.fixture_id).single().execute()
+            if fx.data:
+                matchday = fx.data.get('matchday')
+        except Exception as e:
+            print(f"   ⚠️ No se pudo obtener la jornada del fixture: {e}")
+
         # Mapear stats del engine a formato de tabla
         for player_id, total_points in self.points.items():
             team_id = self.players_team.get(player_id)
@@ -676,6 +685,7 @@ class LiveMatchSync:
                 'player_id': player_id,
                 'fixture_id': self.fixture_id,
                 'match_id': self.match_id,
+                'matchday': matchday,
                 'team_id': team_id,
                 'position': pos,
                 'is_starter': is_starter,

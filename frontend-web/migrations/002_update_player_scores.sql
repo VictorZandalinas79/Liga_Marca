@@ -94,6 +94,10 @@ CREATE TABLE IF NOT EXISTS player_scores (
     long_balls_completed INTEGER DEFAULT 0,
     lay_offs INTEGER DEFAULT 0,
     offside_passes INTEGER DEFAULT 0,
+    -- Nuevas métricas v3.0 RELEVO
+    forward_passes INTEGER DEFAULT 0,
+    set_pieces_taken INTEGER DEFAULT 0,
+    successful_crosses INTEGER DEFAULT 0,
 
     -- REGATES Y TÉCNICA
     takeons_won INTEGER DEFAULT 0,

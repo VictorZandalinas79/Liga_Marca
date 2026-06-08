@@ -60,8 +60,12 @@ interface Player {
   passes_into_box?: number
   through_balls?: number
   crosses_completed?: number
+  crosses_attempted?: number
   switch_plays?: number
   long_balls_completed?: number
+  forward_passes?: number
+  set_pieces_taken?: number
+  successful_crosses?: number
   // Regates
   takeons_won?: number
   takeons_lost?: number
@@ -197,12 +201,16 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
       metrics: [
         { key: 'passes_completed', label: 'Pases completados', max: 100 },
         { key: 'progressive_passes', label: 'Pases progresivos', max: 20 },
+        { key: 'forward_passes', label: 'Pases hacia adelante', max: 50 },
         { key: 'passes_into_final_third', label: 'Pases a último tercio', max: 20 },
         { key: 'passes_into_box', label: 'Pases al área', max: 10 },
         { key: 'through_balls', label: 'Pases al hueco', max: 5 },
         { key: 'crosses_completed', label: 'Centros completados', max: 10 },
+        { key: 'crosses_attempted', label: 'Centros intentados', max: 20 },
+        { key: 'successful_crosses', label: 'Centros exitosos', max: 10 },
         { key: 'switch_plays', label: 'Cambios de juego', max: 5 },
         { key: 'long_balls_completed', label: 'Balones largos', max: 10 },
+        { key: 'set_pieces_taken', label: 'Balones parados', max: 10 },
         { key: 'pass_accuracy', label: 'Precisión de pase', max: 100, isPercent: true },
       ]
     },
@@ -259,15 +267,15 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
   const getPointsForMetric = (key: string, value: number, playerPosition?: string): number => {
     const position = normPos(playerPosition)
 
-    // Puntos fijos por evento
+    // Puntos fijos por evento (reglas v3.0 RELEVO)
     const fixedPoints: Record<string, number> = {
       'goals': position === 'DEL' ? 4 : position === 'MED' ? 5 : 6,  // POR/DEF=6, MED=5, DEL=4
       'assists': 3,         // Asistencia de gol
       'intent_assists': 1,  // Intento de asistencia (fantasy assist)
       'own_goals': -2,
       'penalties_missed': -2,
-      'penalties_won': 2,
-      'penalties_conceded': -2,
+      'penalties_won': 1,        // Cambiado de 2 a 1
+      'penalties_conceded': -1,  // Cambiado de -2 a -1
       'penalty_saves': 5,
       'yellow_cards': -1,
       'second_yellow_cards': -1,
@@ -286,14 +294,13 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
       return 1  // DEL
     }
 
-    // Goles recibidos: cada 2 = -1 o -2 según posición
+    // Goles recibidos: -1 o -2 POR GOL encajado (no cada 2)
     if (key === 'goals_conceded' && value > 0) {
-      const tramos = Math.floor(value / 2)
-      if (position === 'POR' || position === 'DEF') return tramos * -2
-      return tramos * -1  // MED/DEL
+      if (position === 'POR' || position === 'DEF') return value * -2
+      return value * -1  // MED/DEL
     }
 
-    // Puntos por TRAMOS (división entera)
+    // Puntos por TRAMOS (división entera) - incluye nuevos bonus v3.0
     const thresholds: Record<string, { every: number; points: number }> = {
       'saves': { every: 2, points: 1 },           // Cada 2 paradas = 1 pt
       'shots_on_target': { every: 2, points: 1 }, // Cada 2 tiros a puerta = 1 pt
@@ -302,6 +309,9 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
       'passes_completed': { every: 10, points: 1 }, // Cada 10 pases = 1 pt
       'ball_recoveries': { every: 5, points: 1 }, // Cada 5 recuperaciones = 1 pt
       'clearances': { every: 3, points: 1 },      // Cada 3 despejes = 1 pt
+      'forward_passes': { every: 10, points: 1 }, // Nuevo: pases hacia adelante
+      'set_pieces_taken': { every: 5, points: 1 }, // Nuevo: lanzamientos BP
+      'successful_crosses': { every: 3, points: 1 }, // Nuevo: centros
     }
 
     const threshold = thresholds[key]
@@ -390,21 +400,28 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
         if (min > 0) lines.push({ label: `Participación (${min} min)`, points: min > 60 ? 2 : 1 })
         if (n(player.goals) > 0) lines.push({ label: `Goles (${n(player.goals)}, ${pos})`, points: n(player.goals) * (pos === 'DEL' ? 4 : pos === 'MED' ? 5 : 6) })
         if (n(player.own_goals) > 0) lines.push({ label: `Goles en propia (${n(player.own_goals)})`, points: n(player.own_goals) * -2, negative: true })
-        if (n(player.assists) > 0) lines.push({ label: `Asistencias (${n(player.assists)})`, points: n(player.assists) * 3 })
-        if (n(player.intent_assists) > 0) lines.push({ label: `Intentos de asistencia (${n(player.intent_assists)})`, points: n(player.intent_assists) * 1 })
+        if (n(player.assists) > 0) lines.push({ label: `Asistencias de gol (${n(player.assists)})`, points: n(player.assists) * 3 })
+        if (n(player.intent_assists) > 0) lines.push({ label: `Asistencias sin gol (${n(player.intent_assists)})`, points: n(player.intent_assists) * 1 })
         const cs = player.clean_sheet === true || player.clean_sheet === 1 || player.clean_sheet === 'true'
         if (cs) lines.push({ label: `Portería a cero (>60 min, ${pos})`, points: pos === 'POR' ? 4 : pos === 'DEF' ? 3 : pos === 'MED' ? 2 : 1 })
-        if (n(player.goals_conceded) >= 2) lines.push({ label: `Goles recibidos (${n(player.goals_conceded)} ÷ 2)`, points: fd(n(player.goals_conceded), 2) * ((pos === 'POR' || pos === 'DEF') ? -2 : -1), negative: true })
+        if (n(player.goals_conceded) > 0) lines.push({ label: `Goles recibidos (${n(player.goals_conceded)})`, points: n(player.goals_conceded) * ((pos === 'POR' || pos === 'DEF') ? -2 : -1), negative: true })
         if (n(player.shots_on_target) >= 2) lines.push({ label: `Tiros a puerta (${n(player.shots_on_target)} ÷ 2)`, points: fd(n(player.shots_on_target), 2) })
         if (n(player.penalties_missed) > 0) lines.push({ label: `Penaltis fallados (${n(player.penalties_missed)})`, points: n(player.penalties_missed) * -2, negative: true })
-        if (n(player.penalties_won) > 0) lines.push({ label: `Penaltis provocados (${n(player.penalties_won)})`, points: n(player.penalties_won) * 2 })
-        if (n(player.penalties_conceded) > 0) lines.push({ label: `Penaltis cometidos (${n(player.penalties_conceded)})`, points: n(player.penalties_conceded) * -2, negative: true })
+        if (n(player.penalties_won) > 0) lines.push({ label: `Penaltis provocados (${n(player.penalties_won)})`, points: n(player.penalties_won) * 1 })
+        if (n(player.penalties_conceded) > 0) lines.push({ label: `Penaltis cometidos (${n(player.penalties_conceded)})`, points: n(player.penalties_conceded) * -1, negative: true })
         if (n(player.penalty_saves) > 0) lines.push({ label: `Penaltis parados (${n(player.penalty_saves)})`, points: n(player.penalty_saves) * 5 })
         if (n(player.saves) >= 2) lines.push({ label: `Paradas (${n(player.saves)} ÷ 2)`, points: fd(n(player.saves), 2) })
         if (n(player.takeons_won) >= 2) lines.push({ label: `Regates (${n(player.takeons_won)} ÷ 2)`, points: fd(n(player.takeons_won), 2) })
         if (n(player.ball_recoveries) >= 5) lines.push({ label: `Recuperaciones (${n(player.ball_recoveries)} ÷ 5)`, points: fd(n(player.ball_recoveries), 5) })
         if (n(player.clearances) >= 3) lines.push({ label: `Despejes (${n(player.clearances)} ÷ 3)`, points: fd(n(player.clearances), 3) })
         if (n(player.passes_completed) >= 10) lines.push({ label: `Pases completados (${n(player.passes_completed)} ÷ 10)`, points: fd(n(player.passes_completed), 10) })
+        // Nuevos bonus v3.0
+        const forwardPasses = n(player.forward_passes)
+        if (forwardPasses >= 10) lines.push({ label: `Pases hacia adelante (${forwardPasses} ÷ 10)`, points: fd(forwardPasses, 10) })
+        const setPieces = n(player.set_pieces_taken)
+        if (setPieces >= 5) lines.push({ label: `Lanzamientos BP (${setPieces} ÷ 5)`, points: fd(setPieces, 5) })
+        const successfulCrosses = n(player.successful_crosses)
+        if (successfulCrosses >= 3) lines.push({ label: `Centros completados (${successfulCrosses} ÷ 3)`, points: fd(successfulCrosses, 3) })
         const lostBalls = n(player.dispossessed) + n(player.bad_touches)
         const lostReq = pos === 'DEL' ? 12 : pos === 'MED' ? 10 : 8
         if (lostBalls >= lostReq) lines.push({ label: `Balones perdidos (${lostBalls} ÷ ${lostReq})`, points: fd(lostBalls, lostReq) * -1, negative: true })
@@ -585,8 +602,13 @@ export default function PartidoDetallePage() {
           passes_into_box: score?.passes_into_box || 0,
           through_balls: score?.through_balls || 0,
           crosses_completed: score?.crosses_completed || 0,
+          crosses_attempted: score?.crosses_attempted || 0,
           switch_plays: score?.switch_plays || 0,
           long_balls_completed: score?.long_balls_completed || 0,
+          // Nuevos bonus v3.0
+          forward_passes: score?.forward_passes || 0,
+          set_pieces_taken: score?.set_pieces_taken || 0,
+          successful_crosses: score?.successful_crosses || 0,
           // Bonus ataque
           box_entries: score?.box_entries || 0,  // Llegadas al área
           // Regates
@@ -860,8 +882,8 @@ export default function PartidoDetallePage() {
 
       {/* Cabecera del partido */}
       <Card className="!bg-slate-800 border-slate-700">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-6">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
             <div className="flex items-center gap-3">
               {fixture?.status === 'live' ? (
                 <div className="flex items-center gap-2">
@@ -895,13 +917,13 @@ export default function PartidoDetallePage() {
               </button>
             </div>
             {dateTime && (
-              <div className="flex items-center gap-4 text-sm text-slate-300">
-                <div className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4" />
+              <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm text-slate-300 flex-wrap">
+                <div className="flex items-center gap-1 capitalize">
+                  <Calendar className="w-4 h-4 shrink-0" />
                   {dateTime.date}
                 </div>
                 <div className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
+                  <Clock className="w-4 h-4 shrink-0" />
                   {dateTime.time}
                 </div>
               </div>
@@ -924,18 +946,18 @@ export default function PartidoDetallePage() {
             {/* Equipo Local */}
             <div className="flex-1 flex flex-col items-center">
               {homeTeam?.logo_url ? (
-                <img src={homeTeam.logo_url} alt={homeTeam.name} className="w-20 h-20 object-contain mb-3" />
+                <img src={homeTeam.logo_url} alt={homeTeam.name} className="w-16 h-16 sm:w-20 sm:h-20 object-contain mb-3" />
               ) : (
-                <div className="w-20 h-20 rounded-full bg-slate-700 flex items-center justify-center mb-3">
-                  <Trophy className="w-10 h-10 text-slate-400" />
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-700 flex items-center justify-center mb-3">
+                  <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-slate-400" />
                 </div>
               )}
-              <h2 className="text-xl font-bold text-white text-center">{homeTeam?.name || 'Local'}</h2>
+              <h2 className="text-base sm:text-xl font-bold text-white text-center">{homeTeam?.name || 'Local'}</h2>
             </div>
 
             {/* Marcador Central */}
-            <div className="px-8 flex flex-col items-center">
-              <div className="flex items-center gap-4 text-4xl font-bold text-white">
+            <div className="px-3 sm:px-8 flex flex-col items-center">
+              <div className="flex items-center gap-2 sm:gap-4 text-3xl sm:text-4xl font-bold text-white">
                 <span>{fixture?.home_score ?? 0}</span>
                 <span className="text-slate-500">-</span>
                 <span>{fixture?.away_score ?? 0}</span>
@@ -955,13 +977,13 @@ export default function PartidoDetallePage() {
             {/* Equipo Visitante */}
             <div className="flex-1 flex flex-col items-center">
               {awayTeam?.logo_url ? (
-                <img src={awayTeam.logo_url} alt={awayTeam.name} className="w-20 h-20 object-contain mb-3" />
+                <img src={awayTeam.logo_url} alt={awayTeam.name} className="w-16 h-16 sm:w-20 sm:h-20 object-contain mb-3" />
               ) : (
-                <div className="w-20 h-20 rounded-full bg-slate-700 flex items-center justify-center mb-3">
-                  <Trophy className="w-10 h-10 text-slate-400" />
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-700 flex items-center justify-center mb-3">
+                  <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-slate-400" />
                 </div>
               )}
-              <h2 className="text-xl font-bold text-white text-center">{awayTeam?.name || 'Visitante'}</h2>
+              <h2 className="text-base sm:text-xl font-bold text-white text-center">{awayTeam?.name || 'Visitante'}</h2>
             </div>
           </div>
 
@@ -1159,9 +1181,9 @@ export default function PartidoDetallePage() {
             </div>
 
             {/* Cuerpo con métricas */}
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-6">
               {/* Resumen principal */}
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-emerald-50 p-4 rounded-xl text-center">
                   <p className="text-emerald-800 text-sm font-semibold">Puntos</p>
                   <p className="text-3xl font-bold text-emerald-600">{selectedPlayer.total_points || 0}</p>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, Users } from 'lucide-react'
+import { Trophy, Users, ChevronLeft, ChevronRight, Radio } from 'lucide-react'
 
 interface Player {
   id: string
@@ -15,6 +15,7 @@ interface Player {
   photo?: string
   shirt_number?: number
   puntos?: number
+  valor?: number
   is_starter?: boolean
   is_captain?: boolean
   team?: { name: string; logo_url?: string }
@@ -28,33 +29,43 @@ interface UserTeam {
   created_at: string
   jugadores: Player[]
   puntos_totales: number
+  valor_total: number
   posicion?: number
 }
 
 interface MatchdayInfo {
-  matchday: number | string
+  matchday: number       // número de jornada para mostrar (momentos remapeados)
   momento?: string
+  rawMatchday: number | null  // fixtures.matchday real (null para fases/momentos)
+  fixtureIds: string[]
   start_time: string
-  end_time?: string
-  is_complete?: boolean
+  end_time: string
+  started: boolean
+  live: boolean
 }
+
+// Duración aproximada de un partido (90' + descanso + añadido) para considerar
+// una jornada "en directo" desde su primer partido hasta que acaba el último.
+const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
 
 export default function JornadaPage() {
   const [loading, setLoading] = useState(true)
   const [selectedMatchday, setSelectedMatchday] = useState<number>(0)
   const [availableMatchdays, setAvailableMatchdays] = useState<MatchdayInfo[]>([])
   const [userTeams, setUserTeams] = useState<UserTeam[]>([])
-  const [userCreatedDates, setUserCreatedDates] = useState<Map<string, string>>(new Map())
   const supabase = createClient()
 
-  // Obtener todas las jornadas disponibles con matchday lógico
+  // Obtener todas las jornadas disponibles (ya empezadas: en directo o finalizadas)
   const fetchMatchdays = async () => {
     const { data: fixtures } = await supabase
       .from('fixtures')
-      .select('matchday, momento, start_time')
+      .select('id, matchday, momento, start_time, status')
       .order('start_time', { ascending: true })
 
-    if (!fixtures) return
+    if (!fixtures) {
+      setLoading(false)
+      return
+    }
 
     // Calcular el matchday numérico máximo
     const numericMatchdays = fixtures
@@ -62,255 +73,198 @@ export default function JornadaPage() {
       .map(f => f.matchday as number)
     const maxNumericMatchday = numericMatchdays.length > 0 ? Math.max(...numericMatchdays) : 0
 
-    // Agrupar por matchday/momento
-    const matchdaysMap = new Map<string, { matchday: number | string; momento: string | null; start_time: string; fixtures: typeof fixtures }>()
+    // Agrupar por matchday/momento, guardando los fixture_ids de cada grupo
+    const matchdaysMap = new Map<string, {
+      matchday: number | string
+      momento: string | null
+      rawMatchday: number | null
+      fixtureIds: string[]
+      starts: number[]
+    }>()
 
     for (const fixture of fixtures) {
-      let key: string
-
-      if (fixture.matchday && fixture.matchday > 0) {
-        key = `md-${fixture.matchday}`
-      } else {
-        const momentoName = fixture.momento || 'Unknown'
-        key = `momento-${momentoName}`
-      }
+      const isNumeric = fixture.matchday && fixture.matchday > 0
+      const momentoName = fixture.momento || 'Unknown'
+      const key = isNumeric ? `md-${fixture.matchday}` : `momento-${momentoName}`
 
       if (!matchdaysMap.has(key)) {
-        const momentoName = fixture.momento || 'Unknown'
         matchdaysMap.set(key, {
-          matchday: fixture.matchday && fixture.matchday > 0 ? fixture.matchday : momentoName,
+          matchday: isNumeric ? (fixture.matchday as number) : momentoName,
           momento: fixture.momento,
-          start_time: fixture.start_time,
-          fixtures: []
+          rawMatchday: isNumeric ? (fixture.matchday as number) : null,
+          fixtureIds: [],
+          starts: [],
         })
       }
-      matchdaysMap.get(key)!.fixtures.push(fixture)
+      const g = matchdaysMap.get(key)!
+      g.fixtureIds.push(fixture.id)
+      g.starts.push(new Date(fixture.start_time).getTime())
     }
 
-    // Convertir a array, calculando fecha de inicio (min) y de fin (max) de cada jornada
-    let matchdays: MatchdayInfo[] = Array.from(matchdaysMap.values())
-      .map(m => ({
-        matchday: m.matchday,
-        momento: m.momento ?? undefined,
-        start_time: m.fixtures.length > 0
-          ? m.fixtures.reduce((min, f) => f.start_time < min ? f.start_time : min, m.fixtures[0].start_time)
-          : m.start_time,
-        end_time: m.fixtures.length > 0
-          ? m.fixtures.reduce((max, f) => f.start_time > max ? f.start_time : max, m.fixtures[0].start_time)
-          : m.start_time,
-      }))
+    const now = Date.now()
 
-    // Separar numèriques i moments
-    const numericMatchdaysInfo = matchdays
-      .filter(m => typeof m.matchday === 'number' && m.matchday > 0)
-      .sort((a, b) => (a.matchday as number) - (b.matchday as number))
-
-    const momentMatchdaysInfo = matchdays
-      .filter(m => typeof m.matchday === 'string')
-      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-
-    // Assignar números correlatius als moments: maxNumeric + 1, maxNumeric + 2, ...
-    const momentMatchdaysWithNumbers: MatchdayInfo[] = momentMatchdaysInfo.map((m, index) => ({
-      matchday: maxNumericMatchday + 1 + index,
-      momento: m.momento || undefined,
-      start_time: m.start_time,
-      end_time: m.end_time,
-    }))
-
-    // Unir: primer numèriques, després moments
-    matchdays = [...numericMatchdaysInfo, ...momentMatchdaysWithNumbers]
-
-    // SOLO jornadas YA FINALIZADAS: el tramo cierra 2h después del último partido.
-    // Las jornadas en curso (tramo activo) y las futuras quedan ocultas, así que no
-    // se pueden ver los equipos de los demás usuarios hasta que la jornada termine.
-    const now = new Date()
-    const LOCK_BUFFER_MS = 2 * 60 * 60 * 1000
-    const finishedMatchdays = matchdays.filter(
-      m => new Date(m.end_time || m.start_time).getTime() + LOCK_BUFFER_MS < now.getTime()
-    )
-
-    setAvailableMatchdays(finishedMatchdays)
-
-    if (finishedMatchdays.length > 0) {
-      // Por defecto, la última jornada finalizada
-      setSelectedMatchday(finishedMatchdays[finishedMatchdays.length - 1].matchday as number)
-    } else {
-      // No hay ninguna jornada finalizada todavía
-      setLoading(false)
-    }
-  }
-
-  // Obtener fechas de creación de usuarios
-  const fetchUserCreatedDates = async () => {
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, created_at')
-
-    const { data: teams } = await supabase
-      .from('user_teams')
-      .select('user_id, created_at')
-
-    const datesMap = new Map<string, string>()
-
-    profiles?.forEach(p => {
-      datesMap.set(p.id, p.created_at)
-    })
-
-    teams?.forEach(t => {
-      if (!datesMap.has(t.user_id)) {
-        datesMap.set(t.user_id, t.created_at)
+    const toInfo = (g: ReturnType<typeof matchdaysMap.get> & object, displayNumber: number): MatchdayInfo => {
+      const first = Math.min(...g.starts)
+      const last = Math.max(...g.starts)
+      const started = now >= first
+      const live = started && now <= last + MATCH_DURATION_MS
+      return {
+        matchday: displayNumber,
+        momento: g.momento ?? undefined,
+        rawMatchday: g.rawMatchday,
+        fixtureIds: g.fixtureIds,
+        start_time: new Date(first).toISOString(),
+        end_time: new Date(last).toISOString(),
+        started,
+        live,
       }
-    })
+    }
 
-    setUserCreatedDates(datesMap)
-    return datesMap
-  }
+    const groups = Array.from(matchdaysMap.values())
 
-  // Verificar si un usuario puede participar en una jornada
-  const canParticipateInMatchday = (userCreatedAt: string, matchday: number | string, matchdayDate: string): boolean => {
-    const userDate = new Date(userCreatedAt)
-    const matchDate = new Date(matchdayDate)
-    return userDate <= matchDate
-  }
+    // Jornadas numéricas (conservan su número)
+    const numericInfos = groups
+      .filter(g => g.rawMatchday != null)
+      .sort((a, b) => (a.rawMatchday as number) - (b.rawMatchday as number))
+      .map(g => toInfo(g, g.rawMatchday as number))
 
-  // Cargar equipos y jugadores de la jornada seleccionada
-  const loadUserTeamsForMatchday = async (matchday: number) => {
-    setLoading(true)
+    // Momentos/fases especiales: se remapean a maxNumeric + 1, + 2, ...
+    const momentoInfos = groups
+      .filter(g => g.rawMatchday == null)
+      .sort((a, b) => Math.min(...a.starts) - Math.min(...b.starts))
+      .map((g, index) => toInfo(g, maxNumericMatchday + 1 + index))
 
-    // Obtener todas las fechas de creación de usuarios
-    const createdDates = await fetchUserCreatedDates()
+    const allInfos = [...numericInfos, ...momentoInfos]
 
-    // Obtener fecha de la jornada seleccionada
-    const matchdayInfo = availableMatchdays.find(m => m.matchday === matchday)
-    const matchdayDate = matchdayInfo?.start_time || new Date().toISOString()
+    // Solo mostramos jornadas que YA han empezado (en directo o finalizadas).
+    // Las futuras quedan ocultas hasta su primer partido.
+    const startedInfos = allInfos.filter(m => m.started)
 
-    // Determinar si es un momento especial (matchday > maxNumericMatchday)
-    const maxNumericMatchday = availableMatchdays
-      .filter(m => typeof m.matchday === 'number' && m.momento === undefined)
-      .map(m => m.matchday as number)
-      .reduce((a, b) => Math.max(a, b), 0)
-    const isMomento = matchday > maxNumericMatchday
+    setAvailableMatchdays(startedInfos)
 
-    // Obtener todos los user_teams
-    const { data: userTeamsData } = await supabase
-      .from('user_teams')
-      .select('id, user_id, name')
-
-    if (!userTeamsData || userTeamsData.length === 0) {
+    if (startedInfos.length === 0) {
       setLoading(false)
       return
     }
 
-    // Obtener team_players de esta jornada
-    let teamPlayersData = null
+    // Por defecto: la jornada en directo (la más alta si hay varias), si no, la última empezada
+    const liveOnes = startedInfos.filter(m => m.live)
+    const defaultMatchday = liveOnes.length > 0
+      ? liveOnes[liveOnes.length - 1].matchday
+      : startedInfos[startedInfos.length - 1].matchday
 
-    if (isMomento) {
-      // Para momentos especiales: el matchday lógico se guarda como el número en team_players
-      const { data: specificPlayers } = await supabase
-        .from('team_players')
-        .select('team_id, player_id, is_starter, is_captain, matchday')
-        .in('team_id', userTeamsData.map(t => t.id))
-        .eq('matchday', matchday)
+    setSelectedMatchday(defaultMatchday)
+  }
 
-      teamPlayersData = specificPlayers
+  // Verificar si un usuario puede participar en una jornada (registrado antes)
+  const canParticipateInMatchday = (userCreatedAt: string, matchdayDate: string): boolean => {
+    return new Date(userCreatedAt) <= new Date(matchdayDate)
+  }
 
-      // Si no hay, buscar el último matchday disponible
-      if (!specificPlayers || specificPlayers.length === 0) {
-        const { data: fallbackPlayers } = await supabase
-          .from('team_players')
-          .select('team_id, player_id, is_starter, is_captain, matchday')
-          .in('team_id', userTeamsData.map(t => t.id))
-          .lte('matchday', matchday)
-          .order('matchday', { ascending: false })
-          .limit(11)
+  // Cargar equipos y jugadores de la jornada seleccionada
+  const loadUserTeamsForMatchday = async (matchday: number, silent = false) => {
+    if (!silent) setLoading(true)
 
-        teamPlayersData = fallbackPlayers
-      }
-    } else if (matchday > 0) {
-      // Para jornadas numéricas, intentar primero esa jornada
-      const { data: specificPlayers } = await supabase
-        .from('team_players')
-        .select('team_id, player_id, is_starter, is_captain, matchday')
-        .in('team_id', userTeamsData.map(t => t.id))
-        .eq('matchday', matchday)
+    const info = availableMatchdays.find(m => m.matchday === matchday)
+    const matchdayDate = info?.start_time || new Date().toISOString()
+    const isMomento = info ? info.rawMatchday == null : false
 
-      teamPlayersData = specificPlayers
+    // Fechas de creación de usuarios (para el control de participación)
+    const { data: profiles } = await supabase.from('profiles').select('id, created_at, full_name, email')
+    const createdDates = new Map<string, string>()
+    profiles?.forEach(p => createdDates.set(p.id, p.created_at))
+    const usersMap = new Map(profiles?.map(u => [u.id, u]) || [])
 
-      // Si no hay, buscar el último matchday disponible
-      if (!specificPlayers || specificPlayers.length === 0) {
-        const { data: fallbackPlayers } = await supabase
-          .from('team_players')
-          .select('team_id, player_id, is_starter, is_captain, matchday')
-          .in('team_id', userTeamsData.map(t => t.id))
-          .lte('matchday', matchday)
-          .order('matchday', { ascending: false })
-          .limit(11)
+    // Todos los equipos de usuario
+    const { data: userTeamsData } = await supabase
+      .from('user_teams')
+      .select('id, user_id, name, created_at')
 
-        teamPlayersData = fallbackPlayers
-      }
-    }
-
-    if (!teamPlayersData || teamPlayersData.length === 0) {
-      console.log('[Jornada] No hay team_players para esta jornada')
-      console.log('[Jornada] matchday:', matchday)
-      console.log('[Jornada] userTeamsData:', userTeamsData?.length)
+    if (!userTeamsData || userTeamsData.length === 0) {
       setUserTeams([])
       setLoading(false)
       return
     }
 
-    console.log('[Jornada] teamPlayersData cargados:', teamPlayersData.length)
+    userTeamsData.forEach(t => {
+      if (!createdDates.has(t.user_id)) createdDates.set(t.user_id, t.created_at)
+    })
 
-    // Obtener IDs de jugadores únicos
+    const teamIdsUser = userTeamsData.map(t => t.id)
+
+    // team_players de esta jornada (con fallback al último matchday alineado <= jornada)
+    let { data: teamPlayersData } = await supabase
+      .from('team_players')
+      .select('team_id, player_id, is_starter, is_captain, matchday')
+      .in('team_id', teamIdsUser)
+      .eq('matchday', matchday)
+
+    if (!teamPlayersData || teamPlayersData.length === 0) {
+      const { data: fallbackPlayers } = await supabase
+        .from('team_players')
+        .select('team_id, player_id, is_starter, is_captain, matchday')
+        .in('team_id', teamIdsUser)
+        .lte('matchday', matchday)
+        .order('matchday', { ascending: false })
+      teamPlayersData = fallbackPlayers
+    }
+
+    if (!teamPlayersData || teamPlayersData.length === 0) {
+      setUserTeams([])
+      setLoading(false)
+      return
+    }
+
     const playerIds = [...new Set(teamPlayersData.map(tp => tp.player_id))]
 
-    // Obtener datos de jugadores con sus equipos
+    // Datos de jugadores (incluye precio para el valor del equipo)
     const { data: playersData } = await supabase
       .from('players')
-      .select('id, first_name, last_name, short_name, position, photo, shirt_number, team_id')
+      .select('id, first_name, last_name, short_name, position, photo, shirt_number, team_id, precio')
       .in('id', playerIds)
 
-    // Obtener equipos
-    const teamIds = [...new Set(playersData?.map(p => p.team_id).filter(Boolean) || [])]
+    // Equipos reales (escudos)
+    const realTeamIds = [...new Set(playersData?.map(p => p.team_id).filter(Boolean) || [])]
     const { data: teamsData } = await supabase
       .from('real_teams')
       .select('id, name, logo_url')
-      .in('id', teamIds)
-
+      .in('id', realTeamIds)
     const teamsMap = new Map(teamsData?.map(t => [t.id, t]) || [])
 
-    // Obtener puntos de jugadores para esta jornada
-    const { data: scoresData } = await supabase
-      .from('player_scores')
-      .select('player_id, total_points, fixture_id')
-      .in('player_id', playerIds)
+    // Puntos de la jornada: merge por (matchday, player_id) usando la columna matchday.
+    // Si está vacío (momento o columna aún sin rellenar), caemos a filtrar por fixture_id.
+    let scoresData: { player_id: string; total_points: number }[] | null = null
+    if (info && info.rawMatchday != null) {
+      const res = await supabase
+        .from('player_scores')
+        .select('player_id, total_points')
+        .eq('matchday', info.rawMatchday)
+        .in('player_id', playerIds)
+      scoresData = res.data as typeof scoresData
+    }
+    if ((!scoresData || scoresData.length === 0) && info && info.fixtureIds.length > 0) {
+      const res = await supabase
+        .from('player_scores')
+        .select('player_id, total_points')
+        .in('fixture_id', info.fixtureIds)
+        .in('player_id', playerIds)
+      scoresData = res.data as typeof scoresData
+    }
 
-    // Agrupar puntos por jugador (suma de todos los fixtures)
     const playerPointsMap = new Map<string, number>()
     scoresData?.forEach(s => {
       playerPointsMap.set(s.player_id, (playerPointsMap.get(s.player_id) || 0) + (s.total_points || 0))
     })
 
-    // Obtener nombres de usuarios
-    const userIds = [...new Set(userTeamsData.map(ut => ut.user_id))]
-    const { data: usersData } = await supabase
-      .from('profiles')
-      .select('id, full_name, email')
-      .in('id', userIds)
-
-    const usersMap = new Map(usersData?.map(u => [u.id, u]) || [])
-
-    // Crear mapa de player_id -> team_players info (is_starter, is_captain, team_id)
-    const teamPlayersInfoMap = new Map<string, { team_id: string; is_starter: boolean; is_captain: boolean }>()
+    // Info de alineación por (team_id, player_id)
+    const teamPlayersByTeam = new Map<string, typeof teamPlayersData>()
     for (const tp of teamPlayersData) {
-      teamPlayersInfoMap.set(tp.player_id, {
-        team_id: tp.team_id,
-        is_starter: tp.is_starter,
-        is_captain: tp.is_captain,
-      })
+      if (!teamPlayersByTeam.has(tp.team_id)) teamPlayersByTeam.set(tp.team_id, [])
+      teamPlayersByTeam.get(tp.team_id)!.push(tp)
     }
 
-    // Crear equipos con jugadores y puntos
+    const playersById = new Map(playersData?.map(p => [p.id, p]) || [])
+
     const teams: UserTeam[] = []
 
     for (const ut of userTeamsData) {
@@ -318,38 +272,45 @@ export default function JornadaPage() {
       const userName = user?.full_name || user?.email?.split('@')[0] || 'Usuario'
       const userCreatedAt = createdDates.get(ut.user_id) || new Date().toISOString()
 
-      // Verificar si el usuario puede participar en esta jornada
-      if (!canParticipateInMatchday(userCreatedAt, matchday, matchdayDate)) {
-        continue // Saltar usuarios que se registraron después de esta jornada
-      }
+      if (!canParticipateInMatchday(userCreatedAt, matchdayDate)) continue
 
-      // Obtener jugadores de este equipo
-      const teamPlayerIds = teamPlayersData
-        .filter(tp => tp.team_id === ut.id)
-        .map(tp => tp.player_id)
+      const teamPlayers = teamPlayersByTeam.get(ut.id) || []
+      if (teamPlayers.length === 0) continue
 
-      const jugadores: Player[] = (playersData || [])
-        .filter(p => teamPlayerIds.includes(p.id))
-        .map(p => {
-          const tpInfo = teamPlayersInfoMap.get(p.id)
-          const teamObj = teamsMap.get(p.team_id)
-          return {
-            ...p,
-            team: teamObj ? { name: teamObj.name, logo_url: teamObj.logo_url } : undefined,
-            puntos: playerPointsMap.get(p.id) ?? 0,
-            is_starter: tpInfo?.is_starter || false,
-            is_captain: tpInfo?.is_captain || false,
-          }
-        })
+      const jugadores: Player[] = teamPlayers.map(tp => {
+        const p = playersById.get(tp.player_id)
+        const teamObj = p ? teamsMap.get(p.team_id) : undefined
+        return {
+          id: tp.player_id,
+          first_name: p?.first_name || '',
+          last_name: p?.last_name || '',
+          short_name: p?.short_name || '',
+          position: p?.position || '',
+          photo: p?.photo,
+          shirt_number: p?.shirt_number,
+          team: teamObj ? { name: teamObj.name, logo_url: teamObj.logo_url } : undefined,
+          puntos: playerPointsMap.get(tp.player_id) ?? 0,
+          valor: p?.precio ?? 0,
+          is_starter: tp.is_starter || false,
+          is_captain: tp.is_captain || false,
+        }
+      })
 
-      // Ordenar: titulares primero, luego por puntos
+      // Ordenar: titulares primero, luego por posición (POR, DEF, MED, DEL)
+      const positionOrder: Record<string, number> = { POR: 0, DEF: 1, MED: 2, DEL: 3 }
       jugadores.sort((a, b) => {
         if (a.is_starter && !b.is_starter) return -1
         if (!a.is_starter && b.is_starter) return 1
+        const posA = getPositionLabel(a.position)
+        const posB = getPositionLabel(b.position)
+        const orderA = positionOrder[posA] ?? 99
+        const orderB = positionOrder[posB] ?? 99
+        if (orderA !== orderB) return orderA - orderB
         return (b.puntos || 0) - (a.puntos || 0)
       })
 
       const puntos_totales = jugadores.reduce((sum, p) => sum + (p.puntos || 0), 0)
+      const valor_total = jugadores.reduce((sum, p) => sum + (p.valor || 0), 0)
 
       teams.push({
         team_id: ut.id,
@@ -359,20 +320,18 @@ export default function JornadaPage() {
         created_at: userCreatedAt,
         jugadores,
         puntos_totales,
+        valor_total,
       })
     }
 
-    // Ordenar equipos por puntos totales y asignar posición
+    // Ordenar por puntos y asignar posición
     teams.sort((a, b) => b.puntos_totales - a.puntos_totales)
-    teams.forEach((team, index) => {
-      team.posicion = index + 1
-    })
+    teams.forEach((team, index) => { team.posicion = index + 1 })
 
     setUserTeams(teams)
     setLoading(false)
   }
 
-  // Efecto para cargar datos cuando cambia la jornada
   useEffect(() => {
     fetchMatchdays()
   }, [])
@@ -381,7 +340,17 @@ export default function JornadaPage() {
     if (selectedMatchday && availableMatchdays.length > 0) {
       loadUserTeamsForMatchday(selectedMatchday)
     }
-  }, [selectedMatchday])
+  }, [selectedMatchday, availableMatchdays.length])
+
+  // Polling en tiempo real cuando la jornada seleccionada está en directo
+  useEffect(() => {
+    const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
+    if (!info?.live) return
+    const interval = setInterval(() => {
+      loadUserTeamsForMatchday(selectedMatchday, true)
+    }, 45000)
+    return () => clearInterval(interval)
+  }, [selectedMatchday, availableMatchdays])
 
   const getPositionLabel = (position: string) => {
     const posLower = position.toLowerCase()
@@ -403,14 +372,23 @@ export default function JornadaPage() {
     return colors[code] || 'bg-slate-500 text-white'
   }
 
-  const getMatchdayLabel = (matchday: number | string, momento?: string) => {
-    if (typeof matchday === 'string') {
-      // És un moment especial
-      return matchday
-    }
-    if (matchday === 0 && momento) return momento
-    return `Jornada ${matchday}`
+  const currentInfo = availableMatchdays.find(m => m.matchday === selectedMatchday)
+  const getMatchdayLabel = (info?: MatchdayInfo) => {
+    if (!info) return `Jornada ${selectedMatchday}`
+    if (info.rawMatchday == null && info.momento) return info.momento
+    return `Jornada ${info.matchday}`
   }
+
+  // Navegación por flechas
+  const currentIndex = availableMatchdays.findIndex(m => m.matchday === selectedMatchday)
+  const canGoPrev = currentIndex > 0
+  const canGoNext = currentIndex >= 0 && currentIndex < availableMatchdays.length - 1
+  const goToAdjacent = (dir: -1 | 1) => {
+    const target = availableMatchdays[currentIndex + dir]
+    if (target) setSelectedMatchday(target.matchday)
+  }
+
+  const fmtValor = (v: number) => v > 0 ? `${v}M` : '-'
 
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando jornada...</div>
@@ -418,29 +396,49 @@ export default function JornadaPage() {
 
   return (
     <div className="space-y-6">
-      {/* Cabecera con selector de jornada */}
-      <div className="flex items-center justify-between">
+      {/* Cabecera con selector de jornada por flechas */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Jornada</h1>
-          <p className="text-slate-600 mt-1">
-            Clasificación y equipos de jornadas ya finalizadas
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Jornada</h1>
+          <p className="text-slate-600 mt-1 text-sm sm:text-base">
+            Equipos, puntos y valor de cada usuario por jornada
           </p>
         </div>
 
-        {/* Selector de jornada */}
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedMatchday}
-            onChange={(e) => setSelectedMatchday(Number(e.target.value) || 0)}
-            className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-emerald-500"
-          >
-            {availableMatchdays.map(m => (
-              <option key={m.matchday} value={m.matchday}>
-                {getMatchdayLabel(m.matchday, m.momento)}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Flechas */}
+        {availableMatchdays.length > 0 && (
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={() => goToAdjacent(-1)}
+              disabled={!canGoPrev}
+              className="p-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div className="min-w-[140px] text-center">
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-base font-bold text-slate-900">{getMatchdayLabel(currentInfo)}</span>
+                {currentInfo?.live && (
+                  <Badge className="bg-red-500 text-white text-xs flex items-center gap-1 animate-pulse">
+                    <Radio className="w-3 h-3" /> EN DIRECTO
+                  </Badge>
+                )}
+              </div>
+              <span className="text-xs text-slate-400">
+                {currentIndex + 1} / {availableMatchdays.length}
+              </span>
+            </div>
+
+            <button
+              onClick={() => goToAdjacent(1)}
+              disabled={!canGoNext}
+              className="p-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Clasificación de la jornada */}
@@ -450,8 +448,13 @@ export default function JornadaPage() {
             <div className="flex items-center gap-2 mb-4">
               <Trophy className="w-5 h-5 text-emerald-600" />
               <h2 className="text-lg font-bold text-slate-900">
-                Clasificación {getMatchdayLabel(selectedMatchday, availableMatchdays.find(m => m.matchday === selectedMatchday)?.momento)}
+                Clasificación {getMatchdayLabel(currentInfo)}
               </h2>
+              {currentInfo?.live && (
+                <Badge className="bg-red-500 text-white text-xs flex items-center gap-1 animate-pulse ml-auto">
+                  <Radio className="w-3 h-3" /> EN DIRECTO
+                </Badge>
+              )}
             </div>
 
             <div className="overflow-x-auto">
@@ -461,6 +464,7 @@ export default function JornadaPage() {
                     <th className="text-left py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Pos</th>
                     <th className="text-left py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Usuario</th>
                     <th className="hidden sm:table-cell text-left py-2 px-3 text-sm font-semibold text-slate-600">Equipo</th>
+                    <th className="hidden sm:table-cell text-right py-2 px-3 text-sm font-semibold text-slate-600">Valor</th>
                     <th className="text-right py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Puntos</th>
                   </tr>
                 </thead>
@@ -479,10 +483,13 @@ export default function JornadaPage() {
                       </td>
                       <td className="py-3 px-2 sm:px-3">
                         <span className="font-medium text-slate-900">{team.user_name}</span>
-                        <span className="block sm:hidden text-xs text-slate-500 truncate">{team.team_name}</span>
+                        <span className="block sm:hidden text-xs text-slate-500 truncate">{team.team_name} · {fmtValor(team.valor_total)}</span>
                       </td>
                       <td className="hidden sm:table-cell py-3 px-3">
                         <span className="text-sm text-slate-600">{team.team_name}</span>
+                      </td>
+                      <td className="hidden sm:table-cell py-3 px-3 text-right">
+                        <span className="text-sm font-semibold text-slate-700">{fmtValor(team.valor_total)}</span>
                       </td>
                       <td className="py-3 px-2 sm:px-3 text-right">
                         <Badge className="bg-emerald-600 text-white text-xs sm:text-sm px-2 sm:px-3 py-1 whitespace-nowrap">
@@ -511,9 +518,9 @@ export default function JornadaPage() {
               <CardContent className="p-0">
                 {/* Cabecera del equipo */}
                 <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-4 py-3 border-b border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                         team.posicion === 1 ? 'bg-yellow-500' :
                         team.posicion === 2 ? 'bg-gray-400' :
                         team.posicion === 3 ? 'bg-amber-600' :
@@ -521,117 +528,80 @@ export default function JornadaPage() {
                       }`}>
                         <span className="text-white font-bold">{team.posicion}º</span>
                       </div>
-                      <div>
-                        <h3 className="font-bold text-slate-900">{team.user_name}</h3>
-                        <p className="text-xs text-slate-500">{team.team_name}</p>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-slate-900 truncate">{team.user_name}</h3>
+                        <p className="text-xs text-slate-500 truncate">{team.team_name}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-slate-500">Puntos jornada</p>
-                      <p className="text-2xl font-bold text-emerald-600">{team.puntos_totales}</p>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500">Valor</p>
+                        <p className="text-lg font-bold text-slate-700">{fmtValor(team.valor_total)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500">Puntos</p>
+                        <p className="text-2xl font-bold text-emerald-600">{team.puntos_totales}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Jugadores */}
                 <div className="p-4">
-                  <div className="space-y-2">
-                    {/* Titulares */}
-                    {team.jugadores.filter(p => p.is_starter).length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Titulares</p>
-                        <div className="grid gap-2">
-                          {team.jugadores
-                            .filter(p => p.is_starter)
-                            .map((player, idx) => (
+                  <div className="space-y-3">
+                    {(['Titulares', 'Suplentes'] as const).map((grupo) => {
+                      const jugadoresGrupo = team.jugadores.filter(p =>
+                        grupo === 'Titulares' ? p.is_starter : !p.is_starter
+                      )
+                      if (jugadoresGrupo.length === 0) return null
+                      return (
+                        <div key={grupo}>
+                          <p className="text-xs font-semibold text-slate-500 uppercase mb-2">{grupo}</p>
+                          <div className="grid gap-2">
+                            {jugadoresGrupo.map((player, idx) => (
                               <div
                                 key={player.id}
-                                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors gap-2"
                               >
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm font-bold text-slate-400 w-6">{idx + 1}</span>
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <span className="text-sm font-bold text-slate-400 w-5 shrink-0">{idx + 1}</span>
                                   {player.photo ? (
                                     <img
                                       src={player.photo}
                                       alt={player.short_name || ''}
-                                      className="w-10 h-10 rounded-full object-cover border-2 border-slate-300"
+                                      className="w-10 h-10 rounded-full object-cover border-2 border-slate-300 shrink-0"
                                     />
                                   ) : (
-                                    <div className="w-10 h-10 rounded-full bg-slate-300 flex items-center justify-center text-sm font-bold text-slate-600 border-2 border-slate-400">
+                                    <div className="w-10 h-10 rounded-full bg-slate-300 flex items-center justify-center text-sm font-bold text-slate-600 border-2 border-slate-400 shrink-0">
                                       {player.shirt_number || '?'}
                                     </div>
                                   )}
-                                  <div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-semibold text-slate-900">{player.short_name || player.first_name}</span>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-semibold text-slate-900 truncate">{player.short_name || player.first_name}</span>
                                       <Badge className={`text-xs ${getPositionColor(player.position)}`}>
                                         {getPositionLabel(player.position)}
                                       </Badge>
                                       {player.is_captain && (
                                         <Badge className="text-xs bg-yellow-500 text-white">C</Badge>
                                       )}
-                                      {player.team && (
-                                        <span className="text-xs text-slate-500">{player.team.name}</span>
-                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                                      {player.team && <span className="truncate">{player.team.name}</span>}
+                                      <span className="text-slate-400">· {fmtValor(player.valor || 0)}</span>
                                     </div>
                                   </div>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-right shrink-0">
                                   <span className="text-lg font-bold text-emerald-600">{player.puntos ?? 0}</span>
                                   <p className="text-xs text-slate-500">puntos</p>
                                 </div>
                               </div>
                             ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
-
-                    {/* Suplentes */}
-                    {team.jugadores.filter(p => !p.is_starter).length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Suplentes</p>
-                        <div className="grid gap-2">
-                          {team.jugadores
-                            .filter(p => !p.is_starter)
-                            .map((player, idx) => (
-                              <div
-                                key={player.id}
-                                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm font-bold text-slate-400 w-6">{idx + 1}</span>
-                                  {player.photo ? (
-                                    <img
-                                      src={player.photo}
-                                      alt={player.short_name || ''}
-                                      className="w-10 h-10 rounded-full object-cover border-2 border-slate-300"
-                                    />
-                                  ) : (
-                                    <div className="w-10 h-10 rounded-full bg-slate-300 flex items-center justify-center text-sm font-bold text-slate-600 border-2 border-slate-400">
-                                      {player.shirt_number || '?'}
-                                    </div>
-                                  )}
-                                  <div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-semibold text-slate-900">{player.short_name || player.first_name}</span>
-                                      <Badge className={`text-xs ${getPositionColor(player.position)}`}>
-                                        {getPositionLabel(player.position)}
-                                      </Badge>
-                                      {player.team && (
-                                        <span className="text-xs text-slate-500">{player.team.name}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <span className="text-lg font-bold text-emerald-600">{player.puntos ?? 0}</span>
-                                  <p className="text-xs text-slate-500">puntos</p>
-                                </div>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
+                      )
+                    })}
                   </div>
                 </div>
               </CardContent>
@@ -645,10 +615,10 @@ export default function JornadaPage() {
             {availableMatchdays.length === 0 ? (
               <>
                 <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                  Aún no hay jornadas finalizadas
+                  Aún no ha empezado ninguna jornada
                 </h3>
                 <p className="text-slate-500">
-                  Cuando termine una jornada podrás ver aquí los equipos y la clasificación del resto de usuarios
+                  Cuando arranque la primera jornada verás aquí los equipos, puntos y valor de cada usuario
                 </p>
               </>
             ) : (

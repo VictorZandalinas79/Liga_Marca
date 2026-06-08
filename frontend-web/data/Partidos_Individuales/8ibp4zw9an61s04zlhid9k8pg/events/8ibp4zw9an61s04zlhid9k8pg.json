@@ -10,7 +10,7 @@
         "numberOfPeriods": 2,
         "periodLength": 45,
         "var": "1",
-        "lastUpdated": "2026-05-31T17:06:46Z",
+        "lastUpdated": "2026-06-02T03:06:24Z",
         "description": "Granada vs Sporting de Gijón",
         "sport": {
             "id": "289u5typ3vp4ifwh5thalohmq",
@@ -35,7 +35,7 @@
         "tournamentCalendar": {
             "id": "dko0hzifl1xv9c51s3ai017v8",
             "startDate": "2025-08-15Z",
-            "endDate": "2026-06-21Z",
+            "endDate": "2026-06-20Z",
             "name": "2025/2026"
         },
         "stage": {

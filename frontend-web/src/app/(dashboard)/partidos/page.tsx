@@ -139,21 +139,56 @@ export default function PartidosPage() {
 
     // 5. Obtener TODAS las jornadas únicas (columna matchday) de forma global,
     //    independientemente del momento, para que las flechas naveguen por matchday.
-    const currentMomentoFixtures = momentosMap.get(selectedMomento)!
     const matchdays = [...new Set(allFixtures.map(f => f.matchday).filter(m => m > 0))].sort((a, b) => a - b)
     setAvailableMatchdays(matchdays)
 
-    // 6. Encontrar la jornada por defecto (la última que se ha disputado o se está disputando hoy)
+    // 6. Encontrar la jornada por defecto.
+    //    Prioridad: la jornada EN JUEGO ahora mismo > la última disputada > la primera.
     const now = new Date()
+    const nowMs = now.getTime()
     let closestMatchday = matchdays.length > 0 ? matchdays[0] : 1
 
-    // Filtrar los partidos que ya han comenzado o terminado (fecha anterior o igual a ahora)
-    const pastFixtures = currentMomentoFixtures.filter(f => f.matchday > 0 && new Date(f.start_time) <= now)
+    // Duración aproximada de un partido (90' + descanso + añadido) para considerar
+    // una jornada "en juego" desde su primer partido hasta que acaba el último.
+    const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
 
-    if (pastFixtures.length > 0) {
+    // Trabajamos con TODOS los fixtures con jornada (independiente del momento),
+    // para que el cálculo de "en juego" / "última jugada" sea siempre fiable.
+    const datedFixtures = allFixtures.filter(f => f.matchday > 0 && f.start_time)
+
+    // Ventana temporal de cada jornada: [primer partido, último partido]
+    const matchdayWindows = new Map<number, { first: number; last: number }>()
+    for (const f of datedFixtures) {
+      const t = new Date(f.start_time).getTime()
+      const w = matchdayWindows.get(f.matchday)
+      if (!w) {
+        matchdayWindows.set(f.matchday, { first: t, last: t })
+      } else {
+        w.first = Math.min(w.first, t)
+        w.last = Math.max(w.last, t)
+      }
+    }
+
+    // ¿Hay una jornada en juego ahora mismo? (now dentro de su ventana + duración)
+    // Si varias se solapan (p. ej. un partido aplazado), nos quedamos con la más alta.
+    let liveMatchday: number | null = null
+    for (const [md, w] of matchdayWindows) {
+      if (nowMs >= w.first && nowMs <= w.last + MATCH_DURATION_MS) {
+        if (liveMatchday === null || md > liveMatchday) liveMatchday = md
+      }
+    }
+
+    // Filtrar los partidos que ya han comenzado o terminado (fecha anterior o igual a ahora)
+    const pastFixtures = datedFixtures.filter(f => new Date(f.start_time) <= now)
+
+    if (liveMatchday !== null) {
+      // Hay partidos en juego: arrancamos en esa jornada
+      closestMatchday = liveMatchday
+      console.log(`🟢 Jornada en juego: ${closestMatchday}`)
+    } else if (pastFixtures.length > 0) {
       // Ordenamos de más reciente a más antiguo
       pastFixtures.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
-      // Cogemos la jornada del partido más reciente que se ha jugado (o se está jugando)
+      // Cogemos la jornada del partido más reciente que se ha jugado
       closestMatchday = pastFixtures[0].matchday
       console.log(`✅ Jornada actual/última disputada: ${closestMatchday}`)
     } else if (matchdays.length > 0) {
@@ -488,11 +523,11 @@ export default function PartidosPage() {
   return (
     <div className="space-y-6">
       {/* Cabecera con selector de jornadas */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Partidos</h1>
-            <p className="text-slate-600 mt-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Partidos</h1>
+            <p className="text-slate-600 mt-1 text-sm sm:text-base">
               {availableMatchdays.length === 0
                 ? `${currentMomento}`
                 : typeof currentMatchday === 'string'
@@ -551,7 +586,7 @@ export default function PartidosPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-emerald-600" />
             <span className="text-sm font-medium text-slate-600">
@@ -563,10 +598,11 @@ export default function PartidosPage() {
           <Button
             onClick={handleSyncAll}
             disabled={syncStatus.syncingAll || fixtures.length === 0}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${syncStatus.syncingAll ? 'animate-spin' : ''}`} />
-            {syncStatus.syncingAll ? 'Sincronizando...' : 'Sincronizar Jornada'}
+            <RefreshCw className={`w-4 h-4 sm:mr-2 ${syncStatus.syncingAll ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{syncStatus.syncingAll ? 'Sincronizando...' : 'Sincronizar Jornada'}</span>
+            <span className="sm:hidden">{syncStatus.syncingAll ? 'Sincronizando' : 'Sincronizar'}</span>
           </Button>
         </div>
       </div>

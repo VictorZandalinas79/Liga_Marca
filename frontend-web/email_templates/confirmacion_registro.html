@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirmació de registre - LFM Vilafranca</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f1f5f9;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+
+        <!-- Contenidor principal -->
+        <table role="presentation" style="max-width: 600px; width: 100%; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+
+          <!-- Capçalera amb logo -->
+          <tr>
+            <td align="center" style="padding: 40px 30px 30px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
+              <img src="{{icono_url}}" alt="Lliga Marca Vilafranca" style="width: 120px; height: 120px; object-fit: contain; margin-bottom: 20px;">
+              <h1 style="color: #ffffff; font-size: 28px; margin: 0 0 10px 0; font-weight: 700;">
+                Lliga Marca<span style="color: #10b981;"> Vilafranca</span>
+              </h1>
+              <p style="color: #94a3b8; font-size: 16px; margin: 0;">Temporada 2026</p>
+            </td>
+          </tr>
+
+          <!-- Cos del missatge -->
+          <tr>
+            <td style="padding: 40px 30px; background: #ffffff;">
+              <h2 style="color: #1e293b; font-size: 24px; margin: 0 0 20px 0; font-weight: 700;">
+                🏆 Benvingut/da a la Lliga!
+              </h2>
+
+              <p style="color: #334155; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                Hola <strong style="color: #1e293b;">{{user_name}}</strong>,
+              </p>
+
+              <p style="color: #334155; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                Gràcies per registrar-te a la <strong>Lliga Marca Vilafranca</strong>. Estem molt contents de tenir-te amb nosaltres!
+              </p>
+
+              <p style="color: #334155; font-size: 16px; line-height: 1.6; margin: 0 0 30px 0;">
+                Per activar el teu compte i començar a competir, només has de confirmar el teu correu electrònic fent clic al botó de més avall:
+              </p>
+
+              <!-- Botó de confirmació -->
+              <table role="presentation" style="margin: 30px 0; border-collapse: collapse;">
+                <tr>
+                  <td align="center" style="border-radius: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                    <a href="{{confirmation_link}}" target="_blank" style="display: inline-block; padding: 16px 40px; color: #ffffff; text-decoration: none; font-size: 18px; font-weight: 600; border-radius: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                      ✅ Confirmar el meu compte
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0;">
+                Si el botó no funciona, pots copiar i enganlar aquest enllaç al teu navegador:
+              </p>
+              <p style="color: #10b981; font-size: 13px; word-break: break-all; margin: 10px 0 0 0;">
+                {{confirmation_link}}
+              </p>
+
+              <!-- Divider -->
+              <div style="border-top: 2px dashed #e2e8f0; margin: 30px 0 20px 0;"></div>
+
+              <!-- Informació addicional -->
+              <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0;">
+                <strong>Què passa ara?</strong><br>
+                Un vegada confirmat el teu compte, rebràs un equip inicial de 11 jugadors aleatoris per a la propera jornada. Després podràs fer els teus canvis durant el tram de modificacions!
+              </p>
+            </td>
+          </tr>
+
+          <!-- Peu -->
+          <tr>
+            <td align="center" style="padding: 30px; background: #f8fafc;">
+              <p style="color: #94a3b8; font-size: 14px; margin: 0 0 10px 0;">
+                © 2026 Lliga Marca Vilafranca
+              </p>
+              <p style="color: #cbd5e1; font-size: 12px; margin: 0;">
+                Fantasy Football League · Vilafranca del Penedès
+              </p>
+            </td>
+          </tr>
+
+        </table>
+
+        <!-- Enllaç de baixa -->
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 20px; text-align: center;">
+          Aquest correu s'ha enviat a {{user_email}} perquè t'has registrat a la Lliga Marca Vilafranca.
+        </p>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

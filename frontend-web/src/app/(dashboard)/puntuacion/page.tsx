@@ -115,17 +115,17 @@ export default function PuntuacionPage() {
             { accion: 'Gol marcado', detalle: 'Portero (POR) / Defensa (DEF)', pts: '+6' },
             { accion: 'Gol marcado', detalle: 'Mediocentro (MED)', pts: '+5' },
             { accion: 'Gol marcado', detalle: 'Delantero (DEL)', pts: '+4' },
-            { accion: 'Asistencia de gol', detalle: 'Último pase directo · todas las posiciones', pts: '+3' },
+            { accion: 'Asistencia de gol', detalle: 'Último pase que acaba en gol (qualifier 210 con valor 16) · todas las posiciones', pts: '+3' },
             {
-              accion: 'Pase clave / asistencia de ocasión',
-              detalle: 'Provoca ocasión manifiesta sin acabar en gol · todas',
+              accion: 'Asistencia sin gol / Pase clave',
+              detalle: 'Pase que asiste un remate sin acabar en gol (qualifier 210 con valores 13, 14 o 15) · todas las posiciones',
               pts: '+1',
             },
-            { accion: 'Gol en contra (propia puerta)', detalle: 'Todas las posiciones', pts: '-2' },
-            { accion: 'Penalti provocado', detalle: 'Todas las posiciones', pts: '+2' },
-            { accion: 'Penalti cometido', detalle: 'Todas las posiciones', pts: '-2' },
-            { accion: 'Penalti fallado', detalle: 'Todas las posiciones', pts: '-2' },
-            { accion: 'Penalti parado', detalle: 'Intervención directa del portero', pts: '+5' },
+            { accion: 'Gol en contra (propia puerta)', detalle: 'Todas las posiciones (con qualifier 28)', pts: '-2' },
+            { accion: 'Penalti provocado', detalle: 'Sufre la falta dentro del área (outcome 1 con qualifier 9)', pts: '+1' },
+            { accion: 'Penalti cometido', detalle: 'Comete la falta dentro del área (outcome 0 con qualifier 9)', pts: '-1' },
+            { accion: 'Penalti fallado', detalle: 'Disparo desviado o atajado (outcome 0 con qualifier 9)', pts: '-2' },
+            { accion: 'Penalti parado', detalle: 'Parada directa del portero (con qualifier 187)', pts: '+5' },
           ]}
         />
       </Section>
@@ -138,7 +138,7 @@ export default function PuntuacionPage() {
         description="Acciones defensivas y colectivas para la contención del rival."
       >
         <p className="mb-2 text-sm font-semibold text-slate-700">
-          Portería a cero (habiendo jugado &gt; 60 minutos)
+          Portería a cero (habiendo jugado &gt; 60 minutos con 0 goles recibidos)
         </p>
         <PointsTable
           rows={[
@@ -153,8 +153,8 @@ export default function PuntuacionPage() {
         </p>
         <PointsTable
           rows={[
-            { accion: 'Portero y Defensa', detalle: 'por cada 2 goles recibidos', pts: '-2' },
-            { accion: 'Mediocentro y Delantero', detalle: 'por cada 2 goles recibidos', pts: '-1' },
+            { accion: 'Portero y Defensa', detalle: 'por cada gol encajado', pts: '-2' },
+            { accion: 'Mediocentro y Delantero', detalle: 'por cada gol encajado', pts: '-1' },
           ]}
         />
       </Section>
@@ -190,6 +190,9 @@ export default function PuntuacionPage() {
             { accion: 'Balones recuperados', detalle: 'por cada 5 recuperaciones', pts: '+1' },
             { accion: 'Despejes', detalle: 'por cada 3 despejes', pts: '+1' },
             { accion: 'Pases completados', detalle: 'por cada 10 pases con éxito', pts: '+1' },
+            { accion: 'Pases hacia adelante completados', detalle: 'por cada 10 pases donde la coordenada X final (qualifier 140) es mayor que la inicial', pts: '+1' },
+            { accion: 'Lanzamiento de falta o córner', detalle: 'por cada 5 envíos (qualifier 5 o 6)', pts: '+1' },
+            { accion: 'Centros buenos', detalle: 'por cada 3 centros con éxito (pase completado con qualifier 2)', pts: '+1' },
           ]}
         />
       </Section>
