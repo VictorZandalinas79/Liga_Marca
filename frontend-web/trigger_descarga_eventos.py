@@ -100,10 +100,10 @@ def load_scoring_rules():
         "events": {
             "goal": {"POR": 6, "DEF": 6, "MED": 5, "DEL": 4},
             "own_goal": {"all": -2},
-            "assist": {"all": 3},
-            "fantasy_assist": {"all": 1},
+            "assist_goal": {"all": 3},
+            "assist_no_goal": {"all": 1},
             "clean_sheet": {"POR": 4, "DEF": 3, "MED": 2, "DEL": 1, "min_minutes": 60},
-            "goal_conceded_per_2": {"POR": -2, "DEF": -2, "MED": -1, "DEL": -1},
+            "goal_conceded": {"POR": -2, "DEF": -2, "MED": -1, "DEL": -1},
             "save_per_2": {"all": 1},
             "penalty_save": {"all": 5},
             "penalty_missed": {"all": -2},
@@ -470,11 +470,11 @@ class MatchEventDownloader:
         # --- ASISTENCIAS ---
         assists = stats.get('assists', 0)
         if assists > 0:
-            points += assists * self.get_position_points('assist', pos)
+            points += assists * self.get_position_points('assist_goal', pos)
 
         fantasy_assists = stats.get('fantasy_assist', 0)
         if fantasy_assists > 0:
-            points += fantasy_assists * self.get_position_points('fantasy_assist', pos)
+            points += fantasy_assists * self.get_position_points('assist_no_goal', pos)
 
         # --- PORTERÍA A CERO ---
         goals_conc = stats.get('goals_conceded', 0)
@@ -483,10 +483,10 @@ class MatchEventDownloader:
         if mins_played > clean_sheet_min and goals_conc == 0:
             points += self.get_position_points('clean_sheet', pos)
 
-        # --- GOLES RECIBIDOS (cada 2) ---
+        # --- GOLES RECIBIDOS (por gol) ---
         if goals_conc > 0:
-            gc_rule = self.get_position_points('goal_conceded_per_2', pos)
-            points += (goals_conc // 2) * gc_rule
+            gc_rule = self.get_position_points('goal_conceded', pos)
+            points += goals_conc * gc_rule
 
         # --- PENALTIS ---
         pen_missed = stats.get('penalties_missed', 0)
@@ -540,6 +540,9 @@ class MatchEventDownloader:
         points += apply_bonus('box_entries', bonuses.get('box_entries', {}))
         points += apply_bonus('ball_recoveries', bonuses.get('recoveries', {}))
         points += apply_bonus('clearances', bonuses.get('clearances', {}))
+        points += apply_bonus('forward_passes', bonuses.get('forward_passes', {}))
+        points += apply_bonus('set_pieces_taken', bonuses.get('set_pieces_taken', {}))
+        points += apply_bonus('successful_crosses', bonuses.get('successful_crosses', {}))
 
         # Pases completados (Bonus normal)
         bonus_pases = self.scoring_rules.get('bonus_pases_per_10', {})
@@ -1085,6 +1088,7 @@ class MatchEventDownloader:
                 'forward_passes': stats.get('forward_passes', 0),
                 'set_pieces_taken': stats.get('set_pieces_taken', 0),
                 'successful_crosses': stats.get('successful_crosses', 0),
+                'box_entries': stats.get('box_entries', 0),
 
                 # Regates
                 'takeons_won': stats.get('takeons_won', 0),

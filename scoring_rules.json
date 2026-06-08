@@ -36,14 +36,14 @@
       "qualifierValues": [13, 14, 15]
     },
     "penalty_won": {
-      "all": 1,
+      "all": 2,
       "typeId": 4,
       "outcome": 1,
       "qualifierId": 9,
       "description": "Falta recibida (typeId 4, outcome 1) que resulta en penalti (qualifier 9)"
     },
     "penalty_conceded": {
-      "all": -1,
+      "all": -2,
       "typeId": 4,
       "outcome": 0,
       "qualifierId": 9,
@@ -74,12 +74,6 @@
       "all": 5
     },
     "penalty_missed": {
-      "all": -2
-    },
-    "penalty_won": {
-      "all": 2
-    },
-    "penalty_conceded": {
       "all": -2
     },
     "yellow_card": {

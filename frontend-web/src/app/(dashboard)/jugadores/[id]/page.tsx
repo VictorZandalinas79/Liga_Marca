@@ -109,6 +109,7 @@ interface PlayerScore {
   forward_passes: number
   set_pieces_taken: number
   successful_crosses: number
+  box_entries: number
 
   // Regates
   takeons_won: number
@@ -303,14 +304,15 @@ export default function JugadorDetallePage() {
     save_per_2: 1,
     penalty_save: 5,
     penalty_missed: -2,
-    penalty_won: 1,        // Cambiado de 2 a 1
-    penalty_conceded: -1,  // Cambiado de -2 a -1
+    penalty_won: 2,        // Penalti provocado
+    penalty_conceded: -2,  // Penalti cometido
     yellow_card: -1,
     second_yellow_card: -1,
     red_card: -3,
     bonuses_per_X: {
       shots_on_target: { required: 2, points: 1 },
       takeons_won: { required: 2, points: 1 },
+      box_entries: { required: 2, points: 1 },          // Llegadas al área
       recoveries: { required: 5, points: 1 },
       clearances: { required: 3, points: 1 },
       forward_passes: { required: 10, points: 1 },      // Nuevo: pases hacia adelante
@@ -465,6 +467,14 @@ export default function JugadorDetallePage() {
       points: floorDiv(score.takeons_won, SR.bonuses_per_X.takeons_won.required) * SR.bonuses_per_X.takeons_won.points,
       icon: '🌀',
       description: `+${SR.bonuses_per_X.takeons_won.points} pt por cada ${SR.bonuses_per_X.takeons_won.required} regates`,
+    })
+    const boxEntries = score.box_entries || 0
+    if (boxEntries >= SR.bonuses_per_X.box_entries.required) bonusMetrics.push({
+      name: 'Llegadas al área',
+      value: boxEntries,
+      points: floorDiv(boxEntries, SR.bonuses_per_X.box_entries.required) * SR.bonuses_per_X.box_entries.points,
+      icon: '📦',
+      description: `+${SR.bonuses_per_X.box_entries.points} pt por cada ${SR.bonuses_per_X.box_entries.required} llegadas al área`,
     })
     if (score.ball_recoveries >= SR.bonuses_per_X.recoveries.required) bonusMetrics.push({
       name: 'Recuperaciones',

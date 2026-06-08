@@ -222,6 +222,7 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
       metrics: [
         { key: 'takeons_won', label: 'Regates completados', max: 10 },
         { key: 'takeons_lost', label: 'Regates fallidos', max: 10, negative: true },
+        { key: 'box_entries', label: 'Llegadas al área', max: 10 },
         { key: 'good_skills', label: 'Buenas habilidades', max: 5 },
         { key: 'dispossessed', label: 'Balones perdidos', max: 10, negative: true },
         { key: 'aerials_won', label: 'Duelos aéreos ganados', max: 15 },
@@ -274,8 +275,8 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
       'intent_assists': 1,  // Intento de asistencia (fantasy assist)
       'own_goals': -2,
       'penalties_missed': -2,
-      'penalties_won': 1,        // Cambiado de 2 a 1
-      'penalties_conceded': -1,  // Cambiado de -2 a -1
+      'penalties_won': 2,        // Penalti provocado
+      'penalties_conceded': -2,  // Penalti cometido
       'penalty_saves': 5,
       'yellow_cards': -1,
       'second_yellow_cards': -1,
@@ -407,11 +408,12 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
         if (n(player.goals_conceded) > 0) lines.push({ label: `Goles recibidos (${n(player.goals_conceded)})`, points: n(player.goals_conceded) * ((pos === 'POR' || pos === 'DEF') ? -2 : -1), negative: true })
         if (n(player.shots_on_target) >= 2) lines.push({ label: `Tiros a puerta (${n(player.shots_on_target)} ÷ 2)`, points: fd(n(player.shots_on_target), 2) })
         if (n(player.penalties_missed) > 0) lines.push({ label: `Penaltis fallados (${n(player.penalties_missed)})`, points: n(player.penalties_missed) * -2, negative: true })
-        if (n(player.penalties_won) > 0) lines.push({ label: `Penaltis provocados (${n(player.penalties_won)})`, points: n(player.penalties_won) * 1 })
-        if (n(player.penalties_conceded) > 0) lines.push({ label: `Penaltis cometidos (${n(player.penalties_conceded)})`, points: n(player.penalties_conceded) * -1, negative: true })
+        if (n(player.penalties_won) > 0) lines.push({ label: `Penaltis provocados (${n(player.penalties_won)})`, points: n(player.penalties_won) * 2 })
+        if (n(player.penalties_conceded) > 0) lines.push({ label: `Penaltis cometidos (${n(player.penalties_conceded)})`, points: n(player.penalties_conceded) * -2, negative: true })
         if (n(player.penalty_saves) > 0) lines.push({ label: `Penaltis parados (${n(player.penalty_saves)})`, points: n(player.penalty_saves) * 5 })
         if (n(player.saves) >= 2) lines.push({ label: `Paradas (${n(player.saves)} ÷ 2)`, points: fd(n(player.saves), 2) })
         if (n(player.takeons_won) >= 2) lines.push({ label: `Regates (${n(player.takeons_won)} ÷ 2)`, points: fd(n(player.takeons_won), 2) })
+        if (n(player.box_entries) >= 2) lines.push({ label: `Llegadas al área (${n(player.box_entries)} ÷ 2)`, points: fd(n(player.box_entries), 2) })
         if (n(player.ball_recoveries) >= 5) lines.push({ label: `Recuperaciones (${n(player.ball_recoveries)} ÷ 5)`, points: fd(n(player.ball_recoveries), 5) })
         if (n(player.clearances) >= 3) lines.push({ label: `Despejes (${n(player.clearances)} ÷ 3)`, points: fd(n(player.clearances), 3) })
         if (n(player.passes_completed) >= 10) lines.push({ label: `Pases completados (${n(player.passes_completed)} ÷ 10)`, points: fd(n(player.passes_completed), 10) })
