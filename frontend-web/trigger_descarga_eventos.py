@@ -692,6 +692,13 @@ class MatchEventDownloader:
         if self.has_qualifier(event, Q_CROSS):
             self.apply_points(pid, 'crosses_attempted', 1, current_min)
 
+        # Lanzamiento a balón parado: falta (5) o córner (6) LANZADO,
+        # se complete o no (un córner despejado sigue siendo un lanzamiento).
+        # Antes estaba dentro de outcome==1 y los córners sin rematador no
+        # contaban (solo 2 de 8).
+        if self.has_qualifier(event, Q_CORNER) or self.has_qualifier(event, Q_FREE_KICK):
+            self.apply_points(pid, 'set_pieces_taken', 1, current_min)
+
         if outcome == 1:
             self.apply_points(pid, 'passes_completed', 1, current_min)
 
@@ -719,10 +726,6 @@ class MatchEventDownloader:
             if self.has_qualifier(event, Q_CROSS):
                 self.apply_points(pid, 'crosses_completed', 1, current_min)
                 self.apply_points(pid, 'successful_crosses', 1, current_min)
-
-            # Set piece taken: córner (6) o falta (5)
-            if self.has_qualifier(event, Q_CORNER) or self.has_qualifier(event, Q_FREE_KICK):
-                self.apply_points(pid, 'set_pieces_taken', 1, current_min)
 
             # Asistencias: el qualifier 210 lleva un valor con el resultado del
             # remate asistido (16 = gol, 13/14/15 = remate sin gol).
