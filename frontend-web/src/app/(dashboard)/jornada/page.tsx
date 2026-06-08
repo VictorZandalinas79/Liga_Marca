@@ -33,6 +33,11 @@ interface UserTeam {
   posicion?: number
 }
 
+interface PlayerScoreItem {
+  player_id: string
+  total_points: number
+}
+
 interface MatchdayInfo {
   matchday: number       // número de jornada para mostrar (momentos remapeados)
   momento?: string
@@ -233,16 +238,20 @@ export default function JornadaPage() {
 
     // Puntos de la jornada: merge por (matchday, player_id) usando la columna matchday.
     // Si está vacío (momento o columna aún sin rellenar), caemos a filtrar por fixture_id.
-    let scoresData: { player_id: string; total_points: number }[] | null = null
+    let scoresData: PlayerScoreItem[] | null = null
     if (info && info.rawMatchday != null) {
       const res = await supabase
         .from('player_scores')
         .select('player_id, total_points')
         .eq('matchday', info.rawMatchday)
         .in('player_id', playerIds)
-      scoresData = res.data as { player_id: string; total_points: number }[] | null
+      scoresData = res.data as PlayerScoreItem[] | null
     }
-    if ((!scoresData || scoresData.length === 0) && info && info.fixtureIds.length > 0) {
+
+    // Aserción segura para obtener la longitud sin provocar el error "never"
+    const scoresCount = (scoresData as PlayerScoreItem[])?.length ?? 0
+
+    if (scoresCount === 0 && info && info.fixtureIds.length > 0) {
       const res = await supabase
         .from('player_scores')
         .select('player_id, total_points')
