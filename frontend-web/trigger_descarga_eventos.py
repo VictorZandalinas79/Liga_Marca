@@ -712,8 +712,12 @@ class MatchEventDownloader:
             if end_x is not None and end_y is not None and end_x >= 83 and 21 <= end_y <= 79:
                 self.apply_points(pid, 'box_entries', 1, current_min)
 
-            # Centro completado: pase con qualifier cross (2) completado
+            # Centro completado: pase con qualifier cross (2) completado.
+            # crosses_completed (solo display) y successful_crosses (puntúa,
+            # +1 cada 3) cuentan lo mismo; antes crosses_completed no se
+            # incrementaba nunca y salía 0 en las fichas.
             if self.has_qualifier(event, Q_CROSS):
+                self.apply_points(pid, 'crosses_completed', 1, current_min)
                 self.apply_points(pid, 'successful_crosses', 1, current_min)
 
             # Set piece taken: córner (6) o falta (5)
