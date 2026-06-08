@@ -242,7 +242,7 @@ export default function JornadaPage() {
         .in('player_id', playerIds)
       scoresData = res.data as typeof scoresData
     }
-    if ((!scoresData || scoresData.length === 0) && info && info.fixtureIds.length > 0) {
+    if ((!scoresData || scoresData?.length === 0) && info && info.fixtureIds.length > 0) {
       const res = await supabase
         .from('player_scores')
         .select('player_id, total_points')
