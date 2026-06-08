@@ -130,7 +130,7 @@
       "description": "1 punto cada 3 centros buenos (Pase exitoso con qualifier 2)"
     }
   },
-  "bonus_pases_per_10": {
+  "bonus_pases_per_20": {
     "passes_completed": 1
   },
   "penalties_per_X": {

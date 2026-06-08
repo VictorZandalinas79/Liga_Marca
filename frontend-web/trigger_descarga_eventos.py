@@ -544,11 +544,11 @@ class MatchEventDownloader:
         points += apply_bonus('set_pieces_taken', bonuses.get('set_pieces_taken', {}))
         points += apply_bonus('successful_crosses', bonuses.get('successful_crosses', {}))
 
-        # Pases completados (Bonus normal)
-        bonus_pases = self.scoring_rules.get('bonus_pases_per_10', {})
+        # Pases completados (1 pt por cada 20 pases completados)
+        bonus_pases = self.scoring_rules.get('bonus_pases_per_20', {})
         passes_completed = stats.get('passes_completed', 0)
-        if passes_completed >= 10:
-            points += (passes_completed // 10) * bonus_pases.get('passes_completed', 1)
+        if passes_completed >= 20:
+            points += (passes_completed // 20) * bonus_pases.get('passes_completed', 1)
 
         # ============================================
         # === PENALIZACIONES POSICIONALES ===
@@ -720,10 +720,16 @@ class MatchEventDownloader:
             if self.has_qualifier(event, Q_CORNER) or self.has_qualifier(event, Q_FREE_KICK):
                 self.apply_points(pid, 'set_pieces_taken', 1, current_min)
 
-            if self.get_qualifier(event, Q_ASSIST):
-                self.apply_points(pid, 'assists', 1, current_min)
-            elif self.has_qualifier(event, Q_INTENT_ASSIST) or self.has_qualifier(event, Q_BIG_CHANCE):
-                self.apply_points(pid, 'fantasy_assist', 1, current_min)
+            # Asistencias: el qualifier 210 lleva un valor con el resultado del
+            # remate asistido (16 = gol, 13/14/15 = remate sin gol).
+            #   valor 16     -> asistencia de gol (assist_goal, 3 pts)
+            #   valor 13/14/15 -> asistencia sin gol (assist_no_goal, 1 pt)
+            assist_val = self.get_qualifier(event, Q_ASSIST)
+            if assist_val is not False:
+                if str(assist_val) == '16':
+                    self.apply_points(pid, 'assists', 1, current_min)
+                else:
+                    self.apply_points(pid, 'fantasy_assist', 1, current_min)
         else:
             self.apply_points(pid, 'dispossessed', 1, current_min)
 
@@ -1162,7 +1168,15 @@ class MatchEventDownloader:
                 json.dump(data, f, indent=4, ensure_ascii=False)
 
             events = data.get('liveData', {}).get('event', [])
-            events.sort(key=lambda x: (x.get('periodId', 0), x.get('timeMin', 0), x.get('timeSec', 0), x.get('id', 0)))
+            # IMPORTANTE: los eventos de alineación (typeId 34) llegan con
+            # periodId 16 (pre-partido). Si se ordena solo por periodId numérico,
+            # quedan DESPUÉS de la 1ª/2ª parte y los goles se procesan con
+            # on_pitch vacío -> nadie recibe gol encajado -> portería a cero
+            # falsa para todos. Forzamos que el pre-partido (16) vaya primero.
+            events.sort(key=lambda x: (
+                -1 if x.get('periodId') == 16 else x.get('periodId', 0),
+                x.get('timeMin', 0), x.get('timeSec', 0), x.get('id', 0)
+            ))
 
             for event in events:
                 t_min = event.get('timeMin', 0)

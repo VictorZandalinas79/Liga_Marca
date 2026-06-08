@@ -173,7 +173,7 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
         { key: 'ball_recoveries', label: 'Recuperaciones', max: 15 },
         { key: 'offsides_provoked', label: 'Fueras de juego provocados', max: 5 },
         { key: 'goals_conceded', label: 'Goles en contra', max: 5, negative: true },
-        { key: 'clean_sheet', label: 'Clean sheet', max: 1, isBoolean: true },
+        { key: 'clean_sheet', label: 'Portería a cero', max: 1, isBoolean: true },
       ]
     },
     {
@@ -307,7 +307,7 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
       'shots_on_target': { every: 2, points: 1 }, // Cada 2 tiros a puerta = 1 pt
       'takeons_won': { every: 2, points: 1 },     // Cada 2 regates = 1 pt
       'box_entries': { every: 2, points: 1 },     // Cada 2 llegadas = 1 pt
-      'passes_completed': { every: 10, points: 1 }, // Cada 10 pases = 1 pt
+      'passes_completed': { every: 20, points: 1 }, // Cada 20 pases = 1 pt
       'ball_recoveries': { every: 5, points: 1 }, // Cada 5 recuperaciones = 1 pt
       'clearances': { every: 3, points: 1 },      // Cada 3 despejes = 1 pt
       'forward_passes': { every: 10, points: 1 }, // Nuevo: pases hacia adelante
@@ -416,7 +416,7 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
         if (n(player.box_entries) >= 2) lines.push({ label: `Llegadas al área (${n(player.box_entries)} ÷ 2)`, points: fd(n(player.box_entries), 2) })
         if (n(player.ball_recoveries) >= 5) lines.push({ label: `Recuperaciones (${n(player.ball_recoveries)} ÷ 5)`, points: fd(n(player.ball_recoveries), 5) })
         if (n(player.clearances) >= 3) lines.push({ label: `Despejes (${n(player.clearances)} ÷ 3)`, points: fd(n(player.clearances), 3) })
-        if (n(player.passes_completed) >= 10) lines.push({ label: `Pases completados (${n(player.passes_completed)} ÷ 10)`, points: fd(n(player.passes_completed), 10) })
+        if (n(player.passes_completed) >= 20) lines.push({ label: `Pases completados (${n(player.passes_completed)} ÷ 20)`, points: fd(n(player.passes_completed), 20) })
         // Nuevos bonus v3.0
         const forwardPasses = n(player.forward_passes)
         if (forwardPasses >= 10) lines.push({ label: `Pases hacia adelante (${forwardPasses} ÷ 10)`, points: fd(forwardPasses, 10) })

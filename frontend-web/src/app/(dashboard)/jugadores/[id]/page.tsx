@@ -319,7 +319,7 @@ export default function JugadorDetallePage() {
       set_pieces_taken: { required: 5, points: 1 },     // Nuevo: faltas/córners
       successful_crosses: { required: 3, points: 1 },   // Nuevo: centros completados
     },
-    passes_per_10: 1,
+    passes_per_20: 1,
     lost_balls: {
       POR: { required: 8, points: -1 },
       DEF: { required: 8, points: -1 },
@@ -519,12 +519,12 @@ export default function JugadorDetallePage() {
 
     // --- Pases (bonus por tramos de 10) ---
     const passMetrics = []
-    if (score.passes_completed >= 10) passMetrics.push({
+    if (score.passes_completed >= 20) passMetrics.push({
       name: 'Pases completados',
       value: score.passes_completed,
-      points: floorDiv(score.passes_completed, 10) * SR.passes_per_10,
+      points: floorDiv(score.passes_completed, 20) * SR.passes_per_20,
       icon: '✅',
-      description: `+${SR.passes_per_10} pt por cada 10 pases completados`,
+      description: `+${SR.passes_per_20} pt por cada 20 pases completados`,
     })
     if (passMetrics.length > 0) breakdowns.push({ category: 'Pases', metrics: passMetrics })
 
