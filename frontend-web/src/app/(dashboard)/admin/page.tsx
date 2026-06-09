@@ -1,7 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Download, ShieldCheck, CheckCircle2, XCircle, Users, RefreshCw, Euro } from 'lucide-react'
+import {
+  Search, Download, ShieldCheck, CheckCircle2, XCircle, Users, RefreshCw, Euro,
+  Pencil, Trash2, X, AlertTriangle,
+} from 'lucide-react'
 
 type AdminUser = {
   id: string
@@ -16,18 +19,11 @@ type AdminUser = {
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
-
-// ISO/timestamp → 'YYYY-MM-DD' para el input date
 function toDateInput(iso: string | null): string {
   return iso ? iso.slice(0, 10) : ''
 }
-
 function formatEuro(n: number): string {
   return n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
 }
@@ -40,6 +36,10 @@ export default function AdminPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
   const [savingId, setSavingId] = useState<string | null>(null)
+
+  // Modales
+  const [editUser, setEditUser] = useState<AdminUser | null>(null)
+  const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null)
 
   const loadUsers = async () => {
     setLoading(true)
@@ -67,7 +67,7 @@ export default function AdminPage() {
     loadUsers()
   }, [])
 
-  // Guarda cambios parciales (importe, fecha y/o estado) con actualización optimista.
+  // Guarda cambios parciales con actualización optimista.
   const saveUser = async (id: string, patch: Partial<AdminUser>) => {
     const prev = users.find((u) => u.id === id)
     if (!prev) return
@@ -79,10 +79,14 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       })
-      if (!res.ok) throw new Error('No se pudo guardar')
-    } catch {
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}))
+        throw new Error(b.error || 'No se pudo guardar')
+      }
+    } catch (err) {
       setUsers((list) => list.map((u) => (u.id === id ? prev : u)))
-      setError('No se pudo guardar el cambio')
+      setError(err instanceof Error ? err.message : 'No se pudo guardar el cambio')
+      throw err
     } finally {
       setSavingId(null)
     }
@@ -90,10 +94,11 @@ export default function AdminPage() {
 
   const togglePaid = (user: AdminUser) => {
     const next = !user.has_paid
-    saveUser(user.id, {
-      has_paid: next,
-      paid_at: next ? user.paid_at ?? new Date().toISOString() : null,
-    })
+    saveUser(user.id, { has_paid: next, paid_at: next ? user.paid_at ?? new Date().toISOString() : null }).catch(() => {})
+  }
+
+  const onDeleted = (id: string) => {
+    setUsers((list) => list.filter((u) => u.id !== id))
   }
 
   const filtered = useMemo(() => {
@@ -121,16 +126,11 @@ export default function AdminPage() {
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
     const rows = filtered.map((u) =>
       [
-        u.full_name,
-        u.email,
-        u.phone,
+        u.full_name, u.email, u.phone,
         u.has_paid ? 'Sí' : 'No',
         (u.amount_paid || 0).toFixed(2).replace('.', ','),
-        formatDate(u.paid_at),
-        formatDate(u.created_at),
-      ]
-        .map((v) => escape(String(v ?? '')))
-        .join(',')
+        formatDate(u.paid_at), formatDate(u.created_at),
+      ].map((v) => escape(String(v ?? ''))).join(',')
     )
     const csv = '﻿' + [headers.map(escape).join(','), ...rows].join('\r\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -207,11 +207,7 @@ export default function AdminPage() {
           />
         </div>
         <div className="flex bg-slate-100 rounded-xl p-1">
-          {([
-            ['all', 'Todos'],
-            ['paid', 'Pagados'],
-            ['unpaid', 'Pendientes'],
-          ] as const).map(([key, label]) => (
+          {([['all', 'Todos'], ['paid', 'Pagados'], ['unpaid', 'Pendientes']] as const).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setFilter(key)}
@@ -226,9 +222,7 @@ export default function AdminPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3 text-red-700 text-sm font-medium">
-          {error}
-        </div>
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3 text-red-700 text-sm font-medium">{error}</div>
       )}
 
       {/* Tabla */}
@@ -244,21 +238,14 @@ export default function AdminPage() {
                 <th className="px-4 py-3 font-semibold">Importe (€)</th>
                 <th className="px-4 py-3 font-semibold">Fecha de pago</th>
                 <th className="px-4 py-3 font-semibold text-center">Estado</th>
+                <th className="px-4 py-3 font-semibold text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
-                    Cargando usuarios…
-                  </td>
-                </tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">Cargando usuarios…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
-                    No hay usuarios que coincidan.
-                  </td>
-                </tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">No hay usuarios que coincidan.</td></tr>
               ) : (
                 filtered.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/60">
@@ -272,14 +259,12 @@ export default function AdminPage() {
                       <div className="relative w-28">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">€</span>
                         <input
-                          type="number"
-                          min="0"
-                          step="0.5"
+                          type="number" min="0" step="0.5"
                           defaultValue={u.amount_paid || ''}
                           disabled={savingId === u.id}
                           onBlur={(e) => {
                             const val = e.target.value === '' ? 0 : Number(e.target.value)
-                            if (val !== (u.amount_paid || 0)) saveUser(u.id, { amount_paid: val })
+                            if (val !== (u.amount_paid || 0)) saveUser(u.id, { amount_paid: val }).catch(() => {})
                           }}
                           placeholder="0"
                           className="w-full pl-6 pr-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm"
@@ -295,10 +280,7 @@ export default function AdminPage() {
                         disabled={savingId === u.id}
                         onChange={(e) => {
                           const v = e.target.value
-                          saveUser(u.id, {
-                            paid_at: v || null,
-                            ...(v ? { has_paid: true } : {}),
-                          })
+                          saveUser(u.id, { paid_at: v || null, ...(v ? { has_paid: true } : {}) }).catch(() => {})
                         }}
                         className="px-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm text-slate-600"
                       />
@@ -311,21 +293,31 @@ export default function AdminPage() {
                           onClick={() => togglePaid(u)}
                           disabled={savingId === u.id}
                           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors disabled:opacity-60 ${
-                            u.has_paid
-                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                              : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                            u.has_paid ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
                           }`}
                           title={u.has_paid ? 'Clic para marcar pendiente' : 'Clic para marcar como pagado'}
                         >
-                          {u.has_paid ? (
-                            <>
-                              <CheckCircle2 className="w-3.5 h-3.5" /> Pagado
-                            </>
-                          ) : (
-                            <>
-                              <XCircle className="w-3.5 h-3.5" /> Pendiente
-                            </>
-                          )}
+                          {u.has_paid ? (<><CheckCircle2 className="w-3.5 h-3.5" /> Pagado</>) : (<><XCircle className="w-3.5 h-3.5" /> Pendiente</>)}
+                        </button>
+                      </div>
+                    </td>
+
+                    {/* Acciones */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => setEditUser(u)}
+                          className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                          title="Editar datos"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteUser(u)}
+                          className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                          title="Eliminar usuario"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
@@ -338,17 +330,183 @@ export default function AdminPage() {
       </div>
 
       <p className="text-xs text-slate-400 text-center">
-        Mostrando {filtered.length} de {users.length} usuarios. La exportación incluye solo los filtrados.
+        Mostrando {filtered.length} de {users.length} usuarios. Las cuentas de administrador no aparecen en esta lista.
       </p>
+
+      {editUser && (
+        <EditModal
+          user={editUser}
+          onClose={() => setEditUser(null)}
+          onSave={async (patch) => {
+            await saveUser(editUser.id, patch)
+            setEditUser(null)
+          }}
+        />
+      )}
+
+      {deleteUser && (
+        <DeleteModal
+          user={deleteUser}
+          onClose={() => setDeleteUser(null)}
+          onDeleted={() => {
+            onDeleted(deleteUser.id)
+            setDeleteUser(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ---------- Modal de edición de datos ---------- */
+function EditModal({
+  user, onClose, onSave,
+}: {
+  user: AdminUser
+  onClose: () => void
+  onSave: (patch: Partial<AdminUser>) => Promise<void>
+}) {
+  const [fullName, setFullName] = useState(user.full_name)
+  const [email, setEmail] = useState(user.email)
+  const [phone, setPhone] = useState(user.phone)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setErr('')
+    const patch: Partial<AdminUser> = {}
+    if (fullName !== user.full_name) patch.full_name = fullName
+    if (email.trim().toLowerCase() !== user.email) patch.email = email.trim().toLowerCase()
+    if (phone !== user.phone) patch.phone = phone
+    if (Object.keys(patch).length === 0) { onClose(); return }
+    try {
+      await onSave(patch)
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : 'No se pudo guardar')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-lg font-bold text-slate-900">Editar usuario</h2>
+        <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100"><X className="w-5 h-5" /></button>
+      </div>
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Nombre completo">
+          <input value={fullName} onChange={(e) => setFullName(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500" />
+        </Field>
+        <Field label="Email">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            className="w-full px-3 py-2.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500" />
+        </Field>
+        <Field label="Teléfono">
+          <input value={phone} onChange={(e) => setPhone(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500" />
+        </Field>
+        {err && <p className="text-red-600 text-sm font-medium">{err}</p>}
+        <div className="flex gap-3 pt-2">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-lg border-2 border-slate-200 font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+          <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
+            {saving ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        </div>
+      </form>
+    </Overlay>
+  )
+}
+
+/* ---------- Modal de eliminación con contraseña ---------- */
+function DeleteModal({
+  user, onClose, onDeleted,
+}: {
+  user: AdminUser
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const [password, setPassword] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [err, setErr] = useState('')
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setDeleting(true)
+    setErr('')
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      })
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}))
+        throw new Error(b.error || 'No se pudo eliminar')
+      }
+      onDeleted()
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : 'No se pudo eliminar')
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+          <AlertTriangle className="w-5 h-5 text-red-600" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900">Eliminar usuario</h2>
+      </div>
+      <p className="text-sm text-slate-600 mb-4">
+        Vas a eliminar de forma permanente a <strong>{user.full_name || user.email}</strong> ({user.email}),
+        junto con su equipo y alineaciones. Esta acción <strong>no se puede deshacer</strong>.
+      </p>
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Confirma con tu contraseña de administrador">
+          <input
+            type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+            autoFocus placeholder="Tu contraseña"
+            className="w-full px-3 py-2.5 rounded-lg border-2 border-slate-200 outline-none focus:border-red-500"
+          />
+        </Field>
+        {err && <p className="text-red-600 text-sm font-medium">{err}</p>}
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-lg border-2 border-slate-200 font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+          <button type="submit" disabled={deleting || !password} className="flex-1 py-2.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-50">
+            {deleting ? 'Eliminando…' : 'Eliminar definitivamente'}
+          </button>
+        </div>
+      </form>
+    </Overlay>
+  )
+}
+
+/* ---------- Helpers de UI ---------- */
+function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-slate-700 mb-1.5">{label}</label>
+      {children}
     </div>
   )
 }
 
 function StatCard({
-  icon,
-  label,
-  value,
-  color,
+  icon, label, value, color,
 }: {
   icon: React.ReactNode
   label: string

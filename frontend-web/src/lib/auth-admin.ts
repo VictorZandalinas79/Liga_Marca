@@ -4,7 +4,7 @@ import { createAdminSupabase } from '@/lib/supabase/admin'
 // Verifica que quien hace la petición es un usuario autenticado Y administrador.
 // Devuelve { ok: true, userId } o { ok: false, status, error } para responder.
 export async function requireAdmin(): Promise<
-  | { ok: true; userId: string }
+  | { ok: true; userId: string; email: string }
   | { ok: false; status: number; error: string }
 > {
   const supabase = await createServerSupabase()
@@ -26,5 +26,5 @@ export async function requireAdmin(): Promise<
     return { ok: false, status: 403, error: 'No autorizado' }
   }
 
-  return { ok: true, userId: user.id }
+  return { ok: true, userId: user.id, email: user.email ?? '' }
 }

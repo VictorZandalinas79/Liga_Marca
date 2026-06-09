@@ -27,7 +27,7 @@ export async function GET() {
   // 1. Perfiles (estado de pago + teléfono) indexados por id.
   const { data: profiles, error: profilesError } = await admin
     .from('profiles')
-    .select('id, phone, has_paid, paid_at, amount_paid')
+    .select('id, phone, has_paid, paid_at, amount_paid, is_admin')
   if (profilesError) {
     return NextResponse.json({ error: profilesError.message }, { status: 500 })
   }
@@ -46,6 +46,8 @@ export async function GET() {
     }
     for (const u of data.users) {
       const profile = profileById.get(u.id)
+      // Los administradores no participan en el proceso de pago: se ocultan.
+      if (profile?.is_admin) continue
       const meta = (u.user_metadata ?? {}) as Record<string, unknown>
       users.push({
         id: u.id,
