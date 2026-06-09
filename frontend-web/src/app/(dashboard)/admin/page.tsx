@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Download, ShieldCheck, CheckCircle2, XCircle, Users, RefreshCw } from 'lucide-react'
+import { Search, Download, ShieldCheck, CheckCircle2, XCircle, Users, RefreshCw, Euro } from 'lucide-react'
 
 type AdminUser = {
   id: string
@@ -10,6 +10,7 @@ type AdminUser = {
   phone: string
   has_paid: boolean
   paid_at: string | null
+  amount_paid: number
   created_at: string
 }
 
@@ -20,6 +21,15 @@ function formatDate(iso: string | null): string {
     month: '2-digit',
     year: 'numeric',
   })
+}
+
+// ISO/timestamp → 'YYYY-MM-DD' para el input date
+function toDateInput(iso: string | null): string {
+  return iso ? iso.slice(0, 10) : ''
+}
+
+function formatEuro(n: number): string {
+  return n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
 }
 
 export default function AdminPage() {
@@ -57,33 +67,33 @@ export default function AdminPage() {
     loadUsers()
   }, [])
 
-  const togglePaid = async (user: AdminUser) => {
-    const next = !user.has_paid
-    setSavingId(user.id)
-    // Actualización optimista
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === user.id
-          ? { ...u, has_paid: next, paid_at: next ? new Date().toISOString() : null }
-          : u
-      )
-    )
+  // Guarda cambios parciales (importe, fecha y/o estado) con actualización optimista.
+  const saveUser = async (id: string, patch: Partial<AdminUser>) => {
+    const prev = users.find((u) => u.id === id)
+    if (!prev) return
+    setSavingId(id)
+    setUsers((list) => list.map((u) => (u.id === id ? { ...u, ...patch } : u)))
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
+      const res = await fetch(`/api/admin/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ has_paid: next }),
+        body: JSON.stringify(patch),
       })
       if (!res.ok) throw new Error('No se pudo guardar')
     } catch {
-      // Revertir si falla
-      setUsers((prev) =>
-        prev.map((u) => (u.id === user.id ? { ...u, has_paid: user.has_paid, paid_at: user.paid_at } : u))
-      )
-      setError('No se pudo actualizar el estado de pago')
+      setUsers((list) => list.map((u) => (u.id === id ? prev : u)))
+      setError('No se pudo guardar el cambio')
     } finally {
       setSavingId(null)
     }
+  }
+
+  const togglePaid = (user: AdminUser) => {
+    const next = !user.has_paid
+    saveUser(user.id, {
+      has_paid: next,
+      paid_at: next ? user.paid_at ?? new Date().toISOString() : null,
+    })
   }
 
   const filtered = useMemo(() => {
@@ -102,11 +112,12 @@ export default function AdminPage() {
 
   const stats = useMemo(() => {
     const paid = users.filter((u) => u.has_paid).length
-    return { total: users.length, paid, unpaid: users.length - paid }
+    const collected = users.reduce((sum, u) => sum + (u.amount_paid || 0), 0)
+    return { total: users.length, paid, unpaid: users.length - paid, collected }
   }, [users])
 
   const exportCsv = () => {
-    const headers = ['Nombre', 'Email', 'Teléfono', 'Ha pagado', 'Fecha de pago', 'Fecha de registro']
+    const headers = ['Nombre', 'Email', 'Teléfono', 'Ha pagado', 'Importe (€)', 'Fecha de pago', 'Fecha de registro']
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
     const rows = filtered.map((u) =>
       [
@@ -114,6 +125,7 @@ export default function AdminPage() {
         u.email,
         u.phone,
         u.has_paid ? 'Sí' : 'No',
+        (u.amount_paid || 0).toFixed(2).replace('.', ','),
         formatDate(u.paid_at),
         formatDate(u.created_at),
       ]
@@ -175,10 +187,11 @@ export default function AdminPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <StatCard icon={<Users className="w-5 h-5" />} label="Total" value={stats.total} color="slate" />
-        <StatCard icon={<CheckCircle2 className="w-5 h-5" />} label="Han pagado" value={stats.paid} color="emerald" />
-        <StatCard icon={<XCircle className="w-5 h-5" />} label="Pendientes" value={stats.unpaid} color="amber" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={<Users className="w-5 h-5" />} label="Total" value={String(stats.total)} color="slate" />
+        <StatCard icon={<CheckCircle2 className="w-5 h-5" />} label="Han pagado" value={String(stats.paid)} color="emerald" />
+        <StatCard icon={<XCircle className="w-5 h-5" />} label="Pendientes" value={String(stats.unpaid)} color="amber" />
+        <StatCard icon={<Euro className="w-5 h-5" />} label="Recaudado" value={formatEuro(stats.collected)} color="emerald" />
       </div>
 
       {/* Filtros */}
@@ -228,33 +241,70 @@ export default function AdminPage() {
                 <th className="px-4 py-3 font-semibold">Email</th>
                 <th className="px-4 py-3 font-semibold">Teléfono</th>
                 <th className="px-4 py-3 font-semibold">Registro</th>
+                <th className="px-4 py-3 font-semibold">Importe (€)</th>
                 <th className="px-4 py-3 font-semibold">Fecha de pago</th>
-                <th className="px-4 py-3 font-semibold text-center">Pago</th>
+                <th className="px-4 py-3 font-semibold text-center">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
                     Cargando usuarios…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
                     No hay usuarios que coincidan.
                   </td>
                 </tr>
               ) : (
                 filtered.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3 font-medium text-slate-900">{u.full_name || '—'}</td>
+                    <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">{u.full_name || '—'}</td>
                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
-                    <td className="px-4 py-3 text-slate-600">{u.phone || '—'}</td>
-                    <td className="px-4 py-3 text-slate-500">{formatDate(u.created_at)}</td>
-                    <td className="px-4 py-3 text-slate-500">
-                      {u.has_paid ? formatDate(u.paid_at) : '—'}
+                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{u.phone || '—'}</td>
+                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{formatDate(u.created_at)}</td>
+
+                    {/* Importe editable */}
+                    <td className="px-4 py-3">
+                      <div className="relative w-28">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">€</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          defaultValue={u.amount_paid || ''}
+                          disabled={savingId === u.id}
+                          onBlur={(e) => {
+                            const val = e.target.value === '' ? 0 : Number(e.target.value)
+                            if (val !== (u.amount_paid || 0)) saveUser(u.id, { amount_paid: val })
+                          }}
+                          placeholder="0"
+                          className="w-full pl-6 pr-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm"
+                        />
+                      </div>
                     </td>
+
+                    {/* Fecha de pago editable */}
+                    <td className="px-4 py-3">
+                      <input
+                        type="date"
+                        value={toDateInput(u.paid_at)}
+                        disabled={savingId === u.id}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          saveUser(u.id, {
+                            paid_at: v || null,
+                            ...(v ? { has_paid: true } : {}),
+                          })
+                        }}
+                        className="px-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm text-slate-600"
+                      />
+                    </td>
+
+                    {/* Estado (toggle) */}
                     <td className="px-4 py-3">
                       <div className="flex justify-center">
                         <button
@@ -265,7 +315,7 @@ export default function AdminPage() {
                               ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                               : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
                           }`}
-                          title={u.has_paid ? `Pagado el ${formatDate(u.paid_at)} · clic para marcar pendiente` : 'Clic para marcar como pagado'}
+                          title={u.has_paid ? 'Clic para marcar pendiente' : 'Clic para marcar como pagado'}
                         >
                           {u.has_paid ? (
                             <>
@@ -302,7 +352,7 @@ function StatCard({
 }: {
   icon: React.ReactNode
   label: string
-  value: number
+  value: string
   color: 'slate' | 'emerald' | 'amber'
 }) {
   const colors = {
@@ -312,9 +362,9 @@ function StatCard({
   }
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${colors[color]}`}>{icon}</div>
-      <div>
-        <p className="text-2xl font-bold text-slate-900 leading-none">{value}</p>
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${colors[color]}`}>{icon}</div>
+      <div className="min-w-0">
+        <p className="text-2xl font-bold text-slate-900 leading-none truncate">{value}</p>
         <p className="text-xs text-slate-500 mt-1">{label}</p>
       </div>
     </div>

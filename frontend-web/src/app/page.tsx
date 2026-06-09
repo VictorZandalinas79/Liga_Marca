@@ -20,8 +20,8 @@ export default function Home() {
     setLoading(true)
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+      email: email.trim().toLowerCase(),
+      password: password.trim(),
     })
 
     setLoading(false)
@@ -66,10 +66,14 @@ export default function Home() {
                 Usuario / Email
               </label>
               <input
-                type="text"
+                type="email"
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode="email"
                 className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                 placeholder="tu@email.com"
                 required
