@@ -330,7 +330,7 @@ export default function AdminPage() {
       </div>
 
       <p className="text-xs text-slate-400 text-center">
-        Mostrando {filtered.length} de {users.length} usuarios. Las cuentas de administrador no aparecen en esta lista.
+        Mostrando {filtered.length} de {users.length} usuarios. La cuenta de administración no aparece en esta lista.
       </p>
 
       {editUser && (

@@ -4,6 +4,15 @@ import { createAdminSupabase } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
+// Cuentas de administración pura que NO participan en pagos y se ocultan de la
+// lista. Configurable con ADMIN_EXCLUDED_EMAILS (separadas por comas).
+const EXCLUDED_EMAILS = (
+  process.env.ADMIN_EXCLUDED_EMAILS || 'vilafranca.fantasy2026@gmail.com'
+)
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean)
+
 export type AdminUser = {
   id: string
   email: string
@@ -27,7 +36,7 @@ export async function GET() {
   // 1. Perfiles (estado de pago + teléfono) indexados por id.
   const { data: profiles, error: profilesError } = await admin
     .from('profiles')
-    .select('id, phone, has_paid, paid_at, amount_paid, is_admin')
+    .select('id, phone, has_paid, paid_at, amount_paid')
   if (profilesError) {
     return NextResponse.json({ error: profilesError.message }, { status: 500 })
   }
@@ -46,8 +55,8 @@ export async function GET() {
     }
     for (const u of data.users) {
       const profile = profileById.get(u.id)
-      // Los administradores no participan en el proceso de pago: se ocultan.
-      if (profile?.is_admin) continue
+      // Solo se oculta la cuenta de administración pura (no todo admin).
+      if (u.email && EXCLUDED_EMAILS.includes(u.email.toLowerCase())) continue
       const meta = (u.user_metadata ?? {}) as Record<string, unknown>
       users.push({
         id: u.id,
