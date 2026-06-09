@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
-import { Trophy, Users, Calendar, LogOut, Home, CircleDot, Lock, Gauge } from 'lucide-react'
+import { Trophy, Users, Calendar, LogOut, Home, CircleDot, Lock, Gauge, ShieldCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 
@@ -16,12 +16,15 @@ const navigation = [
   { name: 'Puntuación', href: '/puntuacion', icon: Gauge },
 ]
 
+const adminNavItem = { name: 'Admin', href: '/admin', icon: ShieldCheck }
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   const [userName, setUserName] = useState<string>('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock } = useMatchdayLock()
 
@@ -30,10 +33,18 @@ export default function DashboardLayout({
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setUserName(user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario')
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', user.id)
+          .maybeSingle()
+        setIsAdmin(Boolean(profile?.is_admin))
       }
     }
     getUser()
   }, [])
+
+  const navItems = isAdmin ? [...navigation, adminNavItem] : navigation
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -85,7 +96,7 @@ export default function DashboardLayout({
             </Link>
 
             <nav className="hidden md:flex items-center space-x-4">
-              {navigation.map((item) => (
+              {navItems.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
@@ -110,7 +121,7 @@ export default function DashboardLayout({
           </div>
 
           <nav className="md:hidden flex items-center justify-between pb-4 overflow-x-auto">
-            {navigation.map((item) => (
+            {navItems.map((item) => (
               <Link
                 key={item.name}
                 href={item.href}
