@@ -68,7 +68,7 @@
       "description": "Otorgar si juega >= 60 min y suma 0 en goal_conceded"
     },
     "save": {
-      "all": 0.3,
+      "all": 0.5,
       "description": "Por cada parada (typeId 10)"
     },
     "punch_ok": {
@@ -106,13 +106,13 @@
   "bonuses_per_X": {
     "passes_completed": {
       "required": 1,
-      "points": 0.01,
-      "description": "0.01 puntos por cada pase completado"
+      "points": 0.2,
+      "description": "0.2 puntos por cada pase completado"
     },
     "forward_passes": {
       "required": 1,
-      "points": 0.03,
-      "description": "0.03 por cada pase hacia adelante (end_x >= x + 10, y_desviación entre -10 y 10)"
+      "points": 0.4,
+      "description": "0.4 por cada pase hacia adelante (end_x >= x + 10, y_desviación entre -10 y 10)"
     },
     "shots_on_target": {
       "required": 1,
@@ -120,7 +120,7 @@
     },
     "takeons_won": {
       "required": 1,
-      "points": 0.2
+      "points": 0.5
     },
     "box_entries": {
       "required": 1,
@@ -144,7 +144,7 @@
     },
     "clearances": {
       "required": 1,
-      "points": 0.2
+      "points": 0.5
     },
     "set_pieces_taken": {
       "required": 1,
@@ -161,15 +161,15 @@
     "lost_balls": {
       "POR": {
         "required": 1,
-        "points": -0.3
+        "points": -0.1
       },
       "DEF": {
         "required": 1,
-        "points": -0.3
+        "points": -0.1
       },
       "MED": {
         "required": 1,
-        "points": -0.2
+        "points": -0.1
       },
       "DEL": {
         "required": 1,

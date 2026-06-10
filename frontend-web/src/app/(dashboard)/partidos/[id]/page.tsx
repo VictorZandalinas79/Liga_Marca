@@ -71,8 +71,13 @@ interface Player {
   takeons_lost?: number
   good_skills?: number
   dispossessed?: number
+  bad_touches?: number
   aerials_won?: number
   aerials_lost?: number
+  // Recuperaciones por zona
+  recoveries_high?: number
+  recoveries_med?: number
+  recoveries_low?: number
   // Faltas y tarjetas
   fouls_won?: number
   fouls_committed?: number
@@ -171,7 +176,10 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
         { key: 'clearances_last_line', label: 'Despejes última línea', max: 5 },
         { key: 'blocked_shots', label: 'Tiros bloqueados', max: 5 },
         { key: 'blocked_passes', label: 'Pases bloqueados', max: 5 },
-        { key: 'ball_recoveries', label: 'Recuperaciones', max: 15 },
+        { key: 'ball_recoveries', label: 'Recuperaciones totales', max: 15 },
+        { key: 'recoveries_high', label: 'Recuperaciones (zona ofensiva)', max: 10 },
+        { key: 'recoveries_med', label: 'Recuperaciones (zona media)', max: 10 },
+        { key: 'recoveries_low', label: 'Recuperaciones (zona defensiva)', max: 10 },
         { key: 'offsides_provoked', label: 'Fueras de juego provocados', max: 5 },
         { key: 'goals_conceded', label: 'Goles en contra', max: 5, negative: true },
         { key: 'clean_sheet', label: 'Portería a cero', max: 1, isBoolean: true },
@@ -307,27 +315,30 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
     }
 
     // --- Bonus DECIMALES por unidad (v3.1) ---
+    // Valores exactos de scoring_rules.json (bonuses_per_X)
     const perUnit: Record<string, number> = {
-      'saves': 0.3,             // por parada
-      'punches_ok': 0.2,        // despeje de puños bueno
-      'punches_fail': 0.1,      // despeje de puños fallido
-      'passes_completed': 0.01, // por pase completado
-      'forward_passes': 0.03,   // por pase hacia adelante
-      'shots_on_target': 0.3,   // por tiro a puerta
-      'takeons_won': 0.2,       // por regate completado
-      'box_entries': 0.1,       // por llegada al área
-      'clearances': 0.2,        // por despeje
-      'set_pieces_taken': 0.2,  // por balón parado lanzado
-      'successful_crosses': 0.3,// por centro bueno
+      'saves': 0.5,             // scoring_rules.json: save = 0.5
+      'punches_ok': 0.2,        // scoring_rules.json: punch_ok = 0.2
+      'punches_fail': 0.1,      // scoring_rules.json: punch_fail = 0.1
+      'passes_completed': 0.2,  // scoring_rules.json: passes_completed = 0.2
+      'forward_passes': 0.4,    // scoring_rules.json: forward_passes = 0.4
+      'shots_on_target': 0.3,   // scoring_rules.json: shots_on_target = 0.3
+      'takeons_won': 0.5,       // scoring_rules.json: takeons_won = 0.5
+      'box_entries': 0.1,       // scoring_rules.json: box_entries = 0.1
+      'clearances': 0.5,        // scoring_rules.json: clearances = 0.5
+      'set_pieces_taken': 0.2,  // scoring_rules.json: set_pieces_taken = 0.2
+      'successful_crosses': 0.3,// scoring_rules.json: successful_crosses = 0.3
+      'recoveries_high': 0.3,   // scoring_rules.json: recoveries_high = 0.3
+      'recoveries_med': 0.2,    // scoring_rules.json: recoveries_med = 0.2
+      'recoveries_low': 0.1,    // scoring_rules.json: recoveries_low = 0.1
     }
     if (perUnit[key] !== undefined) {
       return Math.round(perUnit[key] * value * 100) / 100
     }
 
-    // Penalización por balón perdido (posicional, por unidad)
+    // Penalización por balón perdido (scoring_rules.json: -0.1 para TODAS las posiciones)
     if (key === 'dispossessed' && value > 0) {
-      const rate = (position === 'POR' || position === 'DEF') ? -0.3 : position === 'MED' ? -0.2 : -0.1
-      return Math.round(rate * value * 100) / 100
+      return Math.round(-0.1 * value * 100) / 100
     }
 
     return 0
@@ -421,22 +432,27 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
         if (n(player.penalties_conceded) > 0) lines.push({ label: `Penaltis cometidos (${n(player.penalties_conceded)})`, points: n(player.penalties_conceded) * -2, negative: true })
         if (n(player.penalty_saves) > 0) lines.push({ label: `Penaltis parados (${n(player.penalty_saves)})`, points: n(player.penalty_saves) * 5 })
 
-        // --- Bonus decimales por unidad (v3.1) ---
-        if (n(player.saves) > 0) lines.push({ label: `Paradas (${n(player.saves)} × 0.3)`, points: r2(n(player.saves) * 0.3) })
+        // --- Bonus decimales por unidad (v3.1) - Valores de scoring_rules.json ---
+        if (n(player.saves) > 0) lines.push({ label: `Paradas (${n(player.saves)} × 0.5)`, points: r2(n(player.saves) * 0.5) })
         if (n(player.punches_ok) > 0) lines.push({ label: `Despejes de puños (${n(player.punches_ok)} × 0.2)`, points: r2(n(player.punches_ok) * 0.2) })
         if (n(player.punches_fail) > 0) lines.push({ label: `Despejes de puños fallidos (${n(player.punches_fail)} × 0.1)`, points: r2(n(player.punches_fail) * 0.1) })
         if (n(player.shots_on_target) > 0) lines.push({ label: `Tiros a puerta (${n(player.shots_on_target)} × 0.3)`, points: r2(n(player.shots_on_target) * 0.3) })
-        if (n(player.takeons_won) > 0) lines.push({ label: `Regates (${n(player.takeons_won)} × 0.2)`, points: r2(n(player.takeons_won) * 0.2) })
+        if (n(player.takeons_won) > 0) lines.push({ label: `Regates (${n(player.takeons_won)} × 0.5)`, points: r2(n(player.takeons_won) * 0.5) })
         if (n(player.box_entries) > 0) lines.push({ label: `Llegadas al área (${n(player.box_entries)} × 0.1)`, points: r2(n(player.box_entries) * 0.1) })
-        if (n(player.clearances) > 0) lines.push({ label: `Despejes (${n(player.clearances)} × 0.2)`, points: r2(n(player.clearances) * 0.2) })
-        if (n(player.passes_completed) > 0) lines.push({ label: `Pases completados (${n(player.passes_completed)} × 0.01)`, points: r2(n(player.passes_completed) * 0.01) })
-        if (n(player.forward_passes) > 0) lines.push({ label: `Pases hacia adelante (${n(player.forward_passes)} × 0.03)`, points: r2(n(player.forward_passes) * 0.03) })
+        if (n(player.clearances) > 0) lines.push({ label: `Despejes (${n(player.clearances)} × 0.5)`, points: r2(n(player.clearances) * 0.5) })
+        if (n(player.passes_completed) > 0) lines.push({ label: `Pases completados (${n(player.passes_completed)} × 0.2)`, points: r2(n(player.passes_completed) * 0.2) })
+        if (n(player.forward_passes) > 0) lines.push({ label: `Pases hacia adelante (${n(player.forward_passes)} × 0.4)`, points: r2(n(player.forward_passes) * 0.4) })
         if (n(player.set_pieces_taken) > 0) lines.push({ label: `Balones parados (${n(player.set_pieces_taken)} × 0.2)`, points: r2(n(player.set_pieces_taken) * 0.2) })
         if (n(player.successful_crosses) > 0) lines.push({ label: `Centros buenos (${n(player.successful_crosses)} × 0.3)`, points: r2(n(player.successful_crosses) * 0.3) })
 
-        // Penalización por balón perdido (posicional, por unidad)
+        // Recuperaciones por zona
+        if (n(player.recoveries_high) > 0) lines.push({ label: `Recuperaciones ofensivas (${n(player.recoveries_high)} × 0.3)`, points: r2(n(player.recoveries_high) * 0.3) })
+        if (n(player.recoveries_med) > 0) lines.push({ label: `Recuperaciones medias (${n(player.recoveries_med)} × 0.2)`, points: r2(n(player.recoveries_med) * 0.2) })
+        if (n(player.recoveries_low) > 0) lines.push({ label: `Recuperaciones defensivas (${n(player.recoveries_low)} × 0.1)`, points: r2(n(player.recoveries_low) * 0.1) })
+
+        // Penalización por balón perdido (posicional, por unidad) - scoring_rules.json: -0.1 para TODAS las posiciones
         const lostBalls = n(player.dispossessed) + n(player.bad_touches)
-        const lostRate = (pos === 'POR' || pos === 'DEF') ? -0.3 : pos === 'MED' ? -0.2 : -0.1
+        const lostRate = -0.1  // scoring_rules.json: lost_balls.points = -0.1 (uniforme para POR/DEF/MED/DEL)
         if (lostBalls > 0) lines.push({ label: `Balones perdidos (${lostBalls} × ${lostRate})`, points: r2(lostBalls * lostRate), negative: true })
 
         if (n(player.yellow_cards) > 0) lines.push({ label: `Tarjetas amarillas (${n(player.yellow_cards)})`, points: n(player.yellow_cards) * -1, negative: true })
@@ -630,8 +646,13 @@ export default function PartidoDetallePage() {
           takeons_lost: score?.takeons_lost || 0,
           good_skills: score?.good_skills || 0,
           dispossessed: score?.dispossessed || 0,
+          bad_touches: score?.bad_touches || 0,
           aerials_won: score?.aerials_won || 0,
           aerials_lost: score?.aerials_lost || 0,
+          // Recuperaciones por zona
+          recoveries_high: score?.recoveries_high || 0,
+          recoveries_med: score?.recoveries_med || 0,
+          recoveries_low: score?.recoveries_low || 0,
           // Faltas y tarjetas
           fouls_won: score?.fouls_won || 0,
           fouls_committed: score?.fouls_committed || 0,
