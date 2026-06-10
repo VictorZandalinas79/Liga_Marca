@@ -941,7 +941,7 @@ class MatchEventDownloader:
         print(f"      ⚠️ No se encontró jugador: API='{player_name}', Team={team_id}, Options: {[p.get('short_name') for p in response.data[:5]]}")
         return api_player_id
 
-    def update_match_score(self, match_ended=False):
+    def update_match_score(self, match_ended=False, current_minute=0):
         """Actualiza el marcador del partido en la tabla fixtures.
 
         match_ended=True solo cuando la API ha emitido el evento de tiempo
@@ -968,7 +968,8 @@ class MatchEventDownloader:
             response = self.supabase.table('fixtures').update({
                 'home_score': home_goals,
                 'away_score': away_goals,
-                'status': new_status
+                'status': new_status,
+                'current_minute': current_minute
             }).eq('id', self.fixture_id).execute()
 
             if response.data:
@@ -1198,7 +1199,7 @@ class MatchEventDownloader:
             self.upload_to_supabase()
 
             # Actualizar marcador del partido (solo 'finished' si llegó el tiempo completo)
-            self.update_match_score(match_ended=match_ended)
+            self.update_match_score(match_ended=match_ended, current_minute=current_minute)
 
             print(f"\n{'='*60}")
             print(f"✅ Descarga completada - Minuto {current_minute}'")

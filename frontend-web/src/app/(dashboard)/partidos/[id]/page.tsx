@@ -101,6 +101,7 @@ interface Fixture {
   home_score?: number
   away_score?: number
   match_id?: string
+  current_minute?: number
 }
 
 interface PlayerScore {
@@ -759,7 +760,15 @@ export default function PartidoDetallePage() {
   }
 
   const calculateMatchMinute = () => {
-    if (!fixture?.start_time || fixture.status !== 'live') return 0
+    if (fixture?.status !== 'live') return 0
+    // Preferimos el último minuto de los datos sincronizados (lo guarda el motor
+    // en fixtures.current_minute). Así el minuto coincide con los eventos subidos
+    // en vez de adelantarse con el reloj del navegador.
+    if (typeof fixture?.current_minute === 'number' && fixture.current_minute > 0) {
+      return fixture.current_minute
+    }
+    // Fallback (aún no se ha sincronizado ningún evento): reloj real.
+    if (!fixture?.start_time) return 0
     const now = new Date()
     const kickOff = new Date(fixture.start_time)
     const diffMs = now.getTime() - kickOff.getTime()
@@ -776,7 +785,7 @@ export default function PartidoDetallePage() {
       }, 30000)
       return () => clearInterval(interval)
     }
-  }, [fixture?.status, fixture?.start_time])
+  }, [fixture?.status, fixture?.start_time, fixture?.current_minute])
 
   const getPositionOrder = (position: string): number => {
     const posLower = position.toLowerCase()
