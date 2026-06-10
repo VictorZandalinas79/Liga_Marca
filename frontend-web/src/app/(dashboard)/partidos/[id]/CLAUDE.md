@@ -7,6 +7,7 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #2761 | 9:37 PM | ✅ | Updated Frontend Pass Bonus Display to Match Backend | ~261 |
 | #2752 | 9:18 PM | 🟣 | Add Box Entries to Match Detail Metrics and Summary | ~345 |
 | #2751 | " | 🔴 | Fix Penalty Scoring in Match Detail Page Breakdown | ~318 |
 </claude-mem-context>
