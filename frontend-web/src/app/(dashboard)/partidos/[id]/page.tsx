@@ -646,7 +646,6 @@ export default function PartidoDetallePage() {
           takeons_lost: score?.takeons_lost || 0,
           good_skills: score?.good_skills || 0,
           dispossessed: score?.dispossessed || 0,
-          bad_touches: score?.bad_touches || 0,
           aerials_won: score?.aerials_won || 0,
           aerials_lost: score?.aerials_lost || 0,
           // Recuperaciones por zona
