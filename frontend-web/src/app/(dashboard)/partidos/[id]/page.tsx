@@ -265,15 +265,20 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
     return 'MED'
   }
 
-  // Puntos por métrica según las reglas v3.0 (espejo de trigger_descarga_eventos.py)
+  // Redondea a 2 decimales y quita ceros sobrantes (0.30 -> 0.3, 1.00 -> 1)
+  const fmtPts = (n: number): string => String(parseFloat((Math.round(n * 100) / 100).toFixed(2)))
+
+  // Puntos por métrica según las reglas v3.1 "RELEVO Decimal"
+  // (espejo exacto de scoring_rules.json + trigger_descarga_eventos.py)
   const getPointsForMetric = (key: string, value: number, playerPosition?: string): number => {
     const position = normPos(playerPosition)
+    if (!value) return 0
 
-    // Puntos fijos por evento (reglas v3.0 RELEVO)
+    // --- Puntos fijos por evento ---
     const fixedPoints: Record<string, number> = {
       'goals': position === 'DEL' ? 4 : position === 'MED' ? 5 : 6,  // POR/DEF=6, MED=5, DEL=4
       'assists': 3,         // Asistencia de gol
-      'intent_assists': 1,  // Intento de asistencia (fantasy assist)
+      'intent_assists': 1,  // Asistencia sin gol (intento)
       'own_goals': -2,
       'penalties_missed': -2,
       'penalties_won': 2,        // Penalti provocado
@@ -283,7 +288,6 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
       'second_yellow_cards': -1,
       'red_cards': -3,
     }
-
     if (fixedPoints[key] !== undefined) {
       return fixedPoints[key] * value
     }
@@ -296,29 +300,34 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
       return 1  // DEL
     }
 
-    // Goles recibidos: -1 o -2 POR GOL encajado (no cada 2)
+    // Goles recibidos: -2 (POR/DEF) o -1 (MED/DEL) POR GOL encajado
     if (key === 'goals_conceded' && value > 0) {
       if (position === 'POR' || position === 'DEF') return value * -2
-      return value * -1  // MED/DEL
+      return value * -1
     }
 
-    // Puntos por TRAMOS (división entera) - incluye nuevos bonus v3.0
-    const thresholds: Record<string, { every: number; points: number }> = {
-      'saves': { every: 2, points: 1 },           // Cada 2 paradas = 1 pt
-      'shots_on_target': { every: 2, points: 1 }, // Cada 2 tiros a puerta = 1 pt
-      'takeons_won': { every: 2, points: 1 },     // Cada 2 regates = 1 pt
-      'box_entries': { every: 2, points: 1 },     // Cada 2 llegadas = 1 pt
-      'passes_completed': { every: 20, points: 1 }, // Cada 20 pases = 1 pt
-      'ball_recoveries': { every: 5, points: 1 }, // Cada 5 recuperaciones = 1 pt
-      'clearances': { every: 3, points: 1 },      // Cada 3 despejes = 1 pt
-      'forward_passes': { every: 10, points: 1 }, // Nuevo: pases hacia adelante
-      'set_pieces_taken': { every: 5, points: 1 }, // Nuevo: lanzamientos BP
-      'successful_crosses': { every: 3, points: 1 }, // Nuevo: centros
+    // --- Bonus DECIMALES por unidad (v3.1) ---
+    const perUnit: Record<string, number> = {
+      'saves': 0.3,             // por parada
+      'punches_ok': 0.2,        // despeje de puños bueno
+      'punches_fail': 0.1,      // despeje de puños fallido
+      'passes_completed': 0.01, // por pase completado
+      'forward_passes': 0.03,   // por pase hacia adelante
+      'shots_on_target': 0.3,   // por tiro a puerta
+      'takeons_won': 0.2,       // por regate completado
+      'box_entries': 0.1,       // por llegada al área
+      'clearances': 0.2,        // por despeje
+      'set_pieces_taken': 0.2,  // por balón parado lanzado
+      'successful_crosses': 0.3,// por centro bueno
+    }
+    if (perUnit[key] !== undefined) {
+      return Math.round(perUnit[key] * value * 100) / 100
     }
 
-    const threshold = thresholds[key]
-    if (threshold && value >= threshold.every) {
-      return Math.floor(value / threshold.every) * threshold.points
+    // Penalización por balón perdido (posicional, por unidad)
+    if (key === 'dispossessed' && value > 0) {
+      const rate = (position === 'POR' || position === 'DEF') ? -0.3 : position === 'MED' ? -0.2 : -0.1
+      return Math.round(rate * value * 100) / 100
     }
 
     return 0
@@ -368,9 +377,9 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
                         <span className={`font-bold ${metric.negative ? 'text-red-600' : isBoolean ? 'text-emerald-600' : 'text-slate-900'}`}>
                           {finalDisplayValue}
                         </span>
-                        {!(isPercent || isBoolean) && (
+                        {!(isPercent || isBoolean) && points !== 0 && (
                           <span className={`text-xs font-semibold ${points >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {points >= 0 ? '+' : ''}{points} pts
+                            {points >= 0 ? '+' : ''}{fmtPts(points)} pts
                           </span>
                         )}
                       </div>
@@ -394,8 +403,8 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
       {/* Resumen de cálculo de puntos (reglas v3.0, reconciliado con el total) */}
       {(() => {
         const pos = normPos(player.calc_position || player.position)
-        const fd = (v: number, d: number) => Math.floor(v / d)
         const n = (v: any) => Number(v) || 0
+        const r2 = (v: number) => Math.round(v * 100) / 100
         const lines: Array<{ label: string; points: number; negative?: boolean }> = []
 
         const min = n(player.minutes_played)
@@ -407,27 +416,29 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
         const cs = player.clean_sheet === true || player.clean_sheet === 1 || player.clean_sheet === 'true'
         if (cs) lines.push({ label: `Portería a cero (>60 min, ${pos})`, points: pos === 'POR' ? 4 : pos === 'DEF' ? 3 : pos === 'MED' ? 2 : 1 })
         if (n(player.goals_conceded) > 0) lines.push({ label: `Goles recibidos (${n(player.goals_conceded)})`, points: n(player.goals_conceded) * ((pos === 'POR' || pos === 'DEF') ? -2 : -1), negative: true })
-        if (n(player.shots_on_target) >= 2) lines.push({ label: `Tiros a puerta (${n(player.shots_on_target)} ÷ 2)`, points: fd(n(player.shots_on_target), 2) })
         if (n(player.penalties_missed) > 0) lines.push({ label: `Penaltis fallados (${n(player.penalties_missed)})`, points: n(player.penalties_missed) * -2, negative: true })
         if (n(player.penalties_won) > 0) lines.push({ label: `Penaltis provocados (${n(player.penalties_won)})`, points: n(player.penalties_won) * 2 })
         if (n(player.penalties_conceded) > 0) lines.push({ label: `Penaltis cometidos (${n(player.penalties_conceded)})`, points: n(player.penalties_conceded) * -2, negative: true })
         if (n(player.penalty_saves) > 0) lines.push({ label: `Penaltis parados (${n(player.penalty_saves)})`, points: n(player.penalty_saves) * 5 })
-        if (n(player.saves) >= 2) lines.push({ label: `Paradas (${n(player.saves)} ÷ 2)`, points: fd(n(player.saves), 2) })
-        if (n(player.takeons_won) >= 2) lines.push({ label: `Regates (${n(player.takeons_won)} ÷ 2)`, points: fd(n(player.takeons_won), 2) })
-        if (n(player.box_entries) >= 2) lines.push({ label: `Llegadas al área (${n(player.box_entries)} ÷ 2)`, points: fd(n(player.box_entries), 2) })
-        if (n(player.ball_recoveries) >= 5) lines.push({ label: `Recuperaciones (${n(player.ball_recoveries)} ÷ 5)`, points: fd(n(player.ball_recoveries), 5) })
-        if (n(player.clearances) >= 3) lines.push({ label: `Despejes (${n(player.clearances)} ÷ 3)`, points: fd(n(player.clearances), 3) })
-        if (n(player.passes_completed) >= 20) lines.push({ label: `Pases completados (${n(player.passes_completed)} ÷ 20)`, points: fd(n(player.passes_completed), 20) })
-        // Nuevos bonus v3.0
-        const forwardPasses = n(player.forward_passes)
-        if (forwardPasses >= 10) lines.push({ label: `Pases hacia adelante (${forwardPasses} ÷ 10)`, points: fd(forwardPasses, 10) })
-        const setPieces = n(player.set_pieces_taken)
-        if (setPieces >= 5) lines.push({ label: `Lanzamientos BP (${setPieces} ÷ 5)`, points: fd(setPieces, 5) })
-        const successfulCrosses = n(player.successful_crosses)
-        if (successfulCrosses >= 3) lines.push({ label: `Centros completados (${successfulCrosses} ÷ 3)`, points: fd(successfulCrosses, 3) })
+
+        // --- Bonus decimales por unidad (v3.1) ---
+        if (n(player.saves) > 0) lines.push({ label: `Paradas (${n(player.saves)} × 0.3)`, points: r2(n(player.saves) * 0.3) })
+        if (n(player.punches_ok) > 0) lines.push({ label: `Despejes de puños (${n(player.punches_ok)} × 0.2)`, points: r2(n(player.punches_ok) * 0.2) })
+        if (n(player.punches_fail) > 0) lines.push({ label: `Despejes de puños fallidos (${n(player.punches_fail)} × 0.1)`, points: r2(n(player.punches_fail) * 0.1) })
+        if (n(player.shots_on_target) > 0) lines.push({ label: `Tiros a puerta (${n(player.shots_on_target)} × 0.3)`, points: r2(n(player.shots_on_target) * 0.3) })
+        if (n(player.takeons_won) > 0) lines.push({ label: `Regates (${n(player.takeons_won)} × 0.2)`, points: r2(n(player.takeons_won) * 0.2) })
+        if (n(player.box_entries) > 0) lines.push({ label: `Llegadas al área (${n(player.box_entries)} × 0.1)`, points: r2(n(player.box_entries) * 0.1) })
+        if (n(player.clearances) > 0) lines.push({ label: `Despejes (${n(player.clearances)} × 0.2)`, points: r2(n(player.clearances) * 0.2) })
+        if (n(player.passes_completed) > 0) lines.push({ label: `Pases completados (${n(player.passes_completed)} × 0.01)`, points: r2(n(player.passes_completed) * 0.01) })
+        if (n(player.forward_passes) > 0) lines.push({ label: `Pases hacia adelante (${n(player.forward_passes)} × 0.03)`, points: r2(n(player.forward_passes) * 0.03) })
+        if (n(player.set_pieces_taken) > 0) lines.push({ label: `Balones parados (${n(player.set_pieces_taken)} × 0.2)`, points: r2(n(player.set_pieces_taken) * 0.2) })
+        if (n(player.successful_crosses) > 0) lines.push({ label: `Centros buenos (${n(player.successful_crosses)} × 0.3)`, points: r2(n(player.successful_crosses) * 0.3) })
+
+        // Penalización por balón perdido (posicional, por unidad)
         const lostBalls = n(player.dispossessed) + n(player.bad_touches)
-        const lostReq = pos === 'DEL' ? 12 : pos === 'MED' ? 10 : 8
-        if (lostBalls >= lostReq) lines.push({ label: `Balones perdidos (${lostBalls} ÷ ${lostReq})`, points: fd(lostBalls, lostReq) * -1, negative: true })
+        const lostRate = (pos === 'POR' || pos === 'DEF') ? -0.3 : pos === 'MED' ? -0.2 : -0.1
+        if (lostBalls > 0) lines.push({ label: `Balones perdidos (${lostBalls} × ${lostRate})`, points: r2(lostBalls * lostRate), negative: true })
+
         if (n(player.yellow_cards) > 0) lines.push({ label: `Tarjetas amarillas (${n(player.yellow_cards)})`, points: n(player.yellow_cards) * -1, negative: true })
         if (n(player.second_yellow_cards) > 0) lines.push({ label: `Segunda amarilla (${n(player.second_yellow_cards)})`, points: n(player.second_yellow_cards) * -1, negative: true })
         if (n(player.red_cards) > 0) lines.push({ label: `Tarjetas rojas (${n(player.red_cards)})`, points: n(player.red_cards) * -3, negative: true })
@@ -435,7 +446,7 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
 
         const sum = lines.reduce((a, l) => a + l.points, 0)
         const total = n(player.total_points)
-        const otros = Math.round((total - sum) * 10) / 10
+        const otros = Math.round((total - sum) * 100) / 100
 
         return (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
@@ -447,13 +458,13 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
               {lines.map((l, idx) => (
                 <div key={idx} className={`flex justify-between items-center ${l.negative ? 'text-red-600' : l.points >= 0 ? 'text-slate-700' : 'text-red-600'}`}>
                   <span>{l.label}</span>
-                  <span className="font-semibold">{l.points >= 0 ? '+' : ''}{l.points} pts</span>
+                  <span className="font-semibold">{l.points >= 0 ? '+' : ''}{fmtPts(l.points)} pts</span>
                 </div>
               ))}
               {otros !== 0 && (
                 <div className="flex justify-between items-center text-slate-500">
-                  <span>Otros / ajustes <span className="text-xs">(llegadas al área y redondeos)</span></span>
-                  <span className="font-semibold">{otros >= 0 ? '+' : ''}{otros} pts</span>
+                  <span>Otros / ajustes <span className="text-xs">(recuperaciones por zona, blocajes y redondeos)</span></span>
+                  <span className="font-semibold">{otros >= 0 ? '+' : ''}{fmtPts(otros)} pts</span>
                 </div>
               )}
               <div className="flex justify-between items-center border-t border-slate-200 pt-2 mt-2">

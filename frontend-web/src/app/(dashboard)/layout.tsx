@@ -84,13 +84,13 @@ export default function DashboardLayout({
                 />
               </div>
               <span className="text-xl font-bold text-white">LMV</span>
-              <div className="relative w-32 h-32">
+              <div className="relative w-16 h-16">
                 <Image
                   src="/liga.png"
                   alt="Liga"
                   fill
                   className="object-contain"
-                  sizes="128px"
+                  sizes="64px"
                 />
               </div>
             </Link>

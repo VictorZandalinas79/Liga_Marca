@@ -301,7 +301,6 @@ export default function JugadorDetallePage() {
     assist_no_goal: 1,     // Asistencia que no acaba en gol (intento)
     clean_sheet: { POR: 4, DEF: 3, MED: 2, DEL: 1 } as Record<Pos, number>,
     goal_conceded: { POR: -2, DEF: -2, MED: -1, DEL: -1 } as Record<Pos, number>, // Por gol encajado
-    save_per_2: 1,
     penalty_save: 5,
     penalty_missed: -2,
     penalty_won: 2,        // Penalti provocado
@@ -309,24 +308,24 @@ export default function JugadorDetallePage() {
     yellow_card: -1,
     second_yellow_card: -1,
     red_card: -3,
-    bonuses_per_X: {
-      shots_on_target: { required: 2, points: 1 },
-      takeons_won: { required: 2, points: 1 },
-      box_entries: { required: 2, points: 1 },          // Llegadas al área
-      recoveries: { required: 5, points: 1 },
-      clearances: { required: 3, points: 1 },
-      forward_passes: { required: 10, points: 1 },      // Nuevo: pases hacia adelante
-      set_pieces_taken: { required: 5, points: 1 },     // Nuevo: faltas/córners
-      successful_crosses: { required: 3, points: 1 },   // Nuevo: centros completados
+    // Bonus DECIMALES por unidad (v3.1 "RELEVO Decimal")
+    per_unit: {
+      saves: 0.3,              // por parada
+      punches_ok: 0.2,         // despeje de puños bueno
+      punches_fail: 0.1,       // despeje de puños fallido
+      shots_on_target: 0.3,    // por tiro a puerta
+      takeons_won: 0.2,        // por regate completado
+      box_entries: 0.1,        // por llegada al área
+      clearances: 0.2,         // por despeje
+      passes_completed: 0.01,  // por pase completado
+      forward_passes: 0.03,    // por pase hacia adelante
+      set_pieces_taken: 0.2,   // por balón parado lanzado
+      successful_crosses: 0.3, // por centro bueno
     },
-    passes_per_20: 1,
-    lost_balls: {
-      POR: { required: 8, points: -1 },
-      DEF: { required: 8, points: -1 },
-      MED: { required: 10, points: -1 },
-      DEL: { required: 12, points: -1 },
-    } as Record<Pos, { required: number; points: number }>,
+    // Penalización por balón perdido (por unidad, posicional)
+    lost_balls: { POR: -0.3, DEF: -0.3, MED: -0.2, DEL: -0.1 } as Record<Pos, number>,
   }
+  const r2 = (v: number) => Math.round(v * 100) / 100
 
   const normPos = (position?: string): Pos => {
     const p = (position || '').toUpperCase()
@@ -339,7 +338,6 @@ export default function JugadorDetallePage() {
   const getMetricBreakdown = (score: PlayerScore): MetricBreakdown[] => {
     const pos = normPos(score.position)
     const breakdowns: MetricBreakdown[] = []
-    const floorDiv = (v: number, d: number) => Math.floor(v / d)
 
     // --- Participación ---
     const partMetrics = []
@@ -405,14 +403,14 @@ export default function JugadorDetallePage() {
     })
     if (assistMetrics.length > 0) breakdowns.push({ category: 'Asistencias', metrics: assistMetrics })
 
-    // --- Tiros (bonus por tramos) ---
+    // --- Tiros (bonus decimal por unidad) ---
     const shotMetrics = []
-    if (score.shots_on_target >= SR.bonuses_per_X.shots_on_target.required) shotMetrics.push({
+    if (score.shots_on_target > 0) shotMetrics.push({
       name: 'Tiros a puerta',
       value: score.shots_on_target,
-      points: floorDiv(score.shots_on_target, SR.bonuses_per_X.shots_on_target.required) * SR.bonuses_per_X.shots_on_target.points,
+      points: r2(score.shots_on_target * SR.per_unit.shots_on_target),
       icon: '🏹',
-      description: `+${SR.bonuses_per_X.shots_on_target.points} pt por cada ${SR.bonuses_per_X.shots_on_target.required} tiros a puerta`,
+      description: `+${SR.per_unit.shots_on_target} pts por cada tiro a puerta`,
     })
     if (shotMetrics.length > 0) breakdowns.push({ category: 'Tiros', metrics: shotMetrics })
 
@@ -448,96 +446,102 @@ export default function JugadorDetallePage() {
     })
     if (penaltyMetrics.length > 0) breakdowns.push({ category: 'Penaltis', metrics: penaltyMetrics })
 
-    // --- Portero (paradas por tramos) ---
+    // --- Portero (decimal por unidad) ---
     const keeperMetrics = []
-    if (score.saves >= 2) keeperMetrics.push({
+    if (score.saves > 0) keeperMetrics.push({
       name: 'Paradas',
       value: score.saves,
-      points: floorDiv(score.saves, 2) * SR.save_per_2,
+      points: r2(score.saves * SR.per_unit.saves),
       icon: '🧤',
-      description: `+${SR.save_per_2} pt por cada 2 paradas`,
+      description: `+${SR.per_unit.saves} pts por cada parada`,
+    })
+    if ((score.punches_ok || 0) > 0) keeperMetrics.push({
+      name: 'Despejes de puños',
+      value: score.punches_ok || 0,
+      points: r2((score.punches_ok || 0) * SR.per_unit.punches_ok),
+      icon: '👊',
+      description: `+${SR.per_unit.punches_ok} pts por cada despeje de puños`,
+    })
+    if ((score.punches_fail || 0) > 0) keeperMetrics.push({
+      name: 'Despejes de puños fallidos',
+      value: score.punches_fail || 0,
+      points: r2((score.punches_fail || 0) * SR.per_unit.punches_fail),
+      icon: '🥊',
+      description: `+${SR.per_unit.punches_fail} pts por cada despeje de puños fallido`,
     })
     if (keeperMetrics.length > 0) breakdowns.push({ category: 'Portero', metrics: keeperMetrics })
 
-    // --- Bonus por tramos (ataque/defensa) ---
+    // --- Bonus decimal por unidad (ataque/defensa) ---
     const bonusMetrics = []
-    if (score.takeons_won >= SR.bonuses_per_X.takeons_won.required) bonusMetrics.push({
+    if (score.takeons_won > 0) bonusMetrics.push({
       name: 'Regates completados',
       value: score.takeons_won,
-      points: floorDiv(score.takeons_won, SR.bonuses_per_X.takeons_won.required) * SR.bonuses_per_X.takeons_won.points,
+      points: r2(score.takeons_won * SR.per_unit.takeons_won),
       icon: '🌀',
-      description: `+${SR.bonuses_per_X.takeons_won.points} pt por cada ${SR.bonuses_per_X.takeons_won.required} regates`,
+      description: `+${SR.per_unit.takeons_won} pts por cada regate completado`,
     })
     const boxEntries = score.box_entries || 0
-    if (boxEntries >= SR.bonuses_per_X.box_entries.required) bonusMetrics.push({
+    if (boxEntries > 0) bonusMetrics.push({
       name: 'Llegadas al área',
       value: boxEntries,
-      points: floorDiv(boxEntries, SR.bonuses_per_X.box_entries.required) * SR.bonuses_per_X.box_entries.points,
+      points: r2(boxEntries * SR.per_unit.box_entries),
       icon: '📦',
-      description: `+${SR.bonuses_per_X.box_entries.points} pt por cada ${SR.bonuses_per_X.box_entries.required} llegadas al área`,
+      description: `+${SR.per_unit.box_entries} pts por cada llegada al área`,
     })
-    if (score.ball_recoveries >= SR.bonuses_per_X.recoveries.required) bonusMetrics.push({
-      name: 'Recuperaciones',
-      value: score.ball_recoveries,
-      points: floorDiv(score.ball_recoveries, SR.bonuses_per_X.recoveries.required) * SR.bonuses_per_X.recoveries.points,
-      icon: '♻️',
-      description: `+${SR.bonuses_per_X.recoveries.points} pt por cada ${SR.bonuses_per_X.recoveries.required} recuperaciones`,
-    })
-    if (score.clearances >= SR.bonuses_per_X.clearances.required) bonusMetrics.push({
+    if (score.clearances > 0) bonusMetrics.push({
       name: 'Despejes',
       value: score.clearances,
-      points: floorDiv(score.clearances, SR.bonuses_per_X.clearances.required) * SR.bonuses_per_X.clearances.points,
+      points: r2(score.clearances * SR.per_unit.clearances),
       icon: '🛡️',
-      description: `+${SR.bonuses_per_X.clearances.points} pt por cada ${SR.bonuses_per_X.clearances.required} despejes`,
+      description: `+${SR.per_unit.clearances} pts por cada despeje`,
     })
-    // Nuevos bonus v3.0
     const forwardPasses = score.forward_passes || 0
-    if (forwardPasses >= SR.bonuses_per_X.forward_passes.required) bonusMetrics.push({
+    if (forwardPasses > 0) bonusMetrics.push({
       name: 'Pases hacia adelante',
       value: forwardPasses,
-      points: floorDiv(forwardPasses, SR.bonuses_per_X.forward_passes.required) * SR.bonuses_per_X.forward_passes.points,
+      points: r2(forwardPasses * SR.per_unit.forward_passes),
       icon: '⏩',
-      description: `+${SR.bonuses_per_X.forward_passes.points} pt por cada ${SR.bonuses_per_X.forward_passes.required} pases hacia adelante`,
+      description: `+${SR.per_unit.forward_passes} pts por cada pase hacia adelante`,
     })
     const setPieces = score.set_pieces_taken || 0
-    if (setPieces >= SR.bonuses_per_X.set_pieces_taken.required) bonusMetrics.push({
+    if (setPieces > 0) bonusMetrics.push({
       name: 'Lanzamientos a balón parado',
       value: setPieces,
-      points: floorDiv(setPieces, SR.bonuses_per_X.set_pieces_taken.required) * SR.bonuses_per_X.set_pieces_taken.points,
+      points: r2(setPieces * SR.per_unit.set_pieces_taken),
       icon: '🎯',
-      description: `+${SR.bonuses_per_X.set_pieces_taken.points} pt por cada ${SR.bonuses_per_X.set_pieces_taken.required} faltas/córners`,
+      description: `+${SR.per_unit.set_pieces_taken} pts por cada falta/córner lanzado`,
     })
     const successfulCrosses = score.successful_crosses || 0
-    if (successfulCrosses >= SR.bonuses_per_X.successful_crosses.required) bonusMetrics.push({
-      name: 'Centros completados',
+    if (successfulCrosses > 0) bonusMetrics.push({
+      name: 'Centros buenos',
       value: successfulCrosses,
-      points: floorDiv(successfulCrosses, SR.bonuses_per_X.successful_crosses.required) * SR.bonuses_per_X.successful_crosses.points,
+      points: r2(successfulCrosses * SR.per_unit.successful_crosses),
       icon: '✈️',
-      description: `+${SR.bonuses_per_X.successful_crosses.points} pt por cada ${SR.bonuses_per_X.successful_crosses.required} centros`,
+      description: `+${SR.per_unit.successful_crosses} pts por cada centro bueno`,
     })
     if (bonusMetrics.length > 0) breakdowns.push({ category: 'Bonus Ataque y Defensa', metrics: bonusMetrics })
 
-    // --- Pases (bonus por tramos de 10) ---
+    // --- Pases (decimal por unidad) ---
     const passMetrics = []
-    if (score.passes_completed >= 20) passMetrics.push({
+    if (score.passes_completed > 0) passMetrics.push({
       name: 'Pases completados',
       value: score.passes_completed,
-      points: floorDiv(score.passes_completed, 20) * SR.passes_per_20,
+      points: r2(score.passes_completed * SR.per_unit.passes_completed),
       icon: '✅',
-      description: `+${SR.passes_per_20} pt por cada 20 pases completados`,
+      description: `+${SR.per_unit.passes_completed} pts por cada pase completado`,
     })
     if (passMetrics.length > 0) breakdowns.push({ category: 'Pases', metrics: passMetrics })
 
-    // --- Penalización por balones perdidos (posicional) ---
+    // --- Penalización por balones perdidos (posicional, por unidad) ---
     const lostMetrics = []
     const lostBalls = (score.dispossessed || 0) + (score.bad_touches || 0)
-    const lostRule = SR.lost_balls[pos]
-    if (lostBalls >= lostRule.required) lostMetrics.push({
+    const lostRate = SR.lost_balls[pos]
+    if (lostBalls > 0) lostMetrics.push({
       name: 'Balones perdidos',
       value: lostBalls,
-      points: floorDiv(lostBalls, lostRule.required) * lostRule.points,
+      points: r2(lostBalls * lostRate),
       icon: '😵',
-      description: `Pérdidas + malos controles. ${lostRule.points} pt por cada ${lostRule.required} como ${pos}`,
+      description: `Pérdidas + malos controles. ${lostRate} pts cada uno como ${pos}`,
     })
     if (lostMetrics.length > 0) breakdowns.push({ category: 'Pérdidas', metrics: lostMetrics })
 
@@ -973,12 +977,12 @@ export default function JugadorDetallePage() {
               {(() => {
                 const desglose = sumBreakdownPoints(selectedMatch)
                 const oficial = selectedMatch.total_points || 0
-                const otros = Math.round((oficial - desglose) * 10) / 10
+                const otros = Math.round((oficial - desglose) * 100) / 100
                 return (
                   <div className="mt-2 space-y-2 border-t border-slate-200 pt-4">
                     <div className="flex items-center justify-between text-sm text-slate-600">
                       <span>Suma del desglose</span>
-                      <span className="font-semibold">{Math.round(desglose * 10) / 10} pts</span>
+                      <span className="font-semibold">{Math.round(desglose * 100) / 100} pts</span>
                     </div>
                     {otros !== 0 && (
                       <div className="flex items-center justify-between p-2 bg-slate-50 rounded">
@@ -986,7 +990,7 @@ export default function JugadorDetallePage() {
                           <span className="text-lg">➕</span>
                           <div>
                             <p className="font-medium text-slate-900">Otros / ajustes</p>
-                            <p className="text-xs text-slate-500">Métricas sin detalle almacenado (entradas al área, etc.) y redondeos</p>
+                            <p className="text-xs text-slate-500">Recuperaciones por zona, blocajes/salidas y redondeos</p>
                           </div>
                         </div>
                         <p className={`text-sm ${otros >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>

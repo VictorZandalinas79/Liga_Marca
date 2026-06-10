@@ -329,7 +329,9 @@ class MatchEventDownloader:
         if player_id not in self.stats:
             self.stats[player_id] = {
                 'goals': 0, 'own_goals': 0,
-                'assists': 0, 'fantasy_assist': 0,
+                'assists': 0, 'fantasy_assist': 0, 'recoveries_high': 0, 'recoveries_med': 0, 'recoveries_low': 0,
+                'punches_ok': 0, 'punches_fail': 0, 
+                'claims': 0, 'sweepers': 0,
                 'penalties_missed': 0, 'penalties_saved': 0, 'penalties_won': 0, 'penalties_conceded': 0,
                 'goals_conceded': 0, 'clean_sheet': 0, 'saves': 0,
                 'yellow_cards': 0, 'second_yellow_cards': 0, 'red_cards': 0,
@@ -518,10 +520,14 @@ class MatchEventDownloader:
         if red > 0:
             points += red * self.get_position_points('red_card', pos)
 
-        # --- PARADAS PORTERO (cada 2) ---
+        # --- PARADAS PORTERO Y ACCIONES NUEVAS ---
         saves = stats.get('saves', 0)
-        if saves >= 2:
-            points += (saves // 2) * self.get_position_points('save_per_2', pos)
+        points += saves * self.get_position_points('save', pos)
+        
+        points += stats.get('punches_ok', 0) * self.get_position_points('punch_ok', pos)
+        points += stats.get('punches_fail', 0) * self.get_position_points('punch_fail', pos)
+        points += stats.get('claims', 0) * self.get_position_points('claim', pos)
+        points += stats.get('sweepers', 0) * self.get_position_points('sweeper', pos)
 
         # ============================================
         # === BONUS ATAQUE y DEFENSIVOS (Desde JSON) ===
@@ -530,25 +536,20 @@ class MatchEventDownloader:
         
         def apply_bonus(stat_name, bonus_config):
             val = stats.get(stat_name, 0)
-            req = bonus_config.get('required', 999)
-            if val >= req:
-                return (val // req) * bonus_config.get('points', 0)
-            return 0
+            # Como ahora req es 1, multiplicamos directo por los puntos decimales
+            return val * bonus_config.get('points', 0.0)
 
+        points += apply_bonus('passes_completed', bonuses.get('passes_completed', {}))
         points += apply_bonus('shots_on_target', bonuses.get('shots_on_target', {}))
         points += apply_bonus('takeons_won', bonuses.get('takeons_won', {}))
         points += apply_bonus('box_entries', bonuses.get('box_entries', {}))
-        points += apply_bonus('ball_recoveries', bonuses.get('recoveries', {}))
+        points += apply_bonus('recoveries_high', bonuses.get('recoveries_high', {}))
+        points += apply_bonus('recoveries_med', bonuses.get('recoveries_med', {}))
+        points += apply_bonus('recoveries_low', bonuses.get('recoveries_low', {}))
         points += apply_bonus('clearances', bonuses.get('clearances', {}))
         points += apply_bonus('forward_passes', bonuses.get('forward_passes', {}))
         points += apply_bonus('set_pieces_taken', bonuses.get('set_pieces_taken', {}))
         points += apply_bonus('successful_crosses', bonuses.get('successful_crosses', {}))
-
-        # Pases completados (1 pt por cada 20 pases completados)
-        bonus_pases = self.scoring_rules.get('bonus_pases_per_20', {})
-        passes_completed = stats.get('passes_completed', 0)
-        if passes_completed >= 20:
-            points += (passes_completed // 20) * bonus_pases.get('passes_completed', 1)
 
         # ============================================
         # === PENALIZACIONES POSICIONALES ===
@@ -556,10 +557,8 @@ class MatchEventDownloader:
         lost_balls = stats.get('dispossessed', 0) + stats.get('bad_touches', 0)
         penalties_rules = self.scoring_rules.get('penalties_per_X', {}).get('lost_balls', {})
         
-        # Obtener regla para la posición o usar por defecto MED(10)
-        rule_pos = penalties_rules.get(pos, {"required": 10, "points": -1})
-        if lost_balls >= rule_pos.get('required', 10):
-            points += (lost_balls // rule_pos.get('required', 10)) * rule_pos.get('points', -1)
+        rule_pos = penalties_rules.get(pos, {"points": -0.2})
+        points += lost_balls * rule_pos.get('points', -0.2)
 
         # ============================================
         # === APLICAR PUNTOS RELEVO AL TOTAL ===
@@ -571,7 +570,7 @@ class MatchEventDownloader:
         # Sumar los puntos Relevo al total
         points += relevo_points
 
-        self.points[player_id] = points  # ENTERO, sin decimales
+        self.points[player_id] = round(points, 2)
 
     def init_player(self, player_id, team_id, current_min):
         self.on_pitch.add(player_id)
@@ -634,16 +633,19 @@ class MatchEventDownloader:
             7: self._handle_tackle,
             8: self._handle_interception,
             10: self._handle_save,
+            11: self._handle_claim,    
             12: self._handle_clearance,
             13: self._handle_shot_miss,
             14: self._handle_shot_post,
             15: self._handle_shot_target,
             16: self._handle_goal,
             17: self._handle_card,
+            41: self._handle_punch,    
             44: self._handle_aerial,
             49: self._handle_recovery,
             50: self._handle_dispossessed,
             58: self._handle_penalty_faced,
+            59: self._handle_sweeper,  
             61: self._handle_ball_touch,
         }
         handler = handlers.get(type_id)
@@ -675,68 +677,67 @@ class MatchEventDownloader:
         if pid: self.init_player(pid, team_id, event.get('timeMin', current_min))
         return True
 
+    def _handle_recovery(self, event, current_min):
+        pid = event.get('playerId')
+        x_coord = event.get('x', 0)
+        
+        # Lógica de zonas para recuperaciones
+        if x_coord > 66.6:
+            self.apply_points(pid, 'recoveries_high', 1, current_min)
+        elif 33.3 <= x_coord <= 66.6:
+            self.apply_points(pid, 'recoveries_med', 1, current_min)
+        else:
+            self.apply_points(pid, 'recoveries_low', 1, current_min)
+        
+        # Sumamos también al contador general por si hace falta para otras cosas
+        self.apply_points(pid, 'ball_recoveries', 1, current_min)
+
     def _handle_pass(self, event, current_min):
         pid = event.get('playerId')
         outcome = event.get('outcome', 1)
-
-        self.apply_points(pid, 'passes_attempted', 1, current_min)
-
-        # Detectar si el pase inicia en campo contrario (eje X >= 50)
         x_coord = event.get('x', 0)
+        y_coord = event.get('y', 0)
         is_opp_half = x_coord >= 50
 
-        if is_opp_half:
-            self.apply_points(pid, 'pass_opp_half_attempted', 1, current_min)
+        self.apply_points(pid, 'passes_attempted', 1, current_min)
+        if is_opp_half: self.apply_points(pid, 'pass_opp_half_attempted', 1, current_min)
+        if self.has_qualifier(event, Q_CROSS): self.apply_points(pid, 'crosses_attempted', 1, current_min)
 
-        # Centro intentado: cualquier pase con qualifier cross (2)
-        if self.has_qualifier(event, Q_CROSS):
-            self.apply_points(pid, 'crosses_attempted', 1, current_min)
-
-        # Lanzamiento a balón parado: falta (5) o córner (6) LANZADO,
-        # se complete o no (un córner despejado sigue siendo un lanzamiento).
-        # Antes estaba dentro de outcome==1 y los córners sin rematador no
-        # contaban (solo 2 de 8).
-        if self.has_qualifier(event, Q_CORNER) or self.has_qualifier(event, Q_FREE_KICK):
+        # Lógica Balón Parado
+        is_corner = self.has_qualifier(event, Q_CORNER)
+        is_free_kick = self.has_qualifier(event, Q_FREE_KICK)
+        
+        # Falta (si X > 60) o Córner
+        if is_corner or (is_free_kick and x_coord > 60):
             self.apply_points(pid, 'set_pieces_taken', 1, current_min)
 
         if outcome == 1:
             self.apply_points(pid, 'passes_completed', 1, current_min)
-
-            if is_opp_half:
-                self.apply_points(pid, 'pass_opp_half_completed', 1, current_min)
+            if is_opp_half: self.apply_points(pid, 'pass_opp_half_completed', 1, current_min)
 
             end_x = self.get_qualifier_float(event, Q_PASS_END_X)
-
-            # Forward pass: pase hacia adelante (end_x > start_x)
-            if end_x is not None and end_x > x_coord:
-                self.apply_points(pid, 'forward_passes', 1, current_min)
-
-            if end_x is not None and end_x >= 50:
-                self.apply_points(pid, 'pass_opp_half', 1, current_min)
-
-            # Llegadas al área = Pases dentro del área
             end_y = self.get_qualifier_float(event, Q_PASS_END_Y)
-            if end_x is not None and end_y is not None and end_x >= 83 and 21 <= end_y <= 79:
-                self.apply_points(pid, 'box_entries', 1, current_min)
 
-            # Centro completado: pase con qualifier cross (2) completado.
-            # crosses_completed (solo display) y successful_crosses (puntúa,
-            # +1 cada 3) cuentan lo mismo; antes crosses_completed no se
-            # incrementaba nunca y salía 0 en las fichas.
+            if end_x is not None and end_y is not None:
+                # Pase hacia adelante: End_x es 10 unidades mayor que X, y la desviación de Y es entre -10 y 10
+                if end_x >= (x_coord + 10) and -10 <= (end_y - y_coord) <= 10:
+                    self.apply_points(pid, 'forward_passes', 1, current_min)
+
+                if end_x >= 50:
+                    self.apply_points(pid, 'pass_opp_half', 1, current_min)
+
+                # Llegadas al área rival
+                if end_x > 83 and 21.1 <= end_y <= 78.9:
+                    self.apply_points(pid, 'box_entries', 1, current_min)
+
             if self.has_qualifier(event, Q_CROSS):
                 self.apply_points(pid, 'crosses_completed', 1, current_min)
                 self.apply_points(pid, 'successful_crosses', 1, current_min)
 
-            # Asistencias: el qualifier 210 lleva un valor con el resultado del
-            # remate asistido (16 = gol, 13/14/15 = remate sin gol).
-            #   valor 16     -> asistencia de gol (assist_goal, 3 pts)
-            #   valor 13/14/15 -> asistencia sin gol (assist_no_goal, 1 pt)
             assist_val = self.get_qualifier(event, Q_ASSIST)
             if assist_val is not False:
-                if str(assist_val) == '16':
-                    self.apply_points(pid, 'assists', 1, current_min)
-                else:
-                    self.apply_points(pid, 'fantasy_assist', 1, current_min)
+                if str(assist_val) == '16': self.apply_points(pid, 'assists', 1, current_min)
+                else: self.apply_points(pid, 'fantasy_assist', 1, current_min)
         else:
             self.apply_points(pid, 'dispossessed', 1, current_min)
 
@@ -776,7 +777,20 @@ class MatchEventDownloader:
         self.apply_points(event.get('playerId'), 'interceptions', 1, current_min)
 
     def _handle_recovery(self, event, current_min):
-        self.apply_points(event.get('playerId'), 'ball_recoveries', 1, current_min)
+        pid = event.get('playerId')
+        x_coord = event.get('x', 0)
+        
+        # Lógica de zonas para recuperaciones
+        if x_coord > 66.6:
+            self.apply_points(pid, 'recoveries_high', 1, current_min)
+        elif 33.3 <= x_coord <= 66.6:
+            self.apply_points(pid, 'recoveries_med', 1, current_min)
+        else:
+            self.apply_points(pid, 'recoveries_low', 1, current_min)
+        
+        # Sumamos también al contador general por si hace falta para otras cosas
+        self.apply_points(pid, 'ball_recoveries', 1, current_min)
+
 
     def _handle_clearance(self, event, current_min):
         self.apply_points(event.get('playerId'), 'clearances', 1, current_min)
@@ -792,6 +806,18 @@ class MatchEventDownloader:
     def _handle_save(self, event, current_min):
         if not self.has_qualifier(event, Q_DEF_BLOCK):
             self.apply_points(event.get('playerId'), 'saves', 1, current_min)
+    
+    def _handle_claim(self, event, current_min):
+        self.apply_points(event.get('playerId'), 'claims', 1, current_min)
+
+    def _handle_punch(self, event, current_min):
+        if event.get('outcome', 0) == 1:
+            self.apply_points(event.get('playerId'), 'punches_ok', 1, current_min)
+        else:
+            self.apply_points(event.get('playerId'), 'punches_fail', 1, current_min)
+
+    def _handle_sweeper(self, event, current_min):
+        self.apply_points(event.get('playerId'), 'sweepers', 1, current_min)
 
     def _handle_penalty_faced(self, event, current_min):
         if self.has_qualifier(event, Q_PEN_SAVED):
@@ -1026,7 +1052,7 @@ class MatchEventDownloader:
                 'position': pos,
                 'is_starter': is_starter,
                 'minutes_played': mins_played,
-                'total_points': int(total_points),
+                'total_points': total_points,
 
                 # Goles
                 'goals': stats.get('goals', 0),

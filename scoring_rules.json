@@ -1,7 +1,7 @@
 {
-  "version": "3.0 - RELEVO",
+  "version": "3.1 - RELEVO Decimal",
   "game_name": "Biwenger RELEVO Avanzado",
-  "description": "Sistema oficial de puntuación adaptado con penalizaciones posicionales y Puntos RELEVO.",
+  "description": "Sistema oficial de puntuación adaptado con penalizaciones posicionales, Puntos RELEVO y métricas decimales al detalle.",
   "participation": {
     "starter_bonus": 2,
     "substitute_bonus": 1,
@@ -56,7 +56,7 @@
       "DEL": -1,
       "typeId": 16,
       "logic": "contestantId != player_contestantId OR qualifierId == 28",
-      "description": "Gol del equipo rival (contestantId distinto al del jugador) o gol en propia (qualifier 28) mientras el jugador está en el campo"
+      "description": "Gol del equipo rival o gol en propia mientras el jugador está en el campo"
     },
     "clean_sheet": {
       "POR": 4,
@@ -67,8 +67,25 @@
       "requires_zero": "goal_conceded",
       "description": "Otorgar si juega >= 60 min y suma 0 en goal_conceded"
     },
-    "save_per_2": {
-      "all": 1
+    "save": {
+      "all": 0.3,
+      "description": "Por cada parada (typeId 10)"
+    },
+    "punch_ok": {
+      "all": 0.2,
+      "description": "Despeje de puños exitoso (typeId 41, outcome 1)"
+    },
+    "punch_fail": {
+      "all": 0.1,
+      "description": "Despeje de puños fallido (typeId 41, outcome 0)"
+    },
+    "claim": {
+      "all": 0.1,
+      "description": "Blocaje de portero (typeId 11)"
+    },
+    "sweeper": {
+      "all": 0.1,
+      "description": "Salida del área (typeId 59)"
     },
     "penalty_save": {
       "all": 5
@@ -87,69 +104,76 @@
     }
   },
   "bonuses_per_X": {
-    "shots_on_target": {
-      "required": 2,
-      "points": 1
+    "passes_completed": {
+      "required": 1,
+      "points": 0.01,
+      "description": "0.01 puntos por cada pase completado"
     },
     "forward_passes": {
-      "required": 10,
-      "points": 1,
-      "typeId": 1,
-      "outcome": 1,
-      "logic": "qualifier_140_value > event_x",
-      "description": "1 punto cada 10 pases completados donde la coordenada X final (qualifier 140) sea mayor que la coordenada X inicial del evento"
+      "required": 1,
+      "points": 0.03,
+      "description": "0.03 por cada pase hacia adelante (end_x >= x + 10, y_desviación entre -10 y 10)"
+    },
+    "shots_on_target": {
+      "required": 1,
+      "points": 0.3
     },
     "takeons_won": {
-      "required": 2,
-      "points": 1
+      "required": 1,
+      "points": 0.2
     },
     "box_entries": {
-      "required": 2,
-      "points": 1
+      "required": 1,
+      "points": 0.1,
+      "description": "Pases que acaban en el área (end_x > 83 y end_y entre 21.1 y 78.9)"
     },
-    "recoveries": {
-      "required": 5,
-      "points": 1
+    "recoveries_high": {
+      "required": 1,
+      "points": 0.3,
+      "description": "Recuperaciones donde X > 66.6"
+    },
+    "recoveries_med": {
+      "required": 1,
+      "points": 0.2,
+      "description": "Recuperaciones donde X está entre 33.3 y 66.6"
+    },
+    "recoveries_low": {
+      "required": 1,
+      "points": 0.1,
+      "description": "Recuperaciones donde X < 33.3"
     },
     "clearances": {
-      "required": 3,
-      "points": 1
+      "required": 1,
+      "points": 0.2
     },
     "set_pieces_taken": {
-      "required": 5,
-      "points": 1,
-      "logic": "qualifierId == 5 OR qualifierId == 6",
-      "description": "1 punto cada 5 lanzamientos de falta (qualifier 5) o córner (qualifier 6)"
+      "required": 1,
+      "points": 0.2,
+      "description": "Lanzamiento de córner, o falta donde X > 60"
     },
     "successful_crosses": {
-      "required": 3,
-      "points": 1,
-      "typeId": 1,
-      "outcome": 1,
-      "qualifierId": 2,
-      "description": "1 punto cada 3 centros buenos (Pase exitoso con qualifier 2)"
+      "required": 1,
+      "points": 0.3,
+      "description": "Centros buenos con outcome 1"
     }
-  },
-  "bonus_pases_per_20": {
-    "passes_completed": 1
   },
   "penalties_per_X": {
     "lost_balls": {
       "POR": {
-        "required": 8,
-        "points": -1
+        "required": 1,
+        "points": -0.3
       },
       "DEF": {
-        "required": 8,
-        "points": -1
+        "required": 1,
+        "points": -0.3
       },
       "MED": {
-        "required": 10,
-        "points": -1
+        "required": 1,
+        "points": -0.2
       },
       "DEL": {
-        "required": 12,
-        "points": -1
+        "required": 1,
+        "points": -0.1
       }
     }
   },
@@ -178,6 +202,7 @@
     "7": "tackle",
     "8": "interception",
     "10": "save",
+    "11": "claim",
     "12": "clearance",
     "13": "shot_miss",
     "14": "shot_post",
@@ -187,10 +212,12 @@
     "18": "sub_off",
     "19": "sub_on",
     "34": "lineup",
+    "41": "punch",
     "44": "aerial",
     "49": "recovery",
     "50": "dispossessed",
     "58": "penalty_faced",
+    "59": "sweeper",
     "61": "ball_touch"
   },
   "qualifier_mapping": {
