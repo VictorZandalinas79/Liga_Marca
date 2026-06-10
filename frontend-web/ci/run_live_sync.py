@@ -87,8 +87,8 @@ def fixtures_to_sync(sb):
     now = datetime.now(timezone.utc)
     upcoming_to = (now + timedelta(minutes=UPCOMING_WINDOW)).isoformat()
     live_from = (now - timedelta(minutes=LIVE_WINDOW)).isoformat()
-    now_iso = now.isoformat()
 
+    # (a) Ventana de tiempo: partidos a punto de empezar o recién empezados.
     # start_time se guarda en UTC sin zona (ej. 2026-06-06T18:00:00); comparamos
     # como string ISO, que es ordenable lexicográficamente.
     res = (
@@ -98,18 +98,24 @@ def fixtures_to_sync(sb):
         .lte("start_time", upcoming_to)
         .execute()
     )
-    rows = res.data or []
+    rows = list(res.data or [])
 
-    selected = []
+    # (b) Red de seguridad: cualquier fixture ya marcado como 'live', aunque su
+    # start_time quede fuera de la ventana de LIVE_WINDOW (prórrogas, retrasos o
+    # un partido que se quedó "colgado" en vivo porque nunca llegó el evento de
+    # fin). Así nunca deja de refrescarse hasta pasar a 'finished'.
+    res_live = sb.table("fixtures").select("*").eq("status", "live").execute()
+    rows += list(res_live.data or [])
+
+    # Deduplica por id y descarta los terminales.
+    selected = {}
     for f in rows:
         status = (f.get("status") or "").lower()
         if status in TERMINAL_STATUSES:
             continue
-        st = (f.get("start_time") or "")
-        # Próximo (aún no empieza pero dentro de ventana) o en juego (ya empezó)
-        if st <= now_iso or st <= upcoming_to:
-            selected.append(f)
-    log(f"🔎 Cron: {len(selected)} partido(s) próximos/en vivo de {len(rows)} en ventana")
+        selected[f["id"]] = f
+    selected = list(selected.values())
+    log(f"🔎 Cron: {len(selected)} partido(s) próximos/en vivo seleccionados")
     return selected
 
 

@@ -2,7 +2,9 @@ name: Sync Live Matches
 
 on:
   schedule:
-    # Cada 5 minutos. GitHub solo ejecuta crons sobre la rama por defecto.
+    # Red de seguridad. Los crons de GitHub se retrasan y se saltan ejecuciones,
+    # así que el disparador fiable es un cron externo (cron-job.org) que llama al
+    # workflow_dispatch de abajo cada 5 min. Este schedule queda como respaldo.
     - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
@@ -23,7 +25,9 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Un run colgado bloquea el hueco de concurrencia; con disparos cada 5 min,
+    # 10 min libera antes que los 15 anteriores.
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend-web
