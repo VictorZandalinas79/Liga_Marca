@@ -473,7 +473,7 @@ export default function DashboardPage() {
 
   // Obtener lista única de equipos para el filtro
   const uniqueTeams = Array.from(
-    new Map(players.map(p => p.team?.name ? [p.team.name, p.team_id] : null).filter(Boolean) as Map<string, string>)
+    new Map(players.map(p => p.team?.name ? [p.team.name, p.team_id] : null).filter(Boolean) as [string, string][])
   ).map(([name, id]) => ({ name, id })).sort((a, b) => a.name.localeCompare(b.name))
 
   // Filtrar jugadores disponibles
