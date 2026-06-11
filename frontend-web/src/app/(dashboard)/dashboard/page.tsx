@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
@@ -54,6 +54,10 @@ export default function DashboardPage() {
   const [positionFilter, setPositionFilter] = useState<string>('ALL')
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento } = useMatchdayLock()
+  // Evita generar/heredar el once dos veces (el efecto puede re-ejecutarse por
+  // React Strict Mode o por cambios de activeMatchday mientras el hook resuelve).
+  // Guardamos las claves `${teamId}-${matchday}` que ya estamos procesando.
+  const creatingTeamRef = useRef<Set<string>>(new Set())
 
   const getPositionCode = (position: string): string => {
     const posLower = position.toLowerCase()
@@ -176,14 +180,33 @@ export default function DashboardPage() {
       setUserTeamId(teamData.id)
       console.log('[CARGAR] teamId:', teamData.id)
 
-      // 1. Cargar el catálogo de jugadores (para pintar el equipo)
-      const { data: playersData } = await supabase
-        .from('players')
-        .select('*')
-        .order('short_name', { ascending: true })
+      // 1. Cargar el catálogo COMPLETO de jugadores (para pintar el equipo).
+      //    Supabase devuelve como máximo 1000 filas por petición, así que
+      //    paginamos: con >1000 jugadores, si no lo hacemos, algunos del once
+      //    quedarían fuera del catálogo y NO se mostrarían (se verían <11).
+      const playersData: any[] = []
+      {
+        const pageSize = 1000
+        let from = 0
+        while (true) {
+          const { data: page, error } = await supabase
+            .from('players')
+            .select('*')
+            .order('short_name', { ascending: true })
+            .range(from, from + pageSize - 1)
+          if (error) {
+            console.error('[CARGAR] Error cargando jugadores:', error)
+            break
+          }
+          if (!page || page.length === 0) break
+          playersData.push(...page)
+          if (page.length < pageSize) break
+          from += pageSize
+        }
+      }
 
       let playersWithTeam: Player[] = []
-      if (playersData) {
+      if (playersData.length > 0) {
         const teamIds = [...new Set(playersData.map(p => p.team_id).filter(Boolean))]
         const { data: teamsData } = await supabase
           .from('real_teams')
@@ -231,6 +254,16 @@ export default function DashboardPage() {
         setLoading(false)
         return
       }
+
+      // A partir de aquí vamos a CREAR alineación para la jornada activa
+      // (heredándola de la anterior o generándola). Tomamos un cerrojo por
+      // (equipo, jornada) para que dos ejecuciones simultáneas del efecto no
+      // dupliquen el once.
+      const lockKey = `${teamData.id}-${matchday}`
+      if (creatingTeamRef.current.has(lockKey)) {
+        return
+      }
+      creatingTeamRef.current.add(lockKey)
 
       // 4. No tiene equipo para la jornada activa pero SÍ de una anterior:
       //    heredar esos mismos 11 y persistirlos en la jornada activa.

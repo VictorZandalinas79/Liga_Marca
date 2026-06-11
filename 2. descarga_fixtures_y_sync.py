@@ -18,6 +18,7 @@ from supabase import create_client, Client
 from pathlib import Path
 from dotenv import load_dotenv
 from difflib import SequenceMatcher
+from deep_translator import GoogleTranslator
 
 load_dotenv()
 
@@ -26,7 +27,7 @@ with open('settings.json', 'r', encoding='utf-8') as f:
     config = json.load(f)
 
 # ID de liga configurado por el usuario
-ACTIVE_LEAGUE_ID = "3is4bkgf3loxv9qfg3hm8zfqb"
+ACTIVE_LEAGUE_ID = "70excpe1synn9kadnbppahdn7"
 LEAGUE_NAME = config['active_league']['name']
 SEASON_NAME = config['active_league']['season_name']
 SEASON_ID = config['active_league'].get('season_id')
@@ -378,33 +379,46 @@ def normalize_name(name):
 def similarity_score(s1, s2):
     return SequenceMatcher(None, normalize_name(s1), normalize_name(s2)).ratio()
 
+def translate_to_english(text):
+    """Traduce automáticamente cualquier idioma al inglés."""
+    if not text: return ""
+    try:
+        return GoogleTranslator(source='auto', target='en').translate(text)
+    except Exception as e:
+        print(f"   ⚠️ Falló la traducción para '{text}': {e}")
+        return text # Si falla internet, devuelve el original
+
 def find_team_match(json_team_name, csv_teams):
-    norm_json = normalize_name(json_team_name)
+    # 1. TRADUCIR EL NOMBRE DE LA API AL INGLÉS
+    translated_json_name = translate_to_english(json_team_name)
+    
+    # 2. Normalizar el nombre traducido
+    norm_json = normalize_name(translated_json_name)
     json_words = set(norm_json.split())
 
-    # 1. Búsqueda por contención exacta (100% de las palabras coinciden)
-    # Ejemplo: CSV "Sporting" -> API "Real Sporting de Gijon"
+    # 3. Búsqueda por contención exacta (100% de las palabras coinciden)
     for csv_team in csv_teams:
         norm_csv = normalize_name(csv_team)
         csv_words = set(norm_csv.split())
         
-        # Evitamos que equipos de 1 sola palabra muy común ("fc", "cd") den falsos positivos
+        # Evitamos falsos positivos con palabras comunes
         if not csv_words or (len(csv_words) == 1 and list(csv_words)[0] in ['fc', 'cd', 'ud', 'real']):
             continue
             
-        # Comprobamos si todas las palabras de un lado están totalmente incluidas en el otro
+        # Comprobamos contención
         if csv_words.issubset(json_words) or json_words.issubset(csv_words):
             return csv_team, 1.0  # Coincidencia 100%
 
-    # 2. Fallback original: Similitud por ratio (difflib) para fallos tipográficos
+    # 4. Fallback: Similitud por ratio usando el nombre traducido
     best_match, best_score = None, 0.0
     for csv_team in csv_teams:
-        score = similarity_score(json_team_name, csv_team)
+        # Usamos translated_json_name para que compare "Spain" con "Spain"
+        score = similarity_score(translated_json_name, csv_team)
         if score > best_score:
             best_score = score
             best_match = csv_team
             
-    if best_score > 0.55: # Límite permisivo si falla la contención exacta
+    if best_score > 0.55: # Límite permisivo
         return best_match, best_score
         
     return None, best_score

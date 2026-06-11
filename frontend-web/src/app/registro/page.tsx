@@ -59,88 +59,20 @@ export default function RegistroPage() {
           .eq('user_id', userId)
           .maybeSingle()
 
-        let teamId = existingTeam?.id
-        if (!teamId) {
-          const { data: newTeam, error: teamError } = await supabase
+        if (!existingTeam) {
+          const { error: teamError } = await supabase
             .from('user_teams')
             .insert({ user_id: userId, name: nombre })
-            .select('id')
-            .single()
           if (teamError) throw teamError
-          teamId = newTeam.id
         }
 
-        // 2. Jornada objetivo: próxima jornada futura (>0); si no, la última
-        let targetMatchday = 1
-        const { data: nextMd } = await supabase
-          .from('fixtures')
-          .select('matchday')
-          .gte('start_time', new Date().toISOString())
-          .gt('matchday', 0)
-          .order('start_time', { ascending: true })
-          .limit(1)
-          .maybeSingle()
-        if (nextMd?.matchday) {
-          targetMatchday = nextMd.matchday
-        } else {
-          const { data: maxMd } = await supabase
-            .from('fixtures')
-            .select('matchday')
-            .gt('matchday', 0)
-            .order('matchday', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          targetMatchday = maxMd?.matchday || 1
-        }
-
-        // 3. Jugadores: solo si aún no tiene alineación en esa jornada
-        const { data: existingPlayers } = await supabase
-          .from('team_players')
-          .select('id')
-          .eq('team_id', teamId)
-          .eq('matchday', targetMatchday)
-          .limit(1)
-
-        if (!existingPlayers || existingPlayers.length === 0) {
-          const { data: playersData } = await supabase
-            .from('players')
-            .select('id, position')
-
-          if (playersData) {
-            const pos = (p: any) => (p.position ?? '').toString().toLowerCase()
-            const goalkeepers = playersData.filter(p => pos(p).includes('goalkeeper'))
-            const defenders = playersData.filter(p => pos(p).includes('defender'))
-            const midfielders = playersData.filter(p => pos(p).includes('midfielder'))
-            const forwards = playersData.filter(p => pos(p).includes('forward') || pos(p).includes('attacker'))
-
-            const shuffle = (arr: any[]) => [...arr].sort(() => Math.random() - 0.5)
-
-            // 1 POR + 4 DEF + 3 MED + 3 DEL = 11
-            const selected = [
-              ...shuffle(goalkeepers).slice(0, 1),
-              ...shuffle(defenders).slice(0, 4),
-              ...shuffle(midfielders).slice(0, 3),
-              ...shuffle(forwards).slice(0, 3),
-            ].filter(p => p?.id)
-
-            if (selected.length > 0) {
-              const teamPlayers = selected.map((p, index) => ({
-                team_id: teamId,
-                player_id: p.id,
-                is_starter: true,
-                is_captain: index === 0,
-                order: index,
-                matchday: targetMatchday,
-              }))
-              const { error: insertError } = await supabase.from('team_players').insert(teamPlayers)
-              if (insertError) {
-                console.error('[REGISTRO] Error insertando jugadores:', insertError)
-                throw insertError
-              }
-            }
-          }
-        }
-
+        // 2. El once inicial (11 jugadores) NO se genera aquí.
+        //    Lo crea el dashboard en su primera carga, usando la MISMA jornada
+        //    activa que lee de useMatchdayLock. Así evitamos:
+        //      - que el registro guarde el equipo en una jornada distinta a la
+        //        que el dashboard muestra (quedaban dos equipos descolocados), y
+        //      - generar dos veces (carrera registro↔dashboard, agravada porque
+        //        justo tras signUp la sesión/RLS puede no estar lista todavía).
         router.push('/dashboard')
       } catch (err: any) {
         console.error('[REGISTRO] Error creando el equipo:', err)

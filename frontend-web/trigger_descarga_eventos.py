@@ -1053,6 +1053,7 @@ class MatchEventDownloader:
                 'is_starter': is_starter,
                 'minutes_played': mins_played,
                 'total_points': total_points,
+                
 
                 # Goles
                 'goals': stats.get('goals', 0),
