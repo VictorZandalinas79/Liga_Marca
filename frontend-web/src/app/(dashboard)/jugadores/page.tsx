@@ -191,11 +191,15 @@ export default function JugadoresPage() {
     return colors[position] || 'bg-slate-500 hover:bg-slate-600'
   }
 
+  const normalize = (text: string) =>
+    text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+
   const filteredPlayers = players
     .filter((p) => {
-      const matchesFilter = p.short_name?.toLowerCase().includes(filter.toLowerCase()) ||
-        p.first_name?.toLowerCase().includes(filter.toLowerCase()) ||
-        p.last_name?.toLowerCase().includes(filter.toLowerCase())
+      const normalizedFilter = normalize(filter)
+      const matchesFilter = normalize(p.short_name ?? '').includes(normalizedFilter) ||
+        normalize(p.first_name ?? '').includes(normalizedFilter) ||
+        normalize(p.last_name ?? '').includes(normalizedFilter)
       const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
       const matchesTeam = teamFilter === 'ALL' || p.team_id === teamFilter
       return matchesFilter && matchesPosition && matchesTeam
