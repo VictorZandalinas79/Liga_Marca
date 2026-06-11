@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Search, TrendingUp, Goal, Ticket, X } from 'lucide-react'
+import { Search, TrendingUp, Goal, Ticket } from 'lucide-react'
 
 interface Player {
   id: string
@@ -53,7 +53,7 @@ export default function JugadoresPage() {
   const [teams, setTeams] = useState<Array<{ id: string; name: string; logo_url?: string }>>([])
   const [sortBy, setSortBy] = useState<'price' | 'points' | 'goals' | 'name'>('price')
   const [loading, setLoading] = useState(true)
-  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
+  const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => {
@@ -286,7 +286,7 @@ export default function JugadoresPage() {
         {filteredPlayers.map((player) => (
           <div
             key={player.id}
-            onClick={() => setSelectedPlayer(player)}
+            onClick={() => router.push(`/jugadores/${player.id}`)}
             className="cursor-pointer"
           >
             <Card className="hover:shadow-lg transition-all !bg-slate-800 border-transparent hover:border-emerald-500">
@@ -383,216 +383,6 @@ export default function JugadoresPage() {
         </Card>
       )}
 
-      {/* MODAL DE DETALLES DEL JUGADOR */}
-      {selectedPlayer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-
-            {/* Cabecera del modal */}
-            <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-100 p-6 flex justify-between items-start z-10">
-              <div className="flex items-center space-x-6">
-                {selectedPlayer.photo ? (
-                  <img
-                    src={selectedPlayer.photo}
-                    alt={selectedPlayer.short_name || ''}
-                    className="w-24 h-24 rounded-full object-cover shadow-md border-4 border-white"
-                  />
-                ) : (
-                  <div className="w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center text-2xl font-bold text-slate-600">
-                    {selectedPlayer.shirt_number || '?'}
-                  </div>
-                )}
-                <div>
-                  <div className="flex items-center space-x-3 mb-1">
-                    <h2 className="text-2xl font-bold text-slate-900">
-                      {selectedPlayer.first_name} {selectedPlayer.last_name}
-                    </h2>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPositionColor(selectedPlayer.position)}`}>
-                      {getPositionLabel(selectedPlayer.position)}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {selectedPlayer.team?.logo_url && (
-                      <img src={selectedPlayer.team.logo_url} alt={selectedPlayer.team.name || ''} className="w-5 h-5 object-contain" />
-                    )}
-                    <span className="text-slate-600 font-medium">{selectedPlayer.team?.name || 'Sin equipo'}</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedPlayer(null)}
-                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Cuerpo del modal (Métricas) */}
-            <div className="p-6 space-y-8">
-
-              {/* Resumen principal */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
-                  <p className="text-emerald-800 text-sm font-semibold mb-1">Precio</p>
-                  <p className="text-3xl font-bold text-emerald-600">{selectedPlayer.precio ? `${(selectedPlayer.precio / 1000000).toFixed(1)}M` : '-'}</p>
-                </div>
-                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
-                  <p className="text-emerald-800 text-sm font-semibold mb-1">Puntos Totales</p>
-                  <p className="text-3xl font-bold text-emerald-600">{selectedPlayer.stats?.total_points || 0}</p>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                  <p className="text-slate-600 text-sm font-semibold mb-1">Media</p>
-                  <p className="text-3xl font-bold text-slate-800">{selectedPlayer.stats?.avg_points || 0}</p>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                  <p className="text-slate-600 text-sm font-semibold mb-1">Partidos</p>
-                  <p className="text-3xl font-bold text-slate-800">{selectedPlayer.stats?.matches_played || 0}</p>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                  <p className="text-slate-600 text-sm font-semibold mb-1">Minutos</p>
-                  <p className="text-3xl font-bold text-slate-800">{selectedPlayer.stats?.minutes_played || 0}</p>
-                </div>
-              </div>
-
-              {/* Datos Personales */}
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  👤 Datos Personales
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="p-3 bg-slate-50 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Nombre completo</p>
-                    <p className="font-medium text-slate-900">{selectedPlayer.first_name} {selectedPlayer.last_name}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Nombre corto</p>
-                    <p className="font-medium text-slate-900">{selectedPlayer.short_name || '-'}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Posición</p>
-                    <p className="font-medium text-slate-900">{getPositionLabel(selectedPlayer.position)}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Fecha de nacimiento</p>
-                    <p className="font-medium text-slate-900">{selectedPlayer.date_of_birth ? new Date(selectedPlayer.date_of_birth).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Nacionalidad</p>
-                    <p className="font-medium text-slate-900">{selectedPlayer.nationality || '-'}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Estado</p>
-                    <Badge variant={selectedPlayer.status === 'active' ? 'default' : 'outline'} className="mt-1">
-                      {selectedPlayer.status || 'Desconocido'}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-
-              {/* Datos Físicos */}
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  📏 Datos Físicos
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-3 bg-slate-50 rounded-lg text-center">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Altura</p>
-                    <p className="text-2xl font-bold text-slate-800">{selectedPlayer.height ? `${selectedPlayer.height} cm` : '-'}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg text-center">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Peso</p>
-                    <p className="text-2xl font-bold text-slate-800">{selectedPlayer.weight ? `${selectedPlayer.weight} kg` : '-'}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg text-center">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Pie</p>
-                    <p className="text-2xl font-bold text-slate-800">{selectedPlayer.foot ? selectedPlayer.foot.toUpperCase() : '-'}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg text-center">
-                    <p className="text-xs text-slate-500 uppercase font-semibold">Dorsal</p>
-                    <p className="text-2xl font-bold text-slate-800">{selectedPlayer.shirt_number ?? '-'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Equipo */}
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  🛡️ Equipo
-                </h3>
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-4">
-                  {selectedPlayer.team?.logo_url ? (
-                    <img src={selectedPlayer.team.logo_url} alt={selectedPlayer.team.name || ''} className="w-12 h-12 object-contain" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center text-slate-400">?</div>
-                  )}
-                  <div>
-                    <p className="font-semibold text-slate-900">{selectedPlayer.team?.name || 'Sin equipo'}</p>
-                    <p className="text-sm text-slate-500">ID: {selectedPlayer.team_id || 'N/A'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Estadísticas de Rendimiento */}
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  📊 Estadísticas de Rendimiento
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 text-center">
-                    <p className="text-emerald-800 text-sm font-semibold mb-1">Puntos Totales</p>
-                    <p className="text-3xl font-bold text-emerald-600">{selectedPlayer.stats?.total_points || 0}</p>
-                  </div>
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                    <p className="text-slate-600 text-sm font-semibold mb-1">Media</p>
-                    <p className="text-3xl font-bold text-slate-800">{selectedPlayer.stats?.avg_points || 0}</p>
-                  </div>
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                    <p className="text-slate-600 text-sm font-semibold mb-1">Partidos</p>
-                    <p className="text-3xl font-bold text-slate-800">{selectedPlayer.stats?.matches_played || 0}</p>
-                  </div>
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                    <p className="text-slate-600 text-sm font-semibold mb-1">Minutos</p>
-                    <p className="text-3xl font-bold text-slate-800">{selectedPlayer.stats?.minutes_played || 0}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Estadísticas Detalladas */}
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  ⚽ Estadísticas Detalladas
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="p-3 bg-slate-50 rounded-lg flex justify-between items-center">
-                    <span className="text-slate-600">Goles</span>
-                    <span className="font-bold text-lg">{selectedPlayer.stats?.goals || 0}</span>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg flex justify-between items-center">
-                    <span className="text-slate-600">Asistencias</span>
-                    <span className="font-bold text-lg">{selectedPlayer.stats?.assists || 0}</span>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg flex justify-between items-center">
-                    <span className="text-slate-600">T. Amarillas</span>
-                    <span className="font-bold text-lg text-amber-600">{selectedPlayer.stats?.yellow_cards || 0}</span>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg flex justify-between items-center">
-                    <span className="text-slate-600">T. Rojas</span>
-                    <span className="font-bold text-lg text-red-600">{selectedPlayer.stats?.red_cards || 0}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Información adicional */}
-              <div className="pt-4 border-t border-slate-200">
-                <p className="text-xs text-slate-400">
-                  Última actualización: {selectedPlayer.updated_at ? new Date(selectedPlayer.updated_at).toLocaleString('es-ES') : '-'}
-                </p>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

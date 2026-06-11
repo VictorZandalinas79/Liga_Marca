@@ -135,6 +135,7 @@ interface PlayerScore {
   // Fixture info
   fixture?: {
     start_time: string
+    matchday?: number
     home_team?: { name: string }
     away_team?: { name: string }
     home_score?: number
@@ -198,35 +199,64 @@ export default function JugadorDetallePage() {
         team
       })
 
-      // 2. Obtener scores de todos los partidos
+      // 2. Obtener scores de todos los partidos.
+      // Nota: fixtures tiene dos FKs a real_teams (home/away), así que NO se puede
+      // embeber real_teams directamente (es ambiguo). Se obtienen los nombres de
+      // equipo en una segunda consulta, igual que en la página de partidos.
       const { data: scoresData } = await supabase
         .from('player_scores')
         .select(`
           *,
           fixtures (
             start_time,
+            matchday,
             home_team_id,
             away_team_id,
             home_score,
-            away_score,
-            real_teams_home (name),
-            real_teams_away (name)
+            away_score
           )
         `)
         .eq('player_id', playerId)
-        .order('fixtures.start_time', { ascending: false })
 
       if (scoresData) {
-        setScores(scoresData.map(s => ({
+        // Recopilar los ids de equipo de todos los fixtures
+        const teamIds = [...new Set(
+          scoresData.flatMap(s => [s.fixtures?.home_team_id, s.fixtures?.away_team_id])
+            .filter(Boolean)
+        )] as string[]
+
+        const teamsMap = new Map<string, string>()
+        if (teamIds.length > 0) {
+          const { data: teamsData } = await supabase
+            .from('real_teams')
+            .select('id, name')
+            .in('id', teamIds)
+          teamsData?.forEach(t => teamsMap.set(t.id, t.name))
+        }
+
+        const mapped = scoresData.map(s => ({
           ...s,
           fixture: s.fixtures ? {
             start_time: s.fixtures.start_time,
-            home_team: { name: (s.fixtures as any).real_teams_home?.name || 'Local' },
-            away_team: { name: (s.fixtures as any).real_teams_away?.name || 'Visitante' },
+            matchday: s.fixtures.matchday,
+            home_team: { name: teamsMap.get(s.fixtures.home_team_id) || 'Local' },
+            away_team: { name: teamsMap.get(s.fixtures.away_team_id) || 'Visitante' },
             home_score: s.fixtures.home_score,
             away_score: s.fixtures.away_score
           } : undefined
-        })))
+        }))
+
+        // Ordenar por jornada descendente (más reciente primero); fallback a fecha
+        mapped.sort((a, b) => {
+          const ma = a.fixture?.matchday ?? 0
+          const mb = b.fixture?.matchday ?? 0
+          if (mb !== ma) return mb - ma
+          const ta = a.fixture?.start_time ? new Date(a.fixture.start_time).getTime() : 0
+          const tb = b.fixture?.start_time ? new Date(b.fixture.start_time).getTime() : 0
+          return tb - ta
+        })
+
+        setScores(mapped)
       }
 
       setLoading(false)
@@ -849,7 +879,12 @@ export default function JugadorDetallePage() {
       {/* Rendimiento por partido */}
       <Card>
         <CardContent className="p-6">
-          <h3 className="text-lg font-bold text-slate-900 mb-4">Rendimiento por Partido</h3>
+          <h3 className="text-lg font-bold text-slate-900 mb-4">Repaso por Jornadas</h3>
+          {scores.length === 0 ? (
+            <p className="text-slate-500 text-center py-6">
+              Todavía no hay datos de rendimiento para este jugador.
+            </p>
+          ) : (
           <div className="space-y-2">
             {scores.map((score) => (
               <div
@@ -859,6 +894,12 @@ export default function JugadorDetallePage() {
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-2 h-2 rounded-full ${score.is_starter ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  {score.fixture?.matchday !== undefined && score.fixture?.matchday !== null && (
+                    <div className="flex flex-col items-center justify-center w-11 shrink-0">
+                      <span className="text-[10px] uppercase text-slate-400 leading-none">Jor.</span>
+                      <span className="text-lg font-bold text-slate-700 leading-none">{score.fixture.matchday}</span>
+                    </div>
+                  )}
                   <div>
                     <p className="font-medium text-slate-900">
                       {score.fixture?.home_team?.name || 'Local'} vs {score.fixture?.away_team?.name || 'Visitante'}
@@ -880,6 +921,7 @@ export default function JugadorDetallePage() {
               </div>
             ))}
           </div>
+          )}
         </CardContent>
       </Card>
 
@@ -896,6 +938,11 @@ export default function JugadorDetallePage() {
             {/* Cabecera */}
             <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-100 p-6 flex justify-between items-start">
               <div>
+                {selectedMatch.fixture?.matchday !== undefined && selectedMatch.fixture?.matchday !== null && (
+                  <span className="inline-block mb-1 text-xs font-semibold uppercase text-emerald-600">
+                    Jornada {selectedMatch.fixture.matchday}
+                  </span>
+                )}
                 <h2 className="text-xl font-bold text-slate-900">
                   {selectedMatch.fixture?.home_team?.name || 'Local'} vs {selectedMatch.fixture?.away_team?.name || 'Visitante'}
                 </h2>
