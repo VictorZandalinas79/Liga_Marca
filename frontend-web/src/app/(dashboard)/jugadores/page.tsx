@@ -58,19 +58,30 @@ export default function JugadoresPage() {
 
   useEffect(() => {
     const fetchPlayers = async () => {
-      // 1. Obtener todos los jugadores
-      const { data: playersData, error: playersError } = await supabase
-        .from('players')
-        .select('*')
-        .order('short_name', { ascending: true })
+      // 1. Obtener todos los jugadores (paginado: Supabase devuelve máx. 1000 por petición)
+      const PAGE_SIZE = 1000
+      const playersData: any[] = []
+      let from = 0
+      while (true) {
+        const { data: page, error: playersError } = await supabase
+          .from('players')
+          .select('*')
+          .order('short_name', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1)
 
-      if (playersError) {
-        console.error("Error al cargar jugadores:", JSON.stringify(playersError, null, 2))
-        setLoading(false)
-        return
+        if (playersError) {
+          console.error("Error al cargar jugadores:", JSON.stringify(playersError, null, 2))
+          setLoading(false)
+          return
+        }
+
+        if (!page || page.length === 0) break
+        playersData.push(...page)
+        if (page.length < PAGE_SIZE) break
+        from += PAGE_SIZE
       }
 
-      if (!playersData) {
+      if (playersData.length === 0) {
         console.error("No se recibieron datos de jugadores")
         setLoading(false)
         return
