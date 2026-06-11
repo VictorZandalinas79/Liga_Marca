@@ -52,6 +52,9 @@ export default function DashboardPage() {
   const [playerToSwap, setPlayerToSwap] = useState<string | null>(null)
   const [searchFilter, setSearchFilter] = useState('')
   const [positionFilter, setPositionFilter] = useState<string>('ALL')
+  const [teamFilter, setTeamFilter] = useState<string>('')
+  const [priceMinFilter, setPriceMinFilter] = useState<number | ''>('')
+  const [priceMaxFilter, setPriceMaxFilter] = useState<number | ''>('')
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento } = useMatchdayLock()
   // Evita generar/heredar el once dos veces (el efecto puede re-ejecutarse por
@@ -410,6 +413,9 @@ export default function DashboardPage() {
     setPlayerToSwap(null)
     setSearchFilter('')
     setPositionFilter('ALL')
+    setTeamFilter('')
+    setPriceMinFilter('')
+    setPriceMaxFilter('')
   }
 
   const openPlayerSelector = (playerId: string) => {
@@ -420,12 +426,18 @@ export default function DashboardPage() {
     setPlayerToSwap(playerId)
     setSearchFilter('')
     setPositionFilter('ALL')
+    setTeamFilter('')
+    setPriceMinFilter('')
+    setPriceMaxFilter('')
   }
 
   const closePlayerSelector = () => {
     setPlayerToSwap(null)
     setSearchFilter('')
     setPositionFilter('ALL')
+    setTeamFilter('')
+    setPriceMinFilter('')
+    setPriceMaxFilter('')
   }
 
   const undoLastChange = () => {
@@ -438,6 +450,9 @@ export default function DashboardPage() {
     setPlayerToSwap(null)
     setSearchFilter('')
     setPositionFilter('ALL')
+    setTeamFilter('')
+    setPriceMinFilter('')
+    setPriceMaxFilter('')
   }
 
   const selectedPlayersData = players
@@ -456,6 +471,11 @@ export default function DashboardPage() {
 
   const availablePlayers = players.filter(p => !selectedPlayers.includes(p.id))
 
+  // Obtener lista única de equipos para el filtro
+  const uniqueTeams = Array.from(
+    new Map(players.map(p => p.team?.name ? [p.team.name, p.team_id] : null).filter(Boolean) as Map<string, string>)
+  ).map(([name, id]) => ({ name, id })).sort((a, b) => a.name.localeCompare(b.name))
+
   // Filtrar jugadores disponibles
   const filteredAvailablePlayers = availablePlayers.filter(p => {
     const matchesSearch = searchFilter === '' ||
@@ -464,7 +484,10 @@ export default function DashboardPage() {
       p.last_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
       p.team?.name?.toLowerCase().includes(searchFilter.toLowerCase())
     const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
-    return matchesSearch && matchesPosition
+    const matchesTeam = teamFilter === '' || p.team_id === teamFilter
+    const matchesPriceMin = priceMinFilter === '' || (p.precio ?? 0) >= priceMinFilter
+    const matchesPriceMax = priceMaxFilter === '' || (p.precio ?? 0) <= priceMaxFilter
+    return matchesSearch && matchesPosition && matchesTeam && matchesPriceMin && matchesPriceMax
   })
 
   const changedCount = changeHistory.length
@@ -738,6 +761,49 @@ export default function DashboardPage() {
                     {pos === 'ALL' ? 'Todos' : getPositionLabel(pos)}
                   </button>
                 ))}
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={teamFilter}
+                  onChange={(e) => setTeamFilter(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Todos los equipos</option>
+                  {uniqueTeams.map(team => (
+                    <option key={team.id} value={team.id}>{team.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2 items-center">
+                <span className="text-xs text-slate-500 font-medium">Precio:</span>
+                <input
+                  type="number"
+                  placeholder="Min"
+                  value={priceMinFilter}
+                  onChange={(e) => setPriceMinFilter(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  className="w-20 px-2 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                  min="0"
+                  step="0.1"
+                />
+                <span className="text-slate-400">-</span>
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={priceMaxFilter}
+                  onChange={(e) => setPriceMaxFilter(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  className="w-20 px-2 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                  min="0"
+                  step="0.1"
+                />
+                <span className="text-xs text-slate-500">M</span>
+                {(priceMinFilter !== '' || priceMaxFilter !== '') && (
+                  <button
+                    onClick={() => { setPriceMinFilter(''); setPriceMaxFilter('') }}
+                    className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                  >
+                    Limpiar
+                  </button>
+                )}
               </div>
               <p className="text-xs text-slate-500">
                 {filteredAvailablePlayers.length} jugadores disponibles
