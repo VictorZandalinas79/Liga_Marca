@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Trophy, MapPin, Clock, Calendar, Users, Goal, TrendingUp, Shield, Heart, Zap, Target, Award, AlertCircle, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Trophy, MapPin, Clock, Calendar, Users, TrendingUp, RefreshCw } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 
 interface Player {
@@ -120,149 +120,10 @@ interface PlayerScore {
   is_starter: boolean
 }
 
-// Componente para mostrar el desglose de métricas con barras
+// Componente que muestra el desglose de puntos por BLOQUES (orden oficial RELEVO).
+// Espejo exacto de scoring_rules.json + trigger_descarga_eventos.py: cada métrica
+// aporta los puntos exactos que suma al total oficial.
 function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
-  interface MetricDef {
-    key: string
-    label: string
-    max: number
-    negative?: boolean
-    isPercent?: boolean
-    isBoolean?: boolean
-  }
-
-  // Definir todas las métricas posibles con sus categorías
-  const metricsByCategory = [
-    {
-      category: '⚽ Goles y Remates',
-      icon: Goal,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      metrics: [
-        { key: 'goals', label: 'Goles', max: 5 },
-        { key: 'shots_on_target', label: 'Tiros a puerta', max: 10 },
-        { key: 'shots_off_target', label: 'Tiros fuera', max: 10 },
-        { key: 'shots_hit_woodwork', label: 'Tiros al palo', max: 3 },
-        { key: 'big_chances_created', label: 'Ocasiones creadas', max: 5 },
-        { key: 'big_chances_missed', label: 'Ocasiones falladas', max: 5, negative: true },
-        { key: 'penalties_scored', label: 'Penaltis marcados', max: 3 },
-        { key: 'penalties_missed', label: 'Penaltis fallados', max: 3, negative: true },
-        { key: 'penalties_won', label: 'Penaltis provocados', max: 3 },
-        { key: 'penalties_conceded', label: 'Penaltis cometidos', max: 3, negative: true },
-      ]
-    },
-    {
-      category: '🅰️ Asistencias y Pases Clave',
-      icon: Target,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      metrics: [
-        { key: 'assists', label: 'Asistencias', max: 3 },
-        { key: 'key_passes', label: 'Pases clave', max: 8 },
-        { key: 'second_assists', label: 'Segundas asistencias', max: 3 },
-        { key: 'intent_assists', label: 'Intentos de asistencia', max: 5 },
-      ]
-    },
-    {
-      category: '🛡️ Defensa',
-      icon: Shield,
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50',
-      metrics: [
-        { key: 'tackles_won', label: 'Entradas ganadas', max: 10 },
-        { key: 'tackles_lost', label: 'Entradas fallidas', max: 10, negative: true },
-        { key: 'interceptions', label: 'Intercepciones', max: 10 },
-        { key: 'clearances', label: 'Despejes', max: 15 },
-        { key: 'clearances_last_line', label: 'Despejes última línea', max: 5 },
-        { key: 'blocked_shots', label: 'Tiros bloqueados', max: 5 },
-        { key: 'blocked_passes', label: 'Pases bloqueados', max: 5 },
-        { key: 'ball_recoveries', label: 'Recuperaciones totales', max: 15 },
-        { key: 'recoveries_high', label: 'Recuperaciones (zona ofensiva)', max: 10 },
-        { key: 'recoveries_med', label: 'Recuperaciones (zona media)', max: 10 },
-        { key: 'recoveries_low', label: 'Recuperaciones (zona defensiva)', max: 10 },
-        { key: 'offsides_provoked', label: 'Fueras de juego provocados', max: 5 },
-        { key: 'goals_conceded', label: 'Goles en contra', max: 5, negative: true },
-        { key: 'clean_sheet', label: 'Portería a cero', max: 1, isBoolean: true },
-      ]
-    },
-    {
-      category: '🧤 Portero',
-      icon: Award,
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-50',
-      metrics: [
-        { key: 'saves', label: 'Paradas', max: 15 },
-        { key: 'penalty_saves', label: 'Penaltis parados', max: 3 },
-        { key: 'claims_ok', label: 'Balones cogidos', max: 10 },
-        { key: 'claims_fail', label: 'Balones fallados', max: 5, negative: true },
-        { key: 'punches_ok', label: 'Punches exitosos', max: 5 },
-        { key: 'punches_fail', label: 'Punches fallidos', max: 3, negative: true },
-        { key: 'smothers', label: 'Cierres', max: 5 },
-        { key: 'sweepers_ok', label: 'Acciones de líbero', max: 5 },
-        { key: 'fumbles', label: 'Fallos', max: 3, negative: true },
-      ]
-    },
-    {
-      category: '📊 Pases',
-      icon: Zap,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      metrics: [
-        { key: 'passes_completed', label: 'Pases completados', max: 100 },
-        { key: 'progressive_passes', label: 'Pases progresivos', max: 20 },
-        { key: 'forward_passes', label: 'Pases hacia adelante', max: 50 },
-        { key: 'passes_into_final_third', label: 'Pases a último tercio', max: 20 },
-        { key: 'passes_into_box', label: 'Pases al área', max: 10 },
-        { key: 'through_balls', label: 'Pases al hueco', max: 5 },
-        { key: 'crosses_completed', label: 'Centros completados', max: 10 },
-        { key: 'crosses_attempted', label: 'Centros intentados', max: 20 },
-        { key: 'successful_crosses', label: 'Centros exitosos', max: 10 },
-        { key: 'switch_plays', label: 'Cambios de juego', max: 5 },
-        { key: 'long_balls_completed', label: 'Balones largos', max: 10 },
-        { key: 'set_pieces_taken', label: 'Balones parados', max: 10 },
-        { key: 'pass_accuracy', label: 'Precisión de pase', max: 100, isPercent: true },
-      ]
-    },
-    {
-      category: '💪 Regates y Técnica',
-      icon: Heart,
-      color: 'text-pink-600',
-      bgColor: 'bg-pink-50',
-      metrics: [
-        { key: 'takeons_won', label: 'Regates completados', max: 10 },
-        { key: 'takeons_lost', label: 'Regates fallidos', max: 10, negative: true },
-        { key: 'box_entries', label: 'Llegadas al área', max: 10 },
-        { key: 'good_skills', label: 'Buenas habilidades', max: 5 },
-        { key: 'dispossessed', label: 'Balones perdidos', max: 10, negative: true },
-        { key: 'aerials_won', label: 'Duelos aéreos ganados', max: 15 },
-        { key: 'aerials_lost', label: 'Duelos aéreos perdidos', max: 15, negative: true },
-        { key: 'aerial_success_rate', label: '% Duelos aéreos', max: 100, isPercent: true },
-      ]
-    },
-    {
-      category: '🟨 Faltas y Tarjetas',
-      icon: AlertCircle,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      metrics: [
-        { key: 'fouls_won', label: 'Faltas ganadas', max: 5 },
-        { key: 'fouls_committed', label: 'Faltas cometidas', max: 5, negative: true },
-        { key: 'yellow_cards', label: 'Amarillas', max: 2, negative: true },
-        { key: 'red_cards', label: 'Rojas', max: 1, negative: true },
-      ]
-    },
-    {
-      category: '⚠️ Errores',
-      icon: AlertCircle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      metrics: [
-        { key: 'errors_leading_to_shot', label: 'Errores → tiro', max: 3, negative: true },
-        { key: 'errors_leading_to_goal', label: 'Errores → gol', max: 2, negative: true },
-      ]
-    },
-  ]
-
   // Normaliza la posición (acepta código POR/DEF/MED/DEL o nombre en inglés)
   const normPos = (p?: string): 'POR' | 'DEF' | 'MED' | 'DEL' => {
     const s = (p || '').toLowerCase()
@@ -275,227 +136,182 @@ function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
 
   // Redondea a 2 decimales y quita ceros sobrantes (0.30 -> 0.3, 1.00 -> 1)
   const fmtPts = (n: number): string => String(parseFloat((Math.round(n * 100) / 100).toFixed(2)))
+  const r2 = (v: number) => Math.round(v * 100) / 100
+  const n = (v: any) => Number(v) || 0
 
-  // Puntos por métrica según las reglas v3.1 "RELEVO Decimal"
-  // (espejo exacto de scoring_rules.json + trigger_descarga_eventos.py)
-  const getPointsForMetric = (key: string, value: number, playerPosition?: string): number => {
-    const position = normPos(playerPosition)
-    if (!value) return 0
+  const pos = normPos(player.calc_position || player.position)
 
-    // --- Puntos fijos por evento ---
-    const fixedPoints: Record<string, number> = {
-      'goals': position === 'DEL' ? 4 : position === 'MED' ? 5 : 6,  // POR/DEF=6, MED=5, DEL=4
-      'assists': 3,         // Asistencia de gol
-      'intent_assists': 1,  // Asistencia sin gol (intento)
-      'own_goals': -2,
-      'penalties_missed': -2,
-      'penalties_won': 2,        // Penalti provocado
-      'penalties_conceded': -2,  // Penalti cometido
-      'penalty_saves': 5,
-      'yellow_cards': -1,
-      'second_yellow_cards': -1,
-      'red_cards': -3,
-    }
-    if (fixedPoints[key] !== undefined) {
-      return fixedPoints[key] * value
-    }
+  // Tabla de puntos posicionales (espejo de scoring_rules.json)
+  const GOAL = { POR: 6, DEF: 6, MED: 5, DEL: 4 } as const
+  const CLEAN_SHEET = { POR: 4, DEF: 3, MED: 2, DEL: 1 } as const
+  const GOAL_CONCEDED = { POR: -2, DEF: -2, MED: -1, DEL: -1 } as const
 
-    // Portería a cero: puntos fijos por posición (>60 min)
-    if (key === 'clean_sheet' && value) {
-      if (position === 'POR') return 4
-      if (position === 'DEF') return 3
-      if (position === 'MED') return 2
-      return 1  // DEL
-    }
-
-    // Goles recibidos: -2 (POR/DEF) o -1 (MED/DEL) POR GOL encajado
-    if (key === 'goals_conceded' && value > 0) {
-      if (position === 'POR' || position === 'DEF') return value * -2
-      return value * -1
-    }
-
-    // --- Bonus DECIMALES por unidad (v3.1) ---
-    // Valores exactos de scoring_rules.json (bonuses_per_X)
-    const perUnit: Record<string, number> = {
-      'saves': 0.5,             // scoring_rules.json: save = 0.5
-      'punches_ok': 0.2,        // scoring_rules.json: punch_ok = 0.2
-      'punches_fail': 0.1,      // scoring_rules.json: punch_fail = 0.1
-      'passes_completed': 0.2,  // scoring_rules.json: passes_completed = 0.2
-      'forward_passes': 0.4,    // scoring_rules.json: forward_passes = 0.4
-      'shots_on_target': 0.3,   // scoring_rules.json: shots_on_target = 0.3
-      'takeons_won': 0.5,       // scoring_rules.json: takeons_won = 0.5
-      'box_entries': 0.1,       // scoring_rules.json: box_entries = 0.1
-      'clearances': 0.5,        // scoring_rules.json: clearances = 0.5
-      'set_pieces_taken': 0.2,  // scoring_rules.json: set_pieces_taken = 0.2
-      'successful_crosses': 0.3,// scoring_rules.json: successful_crosses = 0.3
-      'recoveries_high': 0.3,   // scoring_rules.json: recoveries_high = 0.3
-      'recoveries_med': 0.2,    // scoring_rules.json: recoveries_med = 0.2
-      'recoveries_low': 0.1,    // scoring_rules.json: recoveries_low = 0.1
-    }
-    if (perUnit[key] !== undefined) {
-      return Math.round(perUnit[key] * value * 100) / 100
-    }
-
-    // Penalización por balón perdido (scoring_rules.json: -0.1 para TODAS las posiciones)
-    if (key === 'dispossessed' && value > 0) {
-      return Math.round(-0.1 * value * 100) / 100
-    }
-
-    return 0
+  // Fila del desglose
+  interface Row {
+    label: string
+    count: number    // nº de eventos (0 = no mostrar contador)
+    unit: number     // puntos por unidad (para "x × +u")
+    points: number   // puntos aportados
+    flat?: boolean   // true => puntos fijos sin contador (participación, RELEVO, portería a cero)
   }
+  interface Block {
+    id: string
+    emoji: string
+    title: string
+    accent: string       // color de texto del acento
+    chip: string         // fondo del chip de subtotal
+    rows: Row[]
+  }
+
+  const u = (count: number, unit: number, label: string): Row =>
+    ({ label, count, unit, points: r2(count * unit) })
+
+  // ---- BLOQUE 1: Participación ----
+  const min = n(player.minutes_played)
+  const b1: Row[] = []
+  if (min > 0) {
+    const titular = min > 60
+    b1.push({
+      label: titular ? `Participación · +60 min (${min}′)` : `Participación · suplente (${min}′)`,
+      count: 0, unit: 0, points: titular ? 2 : 1, flat: true,
+    })
+  }
+
+  // ---- BLOQUE 2: Goles y Asistencias ----
+  const b2: Row[] = []
+  if (n(player.goals) > 0) b2.push(u(n(player.goals), GOAL[pos], `Gol (${pos})`))
+  if (n(player.own_goals) > 0) b2.push(u(n(player.own_goals), -2, 'Gol en propia'))
+  if (n(player.assists) > 0) b2.push(u(n(player.assists), 3, 'Asistencia de gol'))
+  if (n(player.intent_assists) > 0) b2.push(u(n(player.intent_assists), 1, 'Asistencia sin gol'))
+
+  // ---- BLOQUE 3: Defensa y Portería a Cero ----
+  const b3: Row[] = []
+  const cs = player.clean_sheet === true || player.clean_sheet === 1 || player.clean_sheet === 'true'
+  if (cs) b3.push({ label: `Portería a cero · +60 min (${pos})`, count: 0, unit: 0, points: CLEAN_SHEET[pos], flat: true })
+  if (n(player.goals_conceded) > 0) b3.push(u(n(player.goals_conceded), GOAL_CONCEDED[pos], `Gol encajado (${pos})`))
+
+  // ---- BLOQUE 4: Penaltis ----
+  const b4: Row[] = []
+  if (n(player.penalties_won) > 0) b4.push(u(n(player.penalties_won), 2, 'Penalti provocado'))
+  if (n(player.penalties_conceded) > 0) b4.push(u(n(player.penalties_conceded), -2, 'Penalti cometido'))
+  if (n(player.penalties_missed) > 0) b4.push(u(n(player.penalties_missed), -2, 'Penalti fallado'))
+  if (n(player.penalty_saves) > 0) b4.push(u(n(player.penalty_saves), 5, 'Penalti parado'))
+
+  // ---- BLOQUE 5: Tarjetas ----
+  const b5: Row[] = []
+  if (n(player.yellow_cards) > 0) b5.push(u(n(player.yellow_cards), -1, 'Amarilla'))
+  if (n(player.second_yellow_cards) > 0) b5.push(u(n(player.second_yellow_cards), -1, 'Doble amarilla'))
+  if (n(player.red_cards) > 0) b5.push(u(n(player.red_cards), -3, 'Roja directa'))
+
+  // ---- BLOQUE 6: Acciones de Portero ----
+  const b6: Row[] = []
+  if (n(player.saves) > 0) b6.push(u(n(player.saves), 0.5, 'Parada'))
+  if (n(player.punches_ok) > 0) b6.push(u(n(player.punches_ok), 0.2, 'Despeje de puños'))
+  if (n(player.punches_fail) > 0) b6.push(u(n(player.punches_fail), 0.1, 'Despeje de puños fallido'))
+  if (n(player.claims_ok) > 0) b6.push(u(n(player.claims_ok), 0.1, 'Blocaje'))
+  if (n(player.sweepers_ok) > 0) b6.push(u(n(player.sweepers_ok), 0.1, 'Salida del área'))
+
+  // ---- BLOQUE 7: Bonus en Juego ----
+  const b7: Row[] = []
+  if (n(player.passes_completed) > 0) b7.push(u(n(player.passes_completed), 0.05, 'Pases completados'))
+  if (n(player.forward_passes) > 0) b7.push(u(n(player.forward_passes), 0.2, 'Pases hacia adelante'))
+  if (n(player.box_entries) > 0) b7.push(u(n(player.box_entries), 0.1, 'Entradas al área'))
+  if (n(player.successful_crosses) > 0) b7.push(u(n(player.successful_crosses), 0.3, 'Centros exitosos'))
+  if (n(player.set_pieces_taken) > 0) b7.push(u(n(player.set_pieces_taken), 0.2, 'Balón parado'))
+  if (n(player.takeons_won) > 0) b7.push(u(n(player.takeons_won), 0.5, 'Regates ganados'))
+  if (n(player.shots_on_target) > 0) b7.push(u(n(player.shots_on_target), 0.3, 'Tiros a puerta'))
+  if (n(player.recoveries_high) > 0) b7.push(u(n(player.recoveries_high), 0.3, 'Recuperación alta'))
+  if (n(player.recoveries_med) > 0) b7.push(u(n(player.recoveries_med), 0.2, 'Recuperación media'))
+  if (n(player.recoveries_low) > 0) b7.push(u(n(player.recoveries_low), 0.1, 'Recuperación baja'))
+  if (n(player.clearances) > 0) b7.push(u(n(player.clearances), 0.5, 'Despejes'))
+
+  // ---- BLOQUE 8: Penalizaciones ----
+  const b8: Row[] = []
+  const lostBalls = n(player.dispossessed) + n(player.bad_touches)
+  if (lostBalls > 0) b8.push(u(lostBalls, -0.1, 'Balón perdido'))
+
+  // ---- BLOQUE 9: Puntos RELEVO ----
+  const b9: Row[] = []
+  if (n(player.relevo_points) > 0) b9.push({ label: 'Bonus RELEVO (rendimiento global)', count: 0, unit: 0, points: n(player.relevo_points), flat: true })
+
+  const blocks: Block[] = [
+    { id: 'b1', emoji: '⏱️', title: 'Participación', accent: 'text-slate-600', chip: 'bg-slate-100 text-slate-700', rows: b1 },
+    { id: 'b2', emoji: '⚽', title: 'Goles y Asistencias', accent: 'text-red-600', chip: 'bg-red-50 text-red-700', rows: b2 },
+    { id: 'b3', emoji: '🛡️', title: 'Defensa y Portería a Cero', accent: 'text-indigo-600', chip: 'bg-indigo-50 text-indigo-700', rows: b3 },
+    { id: 'b4', emoji: '🎯', title: 'Penaltis', accent: 'text-fuchsia-600', chip: 'bg-fuchsia-50 text-fuchsia-700', rows: b4 },
+    { id: 'b5', emoji: '🟨', title: 'Tarjetas', accent: 'text-amber-600', chip: 'bg-amber-50 text-amber-700', rows: b5 },
+    { id: 'b6', emoji: '🧤', title: 'Acciones de Portero', accent: 'text-cyan-600', chip: 'bg-cyan-50 text-cyan-700', rows: b6 },
+    { id: 'b7', emoji: '📈', title: 'Bonus en Juego', accent: 'text-emerald-600', chip: 'bg-emerald-50 text-emerald-700', rows: b7 },
+    { id: 'b8', emoji: '📉', title: 'Penalizaciones', accent: 'text-rose-600', chip: 'bg-rose-50 text-rose-700', rows: b8 },
+    { id: 'b9', emoji: '⭐', title: 'Puntos RELEVO', accent: 'text-violet-600', chip: 'bg-violet-50 text-violet-700', rows: b9 },
+  ]
+
+  const sum = blocks.reduce((a, blk) => a + blk.rows.reduce((s, row) => s + row.points, 0), 0)
+  const total = n(player.total_points)
+  const ajuste = r2(total - sum)
+  const visibleBlocks = blocks.filter(b => b.rows.length > 0)
 
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-        <TrendingUp className="w-5 h-5" />
-        Desglose de Métricas del Partido
+        <TrendingUp className="w-5 h-5 text-emerald-600" />
+        Puntos por bloques
       </h3>
 
-      {metricsByCategory.map((category) => {
-        const Icon = category.icon
-        const hasMetrics = category.metrics.some(m => (player[m.key] || 0) > 0)
+      {visibleBlocks.length === 0 && (
+        <p className="text-slate-500 text-center py-4">Sin métricas puntuables en este partido.</p>
+      )}
 
-        if (!hasMetrics) return null
-
+      {visibleBlocks.map((blk) => {
+        const subtotal = r2(blk.rows.reduce((s, row) => s + row.points, 0))
         return (
-          <div key={category.category} className="border border-slate-200 rounded-xl overflow-hidden">
-            {/* Cabecera de categoría */}
-            <div className={`${category.bgColor} px-4 py-3 flex items-center gap-2`}>
-              <Icon className={`w-5 h-5 ${category.color}`} />
-              <h4 className={`font-semibold ${category.color}`}>{category.category}</h4>
+          <div key={blk.id} className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+            {/* Cabecera del bloque */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-lg leading-none">{blk.emoji}</span>
+                <h4 className={`font-bold text-sm ${blk.accent}`}>{blk.title}</h4>
+              </div>
+              <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${subtotal >= 0 ? blk.chip : 'bg-red-50 text-red-700'}`}>
+                {subtotal >= 0 ? '+' : ''}{fmtPts(subtotal)}
+              </span>
             </div>
-
-            {/* Métricas */}
-            <div className="p-4 space-y-3">
-              {category.metrics.map((metric: MetricDef) => {
-                const value = player[metric.key]
-                const isBoolean = metric.isBoolean
-                const displayValue = isBoolean ? (value ? 'Sí' : value) : (player[metric.key] || 0)
-
-                if (!isBoolean && (value || 0) <= 0) return null
-                if (isBoolean && !value) return null
-
-                const isPercent = metric.isPercent
-                const finalDisplayValue = isPercent ? `${value.toFixed(1)}%` : displayValue
-                const points = (isPercent || isBoolean) ? 0 : getPointsForMetric(metric.key, value || 0, player.position)
-                const barWidth = Math.min(((value || 0) / (isPercent ? 100 : metric.max)) * 100, 100)
-
-                return (
-                  <div key={metric.key} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-700 font-medium">{metric.label}</span>
-                      <div className="flex items-center gap-3">
-                        <span className={`font-bold ${metric.negative ? 'text-red-600' : isBoolean ? 'text-emerald-600' : 'text-slate-900'}`}>
-                          {finalDisplayValue}
-                        </span>
-                        {!(isPercent || isBoolean) && points !== 0 && (
-                          <span className={`text-xs font-semibold ${points >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {points >= 0 ? '+' : ''}{fmtPts(points)} pts
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          metric.negative ? 'bg-red-500' : isBoolean ? 'bg-emerald-500' : 'bg-emerald-500'
-                        }`}
-                        style={{ width: `${barWidth}%` }}
-                      />
-                    </div>
+            {/* Filas */}
+            <div className="divide-y divide-slate-50">
+              {blk.rows.map((row, idx) => (
+                <div key={idx} className="flex items-center justify-between px-4 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">{row.label}</p>
+                    {!row.flat && (
+                      <p className="text-xs text-slate-400">
+                        {row.count} × {row.unit >= 0 ? '+' : ''}{fmtPts(row.unit)}
+                      </p>
+                    )}
                   </div>
-                )
-              })}
+                  <span className={`shrink-0 text-sm font-bold tabular-nums ${row.points >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {row.points >= 0 ? '+' : ''}{fmtPts(row.points)}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )
       })}
 
-      {/* Resumen de cálculo de puntos (reglas v3.0, reconciliado con el total) */}
-      {(() => {
-        const pos = normPos(player.calc_position || player.position)
-        const n = (v: any) => Number(v) || 0
-        const r2 = (v: number) => Math.round(v * 100) / 100
-        const lines: Array<{ label: string; points: number; negative?: boolean }> = []
+      {/* Ajuste de redondeo (debería ser ~0 si el desglose cuadra) */}
+      {ajuste !== 0 && (
+        <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-slate-50 border border-slate-200">
+          <span className="text-sm text-slate-500">Ajuste / redondeo</span>
+          <span className={`text-sm font-semibold ${ajuste >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            {ajuste >= 0 ? '+' : ''}{fmtPts(ajuste)}
+          </span>
+        </div>
+      )}
 
-        const min = n(player.minutes_played)
-        if (min > 0) lines.push({ label: `Participación (${min} min)`, points: min > 60 ? 2 : 1 })
-        if (n(player.goals) > 0) lines.push({ label: `Goles (${n(player.goals)}, ${pos})`, points: n(player.goals) * (pos === 'DEL' ? 4 : pos === 'MED' ? 5 : 6) })
-        if (n(player.own_goals) > 0) lines.push({ label: `Goles en propia (${n(player.own_goals)})`, points: n(player.own_goals) * -2, negative: true })
-        if (n(player.assists) > 0) lines.push({ label: `Asistencias de gol (${n(player.assists)})`, points: n(player.assists) * 3 })
-        if (n(player.intent_assists) > 0) lines.push({ label: `Asistencias sin gol (${n(player.intent_assists)})`, points: n(player.intent_assists) * 1 })
-        const cs = player.clean_sheet === true || player.clean_sheet === 1 || player.clean_sheet === 'true'
-        if (cs) lines.push({ label: `Portería a cero (>60 min, ${pos})`, points: pos === 'POR' ? 4 : pos === 'DEF' ? 3 : pos === 'MED' ? 2 : 1 })
-        if (n(player.goals_conceded) > 0) lines.push({ label: `Goles recibidos (${n(player.goals_conceded)})`, points: n(player.goals_conceded) * ((pos === 'POR' || pos === 'DEF') ? -2 : -1), negative: true })
-        if (n(player.penalties_missed) > 0) lines.push({ label: `Penaltis fallados (${n(player.penalties_missed)})`, points: n(player.penalties_missed) * -2, negative: true })
-        if (n(player.penalties_won) > 0) lines.push({ label: `Penaltis provocados (${n(player.penalties_won)})`, points: n(player.penalties_won) * 2 })
-        if (n(player.penalties_conceded) > 0) lines.push({ label: `Penaltis cometidos (${n(player.penalties_conceded)})`, points: n(player.penalties_conceded) * -2, negative: true })
-        if (n(player.penalty_saves) > 0) lines.push({ label: `Penaltis parados (${n(player.penalty_saves)})`, points: n(player.penalty_saves) * 5 })
-
-        // --- Bonus decimales por unidad (v3.1) - Valores de scoring_rules.json ---
-        if (n(player.saves) > 0) lines.push({ label: `Paradas (${n(player.saves)} × 0.5)`, points: r2(n(player.saves) * 0.5) })
-        if (n(player.punches_ok) > 0) lines.push({ label: `Despejes de puños (${n(player.punches_ok)} × 0.2)`, points: r2(n(player.punches_ok) * 0.2) })
-        if (n(player.punches_fail) > 0) lines.push({ label: `Despejes de puños fallidos (${n(player.punches_fail)} × 0.1)`, points: r2(n(player.punches_fail) * 0.1) })
-        if (n(player.shots_on_target) > 0) lines.push({ label: `Tiros a puerta (${n(player.shots_on_target)} × 0.3)`, points: r2(n(player.shots_on_target) * 0.3) })
-        if (n(player.takeons_won) > 0) lines.push({ label: `Regates (${n(player.takeons_won)} × 0.5)`, points: r2(n(player.takeons_won) * 0.5) })
-        if (n(player.box_entries) > 0) lines.push({ label: `Llegadas al área (${n(player.box_entries)} × 0.1)`, points: r2(n(player.box_entries) * 0.1) })
-        if (n(player.clearances) > 0) lines.push({ label: `Despejes (${n(player.clearances)} × 0.5)`, points: r2(n(player.clearances) * 0.5) })
-        if (n(player.passes_completed) > 0) lines.push({ label: `Pases completados (${n(player.passes_completed)} × 0.2)`, points: r2(n(player.passes_completed) * 0.2) })
-        if (n(player.forward_passes) > 0) lines.push({ label: `Pases hacia adelante (${n(player.forward_passes)} × 0.4)`, points: r2(n(player.forward_passes) * 0.4) })
-        if (n(player.set_pieces_taken) > 0) lines.push({ label: `Balones parados (${n(player.set_pieces_taken)} × 0.2)`, points: r2(n(player.set_pieces_taken) * 0.2) })
-        if (n(player.successful_crosses) > 0) lines.push({ label: `Centros buenos (${n(player.successful_crosses)} × 0.3)`, points: r2(n(player.successful_crosses) * 0.3) })
-
-        // Recuperaciones por zona
-        if (n(player.recoveries_high) > 0) lines.push({ label: `Recuperaciones ofensivas (${n(player.recoveries_high)} × 0.3)`, points: r2(n(player.recoveries_high) * 0.3) })
-        if (n(player.recoveries_med) > 0) lines.push({ label: `Recuperaciones medias (${n(player.recoveries_med)} × 0.2)`, points: r2(n(player.recoveries_med) * 0.2) })
-        if (n(player.recoveries_low) > 0) lines.push({ label: `Recuperaciones defensivas (${n(player.recoveries_low)} × 0.1)`, points: r2(n(player.recoveries_low) * 0.1) })
-
-        // Penalización por balón perdido (posicional, por unidad) - scoring_rules.json: -0.1 para TODAS las posiciones
-        const lostBalls = n(player.dispossessed) + n(player.bad_touches)
-        const lostRate = -0.1  // scoring_rules.json: lost_balls.points = -0.1 (uniforme para POR/DEF/MED/DEL)
-        if (lostBalls > 0) lines.push({ label: `Balones perdidos (${lostBalls} × ${lostRate})`, points: r2(lostBalls * lostRate), negative: true })
-
-        if (n(player.yellow_cards) > 0) lines.push({ label: `Tarjetas amarillas (${n(player.yellow_cards)})`, points: n(player.yellow_cards) * -1, negative: true })
-        if (n(player.second_yellow_cards) > 0) lines.push({ label: `Segunda amarilla (${n(player.second_yellow_cards)})`, points: n(player.second_yellow_cards) * -1, negative: true })
-        if (n(player.red_cards) > 0) lines.push({ label: `Tarjetas rojas (${n(player.red_cards)})`, points: n(player.red_cards) * -3, negative: true })
-        if (n(player.relevo_points) > 0) lines.push({ label: `Puntos RELEVO (${n(player.relevo_points)})`, points: n(player.relevo_points) })
-
-        const sum = lines.reduce((a, l) => a + l.points, 0)
-        const total = n(player.total_points)
-        const otros = Math.round((total - sum) * 100) / 100
-
-        return (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-            <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-              <Target className="w-4 h-4" />
-              Cómo se calculan los {total} puntos
-            </h4>
-            <div className="space-y-2 text-sm">
-              {lines.map((l, idx) => (
-                <div key={idx} className={`flex justify-between items-center ${l.negative ? 'text-red-600' : l.points >= 0 ? 'text-slate-700' : 'text-red-600'}`}>
-                  <span>{l.label}</span>
-                  <span className="font-semibold">{l.points >= 0 ? '+' : ''}{fmtPts(l.points)} pts</span>
-                </div>
-              ))}
-              {otros !== 0 && (
-                <div className="flex justify-between items-center text-slate-500">
-                  <span>Otros / ajustes <span className="text-xs">(recuperaciones por zona, blocajes y redondeos)</span></span>
-                  <span className="font-semibold">{otros >= 0 ? '+' : ''}{fmtPts(otros)} pts</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center border-t border-slate-200 pt-2 mt-2">
-                <span className="font-bold text-slate-800">Total</span>
-                <span className="font-bold text-emerald-600">{total} pts</span>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* Total de puntos */}
-      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
-        <p className="text-emerald-800 text-sm font-semibold">Puntuación Total</p>
-        <p className="text-4xl font-bold text-emerald-600 mt-1">{player.total_points || 0}</p>
+      {/* Total oficial */}
+      <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 flex items-center justify-between shadow-md">
+        <span className="text-white font-bold text-lg">Puntos totales</span>
+        <span className="text-white font-extrabold text-3xl tabular-nums">{fmtPts(total)}</span>
       </div>
     </div>
   )

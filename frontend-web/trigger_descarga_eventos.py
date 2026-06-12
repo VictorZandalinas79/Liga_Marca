@@ -732,7 +732,10 @@ class MatchEventDownloader:
 
             if self.has_qualifier(event, Q_CROSS):
                 self.apply_points(pid, 'crosses_completed', 1, current_min)
-                self.apply_points(pid, 'successful_crosses', 1, current_min)
+                # Solo suma 'successful_crosses' si NO es córner y NO es falta
+                if not is_corner and not is_free_kick:
+                    self.apply_points(pid, 'successful_crosses', 1, current_min)
+                    
 
             assist_val = self.get_qualifier(event, Q_ASSIST)
             if assist_val is not False:

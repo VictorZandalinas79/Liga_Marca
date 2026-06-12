@@ -53,6 +53,10 @@ interface MatchdayInfo {
 // una jornada "en directo" desde su primer partido hasta que acaba el último.
 const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
 
+// La jornada se hace visible (y se bloquean los cambios) 1 hora antes del
+// primer partido. Durante esa hora ya se ven los 11 de cada usuario.
+const LOCK_LEAD_MS = 60 * 60 * 1000
+
 export default function JornadaPage() {
   const [loading, setLoading] = useState(true)
   const [selectedMatchday, setSelectedMatchday] = useState<number>(0)
@@ -111,8 +115,10 @@ export default function JornadaPage() {
     const toInfo = (g: ReturnType<typeof matchdaysMap.get> & object, displayNumber: number): MatchdayInfo => {
       const first = Math.min(...g.starts)
       const last = Math.max(...g.starts)
-      const started = now >= first
-      const live = started && now <= last + MATCH_DURATION_MS
+      // Visible desde 1h antes del primer partido (cuando se bloquean los cambios)
+      const started = now >= first - LOCK_LEAD_MS
+      // "En directo" solo desde que arranca de verdad el primer partido
+      const live = now >= first && now <= last + MATCH_DURATION_MS
       return {
         matchday: displayNumber,
         momento: g.momento ?? undefined,
@@ -172,7 +178,6 @@ export default function JornadaPage() {
 
     const info = availableMatchdays.find(m => m.matchday === matchday)
     const matchdayDate = info?.start_time || new Date().toISOString()
-    const isMomento = info ? info.rawMatchday == null : false
 
     // Fechas de creación de usuarios (para el control de participación)
     const { data: profiles } = await supabase.from('profiles').select('id, created_at, full_name, email')

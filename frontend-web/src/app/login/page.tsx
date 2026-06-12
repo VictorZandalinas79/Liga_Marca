@@ -49,6 +49,7 @@ export default function LoginPage() {
           }
         }
 
+        localStorage.setItem('lmv:lastActivity', Date.now().toString())
         router.push('/dashboard')
       }
     } catch (err) {

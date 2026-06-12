@@ -106,13 +106,13 @@
   "bonuses_per_X": {
     "passes_completed": {
       "required": 1,
-      "points": 0.2,
-      "description": "0.2 puntos por cada pase completado"
+      "points": 0.05,
+      "description": "0.05 puntos por cada pase completado"
     },
     "forward_passes": {
       "required": 1,
-      "points": 0.4,
-      "description": "0.4 por cada pase hacia adelante (end_x >= x + 10, y_desviación entre -10 y 10)"
+      "points": 0.2,
+      "description": "0.2 por cada pase hacia adelante (end_x >= x + 10, y_desviación entre -10 y 10)"
     },
     "shots_on_target": {
       "required": 1,
@@ -178,7 +178,7 @@
     }
   },
   "relevo_rules": {
-    "participation_step_percent": 5,
+    "participation_step_percent": 10,
     "participation_points_per_step": 1,
     "min_passes": 10,
     "pass_accuracy_high": 85,

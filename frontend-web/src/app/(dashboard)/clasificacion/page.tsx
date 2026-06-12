@@ -21,6 +21,8 @@ interface UserStanding {
   best_change_score: number
   total_changes: number
   successful_changes: number
+  podium_finishes: number   // veces entre los 3 primeros de una jornada
+  bottom_finishes: number   // veces entre los 3 últimos de una jornada
 }
 
 interface MatchdayStatus {
@@ -28,7 +30,7 @@ interface MatchdayStatus {
   is_open: boolean
 }
 
-type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_points' | 'best_change_score' | 'successful_changes'
+type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_points' | 'best_change_score' | 'successful_changes' | 'podium_finishes' | 'bottom_finishes'
 type SortOrder = 'asc' | 'desc'
 
 export default function ClasificacionPage() {
@@ -39,6 +41,7 @@ export default function ClasificacionPage() {
   const [sortField, setSortField] = useState<SortField>('total_points')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [showFilters, setShowFilters] = useState(false)
+  const [tick, setTick] = useState(0)
   const supabase = createClient()
 
   // Obtener jornada actual y todas las disponibles
@@ -179,6 +182,41 @@ export default function ClasificacionPage() {
         }
       }
 
+      // 6b. Calcular podios (top 3) y colistas (bottom 3) por jornada.
+      // Para cada jornada ya disputada, rankeamos a los usuarios participantes
+      // por sus puntos y contamos cuántas veces cada uno queda entre los 3
+      // primeros y entre los 3 últimos.
+      const podiumCount = new Map<string, number>()
+      const bottomCount = new Map<string, number>()
+
+      const participantsByMatchday = new Map<number, { userId: string; points: number }[]>()
+      for (const [userId, pointsMap] of userPointsByMatchday.entries()) {
+        for (const [md, pts] of pointsMap.entries()) {
+          if (md <= 0) continue
+          if (!participantsByMatchday.has(md)) participantsByMatchday.set(md, [])
+          participantsByMatchday.get(md)!.push({ userId, points: pts })
+        }
+      }
+
+      for (const [, participants] of participantsByMatchday.entries()) {
+        // Saltar jornadas aún sin puntuar (todos a 0): no cuentan como disputadas
+        const maxPoints = participants.reduce((max, p) => Math.max(max, p.points), 0)
+        if (maxPoints <= 0) continue
+
+        const sorted = [...participants].sort((a, b) => b.points - a.points)
+        const top3 = sorted.slice(0, 3)
+        for (const p of top3) {
+          podiumCount.set(p.userId, (podiumCount.get(p.userId) || 0) + 1)
+        }
+        // Solo tiene sentido un "bottom 3" si hay más de 3 participantes
+        if (sorted.length > 3) {
+          const bottom3 = sorted.slice(-3)
+          for (const p of bottom3) {
+            bottomCount.set(p.userId, (bottomCount.get(p.userId) || 0) + 1)
+          }
+        }
+      }
+
       // 7. Obtener nombres de usuarios (profiles)
       const userIds = Array.from(userTeamsMap.keys())
       const { data: usersData } = await supabase
@@ -243,6 +281,8 @@ export default function ClasificacionPage() {
           best_change_score: bestChangeScore,
           total_changes: totalChanges,
           successful_changes: successfulChanges,
+          podium_finishes: podiumCount.get(userId) || 0,
+          bottom_finishes: bottomCount.get(userId) || 0,
           current_position: 0,
           previous_position: 0,
           position_change: 0,
@@ -276,7 +316,13 @@ export default function ClasificacionPage() {
     }
 
     fetchStandings()
-  }, [selectedMatchday, sortField, sortOrder])
+  }, [selectedMatchday, sortField, sortOrder, tick])
+
+  // Refresco automático: actualiza los puntos al momento cada 60s
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -465,6 +511,28 @@ export default function ClasificacionPage() {
                       <SortIcon field="best_change_score" />
                     </div>
                   </th>
+                  <th
+                    className="text-center text-xs sm:text-sm font-semibold text-slate-300 p-2 sm:p-4 cursor-pointer hover:bg-slate-700"
+                    onClick={() => handleSort('podium_finishes')}
+                    title="Veces entre los 3 primeros de una jornada"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <Trophy className="w-4 h-4 text-yellow-500" />
+                      <span className="hidden md:inline">Podios</span>
+                      <SortIcon field="podium_finishes" />
+                    </div>
+                  </th>
+                  <th
+                    className="text-center text-xs sm:text-sm font-semibold text-slate-300 p-2 sm:p-4 cursor-pointer hover:bg-slate-700"
+                    onClick={() => handleSort('bottom_finishes')}
+                    title="Veces entre los 3 últimos de una jornada"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <TrendingDown className="w-4 h-4 text-red-500" />
+                      <span className="hidden md:inline">Colistas</span>
+                      <SortIcon field="bottom_finishes" />
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -526,6 +594,22 @@ export default function ClasificacionPage() {
                       <p className="text-xs text-slate-400">
                         {standing.successful_changes}/{standing.total_changes} cambios
                       </p>
+                    </td>
+                    <td className="p-2 sm:p-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <Trophy className="w-4 h-4 text-yellow-500 shrink-0" />
+                        <span className="text-base sm:text-lg font-bold text-yellow-400">
+                          {standing.podium_finishes}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="p-2 sm:p-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <TrendingDown className="w-4 h-4 text-red-500 shrink-0" />
+                        <span className="text-base sm:text-lg font-bold text-red-400">
+                          {standing.bottom_finishes}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -86,6 +86,9 @@ interface PlayerScore {
   blocked_shots: number
   blocked_passes: number
   ball_recoveries: number
+  recoveries_high: number
+  recoveries_med: number
+  recoveries_low: number
   offsides_provoked: number
   challenges_lost: number
 
@@ -143,15 +146,21 @@ interface PlayerScore {
   }
 }
 
-interface MetricBreakdown {
-  category: string
-  metrics: Array<{
-    name: string
-    value: number
-    points: number
-    icon: string
-    description: string
-  }>
+// Desglose por bloques (orden oficial RELEVO)
+interface ScoreRow {
+  label: string
+  count: number   // nº de eventos (no se muestra si flat)
+  unit: number    // puntos por unidad
+  points: number  // puntos aportados
+  flat?: boolean  // puntos fijos sin contador (participación, portería a cero, RELEVO)
+}
+interface ScoreBlock {
+  id: string
+  emoji: string
+  title: string
+  accent: string
+  chip: string
+  rows: ScoreRow[]
 }
 
 export default function JugadorDetallePage() {
@@ -338,24 +347,30 @@ export default function JugadorDetallePage() {
     yellow_card: -1,
     second_yellow_card: -1,
     red_card: -3,
-    // Bonus DECIMALES por unidad (v3.1 "RELEVO Decimal")
+    // Bonus DECIMALES por unidad — valores EXACTOS de scoring_rules.json
     per_unit: {
-      saves: 0.3,              // por parada
-      punches_ok: 0.2,         // despeje de puños bueno
-      punches_fail: 0.1,       // despeje de puños fallido
-      shots_on_target: 0.3,    // por tiro a puerta
-      takeons_won: 0.2,        // por regate completado
-      box_entries: 0.1,        // por llegada al área
-      clearances: 0.2,         // por despeje
-      passes_completed: 0.01,  // por pase completado
-      forward_passes: 0.03,    // por pase hacia adelante
-      set_pieces_taken: 0.2,   // por balón parado lanzado
-      successful_crosses: 0.3, // por centro bueno
+      saves: 0.5,              // save
+      punches_ok: 0.2,         // punch_ok
+      punches_fail: 0.1,       // punch_fail
+      claims: 0.1,             // claim (blocaje)
+      sweepers: 0.1,           // sweeper (salida del área)
+      shots_on_target: 0.3,    // shots_on_target
+      takeons_won: 0.5,        // takeons_won
+      box_entries: 0.1,        // box_entries
+      clearances: 0.5,         // clearances
+      passes_completed: 0.05,  // passes_completed
+      forward_passes: 0.2,     // forward_passes
+      set_pieces_taken: 0.2,   // set_pieces_taken
+      successful_crosses: 0.3, // successful_crosses
+      recoveries_high: 0.3,    // recoveries_high
+      recoveries_med: 0.2,     // recoveries_med
+      recoveries_low: 0.1,     // recoveries_low
     },
-    // Penalización por balón perdido (por unidad, posicional)
-    lost_balls: { POR: -0.3, DEF: -0.3, MED: -0.2, DEL: -0.1 } as Record<Pos, number>,
+    // Penalización por balón perdido: -0.1 uniforme (scoring_rules.json)
+    lost_balls: -0.1,
   }
   const r2 = (v: number) => Math.round(v * 100) / 100
+  const fmtPts = (v: number): string => String(parseFloat(r2(v).toFixed(2)))
 
   const normPos = (position?: string): Pos => {
     const p = (position || '').toUpperCase()
@@ -363,262 +378,98 @@ export default function JugadorDetallePage() {
     return getPositionLabel(position || '') as Pos
   }
 
-  // Desglose de puntos REAL: replica el motor v3.0. Cada métrica suma
-  // exactamente los puntos que aporta al total_points oficial.
-  const getMetricBreakdown = (score: PlayerScore): MetricBreakdown[] => {
+  // Desglose de puntos por BLOQUES (orden oficial RELEVO). Cada fila aporta
+  // exactamente los puntos que suma al total_points oficial del motor.
+  const getScoreBlocks = (score: PlayerScore): ScoreBlock[] => {
     const pos = normPos(score.position)
-    const breakdowns: MetricBreakdown[] = []
+    const s = score as PlayerScore & Record<string, number>
+    const g = (k: string) => Number(s[k]) || 0
+    const u = (count: number, unit: number, label: string): ScoreRow =>
+      ({ label, count, unit, points: r2(count * unit) })
 
-    // --- Participación ---
-    const partMetrics = []
+    // BLOQUE 1: Participación
+    const b1: ScoreRow[] = []
     if (score.minutes_played > 0) {
       const titular = score.minutes_played > SR.participation.minutes_threshold
-      partMetrics.push({
-        name: titular ? 'Participación (+60 min)' : 'Participación (suplente)',
-        value: score.minutes_played,
-        points: titular ? SR.participation.starter_bonus : SR.participation.substitute_bonus,
-        icon: '⏱️',
-        description: titular ? 'Bonus por jugar más de 60 minutos' : 'Bonus por participar (menos de 60 min)',
+      b1.push({
+        label: titular ? `Participación · +60 min (${score.minutes_played}′)` : `Participación · suplente (${score.minutes_played}′)`,
+        count: 0, unit: 0, points: titular ? SR.participation.starter_bonus : SR.participation.substitute_bonus, flat: true,
       })
     }
-    if (partMetrics.length > 0) breakdowns.push({ category: 'Participación', metrics: partMetrics })
 
-    // --- Goles y Portería ---
-    const goalMetrics = []
-    if (score.goals > 0) goalMetrics.push({
-      name: 'Goles',
-      value: score.goals,
-      points: score.goals * SR.goal[pos],
-      icon: '⚽',
-      description: `Gol como ${pos}: ${SR.goal[pos]} pts cada uno`,
-    })
-    if (score.own_goals > 0) goalMetrics.push({
-      name: 'Autogol',
-      value: score.own_goals,
-      points: score.own_goals * SR.own_goal,
-      icon: '🤦',
-      description: 'Penalización por gol en propia puerta',
-    })
-    if (score.clean_sheet) goalMetrics.push({
-      name: 'Portería a cero',
-      value: 1,
-      points: SR.clean_sheet[pos],
-      icon: '🔒',
-      description: `Sin encajar (+60 min). Como ${pos}: ${SR.clean_sheet[pos]} pts`,
-    })
-    if (score.goals_conceded > 0) goalMetrics.push({
-      name: 'Goles encajados',
-      value: score.goals_conceded,
-      points: score.goals_conceded * SR.goal_conceded[pos],
-      icon: '🥅',
-      description: `Penalización por gol encajado (${SR.goal_conceded[pos]} pts cada uno, solo POR/DEF penalizan más)`,
-    })
-    if (goalMetrics.length > 0) breakdowns.push({ category: 'Goles y Portería', metrics: goalMetrics })
+    // BLOQUE 2: Goles y Asistencias
+    const b2: ScoreRow[] = []
+    if (score.goals > 0) b2.push(u(score.goals, SR.goal[pos], `Gol (${pos})`))
+    if (score.own_goals > 0) b2.push(u(score.own_goals, SR.own_goal, 'Gol en propia'))
+    if (score.assists > 0) b2.push(u(score.assists, SR.assist_goal, 'Asistencia de gol'))
+    if (score.intent_assists > 0) b2.push(u(score.intent_assists, SR.assist_no_goal, 'Asistencia sin gol'))
 
-    // --- Asistencias ---
-    const assistMetrics = []
-    if (score.assists > 0) assistMetrics.push({
-      name: 'Asistencias de gol',
-      value: score.assists,
-      points: score.assists * SR.assist_goal,
-      icon: '🅰️',
-      description: `Asistencia que acaba en gol: ${SR.assist_goal} pts cada una`,
-    })
-    if (score.intent_assists > 0) assistMetrics.push({
-      name: 'Asistencias sin gol',
-      value: score.intent_assists,
-      points: score.intent_assists * SR.assist_no_goal,
-      icon: '💭',
-      description: `Asistencia que no acaba en gol: ${SR.assist_no_goal} pts cada una`,
-    })
-    if (assistMetrics.length > 0) breakdowns.push({ category: 'Asistencias', metrics: assistMetrics })
+    // BLOQUE 3: Defensa y Portería a Cero
+    const b3: ScoreRow[] = []
+    if (score.clean_sheet) b3.push({ label: `Portería a cero · +60 min (${pos})`, count: 0, unit: 0, points: SR.clean_sheet[pos], flat: true })
+    if (score.goals_conceded > 0) b3.push(u(score.goals_conceded, SR.goal_conceded[pos], `Gol encajado (${pos})`))
 
-    // --- Tiros (bonus decimal por unidad) ---
-    const shotMetrics = []
-    if (score.shots_on_target > 0) shotMetrics.push({
-      name: 'Tiros a puerta',
-      value: score.shots_on_target,
-      points: r2(score.shots_on_target * SR.per_unit.shots_on_target),
-      icon: '🏹',
-      description: `+${SR.per_unit.shots_on_target} pts por cada tiro a puerta`,
-    })
-    if (shotMetrics.length > 0) breakdowns.push({ category: 'Tiros', metrics: shotMetrics })
+    // BLOQUE 4: Penaltis
+    const b4: ScoreRow[] = []
+    if (score.penalties_won > 0) b4.push(u(score.penalties_won, SR.penalty_won, 'Penalti provocado'))
+    if (score.penalties_conceded > 0) b4.push(u(score.penalties_conceded, SR.penalty_conceded, 'Penalti cometido'))
+    if (score.penalties_missed > 0) b4.push(u(score.penalties_missed, SR.penalty_missed, 'Penalti fallado'))
+    if (score.penalty_saves > 0) b4.push(u(score.penalty_saves, SR.penalty_save, 'Penalti parado'))
 
-    // --- Penaltis ---
-    const penaltyMetrics = []
-    if (score.penalties_missed > 0) penaltyMetrics.push({
-      name: 'Penaltis fallados',
-      value: score.penalties_missed,
-      points: score.penalties_missed * SR.penalty_missed,
-      icon: '❌',
-      description: 'Penaltis fallados (-2 pts cada uno)',
-    })
-    if (score.penalties_won > 0) penaltyMetrics.push({
-      name: 'Penaltis ganados',
-      value: score.penalties_won,
-      points: score.penalties_won * SR.penalty_won,
-      icon: '🎁',
-      description: `Penaltis provocados (+${SR.penalty_won} pts cada uno)`,
-    })
-    if (score.penalties_conceded > 0) penaltyMetrics.push({
-      name: 'Penaltis concedidos',
-      value: score.penalties_conceded,
-      points: score.penalties_conceded * SR.penalty_conceded,
-      icon: '💔',
-      description: `Penaltis cometidos (${SR.penalty_conceded} pts cada uno)`,
-    })
-    if (score.penalty_saves > 0) penaltyMetrics.push({
-      name: 'Penaltis parados',
-      value: score.penalty_saves,
-      points: score.penalty_saves * SR.penalty_save,
-      icon: '💪',
-      description: 'Penaltis detenidos (+5 pts cada uno)',
-    })
-    if (penaltyMetrics.length > 0) breakdowns.push({ category: 'Penaltis', metrics: penaltyMetrics })
+    // BLOQUE 5: Tarjetas
+    const b5: ScoreRow[] = []
+    if (score.yellow_cards > 0) b5.push(u(score.yellow_cards, SR.yellow_card, 'Amarilla'))
+    if (score.second_yellow_cards > 0) b5.push(u(score.second_yellow_cards, SR.second_yellow_card, 'Doble amarilla'))
+    if (score.red_cards > 0) b5.push(u(score.red_cards, SR.red_card, 'Roja directa'))
 
-    // --- Portero (decimal por unidad) ---
-    const keeperMetrics = []
-    if (score.saves > 0) keeperMetrics.push({
-      name: 'Paradas',
-      value: score.saves,
-      points: r2(score.saves * SR.per_unit.saves),
-      icon: '🧤',
-      description: `+${SR.per_unit.saves} pts por cada parada`,
-    })
-    if ((score.punches_ok || 0) > 0) keeperMetrics.push({
-      name: 'Despejes de puños',
-      value: score.punches_ok || 0,
-      points: r2((score.punches_ok || 0) * SR.per_unit.punches_ok),
-      icon: '👊',
-      description: `+${SR.per_unit.punches_ok} pts por cada despeje de puños`,
-    })
-    if ((score.punches_fail || 0) > 0) keeperMetrics.push({
-      name: 'Despejes de puños fallidos',
-      value: score.punches_fail || 0,
-      points: r2((score.punches_fail || 0) * SR.per_unit.punches_fail),
-      icon: '🥊',
-      description: `+${SR.per_unit.punches_fail} pts por cada despeje de puños fallido`,
-    })
-    if (keeperMetrics.length > 0) breakdowns.push({ category: 'Portero', metrics: keeperMetrics })
+    // BLOQUE 6: Acciones de Portero
+    const b6: ScoreRow[] = []
+    if (score.saves > 0) b6.push(u(score.saves, SR.per_unit.saves, 'Parada'))
+    if (g('punches_ok') > 0) b6.push(u(g('punches_ok'), SR.per_unit.punches_ok, 'Despeje de puños'))
+    if (g('punches_fail') > 0) b6.push(u(g('punches_fail'), SR.per_unit.punches_fail, 'Despeje de puños fallido'))
+    if (g('claims_ok') > 0) b6.push(u(g('claims_ok'), SR.per_unit.claims, 'Blocaje'))
+    if (g('sweepers_ok') > 0) b6.push(u(g('sweepers_ok'), SR.per_unit.sweepers, 'Salida del área'))
 
-    // --- Bonus decimal por unidad (ataque/defensa) ---
-    const bonusMetrics = []
-    if (score.takeons_won > 0) bonusMetrics.push({
-      name: 'Regates completados',
-      value: score.takeons_won,
-      points: r2(score.takeons_won * SR.per_unit.takeons_won),
-      icon: '🌀',
-      description: `+${SR.per_unit.takeons_won} pts por cada regate completado`,
-    })
-    const boxEntries = score.box_entries || 0
-    if (boxEntries > 0) bonusMetrics.push({
-      name: 'Llegadas al área',
-      value: boxEntries,
-      points: r2(boxEntries * SR.per_unit.box_entries),
-      icon: '📦',
-      description: `+${SR.per_unit.box_entries} pts por cada llegada al área`,
-    })
-    if (score.clearances > 0) bonusMetrics.push({
-      name: 'Despejes',
-      value: score.clearances,
-      points: r2(score.clearances * SR.per_unit.clearances),
-      icon: '🛡️',
-      description: `+${SR.per_unit.clearances} pts por cada despeje`,
-    })
-    const forwardPasses = score.forward_passes || 0
-    if (forwardPasses > 0) bonusMetrics.push({
-      name: 'Pases hacia adelante',
-      value: forwardPasses,
-      points: r2(forwardPasses * SR.per_unit.forward_passes),
-      icon: '⏩',
-      description: `+${SR.per_unit.forward_passes} pts por cada pase hacia adelante`,
-    })
-    const setPieces = score.set_pieces_taken || 0
-    if (setPieces > 0) bonusMetrics.push({
-      name: 'Lanzamientos a balón parado',
-      value: setPieces,
-      points: r2(setPieces * SR.per_unit.set_pieces_taken),
-      icon: '🎯',
-      description: `+${SR.per_unit.set_pieces_taken} pts por cada falta/córner lanzado`,
-    })
-    const successfulCrosses = score.successful_crosses || 0
-    if (successfulCrosses > 0) bonusMetrics.push({
-      name: 'Centros buenos',
-      value: successfulCrosses,
-      points: r2(successfulCrosses * SR.per_unit.successful_crosses),
-      icon: '✈️',
-      description: `+${SR.per_unit.successful_crosses} pts por cada centro bueno`,
-    })
-    if (bonusMetrics.length > 0) breakdowns.push({ category: 'Bonus Ataque y Defensa', metrics: bonusMetrics })
+    // BLOQUE 7: Bonus en Juego
+    const b7: ScoreRow[] = []
+    if (score.passes_completed > 0) b7.push(u(score.passes_completed, SR.per_unit.passes_completed, 'Pases completados'))
+    if (g('forward_passes') > 0) b7.push(u(g('forward_passes'), SR.per_unit.forward_passes, 'Pases hacia adelante'))
+    if (g('box_entries') > 0) b7.push(u(g('box_entries'), SR.per_unit.box_entries, 'Entradas al área'))
+    if (g('successful_crosses') > 0) b7.push(u(g('successful_crosses'), SR.per_unit.successful_crosses, 'Centros exitosos'))
+    if (g('set_pieces_taken') > 0) b7.push(u(g('set_pieces_taken'), SR.per_unit.set_pieces_taken, 'Balón parado'))
+    if (score.takeons_won > 0) b7.push(u(score.takeons_won, SR.per_unit.takeons_won, 'Regates ganados'))
+    if (score.shots_on_target > 0) b7.push(u(score.shots_on_target, SR.per_unit.shots_on_target, 'Tiros a puerta'))
+    if (g('recoveries_high') > 0) b7.push(u(g('recoveries_high'), SR.per_unit.recoveries_high, 'Recuperación alta'))
+    if (g('recoveries_med') > 0) b7.push(u(g('recoveries_med'), SR.per_unit.recoveries_med, 'Recuperación media'))
+    if (g('recoveries_low') > 0) b7.push(u(g('recoveries_low'), SR.per_unit.recoveries_low, 'Recuperación baja'))
+    if (score.clearances > 0) b7.push(u(score.clearances, SR.per_unit.clearances, 'Despejes'))
 
-    // --- Pases (decimal por unidad) ---
-    const passMetrics = []
-    if (score.passes_completed > 0) passMetrics.push({
-      name: 'Pases completados',
-      value: score.passes_completed,
-      points: r2(score.passes_completed * SR.per_unit.passes_completed),
-      icon: '✅',
-      description: `+${SR.per_unit.passes_completed} pts por cada pase completado`,
-    })
-    if (passMetrics.length > 0) breakdowns.push({ category: 'Pases', metrics: passMetrics })
-
-    // --- Penalización por balones perdidos (posicional, por unidad) ---
-    const lostMetrics = []
+    // BLOQUE 8: Penalizaciones
+    const b8: ScoreRow[] = []
     const lostBalls = (score.dispossessed || 0) + (score.bad_touches || 0)
-    const lostRate = SR.lost_balls[pos]
-    if (lostBalls > 0) lostMetrics.push({
-      name: 'Balones perdidos',
-      value: lostBalls,
-      points: r2(lostBalls * lostRate),
-      icon: '😵',
-      description: `Pérdidas + malos controles. ${lostRate} pts cada uno como ${pos}`,
-    })
-    if (lostMetrics.length > 0) breakdowns.push({ category: 'Pérdidas', metrics: lostMetrics })
+    if (lostBalls > 0) b8.push(u(lostBalls, SR.lost_balls, 'Balón perdido'))
 
-    // --- Tarjetas ---
-    const cardMetrics = []
-    if (score.yellow_cards > 0) cardMetrics.push({
-      name: 'Tarjetas amarillas',
-      value: score.yellow_cards,
-      points: score.yellow_cards * SR.yellow_card,
-      icon: '🟨',
-      description: 'Amonestaciones',
-    })
-    if (score.second_yellow_cards > 0) cardMetrics.push({
-      name: 'Segunda amarilla',
-      value: score.second_yellow_cards,
-      points: score.second_yellow_cards * SR.second_yellow_card,
-      icon: '🟧',
-      description: 'Expulsión por doble amarilla',
-    })
-    if (score.red_cards > 0) cardMetrics.push({
-      name: 'Tarjetas rojas',
-      value: score.red_cards,
-      points: score.red_cards * SR.red_card,
-      icon: '🟥',
-      description: 'Expulsión directa',
-    })
-    if (cardMetrics.length > 0) breakdowns.push({ category: 'Tarjetas', metrics: cardMetrics })
+    // BLOQUE 9: Puntos RELEVO
+    const b9: ScoreRow[] = []
+    if (score.relevo_points) b9.push({ label: 'Bonus RELEVO (rendimiento global)', count: 0, unit: 0, points: score.relevo_points, flat: true })
 
-    // --- Puntos RELEVO (0 a 4) ---
-    if (score.relevo_points) breakdowns.push({
-      category: 'Puntos RELEVO',
-      metrics: [{
-        name: 'Bonus RELEVO',
-        value: score.relevo_points,
-        points: score.relevo_points,
-        icon: '🔁',
-        description: 'Bonus por rendimiento global (participación, precisión de pase, duelos…)',
-      }],
-    })
-
-    return breakdowns
+    return [
+      { id: 'b1', emoji: '⏱️', title: 'Participación', accent: 'text-slate-600', chip: 'bg-slate-100 text-slate-700', rows: b1 },
+      { id: 'b2', emoji: '⚽', title: 'Goles y Asistencias', accent: 'text-red-600', chip: 'bg-red-50 text-red-700', rows: b2 },
+      { id: 'b3', emoji: '🛡️', title: 'Defensa y Portería a Cero', accent: 'text-indigo-600', chip: 'bg-indigo-50 text-indigo-700', rows: b3 },
+      { id: 'b4', emoji: '🎯', title: 'Penaltis', accent: 'text-fuchsia-600', chip: 'bg-fuchsia-50 text-fuchsia-700', rows: b4 },
+      { id: 'b5', emoji: '🟨', title: 'Tarjetas', accent: 'text-amber-600', chip: 'bg-amber-50 text-amber-700', rows: b5 },
+      { id: 'b6', emoji: '🧤', title: 'Acciones de Portero', accent: 'text-cyan-600', chip: 'bg-cyan-50 text-cyan-700', rows: b6 },
+      { id: 'b7', emoji: '📈', title: 'Bonus en Juego', accent: 'text-emerald-600', chip: 'bg-emerald-50 text-emerald-700', rows: b7 },
+      { id: 'b8', emoji: '📉', title: 'Penalizaciones', accent: 'text-rose-600', chip: 'bg-rose-50 text-rose-700', rows: b8 },
+      { id: 'b9', emoji: '⭐', title: 'Puntos RELEVO', accent: 'text-violet-600', chip: 'bg-violet-50 text-violet-700', rows: b9 },
+    ].filter(b => b.rows.length > 0)
   }
 
-  // Suma de puntos del desglose (debe aproximarse a total_points)
-  const sumBreakdownPoints = (score: PlayerScore): number =>
-    getMetricBreakdown(score).reduce(
-      (acc, cat) => acc + cat.metrics.reduce((a, m) => a + m.points, 0),
+  // Suma de puntos del desglose (debe cuadrar con total_points salvo redondeo)
+  const sumBlockPoints = (score: PlayerScore): number =>
+    getScoreBlocks(score).reduce(
+      (acc, blk) => acc + blk.rows.reduce((a, row) => a + row.points, 0),
       0
     )
 
@@ -987,69 +838,70 @@ export default function JugadorDetallePage() {
               </div>
             </div>
 
-            {/* Desglose de métricas */}
-            <div className="p-6 space-y-6">
-              <h3 className="text-lg font-bold text-slate-900">Desglose de Puntos</h3>
-              {getMetricBreakdown(selectedMatch).map((category) => (
-                <div key={category.category}>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-2">{category.category}</h4>
-                  <div className="space-y-2">
-                    {category.metrics.map((metric, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{metric.icon}</span>
-                          <div>
-                            <p className="font-medium text-slate-900">{metric.name}</p>
-                            <p className="text-xs text-slate-500">{metric.description}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-slate-900">x{metric.value}</p>
-                          <p className={`text-sm ${metric.points >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {metric.points >= 0 ? '+' : ''}{metric.points} pts
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {getMetricBreakdown(selectedMatch).length === 0 && (
+            {/* Desglose de puntos por bloques */}
+            <div className="p-4 sm:p-6 space-y-4">
+              <h3 className="text-lg font-bold text-slate-900">Puntos por bloques</h3>
+
+              {getScoreBlocks(selectedMatch).length === 0 && (
                 <p className="text-slate-500 text-center py-4">
-                  No hay métricas destacadas en este partido
+                  Sin métricas puntuables en este partido.
                 </p>
               )}
 
-              {/* Reconciliación: el desglose debe cuadrar con el total oficial */}
-              {(() => {
-                const desglose = sumBreakdownPoints(selectedMatch)
-                const oficial = selectedMatch.total_points || 0
-                const otros = Math.round((oficial - desglose) * 100) / 100
+              {getScoreBlocks(selectedMatch).map((blk) => {
+                const subtotal = r2(blk.rows.reduce((acc, row) => acc + row.points, 0))
                 return (
-                  <div className="mt-2 space-y-2 border-t border-slate-200 pt-4">
-                    <div className="flex items-center justify-between text-sm text-slate-600">
-                      <span>Suma del desglose</span>
-                      <span className="font-semibold">{Math.round(desglose * 100) / 100} pts</span>
-                    </div>
-                    {otros !== 0 && (
-                      <div className="flex items-center justify-between p-2 bg-slate-50 rounded">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">➕</span>
-                          <div>
-                            <p className="font-medium text-slate-900">Otros / ajustes</p>
-                            <p className="text-xs text-slate-500">Recuperaciones por zona, blocajes/salidas y redondeos</p>
-                          </div>
-                        </div>
-                        <p className={`text-sm ${otros >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {otros >= 0 ? '+' : ''}{otros} pts
-                        </p>
+                  <div key={blk.id} className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg leading-none">{blk.emoji}</span>
+                        <h4 className={`font-bold text-sm ${blk.accent}`}>{blk.title}</h4>
                       </div>
-                    )}
-                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 p-3">
-                      <span className="font-bold text-emerald-800">Total oficial</span>
-                      <span className="text-2xl font-bold text-emerald-600">{oficial} pts</span>
+                      <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${subtotal >= 0 ? blk.chip : 'bg-red-50 text-red-700'}`}>
+                        {subtotal >= 0 ? '+' : ''}{fmtPts(subtotal)}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      {blk.rows.map((row, idx) => (
+                        <div key={idx} className="flex items-center justify-between px-4 py-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-800 truncate">{row.label}</p>
+                            {!row.flat && (
+                              <p className="text-xs text-slate-400">
+                                {row.count} × {row.unit >= 0 ? '+' : ''}{fmtPts(row.unit)}
+                              </p>
+                            )}
+                          </div>
+                          <span className={`shrink-0 text-sm font-bold tabular-nums ${row.points >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {row.points >= 0 ? '+' : ''}{fmtPts(row.points)}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
+                )
+              })}
+
+              {/* Ajuste de redondeo + total oficial */}
+              {(() => {
+                const desglose = sumBlockPoints(selectedMatch)
+                const oficial = selectedMatch.total_points || 0
+                const ajuste = r2(oficial - desglose)
+                return (
+                  <>
+                    {ajuste !== 0 && (
+                      <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-sm text-slate-500">Ajuste / redondeo</span>
+                        <span className={`text-sm font-semibold ${ajuste >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {ajuste >= 0 ? '+' : ''}{fmtPts(ajuste)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 flex items-center justify-between shadow-md">
+                      <span className="text-white font-bold text-lg">Puntos totales</span>
+                      <span className="text-white font-extrabold text-3xl tabular-nums">{fmtPts(oficial)}</span>
+                    </div>
+                  </>
                 )
               })()}
 

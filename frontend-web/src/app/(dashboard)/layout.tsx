@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { Trophy, Users, Calendar, LogOut, Home, CircleDot, Lock, Gauge, ShieldCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
+import { AuthGuard } from '@/components/layout/auth-guard'
 
 const navigation = [
   { name: 'Inicio', href: '/dashboard', icon: Home },
@@ -47,11 +48,13 @@ export default function DashboardLayout({
   const navItems = isAdmin ? [...navigation, adminNavItem] : navigation
 
   const handleSignOut = async () => {
+    localStorage.removeItem('lmv:lastActivity')
     await supabase.auth.signOut()
     window.location.href = '/'
   }
 
   return (
+    <AuthGuard>
     <div className="min-h-full">
       {/* Aviso de tramo de jornada */}
       {isUnlockWindowOpen && (
@@ -139,5 +142,6 @@ export default function DashboardLayout({
         {children}
       </main>
     </div>
+    </AuthGuard>
   )
 }

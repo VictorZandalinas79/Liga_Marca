@@ -29,6 +29,7 @@ export default function Home() {
     if (error) {
       setError(error.message)
     } else {
+      localStorage.setItem('lmv:lastActivity', Date.now().toString())
       router.push('/dashboard')
     }
   }
