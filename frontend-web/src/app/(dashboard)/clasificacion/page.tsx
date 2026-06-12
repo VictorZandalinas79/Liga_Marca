@@ -81,10 +81,7 @@ export default function ClasificacionPage() {
         userTeamsMap.get(ut.user_id)!.push({ teamId: ut.id, teamName: ut.name })
       }
 
-      // 2. Obtener todos los team_players.
-      //    Supabase limita a 1000 filas por petición; con varios usuarios y
-      //    jornadas se superan fácilmente, así que paginamos para no perder
-      //    jugadores (si no, faltarían puntos en la clasificación).
+      // 2. Obtener todos los team_players (paginando)
       const teamPlayers: { team_id: string; player_id: string; is_starter: boolean; is_captain: boolean; matchday: number }[] = []
       {
         const pageSize = 1000
@@ -111,35 +108,31 @@ export default function ClasificacionPage() {
         return
       }
 
-      // Agrupar jugadores por equipo y jornada
-      const teamPlayersByMatchday = new Map<string, Map<number, typeof teamPlayers>>()
-      for (const tp of teamPlayers) {
-        if (!teamPlayersByMatchday.has(tp.team_id)) {
-          teamPlayersByMatchday.set(tp.team_id, new Map())
-        }
-        const md = tp.matchday ?? 0
-        if (!teamPlayersByMatchday.get(tp.team_id)!.has(md)) {
-          teamPlayersByMatchday.get(tp.team_id)!.set(md, [])
-        }
-        teamPlayersByMatchday.get(tp.team_id)!.get(md)!.push(tp)
-      }
-
       // 3. Obtener IDs de jugadores únicos
       const playerIds = [...new Set(teamPlayers.map(tp => tp.player_id))]
       const playerIdSet = new Set(playerIds)
 
-      // 4. Obtener puntos de jugadores (player_scores), paginando para evitar
-      //    el tope de 1000 filas de Supabase. player_scores tiene una fila por
-      //    jugador y partido, así que crece rápido: sin paginar se truncaba y
-      //    los puntos de la clasificación no reflejaban lo que se iba sumando.
-      const scoresData: { player_id: string; total_points: number; matchday: number }[] = []
+      // 4. Obtener todos los fixtures para mapear fixture_id -> matchday
+      const { data: fixturesData } = await supabase
+        .from('fixtures')
+        .select('id, matchday')
+
+      const fixtureToMatchday = new Map<string, number>()
+      fixturesData?.forEach(f => {
+        if (f.id && f.matchday && f.matchday > 0) {
+          fixtureToMatchday.set(f.id, f.matchday)
+        }
+      })
+
+      // 5. Obtener todos los player_scores (paginando)
+      const allScores: { player_id: string; total_points: number; fixture_id?: string; matchday?: number }[] = []
       {
         const pageSize = 1000
         let from = 0
         while (true) {
           const { data: page, error } = await supabase
             .from('player_scores')
-            .select('player_id, total_points, matchday')
+            .select('player_id, total_points, fixture_id, matchday')
             .order('id', { ascending: true })
             .range(from, from + pageSize - 1)
           if (error) {
@@ -147,27 +140,83 @@ export default function ClasificacionPage() {
             break
           }
           if (!page || page.length === 0) break
-          scoresData.push(...(page as typeof scoresData))
+          allScores.push(...(page as typeof allScores))
           if (page.length < pageSize) break
           from += pageSize
         }
       }
 
-      // Agrupar puntos por jugador y jornada (solo jugadores de algún equipo)
+      // 6. Mapear puntos por (player_id, matchday) usando fixture_id si matchday es null
       const playerPointsByMatchday = new Map<string, Map<number, number>>()
-      for (const score of scoresData) {
+      let scoresConPuntos = 0
+      let scoresSinMatchday = 0
+      let scoresConMatchday = 0
+
+      for (const score of allScores) {
         if (!playerIdSet.has(score.player_id)) continue
+
+        // Determinar el matchday: usar matchday directo o inferir desde fixture_id
+        let md: number | undefined = score.matchday && score.matchday > 0 ? score.matchday : undefined
+        if (!md && score.fixture_id) {
+          md = fixtureToMatchday.get(score.fixture_id)
+        }
+
+        if (!md || md <= 0) {
+          scoresSinMatchday++
+          continue
+        } else {
+          scoresConMatchday++
+        }
+
+        if ((score.total_points || 0) > 0) scoresConPuntos++
+
         if (!playerPointsByMatchday.has(score.player_id)) {
           playerPointsByMatchday.set(score.player_id, new Map())
         }
-        const md = score.matchday ?? 0
-        playerPointsByMatchday.get(score.player_id)!.set(
-          md,
-          (playerPointsByMatchday.get(score.player_id)!.get(md) || 0) + (score.total_points || 0)
-        )
+        const current = playerPointsByMatchday.get(score.player_id)!.get(md) || 0
+        playerPointsByMatchday.get(score.player_id)!.set(md, current + (score.total_points || 0))
       }
 
-      // 6. Calcular puntos por usuario por jornada
+      console.log('[CLASIFICACION] playerPointsByMatchday size:', playerPointsByMatchday.size)
+      console.log('[CLASIFICACION] allScores length:', allScores.length)
+      console.log('[CLASIFICACION] scoresConMatchday:', scoresConMatchday)
+      console.log('[CLASIFICACION] scoresSinMatchday:', scoresSinMatchday)
+      console.log('[CLASIFICACION] scoresConPuntos:', scoresConPuntos)
+      console.log('[CLASIFICACION] fixtureToMatchday size:', fixtureToMatchday.size)
+
+      // Ver fixtures mapeados
+      console.log('[CLASIFICACION] fixtureToMatchday sample:', Array.from(fixtureToMatchday.entries()).slice(0, 5))
+
+      // Ver algunos ejemplos de playerPoints
+      const samplePlayers = Array.from(playerPointsByMatchday.entries()).slice(0, 3)
+      console.log('[CLASIFICACION] playerPointsByMatchday sample:', samplePlayers.map(([pid, mdMap]) => ({
+        player_id: pid,
+        puntos: Array.from(mdMap.entries())
+      })))
+
+      // Ver sample de allScores
+      console.log('[CLASIFICACION] allScores sample:', allScores.slice(0, 5).map(s => ({
+        player_id: s.player_id,
+        total_points: s.total_points,
+        matchday: s.matchday,
+        fixture_id: s.fixture_id
+      })))
+
+      // 7. Agrupar jugadores por equipo y jornada
+      const teamPlayersByMatchday = new Map<string, Map<number, typeof teamPlayers>>()
+      for (const tp of teamPlayers) {
+        const md = tp.matchday && tp.matchday > 0 ? tp.matchday : 0
+
+        if (!teamPlayersByMatchday.has(tp.team_id)) {
+          teamPlayersByMatchday.set(tp.team_id, new Map())
+        }
+        if (!teamPlayersByMatchday.get(tp.team_id)!.has(md)) {
+          teamPlayersByMatchday.get(tp.team_id)!.set(md, [])
+        }
+        teamPlayersByMatchday.get(tp.team_id)!.get(md)!.push(tp)
+      }
+
+      // 8. Calcular puntos por usuario por jornada
       const userPointsByMatchday = new Map<string, Map<number, number>>()
       const userChangesByMatchday = new Map<string, Map<number, { total: number; successful: number }>>()
 
@@ -183,7 +232,7 @@ export default function ClasificacionPage() {
           const teamMatchdays = teamPlayersByMatchday.get(team.teamId)
           if (teamMatchdays) {
             for (const [md, players] of teamMatchdays.entries()) {
-              if (md <= 0) continue // Saltar jornada 0
+              if (md <= 0) continue
 
               // Inicializar mapa de jornada
               if (!userPointsByMatchday.get(userId)!.has(md)) {
@@ -203,7 +252,6 @@ export default function ClasificacionPage() {
                 if (!tp.is_starter) {
                   const changes = userChangesByMatchday.get(userId)!.get(md)!
                   changes.total += 1
-                  // Un cambio es "exitoso" si el jugador tiene más de 0 puntos
                   if (points > 0) {
                     changes.successful += 1
                   }
@@ -323,20 +371,38 @@ export default function ClasificacionPage() {
         }
       })
 
-      // 9. Filtrar por jornada si está seleccionada
+      // 9. Filtrar por jornada si está seleccionada (acumulado hasta esa jornada)
       if (selectedMatchday > 0) {
         standingsData.forEach(standing => {
           const pointsMap = userPointsByMatchday.get(standing.user_id) || new Map()
-          standing.total_points = pointsMap.get(selectedMatchday) || 0
-          standing.average_points = standing.total_points
-          standing.last_3_jornadas_points = standing.total_points
+          // Sumar puntos acumulados desde jornada 1 hasta la seleccionada
+          let accumulatedPoints = 0
+          let jornadasPlayed = 0
+          for (const [md, pts] of pointsMap.entries()) {
+            if (md > 0 && md <= selectedMatchday) {
+              accumulatedPoints += pts
+              jornadasPlayed += 1
+            }
+          }
+          standing.total_points = accumulatedPoints
+          standing.average_points = jornadasPlayed > 0 ? Math.round((accumulatedPoints / jornadasPlayed) * 10) / 10 : 0
+          standing.matches_played = jornadasPlayed
+          // Últimas 3 jornadas hasta la seleccionada
+          const sortedMds = Array.from(pointsMap.keys())
+            .filter(md => md > 0 && md <= selectedMatchday)
+            .sort((a, b) => b - a)
+            .slice(0, 3)
+          standing.last_3_jornadas_points = sortedMds.reduce((sum, md) => sum + (pointsMap.get(md) || 0), 0)
         })
       }
 
       // 10. Ordenar
       standingsData.sort((a, b) => {
-        const multiplier = sortOrder === 'desc' ? -1 : 1
-        return (b[sortField] - a[sortField]) * multiplier
+        if (sortOrder === 'desc') {
+          return b[sortField] - a[sortField]
+        } else {
+          return a[sortField] - b[sortField]
+        }
       })
 
       // Actualizar posiciones

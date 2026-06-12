@@ -672,47 +672,47 @@ export default function PartidoDetallePage() {
       <Card className={`hover:shadow-lg transition-all !bg-slate-800 border-slate-700 hover:border-emerald-500 ${
         !player.is_starter ? 'opacity-75' : ''
       }`}>
-        <CardContent className="p-3">
+        <CardContent className="p-2 sm:p-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
               {player.photo ? (
                 <img
                   src={player.photo}
                   alt={player.short_name || ''}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-slate-600"
+                  className="w-8 h-8 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-slate-600 shrink-0"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none'
                     ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
                   }}
                 />
               ) : null}
-              <div className={`w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-400 border-2 border-slate-600 ${player.photo ? 'hidden' : ''}`}>
+              <div className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-slate-700 flex items-center justify-center text-xs sm:text-sm font-bold text-slate-400 border-2 border-slate-600 shrink-0 ${player.photo ? 'hidden' : ''}`}>
                 {player.shirt_number || '?'}
               </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h4 className="font-semibold text-white text-sm">{player.short_name || `${player.first_name} ${player.last_name}`}</h4>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPositionColor(player.position)}`}>
+              <div className="min-w-0">
+                <div className="flex items-center space-x-1 sm:space-x-2">
+                  <h4 className="font-semibold text-white text-xs sm:text-sm truncate">{player.short_name || `${player.first_name} ${player.last_name}`}</h4>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${getPositionColor(player.position)} shrink-0`}>
                     {getPositionLabel(player.position)}
                   </span>
                 </div>
-                <div className="flex items-center space-x-3 text-xs text-slate-400 mt-1">
+                <div className="flex items-center space-x-2 sm:space-x-3 text-[10px] sm:text-xs text-slate-400 mt-0.5">
                   <span>{player.is_starter ? 'Titular' : 'Suplente'}</span>
                   <span>{player.minutes_played || 0}'</span>
                 </div>
               </div>
             </div>
 
-            <div className="text-right">
+            <div className="text-right shrink-0">
               <div className="flex items-center space-x-1 text-emerald-400">
-                <span className="text-xl font-bold">{player.total_points || 0}</span>
+                <span className="text-lg sm:text-xl font-bold">{player.total_points || 0}</span>
               </div>
-              <p className="text-xs text-slate-400">puntos</p>
+              <p className="text-[10px] sm:text-xs text-slate-400">pts</p>
               {(player.goals || 0) > 0 && (
-                <p className="text-xs text-green-400">⚽ {player.goals}</p>
+                <p className="text-[10px] sm:text-xs text-green-400">⚽ {player.goals}</p>
               )}
               {(player.assists || 0) > 0 && (
-                <p className="text-xs text-blue-400">🅰️ {player.assists}</p>
+                <p className="text-[10px] sm:text-xs text-blue-400">🅰️ {player.assists}</p>
               )}
             </div>
           </div>
@@ -857,21 +857,21 @@ export default function PartidoDetallePage() {
       </Card>
 
       {/* Jugadores de ambos equipos */}
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {/* Equipo Local */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1 sm:gap-2 mb-3">
             {homeTeam?.badge_url && (
-              <img src={homeTeam.badge_url} alt={homeTeam.name} className="w-6 h-6 object-contain" />
+              <img src={homeTeam.badge_url} alt={homeTeam.name} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
             )}
-            <h3 className="text-lg font-bold text-white">{homeTeam?.name || 'Local'}</h3>
-            <Badge variant="outline" className="ml-auto">
-              <Users className="w-3 h-3 mr-1" />
-              {homePlayers.length}
+            <h3 className="text-sm sm:text-lg font-bold text-white truncate">{homeTeam?.name || 'Local'}</h3>
+            <Badge variant="outline" className="ml-auto shrink-0">
+              <Users className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" />
+              <span className="text-xs">{homePlayers.length}</span>
             </Badge>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-2 sm:space-y-4">
             {/* Porteros */}
             {homePlayers.filter(p => getPositionLabel(p.position) === 'POR').length > 0 && (
               <div>
@@ -924,19 +924,19 @@ export default function PartidoDetallePage() {
         </div>
 
         {/* Equipo Visitante */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1 sm:gap-2 mb-3">
             {awayTeam?.badge_url && (
-              <img src={awayTeam.badge_url} alt={awayTeam.name} className="w-6 h-6 object-contain" />
+              <img src={awayTeam.badge_url} alt={awayTeam.name} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
             )}
-            <h3 className="text-lg font-bold text-white">{awayTeam?.name || 'Visitante'}</h3>
-            <Badge variant="outline" className="ml-auto">
-              <Users className="w-3 h-3 mr-1" />
-              {awayPlayers.length}
+            <h3 className="text-sm sm:text-lg font-bold text-white truncate">{awayTeam?.name || 'Visitante'}</h3>
+            <Badge variant="outline" className="ml-auto shrink-0">
+              <Users className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" />
+              <span className="text-xs">{awayPlayers.length}</span>
             </Badge>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-2 sm:space-y-4">
             {/* Porteros */}
             {awayPlayers.filter(p => getPositionLabel(p.position) === 'POR').length > 0 && (
               <div>
