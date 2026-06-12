@@ -81,12 +81,32 @@ export default function ClasificacionPage() {
         userTeamsMap.get(ut.user_id)!.push({ teamId: ut.id, teamName: ut.name })
       }
 
-      // 2. Obtener todos los team_players
-      const { data: teamPlayers } = await supabase
-        .from('team_players')
-        .select('team_id, player_id, is_starter, is_captain, matchday')
+      // 2. Obtener todos los team_players.
+      //    Supabase limita a 1000 filas por petición; con varios usuarios y
+      //    jornadas se superan fácilmente, así que paginamos para no perder
+      //    jugadores (si no, faltarían puntos en la clasificación).
+      const teamPlayers: { team_id: string; player_id: string; is_starter: boolean; is_captain: boolean; matchday: number }[] = []
+      {
+        const pageSize = 1000
+        let from = 0
+        while (true) {
+          const { data: page, error } = await supabase
+            .from('team_players')
+            .select('team_id, player_id, is_starter, is_captain, matchday')
+            .order('id', { ascending: true })
+            .range(from, from + pageSize - 1)
+          if (error) {
+            console.error('[CLASIFICACION] Error cargando team_players:', error)
+            break
+          }
+          if (!page || page.length === 0) break
+          teamPlayers.push(...(page as typeof teamPlayers))
+          if (page.length < pageSize) break
+          from += pageSize
+        }
+      }
 
-      if (!teamPlayers) {
+      if (teamPlayers.length === 0) {
         setLoading(false)
         return
       }
@@ -106,32 +126,45 @@ export default function ClasificacionPage() {
 
       // 3. Obtener IDs de jugadores únicos
       const playerIds = [...new Set(teamPlayers.map(tp => tp.player_id))]
+      const playerIdSet = new Set(playerIds)
 
-      // 4. Obtener datos de jugadores
-      const { data: playersData } = await supabase
-        .from('players')
-        .select('id')
-        .in('id', playerIds)
-
-      // 5. Obtener puntos de jugadores (player_scores) si existe
-      const { data: scoresData } = await supabase
-        .from('player_scores')
-        .select('player_id, total_points, matchday')
-        .in('player_id', playerIds)
-
-      // Agrupar puntos por jugador y jornada
-      const playerPointsByMatchday = new Map<string, Map<number, number>>()
-      if (scoresData) {
-        for (const score of scoresData) {
-          if (!playerPointsByMatchday.has(score.player_id)) {
-            playerPointsByMatchday.set(score.player_id, new Map())
+      // 4. Obtener puntos de jugadores (player_scores), paginando para evitar
+      //    el tope de 1000 filas de Supabase. player_scores tiene una fila por
+      //    jugador y partido, así que crece rápido: sin paginar se truncaba y
+      //    los puntos de la clasificación no reflejaban lo que se iba sumando.
+      const scoresData: { player_id: string; total_points: number; matchday: number }[] = []
+      {
+        const pageSize = 1000
+        let from = 0
+        while (true) {
+          const { data: page, error } = await supabase
+            .from('player_scores')
+            .select('player_id, total_points, matchday')
+            .order('id', { ascending: true })
+            .range(from, from + pageSize - 1)
+          if (error) {
+            console.error('[CLASIFICACION] Error cargando player_scores:', error)
+            break
           }
-          const md = score.matchday ?? 0
-          playerPointsByMatchday.get(score.player_id)!.set(
-            md,
-            (playerPointsByMatchday.get(score.player_id)!.get(md) || 0) + (score.total_points || 0)
-          )
+          if (!page || page.length === 0) break
+          scoresData.push(...(page as typeof scoresData))
+          if (page.length < pageSize) break
+          from += pageSize
         }
+      }
+
+      // Agrupar puntos por jugador y jornada (solo jugadores de algún equipo)
+      const playerPointsByMatchday = new Map<string, Map<number, number>>()
+      for (const score of scoresData) {
+        if (!playerIdSet.has(score.player_id)) continue
+        if (!playerPointsByMatchday.has(score.player_id)) {
+          playerPointsByMatchday.set(score.player_id, new Map())
+        }
+        const md = score.matchday ?? 0
+        playerPointsByMatchday.get(score.player_id)!.set(
+          md,
+          (playerPointsByMatchday.get(score.player_id)!.get(md) || 0) + (score.total_points || 0)
+        )
       }
 
       // 6. Calcular puntos por usuario por jornada
@@ -260,7 +293,7 @@ export default function ClasificacionPage() {
         let totalChanges = 0
         let successfulChanges = 0
 
-        for (const [md, changes] of changesMap.entries()) {
+        for (const changes of changesMap.values()) {
           // Puntuación de cambios = (exitosos / total) * 100 si hay cambios
           const changeScore = changes.total > 0 ? Math.round((changes.successful / changes.total) * 100) : 0
           if (changeScore > bestChangeScore) {
@@ -318,9 +351,9 @@ export default function ClasificacionPage() {
     fetchStandings()
   }, [selectedMatchday, sortField, sortOrder, tick])
 
-  // Refresco automático: actualiza los puntos al momento cada 60s
+  // Refresco automático: actualiza los puntos al momento cada 30s
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 60 * 1000)
+    const interval = setInterval(() => setTick(t => t + 1), 30 * 1000)
     return () => clearInterval(interval)
   }, [])
 
