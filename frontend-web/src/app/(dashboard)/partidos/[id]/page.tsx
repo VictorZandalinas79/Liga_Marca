@@ -689,14 +689,15 @@ export default function PartidoDetallePage() {
               <div className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-slate-700 flex items-center justify-center text-xs sm:text-sm font-bold text-slate-400 border-2 border-slate-600 shrink-0 ${player.photo ? 'hidden' : ''}`}>
                 {player.shirt_number || '?'}
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center space-x-1 sm:space-x-2">
-                  <h4 className="font-semibold text-white text-xs sm:text-sm truncate">{player.short_name || `${player.first_name} ${player.last_name}`}</h4>
-                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${getPositionColor(player.position)} shrink-0`}>
-                    {getPositionLabel(player.position)}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2 sm:space-x-3 text-[10px] sm:text-xs text-slate-400 mt-0.5">
+              <div className="min-w-0 flex-1">
+                {/* Fila 1: Nombre */}
+                <h4 className="font-semibold text-white text-xs sm:text-sm break-words hyphens-auto">{player.short_name || `${player.first_name} ${player.last_name}`}</h4>
+                {/* Fila 2: Demarcación */}
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${getPositionColor(player.position)} shrink-0 mt-1`}>
+                  {getPositionLabel(player.position)}
+                </span>
+                {/* Fila 3: Titular y Minutos */}
+                <div className="flex items-center space-x-2 sm:space-x-3 text-[10px] sm:text-xs text-slate-400 mt-1">
                   <span>{player.is_starter ? 'Titular' : 'Suplente'}</span>
                   <span>{player.minutes_played || 0}'</span>
                 </div>
