@@ -504,28 +504,35 @@ export default function JornadaPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200">
-                    <th className="text-left py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Pos</th>
-                    <th className="text-left py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Equipo</th>
-                    <th className="text-center py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Sistema</th>
-                    <th className="text-right py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Valor</th>
-                    <th className="text-right py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Puntos</th>
+                    <th className="text-left py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Pos</th>
+                    <th className="text-left py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Equipo</th>
+                    <th className="text-center py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Sys</th>
+                    <th className="text-right py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Valor</th>
+                    <th className="text-right py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Pts</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {userTeams.map((team) => (
+                  {userTeams.map((team, index) => {
+                    const isLast = index === userTeams.length - 1
+                    return (
                     <tr key={team.team_id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-2 sm:px-3">
-                        <div className="flex items-center gap-2">
-                          {team.posicion === 1 && <Trophy className="w-4 h-4 text-yellow-500" />}
-                          {team.posicion === 2 && <Trophy className="w-4 h-4 text-gray-400" />}
-                          {team.posicion === 3 && <Trophy className="w-4 h-4 text-amber-600" />}
-                          <span className={`font-bold ${(team.posicion ?? 0) <= 3 ? 'text-emerald-600' : 'text-slate-700'}`}>
-                            {team.posicion}º
-                          </span>
+                      <td className="py-2 px-1 sm:px-2">
+                        <div className="flex items-center gap-1 sm:gap-2">
+                          {team.posicion === 1 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500" />}
+                          {team.posicion === 2 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />}
+                          {team.posicion === 3 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-amber-600" />}
+                          {isLast && team.posicion !== 1 && team.posicion !== 2 && team.posicion !== 3 && (
+                            <span className="text-base sm:text-lg">🐷</span>
+                          )}
+                          {!isLast && (
+                            <span className={`font-bold text-xs sm:text-sm ${(team.posicion ?? 0) <= 3 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                              {team.posicion}º
+                            </span>
+                          )}
                         </div>
                       </td>
-                      <td className="py-3 px-2 sm:px-3">
-                        <span className="font-medium text-slate-900 text-sm">{team.team_name}</span>
+                      <td className="py-2 px-1 sm:px-2 max-w-[120px] sm:max-w-none">
+                        <span className="font-medium text-slate-900 text-xs sm:text-sm">{team.team_name}</span>
                         {(() => {
                           const best = team.jugadores.reduce((b, p) =>
                             (p.puntos ?? 0) > (b?.puntos ?? 0) ? p : b,
@@ -538,21 +545,22 @@ export default function JornadaPage() {
                           ) : null
                         })()}
                       </td>
-                      <td className="py-3 px-2 sm:px-3 text-center">
-                        <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                      <td className="py-2 px-1 sm:px-2 text-center">
+                        <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-100 px-1 sm:px-2 py-0.5 rounded">
                           {getFormacion(team.jugadores)}
                         </span>
                       </td>
-                      <td className="py-3 px-2 sm:px-3 text-right">
-                        <span className="text-sm font-semibold text-slate-700">{fmtValor(team.valor_total)}</span>
+                      <td className="py-2 px-1 sm:px-2 text-right">
+                        <span className="text-xs sm:text-sm font-semibold text-slate-700">{fmtValor(team.valor_total)}</span>
                       </td>
-                      <td className="py-3 px-2 sm:px-3 text-right">
-                        <Badge className="bg-emerald-600 text-white text-xs sm:text-sm px-2 sm:px-3 py-1 whitespace-nowrap">
-                          {Math.round(team.puntos_totales * 10) / 10} pts
+                      <td className="py-2 px-1 sm:px-2 text-right">
+                        <Badge className="bg-emerald-600 text-white text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 whitespace-nowrap">
+                          {Math.round(team.puntos_totales * 10) / 10}
                         </Badge>
                       </td>
                     </tr>
-                  ))}
+                  )
+                })}
                 </tbody>
               </table>
             </div>

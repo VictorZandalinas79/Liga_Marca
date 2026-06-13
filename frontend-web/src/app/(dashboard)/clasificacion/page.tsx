@@ -432,10 +432,11 @@ export default function ClasificacionPage() {
     }
   }
 
-  const getPositionMedal = (position: number) => {
+  const getPositionMedal = (position: number, isLast: boolean = false) => {
     if (position === 1) return <Medal className="w-5 h-5 text-yellow-500" />
     if (position === 2) return <Medal className="w-5 h-5 text-slate-400" />
     if (position === 3) return <Medal className="w-5 h-5 text-amber-600" />
+    if (isLast) return <span className="text-lg w-5 text-center">🐷</span>
     return <span className="text-lg font-bold text-slate-600 w-5 text-center">{position}</span>
   }
 
@@ -635,13 +636,15 @@ export default function ClasificacionPage() {
                 </tr>
               </thead>
               <tbody>
-                {standings.map((standing) => (
+                {standings.map((standing, index) => {
+                  const isLast = index === standings.length - 1
+                  return (
                   <tr
                     key={standing.user_id}
                     className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors"
                   >
                     <td className="p-2 sm:p-4">
-                      {getPositionMedal(standing.current_position)}
+                      {getPositionMedal(standing.current_position, isLast)}
                     </td>
                     <td className="p-2 sm:p-4">
                       <div className="flex items-center gap-2 sm:gap-3">
@@ -711,7 +714,8 @@ export default function ClasificacionPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
