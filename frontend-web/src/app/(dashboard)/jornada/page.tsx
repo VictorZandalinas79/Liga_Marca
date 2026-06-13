@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, Users, ChevronLeft, ChevronRight, Radio } from 'lucide-react'
+import { Trophy, Users, ChevronLeft, ChevronRight, Radio, X, TrendingUp } from 'lucide-react'
+import { MetricBreakdown } from '@/components/metric-breakdown'
 
 interface Player {
   id: string
@@ -62,7 +63,31 @@ export default function JornadaPage() {
   const [selectedMatchday, setSelectedMatchday] = useState<number>(0)
   const [availableMatchdays, setAvailableMatchdays] = useState<MatchdayInfo[]>([])
   const [userTeams, setUserTeams] = useState<UserTeam[]>([])
+  const [modalPlayer, setModalPlayer] = useState<Record<string, any> | null>(null)
+  const [modalLoading, setModalLoading] = useState(false)
   const supabase = createClient()
+
+  const openPlayerStats = async (playerId: string) => {
+    setModalLoading(true)
+    setModalPlayer({})
+
+    const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
+
+    const { data: playerData } = await supabase.from('players').select('*').eq('id', playerId).single()
+
+    let scoresData: Record<string, any> | null = null
+    if (info?.rawMatchday) {
+      const { data } = await supabase.from('player_scores').select('*').eq('player_id', playerId).eq('matchday', info.rawMatchday).maybeSingle()
+      scoresData = data
+    }
+    if (!scoresData && info?.fixtureIds?.length) {
+      const { data } = await supabase.from('player_scores').select('*').eq('player_id', playerId).in('fixture_id', info.fixtureIds).maybeSingle()
+      scoresData = data
+    }
+
+    setModalPlayer({ ...(playerData || {}), ...(scoresData || {}) })
+    setModalLoading(false)
+  }
 
   // Obtener todas las jornadas disponibles (ya empezadas: en directo o finalizadas)
   const fetchMatchdays = async () => {
@@ -167,19 +192,13 @@ export default function JornadaPage() {
     setSelectedMatchday(defaultMatchday)
   }
 
-  // Verificar si un usuario puede participar en una jornada (registrado antes)
-  const canParticipateInMatchday = (userCreatedAt: string, matchdayDate: string): boolean => {
-    return new Date(userCreatedAt) <= new Date(matchdayDate)
-  }
-
   // Cargar equipos y jugadores de la jornada seleccionada
   const loadUserTeamsForMatchday = async (matchday: number, silent = false) => {
     if (!silent) setLoading(true)
 
     const info = availableMatchdays.find(m => m.matchday === matchday)
-    const matchdayDate = info?.start_time || new Date().toISOString()
 
-    // Fechas de creación de usuarios (para el control de participación)
+    // Fechas de creación de usuarios (para mostrar el nombre correcto)
     const { data: profiles } = await supabase.from('profiles').select('id, created_at, full_name, email')
     const createdDates = new Map<string, string>()
     profiles?.forEach(p => createdDates.set(p.id, p.created_at))
@@ -286,7 +305,7 @@ export default function JornadaPage() {
       const userName = user?.full_name || user?.email?.split('@')[0] || 'Usuario'
       const userCreatedAt = createdDates.get(ut.user_id) || new Date().toISOString()
 
-      if (!canParticipateInMatchday(userCreatedAt, matchdayDate)) continue
+      // Todos los usuarios con equipo aparecen en la jornada independientemente de cuándo se registraron
 
       const teamPlayers = teamPlayersByTeam.get(ut.id) || []
       if (teamPlayers.length === 0) continue
@@ -404,6 +423,16 @@ export default function JornadaPage() {
 
   const fmtValor = (v: number) => v > 0 ? `${v}M` : '-'
 
+  const getFormacion = (jugadores: Player[]): string => {
+    const starters = jugadores.filter(p => p.is_starter)
+    const gk = starters.filter(p => getPositionLabel(p.position) === 'POR').length
+    const def = starters.filter(p => getPositionLabel(p.position) === 'DEF').length
+    const mid = starters.filter(p => getPositionLabel(p.position) === 'MED').length
+    const fwd = starters.filter(p => getPositionLabel(p.position) === 'DEL').length
+    if (gk + def + mid + fwd === 0) return '-'
+    return `${gk}-${def}-${mid}-${fwd}`
+  }
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando jornada...</div>
   }
@@ -476,16 +505,16 @@ export default function JornadaPage() {
                 <thead>
                   <tr className="border-b border-slate-200">
                     <th className="text-left py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Pos</th>
-                    <th className="text-left py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Usuario</th>
-                    <th className="hidden sm:table-cell text-left py-2 px-3 text-sm font-semibold text-slate-600">Equipo</th>
-                    <th className="hidden sm:table-cell text-right py-2 px-3 text-sm font-semibold text-slate-600">Valor</th>
+                    <th className="text-left py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Equipo</th>
+                    <th className="text-center py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Sistema</th>
+                    <th className="text-right py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Valor</th>
                     <th className="text-right py-2 px-2 sm:px-3 text-sm font-semibold text-slate-600">Puntos</th>
                   </tr>
                 </thead>
                 <tbody>
                   {userTeams.map((team) => (
                     <tr key={team.team_id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-3">
+                      <td className="py-3 px-2 sm:px-3">
                         <div className="flex items-center gap-2">
                           {team.posicion === 1 && <Trophy className="w-4 h-4 text-yellow-500" />}
                           {team.posicion === 2 && <Trophy className="w-4 h-4 text-gray-400" />}
@@ -496,18 +525,30 @@ export default function JornadaPage() {
                         </div>
                       </td>
                       <td className="py-3 px-2 sm:px-3">
-                        <span className="font-medium text-slate-900">{team.user_name}</span>
-                        <span className="block sm:hidden text-xs text-slate-500 truncate">{team.team_name} · {fmtValor(team.valor_total)}</span>
+                        <span className="font-medium text-slate-900 text-sm">{team.team_name}</span>
+                        {(() => {
+                          const best = team.jugadores.reduce((b, p) =>
+                            (p.puntos ?? 0) > (b?.puntos ?? 0) ? p : b,
+                            team.jugadores[0]
+                          )
+                          return best ? (
+                            <span className="block text-xs text-slate-500 truncate">
+                              {best.short_name || best.first_name} ({Math.round((best.puntos ?? 0) * 10) / 10})
+                            </span>
+                          ) : null
+                        })()}
                       </td>
-                      <td className="hidden sm:table-cell py-3 px-3">
-                        <span className="text-sm text-slate-600">{team.team_name}</span>
+                      <td className="py-3 px-2 sm:px-3 text-center">
+                        <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                          {getFormacion(team.jugadores)}
+                        </span>
                       </td>
-                      <td className="hidden sm:table-cell py-3 px-3 text-right">
+                      <td className="py-3 px-2 sm:px-3 text-right">
                         <span className="text-sm font-semibold text-slate-700">{fmtValor(team.valor_total)}</span>
                       </td>
                       <td className="py-3 px-2 sm:px-3 text-right">
                         <Badge className="bg-emerald-600 text-white text-xs sm:text-sm px-2 sm:px-3 py-1 whitespace-nowrap">
-                          {team.puntos_totales} pts
+                          {Math.round(team.puntos_totales * 10) / 10} pts
                         </Badge>
                       </td>
                     </tr>
@@ -554,7 +595,7 @@ export default function JornadaPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-slate-500">Puntos</p>
-                        <p className="text-2xl font-bold text-emerald-600">{team.puntos_totales}</p>
+                        <p className="text-2xl font-bold text-emerald-600">{Math.round(team.puntos_totales * 10) / 10}</p>
                       </div>
                     </div>
                   </div>
@@ -575,7 +616,8 @@ export default function JornadaPage() {
                             {jugadoresGrupo.map((player, idx) => (
                               <div
                                 key={player.id}
-                                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors gap-2"
+                                onClick={() => openPlayerStats(player.id)}
+                                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors gap-2 cursor-pointer"
                               >
                                 <div className="flex items-center gap-3 min-w-0">
                                   <span className="text-sm font-bold text-slate-400 w-5 shrink-0">{idx + 1}</span>
@@ -607,7 +649,7 @@ export default function JornadaPage() {
                                   </div>
                                 </div>
                                 <div className="text-right shrink-0">
-                                  <span className="text-lg font-bold text-emerald-600">{player.puntos ?? 0}</span>
+                                  <span className="text-lg font-bold text-emerald-600">{Math.round((player.puntos ?? 0) * 10) / 10}</span>
                                   <p className="text-xs text-slate-500">puntos</p>
                                 </div>
                               </div>
@@ -647,6 +689,79 @@ export default function JornadaPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Modal de estadísticas del jugador */}
+      {modalPlayer !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setModalPlayer(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Cabecera */}
+            <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-100 p-5 flex justify-between items-start z-10">
+              <div className="flex items-center gap-4">
+                {modalPlayer.photo ? (
+                  <img src={modalPlayer.photo} alt={modalPlayer.short_name || ''} className="w-16 h-16 rounded-full object-cover border-4 border-white shadow" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 border-4 border-white shadow">
+                    {modalPlayer.shirt_number || '?'}
+                  </div>
+                )}
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {modalPlayer.first_name} {modalPlayer.last_name}
+                  </h2>
+                  <p className="text-sm text-slate-500">{modalPlayer.short_name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setModalPlayer(null)}
+                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500 shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Cuerpo */}
+            <div className="p-4 sm:p-6">
+              {modalLoading ? (
+                <div className="text-center py-12 text-slate-400">Cargando estadísticas...</div>
+              ) : !modalPlayer.total_points && modalPlayer.total_points !== 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <TrendingUp className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p>Sin datos de partido para esta jornada</p>
+                </div>
+              ) : (
+                <>
+                  {/* Resumen */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                    <div className="bg-emerald-50 p-3 rounded-xl text-center">
+                      <p className="text-emerald-700 text-xs font-semibold">Puntos</p>
+                      <p className="text-3xl font-bold text-emerald-600">{Math.round((modalPlayer.total_points ?? 0) * 10) / 10}</p>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-xl text-center">
+                      <p className="text-slate-600 text-xs font-semibold">Minutos</p>
+                      <p className="text-3xl font-bold text-slate-800">{modalPlayer.minutes_played || 0}′</p>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-xl text-center">
+                      <p className="text-slate-600 text-xs font-semibold">Goles</p>
+                      <p className="text-3xl font-bold text-slate-800">{modalPlayer.goals || 0}</p>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-xl text-center">
+                      <p className="text-slate-600 text-xs font-semibold">Asistencias</p>
+                      <p className="text-3xl font-bold text-slate-800">{modalPlayer.assists || 0}</p>
+                    </div>
+                  </div>
+                  <MetricBreakdown player={modalPlayer} />
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

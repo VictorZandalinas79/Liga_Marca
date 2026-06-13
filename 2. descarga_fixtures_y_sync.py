@@ -12,6 +12,8 @@ Descarga fixtures y squads desde la API, y sincroniza DIRECTO con Supabase:
 import os
 import json
 import csv
+import unicodedata
+from difflib import SequenceMatcher
 import requests
 import time
 from supabase import create_client, Client
@@ -213,12 +215,18 @@ def descargar_squads(season_id: str):
 
                 # Buscar jugadores del equipo
                 players = []
-                for key in ['squad', 'person', 'players', 'athlete']:
-                    if key in item:
+                player_key_found = None
+                for key in ['player', 'players', 'squad', 'person', 'athlete']:
+                    if key in item and isinstance(item[key], list):
                         players = item[key]
+                        player_key_found = key
                         break
 
                 if team_id and team_name != 'Unknown':
+                    if not players and team_name != 'Unknown':
+                        print(f"      ⚠️  {team_name}: sin jugadores. Claves disponibles: {[k for k in item.keys() if k not in ('contestant',)]}")
+                    else:
+                        print(f"      ✅  {team_name}: {len(players)} jugadores (clave='{player_key_found}')")
                     team_data = {"team": contestant_obj, "players": players}
                     all_squads_data.append(team_data)
 
@@ -371,8 +379,12 @@ def load_csv_players():
 
 def normalize_name(name):
     if not name: return ""
+    # Convertir guiones en espacios ANTES de limpiar (Heung-Min -> Heung Min)
+    name = name.replace('-', ' ')
+    # Quitar tildes y caracteres internacionales
+    name = unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode('utf-8')
     name = name.lower()
-    name = name.replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u').replace('ñ', 'n')
+    # Dejar solo letras, números y espacios
     name = ''.join(c for c in name if c.isalnum() or c.isspace())
     return ' '.join(name.split()).strip()
 
@@ -389,161 +401,332 @@ def translate_to_english(text):
         return text # Si falla internet, devuelve el original
 
 def find_team_match(json_team_name, csv_teams):
-    # 1. TRADUCIR EL NOMBRE DE LA API AL INGLÉS
     translated_json_name = translate_to_english(json_team_name)
-    
-    # 2. Normalizar el nombre traducido
     norm_json = normalize_name(translated_json_name)
+
+    # Diccionario de equivalencias internacionales (Inglés API -> Español CSV)
+    ALIASES = {
+        "algeria": ["argelia"],
+        "bosniaherzegovina": ["bosnia", "bosnia y herzegovina"],
+        "brazil": ["brasil"],
+        "cape verde": ["cabo verde"],
+        "cabo verde": ["cape verde"], 
+        "cote divoire": ["costa de marfil", "ivory coast"],
+        "ivory coast": ["costa de marfil", "cote divoire"],
+        "egypt": ["egipto"],
+        "iraq": ["irak"],
+        "japan": ["japon"],
+        "jordan": ["jordania"],
+        "korea republic": ["corea del sur", "corea", "south korea"],
+        "south korea": ["corea del sur", "corea", "korea republic"],
+        "morocco": ["marruecos"],
+        "netherlands": ["paises bajos", "holanda"],
+        "saudi arabia": ["arabia saudi", "arabia saudita"],
+        "scotland": ["escocia"],
+        "south africa": ["sudafrica"],
+        "spain": ["espana"],
+        "united states": ["usa", "estados unidos"],
+        "czechia": ["republica checa", "czech republic", "chequia"],
+        "czech republic": ["republica checa", "czechia"]
+    }
+
     json_words = set(norm_json.split())
 
-    # 3. Búsqueda por contención exacta (100% de las palabras coinciden)
+    # 1. Búsqueda por diccionario de países
+    for csv_team in csv_teams:
+        norm_csv = normalize_name(csv_team)
+        if norm_json in ALIASES and norm_csv in ALIASES[norm_json]:
+            return csv_team, 1.0
+
+    # 2. Contención exacta
     for csv_team in csv_teams:
         norm_csv = normalize_name(csv_team)
         csv_words = set(norm_csv.split())
         
-        # Evitamos falsos positivos con palabras comunes
         if not csv_words or (len(csv_words) == 1 and list(csv_words)[0] in ['fc', 'cd', 'ud', 'real']):
             continue
             
-        # Comprobamos contención
         if csv_words.issubset(json_words) or json_words.issubset(csv_words):
-            return csv_team, 1.0  # Coincidencia 100%
+            return csv_team, 1.0
 
-    # 4. Fallback: Similitud por ratio usando el nombre traducido
+    # 3. Fallback: Similitud
     best_match, best_score = None, 0.0
     for csv_team in csv_teams:
-        # Usamos translated_json_name para que compare "Spain" con "Spain"
-        score = similarity_score(translated_json_name, csv_team)
+        norm_csv = normalize_name(csv_team)
+        score = SequenceMatcher(None, norm_json, norm_csv).ratio()
         if score > best_score:
             best_score = score
             best_match = csv_team
             
-    if best_score > 0.55: # Límite permisivo
+    # UMBRAL SUBIDO A 0.75: Evita falsos positivos como enlazar Egypt con Getafe
+    if best_score > 0.75: 
         return best_match, best_score
         
     return None, best_score
 
-def find_player_match(player_json, csv_players):
-    match_name = player_json.get('matchName', '')
-    first_name = player_json.get('firstName', '')
-    last_name = player_json.get('lastName', '')
-    best_match, best_score = None, 0.0
+def find_player_match_reversed(csv_player_row, indexed_api_players):
+    csv_name = normalize_name(csv_player_row.get('Nombre', ''))
+    if not csv_name:
+        return None, 0.0, None
 
-    for csv_player in csv_players:
-        csv_name = csv_player['Nombre']
-        
-        # Prioridad 1: matchName
-        if match_name:
-            score = similarity_score(match_name, csv_name)
-            if score > best_score: best_score = score; best_match = csv_player
-        # Prioridad 2: firstName + lastName
-        if first_name and last_name:
-            score = similarity_score(f"{first_name} {last_name}", csv_name)
-            if score > best_score: best_score = score; best_match = csv_player
-        # Prioridad 3: solo firstName
-        if first_name:
-            score = similarity_score(first_name, csv_name.split()[0] if csv_name else '')
-            if score > best_score and score > 0.85: best_score = score; best_match = csv_player
+    csv_words = set(csv_name.split())
+    csv_w_list = csv_name.split()
 
-    if best_score > 0.75:
-        return best_match, best_score
-    return None, best_score
+    # Colectamos todos los candidatos para elegir el mejor al final,
+    # evitando falsos positivos por primer match greedy (ej: "alex" matchea
+    # al primer jugador con "alex" en el nombre en lugar del correcto).
+    candidates = []  # (score, full_name_sim, player, display_name)
+
+    for p in indexed_api_players:
+        match_name = normalize_name(p.get('matchName', ''))
+        first_name = normalize_name(p.get('firstName', ''))
+        last_name = normalize_name(p.get('lastName', ''))
+        full_api = normalize_name(f"{first_name} {last_name}".strip())
+
+        # Mapeo de apodos conocidos de la API
+        PLAYER_ALIASES = {
+            "alejandro sebastian romero gamarra": "kaku",
+            "mostafa mohamed zaki abdelraouf": "zico",
+        }
+        if full_api in PLAYER_ALIASES:
+            match_name = PLAYER_ALIASES[full_api]
+
+        api_names = [match_name, full_api, last_name]
+        api_names = [n for n in api_names if n]
+
+        # Nombre representativo para el debug en el TXT
+        display_name = p.get('matchName') or f"{p.get('firstName')} {p.get('lastName')}".strip()
+
+        # 1. Match Exacto: retorno inmediato, no hay ambigüedad posible
+        if csv_name in api_names:
+            return p, 1.0, display_name
+
+        best_score_for_p = 0.0
+
+        # Tokens de todos los nombres API del jugador (calculado una vez)
+        all_api_tokens = set()
+        for an in api_names:
+            all_api_tokens.update(an.split())
+
+        # ✅ Una sola palabra del CSV: token exacto, fuzzy, o prefijo en cualquier nombre de la API
+        # Cubre "Martinelli"→"Gabriel Martinelli", "Kadesh"→"Kadish", "Abde"→"Abdessamad"
+        if len(csv_words) == 1:
+            csv_word = csv_w_list[0]
+            if len(csv_word) >= 4:
+                if csv_word in all_api_tokens:
+                    best_score_for_p = max(best_score_for_p, 0.88)
+                else:
+                    for api_token in all_api_tokens:
+                        # Fuzzy (Kadesh/Kadish, Younis/Younus)
+                        if len(api_token) >= 4 and SequenceMatcher(None, csv_word, api_token).ratio() >= 0.82:
+                            best_score_for_p = max(best_score_for_p, 0.82)
+                            break
+                    for api_token in all_api_tokens:
+                        # Prefijo (Abde → Abdessamad)
+                        if len(api_token) >= 5 and api_token.startswith(csv_word):
+                            best_score_for_p = max(best_score_for_p, 0.80)
+                            break
+
+        for api_name in api_names:
+            api_words = set(api_name.split())
+            api_w_list = api_name.split()
+
+            # 2. Contención total
+            if csv_words.issubset(api_words):
+                if len(csv_words) >= 2 or (len(csv_words) == 1 and len(csv_w_list[0]) >= 3):
+                    best_score_for_p = max(best_score_for_p, 0.95)
+
+            # 3. Intersección de palabras
+            intersection = csv_words.intersection(api_words)
+            if len(intersection) >= 2:
+                best_score_for_p = max(best_score_for_p, 0.90)
+
+            # 4. Palabra clave única (>= 4 letras) y misma inicial
+            if len(intersection) == 1:
+                match_word = list(intersection)[0]
+                if len(match_word) >= 4 and len(api_w_list) > 0 and len(csv_w_list) > 0:
+                    if csv_w_list[0][0] == api_w_list[0][0]:
+                        best_score_for_p = max(best_score_for_p, 0.85)
+
+            # 5. Inicial y apellido coincidente
+            if len(api_w_list) >= 2 and len(csv_w_list) >= 2:
+                if csv_w_list[0][0] == api_w_list[0][0] and csv_w_list[-1] == api_w_list[-1]:
+                    best_score_for_p = max(best_score_for_p, 0.85)
+
+            # 5b. Orden inverso (convención asiática: API guarda Apellido-Nombre, CSV Nombre-Apellido)
+            # "In-beom Hwang" (CSV) vs "Hwang Inbeom" (API)
+            if len(csv_w_list) >= 2 and len(api_w_list) >= 2:
+                if csv_w_list[-1] == api_w_list[0]:
+                    csv_given = "".join(csv_w_list[:-1])
+                    api_given = "".join(api_w_list[1:])
+                    if SequenceMatcher(None, csv_given, api_given).ratio() >= 0.75:
+                        best_score_for_p = max(best_score_for_p, 0.87)
+
+            # 6. Ratios de similitud
+            sorted_api = " ".join(sorted(api_w_list))
+            sorted_csv = " ".join(sorted(csv_w_list))
+            score_sorted = SequenceMatcher(None, sorted_api, sorted_csv).ratio()
+            score_normal = SequenceMatcher(None, api_name, csv_name).ratio()
+            best_score_for_p = max(best_score_for_p, score_sorted, score_normal)
+
+        if best_score_for_p > 0:
+            # Similitud del nombre completo como desempate entre candidatos con igual score
+            full_name_sim = SequenceMatcher(None, csv_name, full_api).ratio()
+            candidates.append((best_score_for_p, full_name_sim, p, display_name))
+
+    if not candidates:
+        return None, 0.0, None
+
+    # Ordenar: mejor score primero, desempate por similitud nombre completo
+    candidates.sort(key=lambda x: (-x[0], -x[1]))
+    best_score, _, best_match, best_candidate_name = candidates[0]
+
+    if best_score > 0.65:
+        return best_match, best_score, best_candidate_name
+
+    return None, best_score, best_candidate_name
 
 def sync_players_with_csv(squads_data):
-    """Cruza la info de squads (en memoria) con el CSV y sube a 'players' en Supabase."""
-    print(f"\n🔗 Procesando matching de Jugadores con CSV y subiendo a Supabase...")
+    """Sincroniza en Supabase UNICAMENTE los jugadores del CSV que tengan un match exitoso en la API."""
+    print(f"\n🔗 Sincronizando jugadores (CSV dicta quién entra al juego, API dicta sus IDs y metadatos)...")
 
     csv_players_by_team = load_csv_players()
     if not csv_players_by_team:
         print("❌ Operación cancelada: No se pudieron cargar jugadores del CSV")
         return False
 
-    min_precio = float('inf')
-    for team_players in csv_players_by_team.values():
-        for player in team_players:
-            if player.get('Precio_Normalizado'):
-                precio = int(float(player['Precio_Normalizado']))
-                if precio < min_precio: min_precio = precio
-    if min_precio == float('inf'): min_precio = None
-
-    print(f"   💰 Precio mínimo base del CSV: {min_precio}")
-
     csv_teams = list(csv_players_by_team.keys())
-    total_synced = 0
+    
+    # 1. Mapear los equipos de la API con los del CSV
+    csv_to_api_team_map = {}
+    for squad in squads_data:
+        team_info = squad.get('team', {})
+        api_team_id = team_info.get('id')
+        api_team_name = team_info.get('name', '')
+        
+        if not api_team_id: continue
+        
+        csv_team_name, _ = find_team_match(api_team_name, csv_teams)
+        if csv_team_name:
+            csv_to_api_team_map[csv_team_name] = {
+                "team_id": api_team_id,
+                "players": squad.get('players', [])
+            }
+
+    total_csv_players = 0
     total_matched = 0
     total_no_match = 0
     players_payload = []
+    jugadores_sin_match = []
 
-    for squad in squads_data:
-        team_info = squad.get('team', {})
-        team_id = team_info.get('id')
-        json_team_name = team_info.get('name', '')
-
-        if not team_id: continue
-
-        csv_team_name, team_score = find_team_match(json_team_name, csv_teams)
-        if not csv_team_name:
+    # 2. Recorrer el CSV (Él decide quién califica para entrar al juego)
+    for csv_team_name, csv_players_list in csv_players_by_team.items():
+        api_team_data = csv_to_api_team_map.get(csv_team_name)
+        
+        if not api_team_data:
+            # Si el equipo entero del CSV no existe en la API, saltamos y reportamos a todos sus jugadores
+            print(f"   ⚠️ El equipo '{csv_team_name}' del CSV no se encontró en la API. Saltando sus jugadores.")
+            for csv_player in csv_players_list:
+                total_csv_players += 1
+                total_no_match += 1
+                jugadores_sin_match.append(f"- [{csv_team_name}] {csv_player.get('Nombre')} | MOTIVO: El equipo nacional completo no fue encontrado en la API de Opta.")
             continue
 
-        csv_players = csv_players_by_team.get(csv_team_name, [])
-        players = squad.get('players', [])
+        team_id = api_team_data["team_id"]
+        
+        # Pool de jugadores de la API: el CSV ya controla quién entra, no filtramos por 'active'
+        # para no excluir jugadores que la API pueda tener marcados de forma distinta
+        api_players_pool = [
+            p for p in api_team_data["players"]
+            if p.get('type') == 'player'
+        ]
 
-        for p in players:
-            if p.get('type') != 'player' or p.get('active') != 'yes':
-                continue
+        print(f"   [{csv_team_name}] Pool API: {len(api_players_pool)} jugadores | CSV: {len(csv_players_list)} jugadores")
+        if not api_players_pool:
+            print(f"      ⚠️  Pool vacío. Claves crudas del equipo: {list(api_team_data.get('players', {})[:1])}")
 
-            matched_csv, player_score = find_player_match(p, csv_players)
-            precio_normalizado = None
-            foto_url = None
+        for csv_player in csv_players_list:
+            total_csv_players += 1
+            csv_raw_name = csv_player.get('Nombre', '').strip()
+            if not csv_raw_name: continue
 
-            if matched_csv:
-                precio_normalizado = int(float(matched_csv['Precio_Normalizado'])) if matched_csv.get('Precio_Normalizado') else None
-                foto_url = matched_csv.get('Foto')
+            # Buscar este jugador del CSV en el pool de jugadores oficiales de la API
+            matched_api, score, best_candidate_name = find_player_match_reversed(csv_player, api_players_pool)
+
+            if matched_api:
+                # === MATCH EXITOSO ===
+                # El jugador entra a la base de datos con su ID oficial y los datos del CSV
                 total_matched += 1
+                player_id = matched_api.get('id')
+                
+                pos_map = {
+                    "Goalkeeper": "Goalkeeper", "Defender": "Defender",
+                    "Midfielder": "Midfielder", "Forward": "Forward", "Attacker": "Forward"
+                }
+                position = pos_map.get(matched_api.get('position', 'Forward'), "Forward")
+
+                # Insertamos en el payload usando la metadata oficial del JSON + Foto y Precio del CSV
+                players_payload.append({
+                    "id": player_id,
+                    "team_id": team_id,
+                    "first_name": matched_api.get('firstName'),
+                    "last_name": matched_api.get('lastName'),
+                    "short_name": matched_api.get('matchName') or matched_api.get('shortLastName') or csv_raw_name,
+                    "position": position,
+                    "status": matched_api.get('status', 'active'),
+                    "photo": csv_player.get('Foto'),  # Foto de tu CSV
+                    "precio": int(float(csv_player['Precio_Normalizado'])) if csv_player.get('Precio_Normalizado') else 1000000, # Precio de tu CSV
+                    "date_of_birth": matched_api.get('dateOfBirth'),
+                    "nationality": matched_api.get('nationality'),
+                    "height": matched_api.get('height'),
+                    "weight": matched_api.get('weight'),
+                    "foot": matched_api.get('foot'),
+                    "shirt_number": matched_api.get('shirtNumber'),
+                })
+                
+                # Lo removemos del pool temporal de este equipo para evitar emparejamientos duplicados
+                api_players_pool = [x for x in api_players_pool if x.get('id') != player_id]
             else:
+                # === SIN MATCH ===
+                # No entra a la base de datos (se salta) y reportamos el porqué detalladamente
                 total_no_match += 1
-                precio_normalizado = min_precio
-                player_id = p.get('id', '')
-                foto_url = f"https://omo.akamai.opta.net/image.php?secure=true&h=omo.akamai.opta.net&sport=football&entity=player&description={team_id}&dimensions=103x155&id={player_id}"
 
-            pos_map = {
-                "Goalkeeper": "Goalkeeper", "Defender": "Defender",
-                "Midfielder": "Midfielder", "Forward": "Forward", "Attacker": "Forward"
-            }
+                pool_size = len(api_players_pool)
+                if not api_players_pool:
+                    motivo = "Pool de la API vacío para este equipo (0 jugadores descargados)."
+                elif best_candidate_name:
+                    motivo = f"Mejor candidato en la API fue '{best_candidate_name}' al {score*100:.0f}% (pool={pool_size} jugadores). Se requiere >65%."
+                else:
+                    motivo = f"No se encontró ningún jugador parecido (pool={pool_size} jugadores)."
 
-            players_payload.append({
-                "id": p.get('id'),
-                "team_id": team_id,
-                "first_name": p.get('firstName'),
-                "last_name": p.get('lastName'),
-                "short_name": p.get('matchName') or p.get('shortLastName', ''),
-                "position": pos_map.get(p.get('position', 'Forward'), "Forward"),
-                "status": p.get('status', 'active'),
-                "photo": foto_url,
-                "precio": precio_normalizado,
-                "date_of_birth": p.get('dateOfBirth'),
-                "nationality": p.get('nationality'),
-                "height": p.get('height'),
-                "weight": p.get('weight'),
-                "foot": p.get('foot'),
-                "shirt_number": p.get('shirtNumber'),
-            })
-            total_synced += 1
+                # DEBUG: mostrar nombres restantes en el pool para diagnosticar
+                pool_names = [p.get('matchName') or f"{p.get('firstName','')} {p.get('lastName','')}".strip() for p in api_players_pool]
+                print(f"      ❌ SIN MATCH: '{csv_raw_name}' | Pool restante ({pool_size}): {pool_names}")
 
+                jugadores_sin_match.append(f"- [{csv_team_name}] {csv_raw_name} | MOTIVO: {motivo}")
+
+    # 3. Subir a Supabase SOLAMENTE los que tuvieron éxito
     if players_payload:
-        # Supabase tiene un límite en el payload, si hay miles de jugadores es bueno dividirlo,
-        # pero para ~500-600 jugadores (una liga estándar) un solo insert suele aguantar sin problema.
         try:
-            # ignore_duplicates=True significa: "Si el ID ya existe en Supabase, sáltatelo. Si no existe, créalo."
+            # upsert con ignore_duplicates=True para proteger registros existentes
             result = supabase.table("players").upsert(players_payload, ignore_duplicates=True).execute()
-            print(f"\n✅ Proceso de jugadores terminado. (Los nuevos se han añadido, los existentes se ignoraron)")
-            print(f"   Match encontrado en CSV: {total_matched} ({100*total_matched/total_synced:.1f}%)")
-            print(f"   Sin match (precio base): {total_no_match} ({100*total_no_match/total_synced:.1f}%)")
+            print(f"\n✅ Sincronización finalizada correctamente.")
+            print(f"   Total jugadores procesados del CSV: {total_csv_players}")
+            print(f"   Sincronizados con éxito (Entran al juego): {total_matched}")
+            print(f"   Descartados por falta de match (No entran al juego): {total_no_match}")
+            
+            # Escribir el reporte final de descartados
+            with open("reporte_sin_match.txt", "w", encoding="utf-8") as f:
+                f.write("=== JUGADORES DEL CSV QUE NO TUVIERON MATCH EN LA API Y FUERON EXCLUIDOS DEL JUEGO ===\n")
+                for line in jugadores_sin_match:
+                    f.write(line + "\n")
+            print("   📄 Reporte actualizado en 'reporte_sin_match.txt'")
             return True
         except Exception as e:
             print(f"❌ Error subiendo jugadores a Supabase: {e}")
             return False
 
+    print("⚠️ No hay jugadores válidos para subir a Supabase.")
     return False
 
 def main():

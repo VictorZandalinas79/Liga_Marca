@@ -523,87 +523,30 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-4 pb-20">
+    <div className="space-y-2 pb-4">
       {/* Mensaje de bloqueo durante tramo de jornada */}
       {isUnlockWindowOpen && (
         <Card className="!bg-amber-50 border-amber-200">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Lock className="w-6 h-6 text-amber-600 animate-pulse" />
-              <div>
-                <p className="font-semibold text-amber-900">Cambios bloqueados</p>
-                <p className="text-sm text-amber-700">
-                  No se pueden realizar cambios durante el tramo de jornada
-                  {timeUntilLock && <span className="ml-1">(cierra en {timeUntilLock})</span>}
-                </p>
-              </div>
-            </div>
+          <CardContent className="p-3 flex items-center gap-3">
+            <Lock className="w-5 h-5 text-amber-600 animate-pulse shrink-0" />
+            <p className="text-sm font-semibold text-amber-900">
+              Cambios bloqueados — tramo de jornada activo
+              {timeUntilLock && timeUntilLock !== 'Finalizada' && <span className="ml-1 font-normal">(cierra en {timeUntilLock})</span>}
+            </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Cabecera con título y botón guardar */}
-      <div className={`flex items-center justify-between sticky top-0 bg-white z-20 py-2 ${isUnlockWindowOpen ? 'opacity-50 pointer-events-none' : ''}`}>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Mi Equipo</h1>
-          <p className="text-sm text-slate-600">
-            {currentMomento ? `${currentMomento} (J${activeMatchday})` : `Jornada ${activeMatchday}`}
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          {/* Cronómetro de cuenta atrás */}
-          {!isUnlockWindowOpen && timeUntilUnlock && (
-            <div className="bg-black text-white px-4 py-2 rounded-lg mb-2">
-              <div className="text-xs text-gray-400 text-center mb-1">Tiempo para cambios</div>
-              <div className="text-2xl font-mono font-bold tracking-wider">
-                {timeUntilUnlock}
-              </div>
-            </div>
-          )}
-          {isUnlockWindowOpen && timeUntilLock && timeUntilLock !== 'Finalizada' && (
-            <div className="bg-black text-white px-4 py-2 rounded-lg mb-2">
-              <div className="text-xs text-gray-400 text-center mb-1">Cierra en</div>
-              <div className="text-2xl font-mono font-bold tracking-wider">
-                {timeUntilLock}
-              </div>
-            </div>
-          )}
-          </div>
-          <div className="flex items-center gap-2">
-            {changedCount > 0 && (
-            <>
-              <button
-                onClick={undoLastChange}
-                className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
-              >
-                <X className="w-4 h-4" />
-                <span className="hidden sm:inline">Deshacer ({changedCount})</span>
-              </button>
-              <span className="text-sm text-emerald-600 font-medium">
-                {changedCount} cambio{changedCount !== 1 ? 's' : ''}
-              </span>
-            </>
-          )}
-          <button
-            onClick={() => setShowSaveConfirm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-          >
-            <Save className="w-4 h-4" />
-            Guardar
-          </button>
-        </div>
-      </div>
-
       {/* Once inicial - Grid responsive ordenado por posiciones */}
       <Card className="border-2 border-emerald-200">
-        <CardContent className="p-3">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-slate-900">Once Inicial</h2>
-            <span className="text-sm text-slate-500">{selectedPlayersData.length}/11</span>
+        <CardContent className="p-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-bold text-slate-900">{currentMomento ? `${currentMomento} · J${activeMatchday}` : `Jornada ${activeMatchday}`}</span>
+            <span className="text-xs text-slate-500">{selectedPlayersData.length}/11</span>
           </div>
 
-          {/* Grid responsive: 2 columnas en móvil, 3 en tablet, 4-5 en desktop */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {/* Grid: más columnas para que todos los jugadores quepan en pantalla */}
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
             {selectedPlayersData.map((player, idx) => {
               // "Cambio" = lo has cambiado en esta sesión, o difiere de tu
               // alineación de la jornada anterior (se mantiene tras guardar)
@@ -669,59 +612,30 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Información de la jornada */}
-      <Card className="!bg-slate-800 border-slate-700">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-white">
-              {currentMomento ? `${currentMomento} (J${activeMatchday})` : `Jornada ${activeMatchday}`}
-            </h2>
-            {isUnlockWindowOpen ? (
-              <Badge className="bg-amber-500 text-black">
-                <Lock className="w-3 h-3 mr-1" />
-                Tramo activo
-              </Badge>
-            ) : (
-              <Badge className="bg-emerald-500 text-black">
-                <Check className="w-3 h-3 mr-1" />
-                Abierta
-              </Badge>
-            )}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <div className="bg-slate-700 rounded-lg p-3">
-              <p className="text-slate-400 text-xs mb-1">Apertura del tramo</p>
-              <p className="text-white font-medium">
-                {unlockTime ? unlockTime.toLocaleDateString('es-ES', {
-                  day: 'numeric',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                }) : '-'}
-              </p>
-            </div>
-            <div className="bg-slate-700 rounded-lg p-3">
-              <p className="text-slate-400 text-xs mb-1">Cierre del tramo</p>
-              <p className="text-white font-medium">
-                {lockTime ? lockTime.toLocaleDateString('es-ES', {
-                  day: 'numeric',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                }) : '-'}
-              </p>
-            </div>
-          </div>
-          {isUnlockWindowOpen && (
-            <div className="mt-3 p-3 bg-amber-500/20 border border-amber-500/30 rounded-lg">
-              <p className="text-amber-400 text-sm">
-                <span className="font-semibold">⚠️ Atención:</span> No se pueden realizar cambios hasta el cierre del tramo
-                {timeUntilLock && <span className="ml-1">(cierra en {timeUntilLock})</span>}
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Botón guardar */}
+      <div className={`flex items-center gap-2 justify-end ${isUnlockWindowOpen ? 'opacity-50 pointer-events-none' : ''}`}>
+        {changedCount > 0 && (
+          <>
+            <button
+              onClick={undoLastChange}
+              className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+            >
+              <X className="w-4 h-4" />
+              <span className="hidden sm:inline">Deshacer ({changedCount})</span>
+            </button>
+            <span className="text-sm text-emerald-600 font-medium">
+              {changedCount} cambio{changedCount !== 1 ? 's' : ''}
+            </span>
+          </>
+        )}
+        <button
+          onClick={() => setShowSaveConfirm(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+        >
+          <Save className="w-4 h-4" />
+          Guardar
+        </button>
+      </div>
 
       {/* Modal de selector de jugador con filtros */}
       {playerToSwap && (

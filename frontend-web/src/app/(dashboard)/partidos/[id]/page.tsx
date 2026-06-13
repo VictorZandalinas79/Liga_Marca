@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Trophy, MapPin, Clock, Calendar, Users, TrendingUp, RefreshCw } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
+import { MetricBreakdown } from '@/components/metric-breakdown'
 
 interface Player {
   id: string
@@ -86,6 +87,10 @@ interface Player {
   // Errores
   errors_leading_to_shot?: number
   errors_leading_to_goal?: number
+  // Para desglose RELEVO
+  passes_attempted?: number
+  pass_accuracy?: number
+  challenges_lost?: number
 }
 
 interface Team {
@@ -120,202 +125,6 @@ interface PlayerScore {
   is_starter: boolean
 }
 
-// Componente que muestra el desglose de puntos por BLOQUES (orden oficial RELEVO).
-// Espejo exacto de scoring_rules.json + trigger_descarga_eventos.py: cada métrica
-// aporta los puntos exactos que suma al total oficial.
-function MetricBreakdown({ player }: { player: Player & Record<string, any> }) {
-  // Normaliza la posición (acepta código POR/DEF/MED/DEL o nombre en inglés)
-  const normPos = (p?: string): 'POR' | 'DEF' | 'MED' | 'DEL' => {
-    const s = (p || '').toLowerCase()
-    if (s.includes('goalkeeper') || s === 'gk' || s === 'por') return 'POR'
-    if (s.includes('defender') || s === 'def') return 'DEF'
-    if (s.includes('forward') || s.includes('attacker') || s.includes('striker') || s === 'del' || s === 'fwd') return 'DEL'
-    if (s.includes('midfielder') || s === 'med' || s === 'mid') return 'MED'
-    return 'MED'
-  }
-
-  // Redondea a 2 decimales y quita ceros sobrantes (0.30 -> 0.3, 1.00 -> 1)
-  const fmtPts = (n: number): string => String(parseFloat((Math.round(n * 100) / 100).toFixed(2)))
-  const r2 = (v: number) => Math.round(v * 100) / 100
-  const n = (v: any) => Number(v) || 0
-
-  const pos = normPos(player.calc_position || player.position)
-
-  // Tabla de puntos posicionales (espejo de scoring_rules.json)
-  const GOAL = { POR: 6, DEF: 6, MED: 5, DEL: 4 } as const
-  const CLEAN_SHEET = { POR: 4, DEF: 3, MED: 2, DEL: 1 } as const
-  const GOAL_CONCEDED = { POR: -2, DEF: -2, MED: -1, DEL: -1 } as const
-
-  // Fila del desglose
-  interface Row {
-    label: string
-    count: number    // nº de eventos (0 = no mostrar contador)
-    unit: number     // puntos por unidad (para "x × +u")
-    points: number   // puntos aportados
-    flat?: boolean   // true => puntos fijos sin contador (participación, RELEVO, portería a cero)
-  }
-  interface Block {
-    id: string
-    emoji: string
-    title: string
-    accent: string       // color de texto del acento
-    chip: string         // fondo del chip de subtotal
-    rows: Row[]
-  }
-
-  const u = (count: number, unit: number, label: string): Row =>
-    ({ label, count, unit, points: r2(count * unit) })
-
-  // ---- BLOQUE 1: Participación ----
-  const min = n(player.minutes_played)
-  const b1: Row[] = []
-  if (min > 0) {
-    const titular = min > 60
-    b1.push({
-      label: titular ? `Participación · +60 min (${min}′)` : `Participación · suplente (${min}′)`,
-      count: 0, unit: 0, points: titular ? 2 : 1, flat: true,
-    })
-  }
-
-  // ---- BLOQUE 2: Goles y Asistencias ----
-  const b2: Row[] = []
-  if (n(player.goals) > 0) b2.push(u(n(player.goals), GOAL[pos], `Gol (${pos})`))
-  if (n(player.own_goals) > 0) b2.push(u(n(player.own_goals), -2, 'Gol en propia'))
-  if (n(player.assists) > 0) b2.push(u(n(player.assists), 3, 'Asistencia de gol'))
-  if (n(player.intent_assists) > 0) b2.push(u(n(player.intent_assists), 1, 'Asistencia sin gol'))
-
-  // ---- BLOQUE 3: Defensa y Portería a Cero ----
-  const b3: Row[] = []
-  const cs = player.clean_sheet === true || player.clean_sheet === 1 || player.clean_sheet === 'true'
-  if (cs) b3.push({ label: `Portería a cero · +60 min (${pos})`, count: 0, unit: 0, points: CLEAN_SHEET[pos], flat: true })
-  if (n(player.goals_conceded) > 0) b3.push(u(n(player.goals_conceded), GOAL_CONCEDED[pos], `Gol encajado (${pos})`))
-
-  // ---- BLOQUE 4: Penaltis ----
-  const b4: Row[] = []
-  if (n(player.penalties_won) > 0) b4.push(u(n(player.penalties_won), 2, 'Penalti provocado'))
-  if (n(player.penalties_conceded) > 0) b4.push(u(n(player.penalties_conceded), -2, 'Penalti cometido'))
-  if (n(player.penalties_missed) > 0) b4.push(u(n(player.penalties_missed), -2, 'Penalti fallado'))
-  if (n(player.penalty_saves) > 0) b4.push(u(n(player.penalty_saves), 5, 'Penalti parado'))
-
-  // ---- BLOQUE 5: Tarjetas ----
-  const b5: Row[] = []
-  if (n(player.yellow_cards) > 0) b5.push(u(n(player.yellow_cards), -1, 'Amarilla'))
-  if (n(player.second_yellow_cards) > 0) b5.push(u(n(player.second_yellow_cards), -1, 'Doble amarilla'))
-  if (n(player.red_cards) > 0) b5.push(u(n(player.red_cards), -3, 'Roja directa'))
-
-  // ---- BLOQUE 6: Acciones de Portero ----
-  const b6: Row[] = []
-  if (n(player.saves) > 0) b6.push(u(n(player.saves), 0.5, 'Parada'))
-  if (n(player.punches_ok) > 0) b6.push(u(n(player.punches_ok), 0.2, 'Despeje de puños'))
-  if (n(player.punches_fail) > 0) b6.push(u(n(player.punches_fail), 0.1, 'Despeje de puños fallido'))
-  if (n(player.claims_ok) > 0) b6.push(u(n(player.claims_ok), 0.1, 'Blocaje'))
-  if (n(player.sweepers_ok) > 0) b6.push(u(n(player.sweepers_ok), 0.1, 'Salida del área'))
-
-  // ---- BLOQUE 7: Bonus en Juego ----
-  const b7: Row[] = []
-  if (n(player.passes_completed) > 0) b7.push(u(n(player.passes_completed), 0.05, 'Pases completados'))
-  if (n(player.forward_passes) > 0) b7.push(u(n(player.forward_passes), 0.2, 'Pases hacia adelante'))
-  if (n(player.box_entries) > 0) b7.push(u(n(player.box_entries), 0.1, 'Entradas al área'))
-  if (n(player.successful_crosses) > 0) b7.push(u(n(player.successful_crosses), 0.3, 'Centros exitosos'))
-  if (n(player.set_pieces_taken) > 0) b7.push(u(n(player.set_pieces_taken), 0.2, 'Balón parado'))
-  if (n(player.takeons_won) > 0) b7.push(u(n(player.takeons_won), 0.5, 'Regates ganados'))
-  if (n(player.shots_on_target) > 0) b7.push(u(n(player.shots_on_target), 0.3, 'Tiros a puerta'))
-  if (n(player.recoveries_high) > 0) b7.push(u(n(player.recoveries_high), 0.3, 'Recuperación alta'))
-  if (n(player.recoveries_med) > 0) b7.push(u(n(player.recoveries_med), 0.2, 'Recuperación media'))
-  if (n(player.recoveries_low) > 0) b7.push(u(n(player.recoveries_low), 0.1, 'Recuperación baja'))
-  if (n(player.clearances) > 0) b7.push(u(n(player.clearances), 0.5, 'Despejes'))
-
-  // ---- BLOQUE 8: Penalizaciones ----
-  const b8: Row[] = []
-  const lostBalls = n(player.dispossessed) + n(player.bad_touches)
-  if (lostBalls > 0) b8.push(u(lostBalls, -0.1, 'Balón perdido'))
-
-  // ---- BLOQUE 9: Puntos RELEVO ----
-  const b9: Row[] = []
-  if (n(player.relevo_points) > 0) b9.push({ label: 'Bonus RELEVO (rendimiento global)', count: 0, unit: 0, points: n(player.relevo_points), flat: true })
-
-  const blocks: Block[] = [
-    { id: 'b1', emoji: '⏱️', title: 'Participación', accent: 'text-slate-600', chip: 'bg-slate-100 text-slate-700', rows: b1 },
-    { id: 'b2', emoji: '⚽', title: 'Goles y Asistencias', accent: 'text-red-600', chip: 'bg-red-50 text-red-700', rows: b2 },
-    { id: 'b3', emoji: '🛡️', title: 'Defensa y Portería a Cero', accent: 'text-indigo-600', chip: 'bg-indigo-50 text-indigo-700', rows: b3 },
-    { id: 'b4', emoji: '🎯', title: 'Penaltis', accent: 'text-fuchsia-600', chip: 'bg-fuchsia-50 text-fuchsia-700', rows: b4 },
-    { id: 'b5', emoji: '🟨', title: 'Tarjetas', accent: 'text-amber-600', chip: 'bg-amber-50 text-amber-700', rows: b5 },
-    { id: 'b6', emoji: '🧤', title: 'Acciones de Portero', accent: 'text-cyan-600', chip: 'bg-cyan-50 text-cyan-700', rows: b6 },
-    { id: 'b7', emoji: '📈', title: 'Bonus en Juego', accent: 'text-emerald-600', chip: 'bg-emerald-50 text-emerald-700', rows: b7 },
-    { id: 'b8', emoji: '📉', title: 'Penalizaciones', accent: 'text-rose-600', chip: 'bg-rose-50 text-rose-700', rows: b8 },
-    { id: 'b9', emoji: '⭐', title: 'Puntos RELEVO', accent: 'text-violet-600', chip: 'bg-violet-50 text-violet-700', rows: b9 },
-  ]
-
-  const sum = blocks.reduce((a, blk) => a + blk.rows.reduce((s, row) => s + row.points, 0), 0)
-  const total = n(player.total_points)
-  const ajuste = r2(total - sum)
-  const visibleBlocks = blocks.filter(b => b.rows.length > 0)
-
-  return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-        <TrendingUp className="w-5 h-5 text-emerald-600" />
-        Puntos por bloques
-      </h3>
-
-      {visibleBlocks.length === 0 && (
-        <p className="text-slate-500 text-center py-4">Sin métricas puntuables en este partido.</p>
-      )}
-
-      {visibleBlocks.map((blk) => {
-        const subtotal = r2(blk.rows.reduce((s, row) => s + row.points, 0))
-        return (
-          <div key={blk.id} className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-            {/* Cabecera del bloque */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="text-lg leading-none">{blk.emoji}</span>
-                <h4 className={`font-bold text-sm ${blk.accent}`}>{blk.title}</h4>
-              </div>
-              <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${subtotal >= 0 ? blk.chip : 'bg-red-50 text-red-700'}`}>
-                {subtotal >= 0 ? '+' : ''}{fmtPts(subtotal)}
-              </span>
-            </div>
-            {/* Filas */}
-            <div className="divide-y divide-slate-50">
-              {blk.rows.map((row, idx) => (
-                <div key={idx} className="flex items-center justify-between px-4 py-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">{row.label}</p>
-                    {!row.flat && (
-                      <p className="text-xs text-slate-400">
-                        {row.count} × {row.unit >= 0 ? '+' : ''}{fmtPts(row.unit)}
-                      </p>
-                    )}
-                  </div>
-                  <span className={`shrink-0 text-sm font-bold tabular-nums ${row.points >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {row.points >= 0 ? '+' : ''}{fmtPts(row.points)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      })}
-
-      {/* Ajuste de redondeo (debería ser ~0 si el desglose cuadra) */}
-      {ajuste !== 0 && (
-        <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-slate-50 border border-slate-200">
-          <span className="text-sm text-slate-500">Ajuste / redondeo</span>
-          <span className={`text-sm font-semibold ${ajuste >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-            {ajuste >= 0 ? '+' : ''}{fmtPts(ajuste)}
-          </span>
-        </div>
-      )}
-
-      {/* Total oficial */}
-      <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 flex items-center justify-between shadow-md">
-        <span className="text-white font-bold text-lg">Puntos totales</span>
-        <span className="text-white font-extrabold text-3xl tabular-nums">{fmtPts(total)}</span>
-      </div>
-    </div>
-  )
-}
 
 export default function PartidoDetallePage() {
   const [loading, setLoading] = useState(true)
@@ -471,6 +280,9 @@ export default function PartidoDetallePage() {
           // Faltas y tarjetas
           fouls_won: score?.fouls_won || 0,
           fouls_committed: score?.fouls_committed || 0,
+          passes_attempted: score?.passes_attempted || 0,
+          pass_accuracy: score?.pass_accuracy || 0,
+          challenges_lost: score?.challenges_lost || 0,
           yellow_cards: score?.yellow_cards || 0,
           second_yellow_cards: score?.second_yellow_cards || 0,
           red_cards: score?.red_cards || 0,
@@ -673,50 +485,50 @@ export default function PartidoDetallePage() {
         !player.is_starter ? 'opacity-75' : ''
       }`}>
         <CardContent className="p-2 sm:p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+          {/* Fila superior: foto + posición/estado + puntos */}
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-1.5 shrink-0">
               {player.photo ? (
                 <img
                   src={player.photo}
                   alt={player.short_name || ''}
-                  className="w-8 h-8 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-slate-600 shrink-0"
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-slate-600 shrink-0"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none'
                     ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
                   }}
                 />
               ) : null}
-              <div className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-slate-700 flex items-center justify-center text-xs sm:text-sm font-bold text-slate-400 border-2 border-slate-600 shrink-0 ${player.photo ? 'hidden' : ''}`}>
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-400 border-2 border-slate-600 shrink-0 ${player.photo ? 'hidden' : ''}`}>
                 {player.shirt_number || '?'}
               </div>
-              <div className="min-w-0 flex-1">
-                {/* Fila 1: Nombre */}
-                <h4 className="font-semibold text-white text-xs sm:text-sm break-words hyphens-auto">{player.short_name || `${player.first_name} ${player.last_name}`}</h4>
-                {/* Fila 2: Demarcación */}
-                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${getPositionColor(player.position)} shrink-0 mt-1`}>
+              <div>
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getPositionColor(player.position)}`}>
                   {getPositionLabel(player.position)}
                 </span>
-                {/* Fila 3: Titular y Minutos */}
-                <div className="flex items-center space-x-2 sm:space-x-3 text-[10px] sm:text-xs text-slate-400 mt-1">
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5">
                   <span>{player.is_starter ? 'Titular' : 'Suplente'}</span>
                   <span>{player.minutes_played || 0}'</span>
                 </div>
               </div>
             </div>
-
             <div className="text-right shrink-0">
-              <div className="flex items-center space-x-1 text-emerald-400">
-                <span className="text-lg sm:text-xl font-bold">{player.total_points || 0}</span>
+              <div className="text-emerald-400">
+                <span className="text-base sm:text-lg font-bold">{player.total_points || 0}</span>
               </div>
-              <p className="text-[10px] sm:text-xs text-slate-400">pts</p>
+              <p className="text-[10px] text-slate-400">pts</p>
               {(player.goals || 0) > 0 && (
-                <p className="text-[10px] sm:text-xs text-green-400">⚽ {player.goals}</p>
+                <p className="text-[10px] text-green-400">⚽ {player.goals}</p>
               )}
               {(player.assists || 0) > 0 && (
-                <p className="text-[10px] sm:text-xs text-blue-400">🅰️ {player.assists}</p>
+                <p className="text-[10px] text-blue-400">🅰️ {player.assists}</p>
               )}
             </div>
           </div>
+          {/* Nombre en fila propia con todo el ancho */}
+          <p className="mt-1.5 text-xs font-semibold text-white whitespace-nowrap overflow-hidden text-ellipsis w-full">
+            {player.short_name || `${player.first_name} ${player.last_name}`}
+          </p>
         </CardContent>
       </Card>
     </div>

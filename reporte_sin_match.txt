@@ -1,0 +1,16 @@
+=== JUGADORES DEL CSV QUE NO TUVIERON MATCH EN LA API Y FUERON EXCLUIDOS DEL JUEGO ===
+- [Portugal] Velho | MOTIVO: Pool de la API vacío para este equipo (0 jugadores descargados).
+- [Uruguay] G. Varela | MOTIVO: Mejor candidato en la API fue 'S. Cáceres' al 47% (pool=17 jugadores). Se requiere >65%.
+- [Morocco] Abde | MOTIVO: Mejor candidato en la API fue 'M. Saadane' al 55% (pool=24 jugadores). Se requiere >65%.
+- [Morocco] Aguerd | MOTIVO: Mejor candidato en la API fue 'A. Bouaddi' al 40% (pool=17 jugadores). Se requiere >65%.
+- [Senegal] I. Camara | MOTIVO: Mejor candidato en la API fue 'C. Ndiaye' al 38% (pool=2 jugadores). Se requiere >65%.
+- [Senegal] Mbow | MOTIVO: Mejor candidato en la API fue 'B. Ndiaye' al 17% (pool=2 jugadores). Se requiere >65%.
+- [Egypt] M. Alaa | MOTIVO: Mejor candidato en la API fue 'Tarek Alaa' al 62% (pool=4 jugadores). Se requiere >65%.
+- [Japan] Endo | MOTIVO: Mejor candidato en la API fue 'A. Seko' al 50% (pool=16 jugadores). Se requiere >65%.
+- [Algeria] Ramdane | MOTIVO: Mejor candidato en la API fue 'M. Mastil' al 31% (pool=3 jugadores). Se requiere >65%.
+- [Bosnia-Herzegovina] Celik | MOTIVO: Mejor candidato en la API fue 'A. Malić' al 40% (pool=5 jugadores). Se requiere >65%.
+- [Mexico] Pineda | MOTIVO: Mejor candidato en la API fue 'G. Martínez' al 40% (pool=8 jugadores). Se requiere >65%.
+- [Saudi Arabia] Kadesh | MOTIVO: Mejor candidato en la API fue 'Jehad Thikri' al 33% (pool=6 jugadores). Se requiere >65%.
+- [Cape Verde] Lenini | MOTIVO: Mejor candidato en la API fue 'Kelvin Pires' al 44% (pool=7 jugadores). Se requiere >65%.
+- [Cape Verde] Stopira | MOTIVO: Mejor candidato en la API fue 'Jamiro Monteiro' al 32% (pool=2 jugadores). Se requiere >65%.
+- [Haiti] L. Pierre | MOTIVO: Mejor candidato en la API fue 'D. Etienne' al 47% (pool=4 jugadores). Se requiere >65%.

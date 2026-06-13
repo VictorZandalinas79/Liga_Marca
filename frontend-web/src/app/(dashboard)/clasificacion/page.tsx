@@ -658,7 +658,7 @@ export default function ClasificacionPage() {
                     </td>
                     <td className="p-2 sm:p-4 text-right">
                       <span className="text-xl sm:text-2xl font-bold text-emerald-400">
-                        {standing.total_points}
+                        {Math.round(standing.total_points * 10) / 10}
                       </span>
                       <span className="hidden sm:inline text-xs text-slate-400 ml-1">pts</span>
                     </td>
@@ -670,7 +670,7 @@ export default function ClasificacionPage() {
                     </td>
                     <td className="hidden md:table-cell p-4 text-right">
                       <span className="text-lg font-semibold text-blue-400">
-                        {standing.last_3_jornadas_points}
+                        {Math.round(standing.last_3_jornadas_points * 10) / 10}
                       </span>
                     </td>
                     <td className="hidden sm:table-cell p-4">
