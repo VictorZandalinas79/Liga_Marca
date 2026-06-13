@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const [basePlayers, setBasePlayers] = useState<string[]>([])
   const [changeHistory, setChangeHistory] = useState<Array<{outId: string, inId: string}>>([])
   const [formation, setFormation] = useState<Formation>(FORMATIONS[1])
+  const [cancelConfirmPlayerId, setCancelConfirmPlayerId] = useState<string | null>(null)
   const [userTeamId, setUserTeamId] = useState<string | null>(null)
   const [isRegistered, setIsRegistered] = useState<boolean>(false)
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
@@ -451,6 +452,19 @@ export default function DashboardPage() {
     }
   }
 
+  const cancelChange = (playerId: string) => {
+    const change = [...changeHistory].reverse().find(ch => ch.inId === playerId)
+    if (!change) return
+    setSelectedPlayers(prev => prev.map(id => id === playerId ? change.outId : id))
+    setChangeHistory(prev => {
+      const revIdx = [...prev].reverse().findIndex(ch => ch.inId === playerId)
+      if (revIdx === -1) return prev
+      const realIdx = prev.length - 1 - revIdx
+      return [...prev.slice(0, realIdx), ...prev.slice(realIdx + 1)]
+    })
+    setCancelConfirmPlayerId(null)
+  }
+
   const swapPlayer = (newPlayerId: string) => {
     if (isUnlockWindowOpen) {
       alert('No se pueden realizar cambios durante el tramo de jornada')
@@ -660,11 +674,9 @@ export default function DashboardPage() {
           {/* Grid: más columnas para que todos los jugadores quepan en pantalla */}
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
             {selectedPlayersData.map((player, idx) => {
-              // "Cambio" = lo has cambiado en esta sesión, o difiere de tu
-              // alineación de la jornada anterior (se mantiene tras guardar)
-              const isChanged =
-                changeHistory.some(ch => ch.inId === player.id) ||
-                (basePlayers.length > 0 && !basePlayers.includes(player.id))
+              const isSessionChange = changeHistory.some(ch => ch.inId === player.id)
+              const isCrossSessionChange = !isSessionChange && basePlayers.length > 0 && !basePlayers.includes(player.id)
+              const isChanged = isSessionChange || isCrossSessionChange
               return (
                 <div
                   key={player.id}
@@ -677,7 +689,16 @@ export default function DashboardPage() {
                         : 'bg-slate-800 border-transparent hover:bg-slate-700 cursor-pointer'
                   }`}
                 >
-                  {isChanged && (
+                  {isSessionChange && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
+                      className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-md z-10 transition-colors"
+                      title="Cancelar cambio"
+                    >
+                      <X className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  )}
+                  {isCrossSessionChange && (
                     <div className="absolute -top-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center shadow-md">
                       <Check className="w-4 h-4 text-white" />
                     </div>
@@ -954,6 +975,38 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de confirmación: cancelar cambio de un jugador */}
+      {cancelConfirmPlayerId && (() => {
+        const player = players.find(p => p.id === cancelConfirmPlayerId)
+        const change = [...changeHistory].reverse().find(ch => ch.inId === cancelConfirmPlayerId)
+        const outPlayer = change ? players.find(p => p.id === change.outId) : null
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+              <h3 className="text-lg font-bold text-slate-900 mb-2">¿Cancelar cambio?</h3>
+              <p className="text-slate-600 text-sm mb-5">
+                Saldrá <strong>{player?.short_name || player?.first_name}</strong>
+                {outPlayer && <> y volverá <strong>{outPlayer.short_name || outPlayer.first_name}</strong></>}.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setCancelConfirmPlayerId(null)}
+                  className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors text-sm"
+                >
+                  Mantener
+                </button>
+                <button
+                  onClick={() => cancelChange(cancelConfirmPlayerId)}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors text-sm"
+                >
+                  Cancelar cambio
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Modal de éxito tras guardar */}
       {showSaveSuccess && (

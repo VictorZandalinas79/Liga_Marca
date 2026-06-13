@@ -48,6 +48,18 @@ SUPABASE_URL = _clean_env(os.environ.get("SUPABASE_URL"))
 SUPABASE_KEY = _clean_env(os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY"))
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+
+def save_notifications(notifications: list):
+    """Inserta notificaciones de cambios en sync_notifications."""
+    if not notifications:
+        return
+    try:
+        supabase.table("sync_notifications").insert(notifications).execute()
+        print(f"🔔 {len(notifications)} notificación(es) guardada(s)")
+    except Exception as e:
+        print(f"⚠️ Error guardando notificaciones: {e}")
+
+
 def load_headers():
     """Carga headers desde headers/headers.json si existe."""
     headers_path = Path('headers/headers.json')
@@ -248,6 +260,7 @@ def upload_fixtures_to_supabase(matches):
     print(f"\n📤 Subiendo fixtures a Supabase (tabla 'fixtures')...")
 
     fixtures_payload = []
+    fixture_display_names = {}  # fixture_id -> "Home vs Away" para notificaciones
     for m in matches:
         info = m.get('matchInfo', {})
         comp_id = info.get('competition', {}).get('id')
@@ -260,13 +273,19 @@ def upload_fixtures_to_supabase(matches):
         full_timestamp = f"{start_date}T{start_time}"
 
         contestants = info.get('contestant', [{}, {}])
-        
+        fixture_id = info.get('id')
+
+        if fixture_id:
+            home = (contestants[0].get('shortName') or contestants[0].get('name', '?')) if len(contestants) > 0 else '?'
+            away = (contestants[1].get('shortName') or contestants[1].get('name', '?')) if len(contestants) > 1 else '?'
+            fixture_display_names[fixture_id] = f"{home} vs {away}"
+
         # Capturamos el matchday (0 por defecto si no existe)
         raw_week = info.get('week')
         matchday = int(raw_week) if raw_week else 0
 
         fixtures_payload.append({
-            "id": info.get('id'),
+            "id": fixture_id,
             "matchday": matchday,
             "momento": info.get('stage', {}).get('name'),
             "home_team_id": contestants[0].get('id') if len(contestants) > 0 else None,
@@ -315,11 +334,34 @@ def upload_fixtures_to_supabase(matches):
         print(f"   🔄 Se asignaron jornadas {max_matchday + 1} a {current_new_matchday - 1} a fases eliminatorias.")
     # --- FIN NUEVA LÓGICA ---
 
+    # Detectar cambios de horario antes del upsert
+    try:
+        existing_resp = supabase.table("fixtures").select("id,start_time").execute()
+        existing_map = {r['id']: r['start_time'] for r in (existing_resp.data or [])}
+    except Exception:
+        existing_map = {}
+
+    schedule_notifications = []
+    for f in fixtures_payload:
+        fid = f.get('id')
+        old_time = existing_map.get(fid)
+        new_time = f.get('start_time', '')
+        if old_time and old_time != new_time and new_time:
+            display = fixture_display_names.get(fid, fid)
+            old_fmt = old_time[:16].replace('T', ' ')
+            new_fmt = new_time[:16].replace('T', ' ')
+            schedule_notifications.append({
+                "type": "fixture_changed",
+                "title": "Cambio de horario",
+                "body": f"{display}: {old_fmt} → {new_fmt}"
+            })
+
     # Subir a Supabase
     try:
         # Usamos UPSERT: Actualiza la fecha/jornada si ya existe, y crea si es nuevo.
         result = supabase.table("fixtures").upsert(fixtures_payload).execute()
         print(f"✅ {len(fixtures_payload)} fixtures actualizados/insertados en Supabase")
+        save_notifications(schedule_notifications)
         return True
     except Exception as e:
         print(f"❌ Error insertando los nuevos fixtures: {e}")
@@ -708,8 +750,27 @@ def sync_players_with_csv(squads_data):
     # 3. Subir a Supabase SOLAMENTE los que tuvieron éxito
     if players_payload:
         try:
+            # Detectar jugadores nuevos antes del upsert
+            try:
+                existing_ids_resp = supabase.table("players").select("id").execute()
+                existing_player_ids = {r['id'] for r in (existing_ids_resp.data or [])}
+            except Exception:
+                existing_player_ids = set()
+
             # upsert con ignore_duplicates=True para proteger registros existentes
             result = supabase.table("players").upsert(players_payload, ignore_duplicates=True).execute()
+
+            new_player_notifications = []
+            for p in players_payload:
+                if p.get('id') and p['id'] not in existing_player_ids:
+                    name = p.get('short_name') or f"{p.get('first_name', '')} {p.get('last_name', '')}".strip()
+                    new_player_notifications.append({
+                        "type": "new_player",
+                        "title": "Nuevo jugador disponible",
+                        "body": f"{name} ({p.get('position', '')}) ha sido añadido al juego"
+                    })
+            save_notifications(new_player_notifications)
+
             print(f"\n✅ Sincronización finalizada correctamente.")
             print(f"   Total jugadores procesados del CSV: {total_csv_players}")
             print(f"   Sincronizados con éxito (Entran al juego): {total_matched}")

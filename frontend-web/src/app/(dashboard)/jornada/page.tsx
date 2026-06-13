@@ -19,7 +19,15 @@ interface Player {
   valor?: number
   is_starter?: boolean
   is_captain?: boolean
+  team_id?: string
   team?: { name: string; logo_url?: string }
+  hasPlayed?: boolean
+  replacedPlayer?: { id: string; short_name?: string; first_name?: string; photo?: string } | null
+}
+
+interface ChangeItem {
+  inPlayer: { id: string; short_name?: string; first_name?: string; position?: string; photo?: string } | null
+  outPlayer: { id: string; short_name?: string; first_name?: string; position?: string; photo?: string } | null
 }
 
 interface UserTeam {
@@ -32,6 +40,7 @@ interface UserTeam {
   puntos_totales: number
   valor_total: number
   posicion?: number
+  changes: ChangeItem[]
 }
 
 interface PlayerScoreItem {
@@ -63,6 +72,7 @@ export default function JornadaPage() {
   const [selectedMatchday, setSelectedMatchday] = useState<number>(0)
   const [availableMatchdays, setAvailableMatchdays] = useState<MatchdayInfo[]>([])
   const [userTeams, setUserTeams] = useState<UserTeam[]>([])
+  const [sortBy, setSortBy] = useState<'puntos' | 'promedio'>('puntos')
   const [modalPlayer, setModalPlayer] = useState<Record<string, any> | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
   const supabase = createClient()
@@ -246,6 +256,47 @@ export default function JornadaPage() {
 
     const playerIds = [...new Set(teamPlayersData.map(tp => tp.player_id))]
 
+    // Lineup de la jornada ANTERIOR por equipo (para detectar cambios)
+    const { data: prevAllData } = await supabase
+      .from('team_players')
+      .select('team_id, player_id, is_starter, matchday')
+      .in('team_id', teamIdsUser)
+      .lt('matchday', matchday)
+      .order('matchday', { ascending: false })
+
+    const latestMdPerTeam = new Map<string, number>()
+    prevAllData?.forEach(tp => {
+      const cur = latestMdPerTeam.get(tp.team_id)
+      if (cur === undefined || tp.matchday > cur) latestMdPerTeam.set(tp.team_id, tp.matchday)
+    })
+
+    const prevStartersByTeam = new Map<string, string[]>()
+    prevAllData?.forEach(tp => {
+      if (!tp.is_starter) return
+      if (tp.matchday !== latestMdPerTeam.get(tp.team_id)) return
+      if (!prevStartersByTeam.has(tp.team_id)) prevStartersByTeam.set(tp.team_id, [])
+      prevStartersByTeam.get(tp.team_id)!.push(tp.player_id)
+    })
+
+    // Equipos reales que ya han jugado en esta jornada
+    const playedTeamIds = new Set<string>()
+    if (info && info.fixtureIds.length > 0) {
+      const now = Date.now()
+      const { data: fixtureDetails } = await supabase
+        .from('fixtures')
+        .select('home_team_id, away_team_id, status, start_time')
+        .in('id', info.fixtureIds)
+      fixtureDetails?.forEach(f => {
+        const matchEnded =
+          f.status === 'finished' ||
+          (f.start_time && new Date(f.start_time).getTime() + MATCH_DURATION_MS < now)
+        if (matchEnded) {
+          if (f.home_team_id) playedTeamIds.add(f.home_team_id)
+          if (f.away_team_id) playedTeamIds.add(f.away_team_id)
+        }
+      })
+    }
+
     // Datos de jugadores (incluye precio para el valor del equipo)
     const { data: playersData } = await supabase
       .from('players')
@@ -298,6 +349,26 @@ export default function JornadaPage() {
 
     const playersById = new Map(playersData?.map(p => [p.id, p]) || [])
 
+    // Jugadores que salieron (estaban antes, no están ahora) → fetch sus datos
+    const allPrevIds = [...new Set([...(prevAllData || []).map(tp => tp.player_id)])]
+    const outPlayerIds = allPrevIds.filter(id => !playerIds.includes(id))
+    const allPlayersById = new Map(playersById)
+    if (outPlayerIds.length > 0) {
+      const { data: outPlayersData } = await supabase
+        .from('players')
+        .select('id, first_name, last_name, short_name, position, photo, shirt_number, team_id, precio')
+        .in('id', outPlayerIds)
+      outPlayersData?.forEach(p => allPlayersById.set(p.id, p))
+    }
+
+    const posLabel = (pos: string) => {
+      const l = (pos || '').toLowerCase()
+      if (l.includes('goalkeeper')) return 'POR'
+      if (l.includes('defender')) return 'DEF'
+      if (l.includes('midfielder')) return 'MED'
+      return 'DEL'
+    }
+
     const teams: UserTeam[] = []
 
     for (const ut of userTeamsData) {
@@ -321,11 +392,13 @@ export default function JornadaPage() {
           position: p?.position || '',
           photo: p?.photo,
           shirt_number: p?.shirt_number,
+          team_id: p?.team_id,
           team: teamObj ? { name: teamObj.name, logo_url: teamObj.logo_url } : undefined,
           puntos: playerPointsMap.get(tp.player_id) ?? 0,
           valor: p?.precio ?? 0,
           is_starter: tp.is_starter || false,
           is_captain: tp.is_captain || false,
+          hasPlayed: p?.team_id ? playedTeamIds.has(p.team_id) : false,
         }
       })
 
@@ -345,6 +418,30 @@ export default function JornadaPage() {
       const puntos_totales = jugadores.reduce((sum, p) => sum + (p.puntos || 0), 0)
       const valor_total = jugadores.reduce((sum, p) => sum + (p.valor || 0), 0)
 
+      // Emparejar cambios por posición: asignar replacedPlayer a cada jugador que entró
+      const prevIds = prevStartersByTeam.get(ut.id) || []
+      const currentStarterIds = teamPlayers.filter(tp => tp.is_starter).map(tp => tp.player_id)
+      const inIds = currentStarterIds.filter(id => !prevIds.includes(id))
+      const outIds = prevIds.filter(id => !currentStarterIds.includes(id))
+
+      const outByPos: Record<string, string[]> = {}
+      outIds.forEach(id => {
+        const pos = posLabel(allPlayersById.get(id)?.position || '')
+        ;(outByPos[pos] ??= []).push(id)
+      })
+
+      // Asignar replacedPlayer a cada jugador que entró (emparejando por posición)
+      const usedOutIds = new Set<string>()
+      inIds.forEach(inId => {
+        const pos = posLabel(allPlayersById.get(inId)?.position || '')
+        const available = (outByPos[pos] || []).find(outId => !usedOutIds.has(outId))
+        if (available) {
+          usedOutIds.add(available)
+          const jug = jugadores.find(j => j.id === inId)
+          if (jug) jug.replacedPlayer = allPlayersById.get(available) || null
+        }
+      })
+
       teams.push({
         team_id: ut.id,
         user_id: ut.user_id,
@@ -354,6 +451,7 @@ export default function JornadaPage() {
         jugadores,
         puntos_totales,
         valor_total,
+        changes: [],
       })
     }
 
@@ -423,6 +521,18 @@ export default function JornadaPage() {
 
   const fmtValor = (v: number) => v > 0 ? `${v}M` : '-'
 
+  const getJugadoresJugaron = (jugadores: Player[]) => jugadores.filter(p => p.hasPlayed).length
+
+  const getPromedio = (team: UserTeam) => {
+    const jugaron = getJugadoresJugaron(team.jugadores)
+    return jugaron > 0 ? team.puntos_totales / jugaron : 0
+  }
+
+  const sortedTeams = [...userTeams].sort((a, b) => {
+    if (sortBy === 'promedio') return getPromedio(b) - getPromedio(a)
+    return b.puntos_totales - a.puntos_totales
+  })
+
   const getFormacion = (jugadores: Player[]): string => {
     const starters = jugadores.filter(p => p.is_starter)
     const gk = starters.filter(p => getPositionLabel(p.position) === 'POR').length
@@ -488,16 +598,30 @@ export default function JornadaPage() {
       {userTeams.length > 0 && (
         <Card className="border-2 border-emerald-200">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
               <Trophy className="w-5 h-5 text-emerald-600" />
               <h2 className="text-lg font-bold text-slate-900">
                 Clasificación {getMatchdayLabel(currentInfo)}
               </h2>
               {currentInfo?.live && (
-                <Badge className="bg-red-500 text-white text-xs flex items-center gap-1 animate-pulse ml-auto">
+                <Badge className="bg-red-500 text-white text-xs flex items-center gap-1 animate-pulse">
                   <Radio className="w-3 h-3" /> EN DIRECTO
                 </Badge>
               )}
+              <div className="ml-auto flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                <button
+                  onClick={() => setSortBy('puntos')}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${sortBy === 'puntos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Puntos
+                </button>
+                <button
+                  onClick={() => setSortBy('promedio')}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${sortBy === 'promedio' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Promedio
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -508,42 +632,39 @@ export default function JornadaPage() {
                     <th className="text-left py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Equipo</th>
                     <th className="text-center py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Sys</th>
                     <th className="text-right py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Valor</th>
-                    <th className="text-right py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Pts</th>
+                    <th className={`text-right py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold ${sortBy === 'puntos' ? 'text-emerald-600' : 'text-slate-600'}`}>Pts</th>
+                    <th className={`text-right py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold ${sortBy === 'promedio' ? 'text-emerald-600' : 'text-slate-600'}`}>Prom</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {userTeams.map((team, index) => {
-                    const isLast = index === userTeams.length - 1
+                  {sortedTeams.map((team, index) => {
+                    const isLast = index === sortedTeams.length - 1
+                    const pos = index + 1
+                    const jugaron = getJugadoresJugaron(team.jugadores)
+                    const total = team.jugadores.length
+                    const promedio = getPromedio(team)
                     return (
                     <tr key={team.team_id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="py-2 px-1 sm:px-2">
                         <div className="flex items-center gap-1 sm:gap-2">
-                          {team.posicion === 1 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500" />}
-                          {team.posicion === 2 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />}
-                          {team.posicion === 3 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-amber-600" />}
-                          {isLast && team.posicion !== 1 && team.posicion !== 2 && team.posicion !== 3 && (
+                          {pos === 1 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500" />}
+                          {pos === 2 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />}
+                          {pos === 3 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-amber-600" />}
+                          {isLast && pos > 3 && (
                             <span className="text-base sm:text-lg">🐷</span>
                           )}
                           {!isLast && (
-                            <span className={`font-bold text-xs sm:text-sm ${(team.posicion ?? 0) <= 3 ? 'text-emerald-600' : 'text-slate-700'}`}>
-                              {team.posicion}º
+                            <span className={`font-bold text-xs sm:text-sm ${pos <= 3 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                              {pos}º
                             </span>
                           )}
                         </div>
                       </td>
                       <td className="py-2 px-1 sm:px-2 max-w-[120px] sm:max-w-none">
                         <span className="font-medium text-slate-900 text-xs sm:text-sm">{team.team_name}</span>
-                        {(() => {
-                          const best = team.jugadores.reduce((b, p) =>
-                            (p.puntos ?? 0) > (b?.puntos ?? 0) ? p : b,
-                            team.jugadores[0]
-                          )
-                          return best ? (
-                            <span className="block text-xs text-slate-500 truncate">
-                              {best.short_name || best.first_name} ({Math.round((best.puntos ?? 0) * 10) / 10})
-                            </span>
-                          ) : null
-                        })()}
+                        <span className="block text-xs text-slate-500">
+                          {jugaron} / {total} jugaron
+                        </span>
                       </td>
                       <td className="py-2 px-1 sm:px-2 text-center">
                         <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-100 px-1 sm:px-2 py-0.5 rounded">
@@ -554,8 +675,13 @@ export default function JornadaPage() {
                         <span className="text-xs sm:text-sm font-semibold text-slate-700">{fmtValor(team.valor_total)}</span>
                       </td>
                       <td className="py-2 px-1 sm:px-2 text-right">
-                        <Badge className="bg-emerald-600 text-white text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 whitespace-nowrap">
+                        <Badge className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 whitespace-nowrap ${sortBy === 'puntos' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
                           {Math.round(team.puntos_totales * 10) / 10}
+                        </Badge>
+                      </td>
+                      <td className="py-2 px-1 sm:px-2 text-right">
+                        <Badge className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 whitespace-nowrap ${sortBy === 'promedio' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                          {jugaron > 0 ? Math.round(promedio * 10) / 10 : '—'}
                         </Badge>
                       </td>
                     </tr>
@@ -576,7 +702,9 @@ export default function JornadaPage() {
             <h2 className="text-lg font-bold text-slate-900">Equipos por Usuario</h2>
           </div>
 
-          {userTeams.map((team) => (
+          {sortedTeams.map((team, index) => {
+            const displayPos = index + 1
+            return (
             <Card key={team.team_id} className="!border-slate-200">
               <CardContent className="p-0">
                 {/* Cabecera del equipo */}
@@ -584,12 +712,12 @@ export default function JornadaPage() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                        team.posicion === 1 ? 'bg-yellow-500' :
-                        team.posicion === 2 ? 'bg-gray-400' :
-                        team.posicion === 3 ? 'bg-amber-600' :
+                        displayPos === 1 ? 'bg-yellow-500' :
+                        displayPos === 2 ? 'bg-gray-400' :
+                        displayPos === 3 ? 'bg-amber-600' :
                         'bg-emerald-600'
                       }`}>
-                        <span className="text-white font-bold">{team.posicion}º</span>
+                        <span className="text-white font-bold">{displayPos}º</span>
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-bold text-slate-900 truncate">{team.user_name}</h3>
@@ -625,7 +753,11 @@ export default function JornadaPage() {
                               <div
                                 key={player.id}
                                 onClick={() => openPlayerStats(player.id)}
-                                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors gap-2 cursor-pointer"
+                                className={`flex items-center justify-between p-3 rounded-lg transition-colors gap-2 cursor-pointer ${
+                                  player.hasPlayed
+                                    ? 'bg-slate-200 hover:bg-slate-300'
+                                    : 'bg-slate-50 hover:bg-slate-100'
+                                }`}
                               >
                                 <div className="flex items-center gap-3 min-w-0">
                                   <span className="text-sm font-bold text-slate-400 w-5 shrink-0">{idx + 1}</span>
@@ -633,31 +765,49 @@ export default function JornadaPage() {
                                     <img
                                       src={player.photo}
                                       alt={player.short_name || ''}
-                                      className="w-10 h-10 rounded-full object-cover border-2 border-slate-300 shrink-0"
+                                      className={`w-10 h-10 rounded-full object-cover border-2 shrink-0 ${player.hasPlayed ? 'border-slate-400 opacity-70' : 'border-slate-300'}`}
                                     />
                                   ) : (
-                                    <div className="w-10 h-10 rounded-full bg-slate-300 flex items-center justify-center text-sm font-bold text-slate-600 border-2 border-slate-400 shrink-0">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 shrink-0 ${player.hasPlayed ? 'bg-slate-400 text-slate-700 border-slate-500' : 'bg-slate-300 text-slate-600 border-slate-400'}`}>
                                       {player.shirt_number || '?'}
                                     </div>
                                   )}
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-semibold text-slate-900 truncate">{player.short_name || player.first_name}</span>
+                                      <span className={`font-semibold truncate ${player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
+                                        {player.short_name || player.first_name}
+                                      </span>
                                       <Badge className={`text-xs ${getPositionColor(player.position)}`}>
                                         {getPositionLabel(player.position)}
                                       </Badge>
                                       {player.is_captain && (
                                         <Badge className="text-xs bg-yellow-500 text-white">C</Badge>
                                       )}
+                                      {player.hasPlayed && (
+                                        <span className="text-xs text-slate-400 font-medium">✓ jugó</span>
+                                      )}
                                     </div>
                                     <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
                                       {player.team && <span className="truncate">{player.team.name}</span>}
                                       <span className="text-slate-400">· {fmtValor(player.valor || 0)}</span>
                                     </div>
+                                    {player.replacedPlayer && (
+                                      <div className="flex items-center gap-1 mt-1">
+                                        <span className="text-[10px] text-slate-400">por</span>
+                                        {player.replacedPlayer.photo && (
+                                          <img src={player.replacedPlayer.photo} className="w-4 h-4 rounded-full object-cover border border-slate-300" alt="" />
+                                        )}
+                                        <span className="text-[10px] text-red-500 font-medium truncate">
+                                          {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="text-right shrink-0">
-                                  <span className="text-lg font-bold text-emerald-600">{Math.round((player.puntos ?? 0) * 10) / 10}</span>
+                                  <span className={`text-lg font-bold ${player.hasPlayed ? 'text-slate-500' : 'text-emerald-600'}`}>
+                                    {Math.round((player.puntos ?? 0) * 10) / 10}
+                                  </span>
                                   <p className="text-xs text-slate-500">puntos</p>
                                 </div>
                               </div>
@@ -670,7 +820,7 @@ export default function JornadaPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+          )})}
         </div>
       ) : (
         <Card>
