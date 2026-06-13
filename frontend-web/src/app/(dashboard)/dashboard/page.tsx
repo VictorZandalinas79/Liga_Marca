@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock, UserPlus } from 'lucide-react'
+import { Save, X, Check, Search, Lock, UserPlus, Trophy, TrendingUp, Users } from 'lucide-react'
 
 interface Player {
   id: string
@@ -55,6 +55,7 @@ export default function DashboardPage() {
   const [teamFilter, setTeamFilter] = useState<string>('')
   const [priceMinFilter, setPriceMinFilter] = useState<number | ''>('')
   const [priceMaxFilter, setPriceMaxFilter] = useState<number | ''>('')
+  const [playerPoints, setPlayerPoints] = useState<Map<string, number>>(new Map())
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento } = useMatchdayLock()
   // Evita generar/heredar el once dos veces (el efecto puede re-ejecutarse por
@@ -304,6 +305,55 @@ export default function DashboardPage() {
     }
   }, [user?.id, activeMatchday])
 
+  // Cargar puntos de los jugadores cuando la jornada está en curso
+  useEffect(() => {
+    const fetchPlayerPoints = async () => {
+      if (!isUnlockWindowOpen || !userTeamId || selectedPlayers.length === 0) {
+        setPlayerPoints(new Map())
+        return
+      }
+
+      const matchdayToLoad = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+
+      // Obtener puntos de player_scores para esta jornada
+      const { data: fixtures } = await supabase
+        .from('fixtures')
+        .select('id')
+        .eq('matchday', matchdayToLoad)
+
+      const fixtureIds = fixtures?.map(f => f.id) || []
+
+      if (fixtureIds.length === 0) {
+        setPlayerPoints(new Map())
+        return
+      }
+
+      const { data: scores } = await supabase
+        .from('player_scores')
+        .select('player_id, total_points')
+        .in('player_id', selectedPlayers)
+        .in('fixture_id', fixtureIds)
+
+      const pointsMap = new Map<string, number>()
+      scores?.forEach(s => {
+        pointsMap.set(s.player_id, (pointsMap.get(s.player_id) || 0) + (s.total_points || 0))
+      })
+
+      setPlayerPoints(pointsMap)
+    }
+
+    fetchPlayerPoints()
+
+    // Polling cada 45 segundos cuando la jornada está en curso
+    const interval = setInterval(() => {
+      if (isUnlockWindowOpen) {
+        fetchPlayerPoints()
+      }
+    }, 45000)
+
+    return () => clearInterval(interval)
+  }, [isUnlockWindowOpen, userTeamId, selectedPlayers, activeMatchday])
+
   const saveTeam = async () => {
     if (isUnlockWindowOpen) {
       alert('No se pueden realizar cambios durante el tramo de jornada')
@@ -469,6 +519,26 @@ export default function DashboardPage() {
       return selectedPlayers.indexOf(a.id) - selectedPlayers.indexOf(b.id)
     })
 
+  // Calcular estadísticas del equipo (solo visibles durante el tramo de jornada)
+  const teamStats = {
+    precioTotal: selectedPlayersData.reduce((sum, p) => sum + (p.precio || 0), 0),
+    formacion: (() => {
+      const starters = selectedPlayersData
+      const gk = starters.filter(p => getPositionCode(p.position) === 'GK').length
+      const def = starters.filter(p => getPositionCode(p.position) === 'DEF').length
+      const mid = starters.filter(p => getPositionCode(p.position) === 'MID').length
+      const fwd = starters.filter(p => getPositionCode(p.position) === 'FWD').length
+      if (gk + def + mid + fwd === 0) return '-'
+      return `${gk}-${def}-${mid}-${fwd}`
+    })(),
+    puntosTotales: selectedPlayersData.reduce((sum, p) => sum + (playerPoints.get(p.id) || 0), 0),
+    mediaPuntos: (() => {
+      const total = selectedPlayersData.reduce((sum, p) => sum + (playerPoints.get(p.id) || 0), 0)
+      const startersCount = selectedPlayersData.length
+      return startersCount > 0 ? total / startersCount : 0
+    })(),
+  }
+
   const availablePlayers = players.filter(p => !selectedPlayers.includes(p.id))
 
   // Obtener lista única de equipos para el filtro
@@ -526,15 +596,57 @@ export default function DashboardPage() {
     <div className="space-y-2 pb-4">
       {/* Mensaje de bloqueo durante tramo de jornada */}
       {isUnlockWindowOpen && (
-        <Card className="!bg-amber-50 border-amber-200">
-          <CardContent className="p-3 flex items-center gap-3">
-            <Lock className="w-5 h-5 text-amber-600 animate-pulse shrink-0" />
-            <p className="text-sm font-semibold text-amber-900">
-              Cambios bloqueados — tramo de jornada activo
-              {timeUntilLock && timeUntilLock !== 'Finalizada' && <span className="ml-1 font-normal">(cierra en {timeUntilLock})</span>}
-            </p>
-          </CardContent>
-        </Card>
+        <>
+          <Card className="!bg-amber-50 border-amber-200">
+            <CardContent className="p-3 flex items-center gap-3">
+              <Lock className="w-5 h-5 text-amber-600 animate-pulse shrink-0" />
+              <p className="text-sm font-semibold text-amber-900">
+                Cambios bloqueados — tramo de jornada activo
+                {timeUntilLock && timeUntilLock !== 'Finalizada' && <span className="ml-1 font-normal">(cierra en {timeUntilLock})</span>}
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Estadísticas del equipo durante la jornada */}
+          <Card className="!bg-emerald-50 border-emerald-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Trophy className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-bold text-emerald-900">Estadísticas de tu Equipo</h3>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Users className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-xs text-slate-500 font-medium">Sistema</span>
+                  </div>
+                  <p className="text-lg font-bold text-slate-900">{teamStats.formacion}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-xs text-slate-500 font-medium">Valor Equipo</span>
+                  </div>
+                  <p className="text-lg font-bold text-slate-900">{teamStats.precioTotal > 0 ? `${teamStats.precioTotal}M` : '-'}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Trophy className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-xs text-slate-500 font-medium">Puntos Totales</span>
+                  </div>
+                  <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.puntosTotales * 10) / 10}</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-xs text-slate-500 font-medium">Media por Jugador</span>
+                  </div>
+                  <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.mediaPuntos * 10) / 10}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {/* Once inicial - Grid responsive ordenado por posiciones */}
