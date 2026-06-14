@@ -788,7 +788,7 @@ export default function ClasificacionPage() {
                   {isExpanded && userTeamData[standing.user_id] && (
                     <tr>
                       <td colSpan={10} className="p-0">
-                        <div ref={(el) => (teamRefs.current[standing.user_id] = el)} className="bg-slate-700/50 p-4">
+                        <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 p-4">
                           <Card className="!bg-slate-800 border-slate-600">
                             <CardContent className="p-4">
                               <div className="flex items-center gap-2 mb-4">
