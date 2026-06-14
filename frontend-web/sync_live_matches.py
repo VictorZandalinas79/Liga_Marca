@@ -69,7 +69,9 @@ POINTS = {
     'TACKLE_LOST':        {'POR': 0.0,  'DEF': -0.1, 'MED': -0.1, 'DEL': 0.0},
     'BLOCK_SHOT':         {'POR': 0.2,  'DEF': 0.5,  'MED': 0.4,  'DEL': 0.2},
     'BLOCK_PASS':         {'POR': 0.1,  'DEF': 0.2,  'MED': 0.2,  'DEL': 0.1},
-    'BALL_RECOVERY':      {'POR': 0.1,  'DEF': 0.2,  'MED': 0.2,  'DEL': 0.1},
+    'RECOVERY_HIGH':      {'POR': 0.3,  'DEF': 0.3,  'MED': 0.3,  'DEL': 0.3},
+    'RECOVERY_MED':       {'POR': 0.2,  'DEF': 0.2,  'MED': 0.2,  'DEL': 0.2},
+    'RECOVERY_LOW':       {'POR': 0.1,  'DEF': 0.1,  'MED': 0.1,  'DEL': 0.1},
     'OFFSIDE_PROVOKED':   {'POR': 0.0,  'DEF': 0.2,  'MED': 0.1,  'DEL': 0.0},
     'CHALLENGE_LOST':     {'POR': 0.0,  'DEF': -0.1, 'MED': -0.1, 'DEL': 0.0},
     'ERROR_LED_SHOT':     {'POR': -1.5, 'DEF': -1.0, 'MED': -1.0, 'DEL': -0.5},
@@ -507,7 +509,14 @@ class LiveMatchSync:
         self.apply_points(event.get('playerId'), 'BLOCK_PASS')
 
     def _handle_recovery(self, event):
-        self.apply_points(event.get('playerId'), 'BALL_RECOVERY')
+        pid = event.get('playerId')
+        x_coord = event.get('x', 0)
+        if x_coord > 66.6:
+            self.apply_points(pid, 'RECOVERY_HIGH')
+        elif x_coord >= 33.3:
+            self.apply_points(pid, 'RECOVERY_MED')
+        else:
+            self.apply_points(pid, 'RECOVERY_LOW')
 
     def _handle_challenge(self, event):
         self.apply_points(event.get('playerId'), 'CHALLENGE_LOST')
@@ -741,7 +750,10 @@ class LiveMatchSync:
                 'tackles_lost': stats.get('TACKLE_LOST', 0),
                 'blocked_shots': stats.get('BLOCK_SHOT', 0),
                 'blocked_passes': stats.get('BLOCK_PASS', 0),
-                'ball_recoveries': stats.get('BALL_RECOVERY', 0),
+                'recoveries_high': stats.get('RECOVERY_HIGH', 0),
+                'recoveries_med': stats.get('RECOVERY_MED', 0),
+                'recoveries_low': stats.get('RECOVERY_LOW', 0),
+                'ball_recoveries': stats.get('RECOVERY_HIGH', 0) + stats.get('RECOVERY_MED', 0) + stats.get('RECOVERY_LOW', 0),
                 'offsides_provoked': stats.get('OFFSIDE_PROVOKED', 0),
                 'challenges_lost': stats.get('CHALLENGE_LOST', 0),
 
