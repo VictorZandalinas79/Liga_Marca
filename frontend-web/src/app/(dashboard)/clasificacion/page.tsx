@@ -628,24 +628,23 @@ export default function ClasificacionPage() {
       {/* Tabla de clasificación */}
       <Card className="!bg-slate-800 border-slate-700">
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto w-full">
+            <table className="min-w-max w-full">
               <thead>
                 <tr className="border-b border-slate-700">
-                  <th className="text-left text-xs sm:text-sm font-semibold text-slate-300 p-2 sm:p-4">Pos</th>
-                  <th className="text-left text-xs sm:text-sm font-semibold text-slate-300 p-2 sm:p-4">Jugador</th>
+                  <th className="text-left text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap">Pos</th>
+                  <th className="text-left text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap">Jugador</th>
                   <th
-                    className="text-right text-xs sm:text-sm font-semibold text-slate-300 p-2 sm:p-4 cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('total_points')}
                   >
                     <div className="flex items-center justify-end gap-1">
-                      <span className="sm:hidden">Pts</span>
-                      <span className="hidden sm:inline">Puntos Totales</span>
+                      Pts Totales
                       <SortIcon field="total_points" />
                     </div>
                   </th>
                   <th
-                    className="hidden sm:table-cell text-right text-sm font-semibold text-slate-300 p-4 cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('average_points')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -654,17 +653,17 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="hidden md:table-cell text-right text-sm font-semibold text-slate-300 p-4 cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('last_3_jornadas_points')}
                   >
                     <div className="flex items-center justify-end gap-1">
-                      Últimas 3
+                      Últ. 3
                       <SortIcon field="last_3_jornadas_points" />
                     </div>
                   </th>
-                  <th className="hidden sm:table-cell text-center text-sm font-semibold text-slate-300 p-4">Tendencia</th>
+                  <th className="text-center text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap">Tendencia</th>
                   <th
-                    className="hidden lg:table-cell text-right text-sm font-semibold text-slate-300 p-4 cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('best_change_score')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -673,24 +672,24 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-center text-xs sm:text-sm font-semibold text-slate-300 p-2 sm:p-4 cursor-pointer hover:bg-slate-700"
+                    className="text-center text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('podium_finishes')}
                     title="Veces entre los 3 primeros de una jornada"
                   >
                     <div className="flex items-center justify-center gap-1">
-                      <Trophy className="w-4 h-4 text-yellow-500" />
-                      <span className="hidden md:inline">Podios</span>
+                      <Trophy className="w-3 h-3 text-yellow-500" />
+                      Podios
                       <SortIcon field="podium_finishes" />
                     </div>
                   </th>
                   <th
-                    className="text-center text-xs sm:text-sm font-semibold text-slate-300 p-2 sm:p-4 cursor-pointer hover:bg-slate-700"
+                    className="text-center text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('bottom_finishes')}
                     title="Veces entre los 3 últimos de una jornada"
                   >
                     <div className="flex items-center justify-center gap-1">
-                      <TrendingDown className="w-4 h-4 text-red-500" />
-                      <span className="hidden md:inline">Colistas</span>
+                      <TrendingDown className="w-3 h-3 text-red-500" />
+                      Colistas
                       <SortIcon field="bottom_finishes" />
                     </div>
                   </th>
@@ -711,74 +710,74 @@ export default function ClasificacionPage() {
                     } cursor-pointer`}
                     onClick={() => handleUserClick(standing.user_id)}
                   >
-                    <td className="p-2 sm:p-4">
+                    <td className="px-2 py-3">
                       {getPositionMedal(standing.current_position, isLast)}
                     </td>
-                    <td className="p-2 sm:p-4">
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="hidden sm:flex w-8 h-8 rounded-full bg-slate-600 items-center justify-center shrink-0">
-                          <User className="w-4 h-4 text-slate-300" />
+                    <td className="px-2 py-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex w-7 h-7 rounded-full bg-slate-600 items-center justify-center shrink-0">
+                          <User className="w-3 h-3 text-slate-300" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-white text-sm sm:text-base truncate uppercase">{standing.user_name}</p>
+                          <p className="font-semibold text-white text-xs whitespace-nowrap uppercase">{standing.user_name}</p>
                           {standing.best_matchday_points > 0 && (
-                            <p className="text-xs text-amber-400 font-medium">
+                            <p className="text-xs text-amber-400 font-medium whitespace-nowrap">
                               Mejor: {Math.round(standing.best_matchday_points * 10) / 10} pts (J{standing.best_matchday})
                             </p>
                           )}
                         </div>
                       </div>
                     </td>
-                    <td className="p-2 sm:p-4 text-right">
-                      <span className="text-xl sm:text-2xl font-bold text-emerald-400">
+                    <td className="px-2 py-3 text-right whitespace-nowrap">
+                      <span className="text-base font-bold text-emerald-400">
                         {Math.round(standing.total_points * 10) / 10}
                       </span>
-                      <span className="hidden sm:inline text-xs text-slate-400 ml-1">pts</span>
+                      <span className="text-xs text-slate-400 ml-1">pts</span>
                     </td>
-                    <td className="hidden sm:table-cell p-4 text-right">
-                      <span className="text-lg font-semibold text-slate-200">
+                    <td className="px-2 py-3 text-right whitespace-nowrap">
+                      <span className="text-sm font-semibold text-slate-200">
                         {standing.average_points}
                       </span>
-                      <span className="text-xs text-slate-400 ml-1">pts/jor</span>
+                      <span className="text-xs text-slate-400 ml-1">pts/j</span>
                     </td>
-                    <td className="hidden md:table-cell p-4 text-right">
-                      <span className="text-lg font-semibold text-blue-400">
+                    <td className="px-2 py-3 text-right whitespace-nowrap">
+                      <span className="text-sm font-semibold text-blue-400">
                         {Math.round(standing.last_3_jornadas_points * 10) / 10}
                       </span>
                     </td>
-                    <td className="hidden sm:table-cell p-4">
+                    <td className="px-2 py-3">
                       <div className="flex justify-center">
                         {getTrendIcon(standing.last_3_trend)}
                       </div>
                     </td>
-                    <td className="hidden lg:table-cell p-4 text-right">
+                    <td className="px-2 py-3 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
-                        <span className={`text-lg font-bold ${
+                        <span className={`text-sm font-bold ${
                           standing.best_change_score >= 70 ? 'text-emerald-400' :
                           standing.best_change_score >= 40 ? 'text-amber-400' : 'text-slate-400'
                         }`}>
                           {standing.best_change_score}%
                         </span>
                         {standing.best_change_score >= 70 && (
-                          <CheckCircle className="w-4 h-4 text-emerald-400" />
+                          <CheckCircle className="w-3 h-3 text-emerald-400" />
                         )}
                       </div>
-                      <p className="text-xs text-slate-400">
-                        {standing.successful_changes}/{standing.total_changes} cambios
+                      <p className="text-xs text-slate-400 whitespace-nowrap">
+                        {standing.successful_changes}/{standing.total_changes}
                       </p>
                     </td>
-                    <td className="p-2 sm:p-4 text-center">
+                    <td className="px-2 py-3 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1">
-                        <Trophy className="w-4 h-4 text-yellow-500 shrink-0" />
-                        <span className="text-base sm:text-lg font-bold text-yellow-400">
+                        <Trophy className="w-3 h-3 text-yellow-500 shrink-0" />
+                        <span className="text-sm font-bold text-yellow-400">
                           {standing.podium_finishes}
                         </span>
                       </div>
                     </td>
-                    <td className="p-2 sm:p-4 text-center">
+                    <td className="px-2 py-3 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1">
-                        <TrendingDown className="w-4 h-4 text-red-500 shrink-0" />
-                        <span className="text-base sm:text-lg font-bold text-red-400">
+                        <TrendingDown className="w-3 h-3 text-red-500 shrink-0" />
+                        <span className="text-sm font-bold text-red-400">
                           {standing.bottom_finishes}
                         </span>
                       </div>
