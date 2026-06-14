@@ -79,6 +79,7 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   if (n(player.successful_crosses) > 0) b7.push(u(n(player.successful_crosses), 0.3, 'Centros exitosos'))
   if (n(player.set_pieces_taken) > 0)   b7.push(u(n(player.set_pieces_taken), 0.2, 'Balón parado'))
   if (n(player.takeons_won) > 0)        b7.push(u(n(player.takeons_won), 0.5, 'Regates ganados'))
+  if (n(player.long_balls_completed) > 0) b7.push(u(n(player.long_balls_completed), 0.5, 'Pases largos completados'))
   if (n(player.shots_on_target) > 0)    b7.push(u(n(player.shots_on_target), 0.3, 'Tiros a puerta'))
   if (n(player.recoveries_high) > 0)    b7.push(u(n(player.recoveries_high), 0.3, 'Recuperación alta'))
   if (n(player.recoveries_med) > 0)     b7.push(u(n(player.recoveries_med), 0.2, 'Recuperación media'))
@@ -139,6 +140,15 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
       else if (aerAcc < 30) pts = -1
       b9.push({ label: `Aéreos ${aerAcc}% (${n(player.aerials_won)}/${aerialsTotal})`, count: 0, unit: 0, points: pts, flat: true })
       knownSum += pts
+    }
+
+    const takeonTotal = n(player.takeons_won) + n(player.takeons_lost)
+    if (takeonTotal > 0) {
+      const takeonAcc = Math.round((n(player.takeons_won) / takeonTotal) * 100)
+      if (takeonAcc > 50) {
+        b9.push({ label: `Regates ${takeonAcc}% éxito (${n(player.takeons_won)}/${takeonTotal})`, count: 0, unit: 0, points: 1, flat: true })
+        knownSum += 1
+      }
     }
 
     const residuo = r2(totalRelevo - Math.max(0, knownSum))

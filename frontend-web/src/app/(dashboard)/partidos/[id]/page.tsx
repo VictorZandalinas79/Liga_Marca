@@ -523,6 +523,12 @@ export default function PartidoDetallePage() {
               {(player.assists || 0) > 0 && (
                 <p className="text-[10px] text-blue-400">🅰️ {player.assists}</p>
               )}
+              {(player.yellow_cards || 0) > 0 && (
+                <p className="text-[10px] text-yellow-400">🟨 {player.yellow_cards}</p>
+              )}
+              {(player.red_cards || 0) > 0 && (
+                <p className="text-[10px] text-red-400">🟥 {player.red_cards}</p>
+              )}
             </div>
           </div>
           {/* Nombre en fila propia con todo el ancho */}

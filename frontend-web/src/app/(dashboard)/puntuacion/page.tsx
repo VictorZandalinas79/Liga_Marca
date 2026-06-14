@@ -193,6 +193,10 @@ export default function PuntuacionPage() {
             { accion: 'Pases hacia adelante completados', detalle: 'por cada 10 pases donde la coordenada X final (qualifier 140) es mayor que la inicial', pts: '+1' },
             { accion: 'Lanzamiento de falta o córner', detalle: 'por cada 5 envíos (qualifier 5 o 6)', pts: '+1' },
             { accion: 'Centros buenos', detalle: 'por cada 3 centros con éxito (pase completado con qualifier 2)', pts: '+1' },
+            { accion: 'Pase largo completado', detalle: 'por cada pase largo exitoso (typeId 1, outcome 1, qualifier 1 presente)', pts: '+0.5' },
+            { accion: 'Balón recuperado (zona alta)', detalle: 'recuperación con x > 66.6', pts: '+0.3' },
+            { accion: 'Balón recuperado (zona media)', detalle: 'recuperación con 33.3 ≤ x ≤ 66.6', pts: '+0.2' },
+            { accion: 'Balón recuperado (zona baja)', detalle: 'recuperación con x < 33.3', pts: '+0.1' },
           ]}
         />
       </Section>
@@ -274,6 +278,14 @@ export default function PuntuacionPage() {
             <ul className="mt-1 space-y-1 text-sm text-slate-600">
               <li className="flex items-start gap-2"><Pts value="+1" /><span>gana el 60% o más por alto.</span></li>
               <li className="flex items-start gap-2"><Pts value="-1" /><span>gana menos del 30%.</span></li>
+            </ul>
+          </li>
+          <li>
+            <p className="text-sm font-semibold text-slate-800">
+              7. Regates intentados
+            </p>
+            <ul className="mt-1 space-y-1 text-sm text-slate-600">
+              <li className="flex items-start gap-2"><Pts value="+1" /><span>más del 50% de los regates intentados son exitosos.</span></li>
             </ul>
           </li>
         </ol>

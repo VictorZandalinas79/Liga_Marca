@@ -362,9 +362,10 @@ export default function JugadorDetallePage() {
       forward_passes: 0.2,     // forward_passes
       set_pieces_taken: 0.2,   // set_pieces_taken
       successful_crosses: 0.3, // successful_crosses
-      recoveries_high: 0.3,    // recoveries_high
-      recoveries_med: 0.2,     // recoveries_med
-      recoveries_low: 0.1,     // recoveries_low
+      recoveries_high: 0.3,        // recoveries_high
+      recoveries_med: 0.2,         // recoveries_med
+      recoveries_low: 0.1,         // recoveries_low
+      long_balls_completed: 0.5,   // long_balls_completed
     },
     // Penalización por balón perdido: -0.1 uniforme (scoring_rules.json)
     lost_balls: -0.1,
@@ -438,6 +439,7 @@ export default function JugadorDetallePage() {
     if (g('successful_crosses') > 0) b7.push(u(g('successful_crosses'), SR.per_unit.successful_crosses, 'Centros exitosos'))
     if (g('set_pieces_taken') > 0) b7.push(u(g('set_pieces_taken'), SR.per_unit.set_pieces_taken, 'Balón parado'))
     if (score.takeons_won > 0) b7.push(u(score.takeons_won, SR.per_unit.takeons_won, 'Regates ganados'))
+    if (g('long_balls_completed') > 0) b7.push(u(g('long_balls_completed'), SR.per_unit.long_balls_completed, 'Pases largos completados'))
     if (score.shots_on_target > 0) b7.push(u(score.shots_on_target, SR.per_unit.shots_on_target, 'Tiros a puerta'))
     if (g('recoveries_high') > 0) b7.push(u(g('recoveries_high'), SR.per_unit.recoveries_high, 'Recuperación alta'))
     if (g('recoveries_med') > 0) b7.push(u(g('recoveries_med'), SR.per_unit.recoveries_med, 'Recuperación media'))
@@ -451,7 +453,16 @@ export default function JugadorDetallePage() {
 
     // BLOQUE 9: Puntos RELEVO
     const b9: ScoreRow[] = []
-    if (score.relevo_points) b9.push({ label: 'Bonus RELEVO (rendimiento global)', count: 0, unit: 0, points: score.relevo_points, flat: true })
+    if (score.relevo_points) {
+      const takeonTotal = g('takeons_won') + g('takeons_lost')
+      const takeonBonus = takeonTotal > 0 && (g('takeons_won') / takeonTotal) > 0.5 ? 1 : 0
+      const baseRelevo = score.relevo_points - takeonBonus
+      if (baseRelevo > 0) b9.push({ label: 'Bonus RELEVO (participación, pases, duelos, tiros)', count: 0, unit: 0, points: baseRelevo, flat: true })
+      if (takeonBonus > 0) {
+        const takeonAcc = Math.round((g('takeons_won') / takeonTotal) * 100)
+        b9.push({ label: `Regates ${takeonAcc}% éxito (${g('takeons_won')}/${takeonTotal})`, count: 0, unit: 0, points: 1, flat: true })
+      }
+    }
 
     return [
       { id: 'b1', emoji: '⏱️', title: 'Participación', accent: 'text-slate-600', chip: 'bg-slate-100 text-slate-700', rows: b1 },

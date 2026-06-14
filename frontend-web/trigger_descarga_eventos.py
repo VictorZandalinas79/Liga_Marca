@@ -434,7 +434,14 @@ class MatchEventDownloader:
             aer_acc = (stats.get('aerials_won', 0) / aerials_total) * 100
             if aer_acc >= rules.get('aerials_won_high', 60): relevo += 1
             elif aer_acc < rules.get('aerials_won_low', 30): relevo -= 1
-            
+
+        # 7. REGATES INTENTADOS (>50% de éxito)
+        takeons_won = stats.get('takeons_won', 0)
+        takeons_lost = stats.get('takeons_lost', 0)
+        takeons_total = takeons_won + takeons_lost
+        if takeons_total > 0 and (takeons_won / takeons_total) > 0.5:
+            relevo += 1
+
         # GARANTIZAR LÍMITE (De 0 a 4 Puntos)
         return max(0, min(4, relevo))
 
@@ -550,6 +557,7 @@ class MatchEventDownloader:
         points += apply_bonus('forward_passes', bonuses.get('forward_passes', {}))
         points += apply_bonus('set_pieces_taken', bonuses.get('set_pieces_taken', {}))
         points += apply_bonus('successful_crosses', bonuses.get('successful_crosses', {}))
+        points += apply_bonus('long_balls_completed', bonuses.get('long_balls_completed', {}))
 
         # ============================================
         # === PENALIZACIONES POSICIONALES ===
@@ -698,6 +706,7 @@ class MatchEventDownloader:
         x_coord = event.get('x', 0)
         y_coord = event.get('y', 0)
         is_opp_half = x_coord >= 50
+        is_long = self.has_qualifier(event, Q_LONG_BALL)
 
         self.apply_points(pid, 'passes_attempted', 1, current_min)
         if is_opp_half: self.apply_points(pid, 'pass_opp_half_attempted', 1, current_min)
@@ -706,7 +715,7 @@ class MatchEventDownloader:
         # Lógica Balón Parado
         is_corner = self.has_qualifier(event, Q_CORNER)
         is_free_kick = self.has_qualifier(event, Q_FREE_KICK)
-        
+
         # Falta (si X > 60) o Córner
         if is_corner or (is_free_kick and x_coord > 60):
             self.apply_points(pid, 'set_pieces_taken', 1, current_min)
@@ -730,12 +739,14 @@ class MatchEventDownloader:
                 if end_x > 83 and 21.1 <= end_y <= 78.9:
                     self.apply_points(pid, 'box_entries', 1, current_min)
 
+            if is_long:
+                self.apply_points(pid, 'long_balls_completed', 1, current_min)
+
             if self.has_qualifier(event, Q_CROSS):
                 self.apply_points(pid, 'crosses_completed', 1, current_min)
                 # Solo suma 'successful_crosses' si NO es córner y NO es falta
                 if not is_corner and not is_free_kick:
                     self.apply_points(pid, 'successful_crosses', 1, current_min)
-                    
 
             assist_val = self.get_qualifier(event, Q_ASSIST)
             if assist_val is not False:

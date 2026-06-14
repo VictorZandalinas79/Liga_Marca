@@ -155,6 +155,11 @@
       "required": 1,
       "points": 0.3,
       "description": "Centros buenos con outcome 1"
+    },
+    "long_balls_completed": {
+      "required": 1,
+      "points": 0.5,
+      "description": "Pase largo bueno: typeId 1, outcome 1, qualifier 1 presente"
     }
   },
   "penalties_per_X": {

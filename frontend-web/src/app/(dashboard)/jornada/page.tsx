@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -75,7 +75,9 @@ export default function JornadaPage() {
   const [sortBy, setSortBy] = useState<'puntos' | 'promedio'>('puntos')
   const [modalPlayer, setModalPlayer] = useState<Record<string, any> | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const supabase = createClient()
+  const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const openPlayerStats = async (playerId: string) => {
     setModalLoading(true)
@@ -465,6 +467,13 @@ export default function JornadaPage() {
 
   useEffect(() => {
     fetchMatchdays()
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setCurrentUserId(user.id)
+      }
+    }
+    getCurrentUser()
   }, [])
 
   useEffect(() => {
@@ -596,44 +605,18 @@ export default function JornadaPage() {
 
       {/* Clasificación de la jornada */}
       {userTeams.length > 0 && (
-        <Card className="border-2 border-emerald-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-4 flex-wrap">
-              <Trophy className="w-5 h-5 text-emerald-600" />
-              <h2 className="text-lg font-bold text-slate-900">
-                Clasificación {getMatchdayLabel(currentInfo)}
-              </h2>
-              {currentInfo?.live && (
-                <Badge className="bg-red-500 text-white text-xs flex items-center gap-1 animate-pulse">
-                  <Radio className="w-3 h-3" /> EN DIRECTO
-                </Badge>
-              )}
-              <div className="ml-auto flex items-center gap-1 bg-slate-100 rounded-lg p-1">
-                <button
-                  onClick={() => setSortBy('puntos')}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${sortBy === 'puntos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Puntos
-                </button>
-                <button
-                  onClick={() => setSortBy('promedio')}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${sortBy === 'promedio' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Promedio
-                </button>
-              </div>
-            </div>
-
+        <Card className="!bg-slate-800 border-slate-700">
+          <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Pos</th>
-                    <th className="text-left py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Equipo</th>
-                    <th className="text-center py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Sys</th>
-                    <th className="text-right py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold text-slate-600">Valor</th>
-                    <th className={`text-right py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold ${sortBy === 'puntos' ? 'text-emerald-600' : 'text-slate-600'}`}>Pts</th>
-                    <th className={`text-right py-2 px-1 sm:px-2 text-xs sm:text-sm font-semibold ${sortBy === 'promedio' ? 'text-emerald-600' : 'text-slate-600'}`}>Prom</th>
+                  <tr className="border-b border-slate-700">
+                    <th className="text-left py-3 px-2 text-xs sm:text-sm font-semibold text-slate-300">Pos</th>
+                    <th className="text-left py-3 px-2 text-xs sm:text-sm font-semibold text-slate-300">Equipo</th>
+                    <th className="text-center py-3 px-2 text-xs sm:text-sm font-semibold text-slate-300">Sys</th>
+                    <th className="text-right py-3 px-2 text-xs sm:text-sm font-semibold text-slate-300">Valor</th>
+                    <th className={`text-right py-3 px-2 text-xs sm:text-sm font-semibold ${sortBy === 'puntos' ? 'text-emerald-400' : 'text-slate-300'}`}>Pts</th>
+                    <th className={`text-right py-3 px-2 text-xs sm:text-sm font-semibold ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}>Prom</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -643,44 +626,53 @@ export default function JornadaPage() {
                     const jugaron = getJugadoresJugaron(team.jugadores)
                     const total = team.jugadores.length
                     const promedio = getPromedio(team)
+                    const isCurrentUser = currentUserId === team.user_id
                     return (
-                    <tr key={team.team_id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-2 px-1 sm:px-2">
+                    <tr
+                      key={team.team_id}
+                      className={`border-b border-slate-700 transition-colors cursor-pointer ${
+                        isCurrentUser ? 'bg-emerald-900/30 animate-pulse' : 'hover:bg-slate-700/50'
+                      }`}
+                      onClick={() => {
+                        teamRefs.current[team.team_id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      }}
+                    >
+                      <td className="py-3 px-2">
                         <div className="flex items-center gap-1 sm:gap-2">
                           {pos === 1 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500" />}
-                          {pos === 2 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />}
+                          {pos === 2 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400" />}
                           {pos === 3 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-amber-600" />}
                           {isLast && pos > 3 && (
                             <span className="text-base sm:text-lg">🐷</span>
                           )}
                           {!isLast && (
-                            <span className={`font-bold text-xs sm:text-sm ${pos <= 3 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                            <span className={`font-bold text-xs sm:text-sm ${pos <= 3 ? 'text-emerald-400' : 'text-slate-300'}`}>
                               {pos}º
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="py-2 px-1 sm:px-2 max-w-[120px] sm:max-w-none">
-                        <span className="font-medium text-slate-900 text-xs sm:text-sm">{team.team_name}</span>
-                        <span className="block text-xs text-slate-500">
+                      <td className="py-3 px-2 max-w-[120px] sm:max-w-none">
+                        <span className="font-medium text-white text-xs sm:text-sm">{team.team_name}</span>
+                        <span className="block text-xs text-slate-400">
                           {jugaron} / {total} jugaron
                         </span>
                       </td>
-                      <td className="py-2 px-1 sm:px-2 text-center">
-                        <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-100 px-1 sm:px-2 py-0.5 rounded">
+                      <td className="py-3 px-2 text-center">
+                        <span className="text-xs font-mono font-semibold text-slate-200 bg-slate-600 px-1 sm:px-2 py-0.5 rounded">
                           {getFormacion(team.jugadores)}
                         </span>
                       </td>
-                      <td className="py-2 px-1 sm:px-2 text-right">
-                        <span className="text-xs sm:text-sm font-semibold text-slate-700">{fmtValor(team.valor_total)}</span>
+                      <td className="py-3 px-2 text-right">
+                        <span className="text-xs sm:text-sm font-semibold text-slate-200">{fmtValor(team.valor_total)}</span>
                       </td>
-                      <td className="py-2 px-1 sm:px-2 text-right">
-                        <Badge className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 whitespace-nowrap ${sortBy === 'puntos' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                      <td className="py-3 px-2 text-right">
+                        <Badge className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 whitespace-nowrap ${sortBy === 'puntos' ? 'bg-emerald-600 text-white' : 'bg-slate-600 text-slate-200'}`}>
                           {Math.round(team.puntos_totales * 10) / 10}
                         </Badge>
                       </td>
-                      <td className="py-2 px-1 sm:px-2 text-right">
-                        <Badge className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 whitespace-nowrap ${sortBy === 'promedio' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                      <td className="py-3 px-2 text-right">
+                        <Badge className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 whitespace-nowrap ${sortBy === 'promedio' ? 'bg-emerald-600 text-white' : 'bg-slate-600 text-slate-200'}`}>
                           {jugaron > 0 ? Math.round(promedio * 10) / 10 : '—'}
                         </Badge>
                       </td>
@@ -704,11 +696,18 @@ export default function JornadaPage() {
 
           {sortedTeams.map((team, index) => {
             const displayPos = index + 1
+            const isCurrentUser = currentUserId === team.user_id
             return (
-            <Card key={team.team_id} className="!border-slate-200">
+            <Card
+              key={team.team_id}
+              ref={(el) => (teamRefs.current[team.team_id] = el)}
+              className={`!border-slate-300 shadow-md scroll-mt-20 ${
+                isCurrentUser ? '!border-emerald-500 ring-2 ring-emerald-500/50' : ''
+              }`}
+            >
               <CardContent className="p-0">
                 {/* Cabecera del equipo */}
-                <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-4 py-3 border-b border-slate-200">
+                <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-4 py-3 border-b border-slate-300">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
@@ -725,6 +724,10 @@ export default function JornadaPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500">Sistema</p>
+                        <p className="text-sm font-mono font-bold text-slate-700">{getFormacion(team.jugadores)}</p>
+                      </div>
                       <div className="text-right">
                         <p className="text-xs text-slate-500">Valor</p>
                         <p className="text-lg font-bold text-slate-700">{fmtValor(team.valor_total)}</p>
@@ -788,6 +791,9 @@ export default function JornadaPage() {
                                       )}
                                     </div>
                                     <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                                      {player.team?.logo_url && (
+                                        <img src={player.team.logo_url} alt={player.team.name} className="w-4 h-4 object-contain" />
+                                      )}
                                       {player.team && <span className="truncate">{player.team.name}</span>}
                                       <span className="text-slate-400">· {fmtValor(player.valor || 0)}</span>
                                     </div>
