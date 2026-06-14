@@ -700,7 +700,7 @@ export default function JornadaPage() {
             return (
             <Card
               key={team.team_id}
-              ref={(el) => (teamRefs.current[team.team_id] = el)}
+              ref={(el) => { teamRefs.current[team.team_id] = el; }}
               className={`!border-slate-300 shadow-md scroll-mt-20 ${
                 isCurrentUser ? '!border-emerald-500 ring-2 ring-emerald-500/50' : ''
               }`}
