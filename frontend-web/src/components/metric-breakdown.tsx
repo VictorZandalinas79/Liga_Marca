@@ -19,9 +19,11 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
 
   const pos = normPos(player.calc_position || player.position)
 
-  const GOAL        = { POR: 6, DEF: 6, MED: 5, DEL: 4 } as const
-  const CLEAN_SHEET = { POR: 4, DEF: 3, MED: 2, DEL: 1 } as const
-  const GOAL_CONCEDED = { POR: -2, DEF: -2, MED: -1, DEL: -1 } as const
+  const GOAL           = { POR: 6,    DEF: 6,    MED: 5,    DEL: 4    } as const
+  const CLEAN_SHEET    = { POR: 4,    DEF: 3,    MED: 2,    DEL: 1    } as const
+  const GOAL_CONCEDED  = { POR: -2,   DEF: -2,   MED: -1,   DEL: -1   } as const
+  const INTERCEPTION   = { POR: 0.1,  DEF: 0.3,  MED: 0.3,  DEL: 0.1  } as const
+  const BALL_RECOVERY  = { POR: 0.1,  DEF: 0.2,  MED: 0.2,  DEL: 0.1  } as const
 
   interface Row  { label: string; count: number; unit: number; points: number; flat?: boolean }
   interface Block { id: string; emoji: string; title: string; accent: string; chip: string; rows: Row[] }
@@ -81,9 +83,15 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   if (n(player.takeons_won) > 0)        b7.push(u(n(player.takeons_won), 0.5, 'Regates ganados'))
   if (n(player.long_balls_completed) > 0) b7.push(u(n(player.long_balls_completed), 0.5, 'Pases largos completados'))
   if (n(player.shots_on_target) > 0)    b7.push(u(n(player.shots_on_target), 0.3, 'Tiros a puerta'))
-  if (n(player.recoveries_high) > 0)    b7.push(u(n(player.recoveries_high), 0.3, 'Recuperación alta'))
-  if (n(player.recoveries_med) > 0)     b7.push(u(n(player.recoveries_med), 0.2, 'Recuperación media'))
-  if (n(player.recoveries_low) > 0)     b7.push(u(n(player.recoveries_low), 0.1, 'Recuperación baja'))
+  if (n(player.interceptions) > 0)      b7.push(u(n(player.interceptions), INTERCEPTION[pos], `Intercepciones (${pos})`))
+  const hasZoneRecoveries = n(player.recoveries_high) + n(player.recoveries_med) + n(player.recoveries_low) > 0
+  if (hasZoneRecoveries) {
+    if (n(player.recoveries_high) > 0)  b7.push(u(n(player.recoveries_high), 0.3, 'Recuperación zona alta'))
+    if (n(player.recoveries_med) > 0)   b7.push(u(n(player.recoveries_med), 0.2, 'Recuperación zona media'))
+    if (n(player.recoveries_low) > 0)   b7.push(u(n(player.recoveries_low), 0.1, 'Recuperación zona baja'))
+  } else if (n(player.ball_recoveries) > 0) {
+    b7.push(u(n(player.ball_recoveries), BALL_RECOVERY[pos], `Recuperaciones (${pos})`))
+  }
   if (n(player.clearances) > 0)         b7.push(u(n(player.clearances), 0.5, 'Despejes'))
 
   // B8: Penalizaciones
