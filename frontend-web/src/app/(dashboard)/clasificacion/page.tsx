@@ -720,7 +720,7 @@ export default function ClasificacionPage() {
                           <User className="w-4 h-4 text-slate-300" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-white text-sm sm:text-base truncate">{standing.user_name}</p>
+                          <p className="font-semibold text-white text-sm sm:text-base truncate uppercase">{standing.user_name}</p>
                           {standing.best_matchday_points > 0 && (
                             <p className="text-xs text-amber-400 font-medium">
                               Mejor: {Math.round(standing.best_matchday_points * 10) / 10} pts (J{standing.best_matchday})
@@ -902,7 +902,7 @@ export default function ClasificacionPage() {
                   </div>
                   <div className="flex-1">
                     <p className="text-xs font-semibold text-emerald-700 uppercase">Mayor evolución (últimas 3 jornadas)</p>
-                    <p className="text-lg font-bold text-emerald-900">{topEvolution.user_name}</p>
+                    <p className="text-lg font-bold text-emerald-900 uppercase">{topEvolution.user_name}</p>
                     <p className="text-sm text-emerald-700">{topEvolution.last_3_jornadas_points} puntos</p>
                   </div>
                 </div>
@@ -919,7 +919,7 @@ export default function ClasificacionPage() {
                   </div>
                   <div className="flex-1">
                     <p className="text-xs font-semibold text-blue-700 uppercase">Mejor porcentaje de cambios</p>
-                    <p className="text-lg font-bold text-blue-900">{topChanges.user_name}</p>
+                    <p className="text-lg font-bold text-blue-900 uppercase">{topChanges.user_name}</p>
                     <p className="text-sm text-blue-700">{topChanges.best_change_score}% de acierto</p>
                   </div>
                 </div>

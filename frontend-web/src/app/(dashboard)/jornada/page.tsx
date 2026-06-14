@@ -718,7 +718,7 @@ export default function JornadaPage() {
                     }`}>
                       <span className="text-white text-sm font-bold">{displayPos}º</span>
                     </div>
-                    <h3 className="font-bold text-white truncate text-base">{team.user_name}</h3>
+                    <h3 className="font-bold text-white truncate text-base uppercase">{team.user_name}</h3>
                   </div>
                   {/* Fila 2: Sistema · Valor · Puntos centrados */}
                   <div className="flex items-center justify-center gap-6">
