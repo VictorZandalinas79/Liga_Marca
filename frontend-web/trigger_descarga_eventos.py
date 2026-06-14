@@ -895,79 +895,25 @@ class MatchEventDownloader:
 
     def find_player_id(self, api_player_id: str, team_id: str, player_name: str):
         """
-        Busca el ID real del jugador en la tabla players.
-        Como external_id está vacío en la BD, usamos coincidencia por nombre.
+        Busca el ID del jugador en la tabla players por ID (Opta ID = ID en BD).
+        No usa coincidencia por nombre para evitar mapeos incorrectos.
         """
-        player_name_lower = player_name.lower().strip() if player_name else ''
-
-        # Estrategia 0: Si el api_player_id parece un ID local (empieza por 'cult_'), buscar directamente
+        # Estrategia 0: Si el api_player_id empieza por 'cult_', buscar por external_id
         if api_player_id.startswith('cult_'):
-            response = self.supabase.table('players').select('id, external_id, short_name').eq('id', api_player_id).execute()
-            if response.data and len(response.data) > 0:
-                print(f"      🔍 Encontrado por ID directo: {api_player_id} → {api_player_id}")
+            response = self.supabase.table('players').select('id').eq('id', api_player_id).execute()
+            if response.data:
                 return api_player_id
-            # Buscar por external_id
-            response = self.supabase.table('players').select('id, external_id, short_name').eq('external_id', api_player_id.replace('cult_', '')).execute()
-            if response.data and len(response.data) > 0:
-                print(f"      🔍 Encontrado por external_id: {api_player_id.replace('cult_', '')} → {response.data[0]['id']}")
+            response = self.supabase.table('players').select('id').eq('external_id', api_player_id.replace('cult_', '')).execute()
+            if response.data:
                 return response.data[0]['id']
 
-        if not player_name_lower:
-            print(f"      ⚠️ Sin nombre para player {api_player_id}")
+        # Estrategia principal: buscar directamente por Opta ID en la BD
+        response_direct = self.supabase.table('players').select('id').eq('id', api_player_id).execute()
+        if response_direct.data:
             return api_player_id
 
-        # Obtener todos los jugadores del equipo
-        response = self.supabase.table('players').select('id, first_name, last_name, short_name, team_id').eq('team_id', team_id).execute()
-        if not response.data:
-            print(f"      ⚠️ No hay jugadores en BD para team {team_id}")
-            return api_player_id
-
-        # Estrategia 1: Coincidencia exacta por short_name
-        short_name = player_name_lower.split()[-1] if player_name_lower else ''
-        for player in response.data:
-            if player.get('short_name', '').lower() == short_name:
-                print(f"      🔍 Encontrado por short_name exacto: {player['short_name']} → {player['id']}")
-                return player['id']
-
-        # Estrategia 2: Coincidencia por apellido (última palabra) en first_name o last_name
-        for player in response.data:
-            full_name = f"{player.get('first_name', '')} {player.get('last_name', '')}".lower().strip()
-            # Buscar si el apellido coincide con alguna parte del nombre completo
-            if short_name and short_name in full_name.split():
-                print(f"      🔍 Encontrado por apellido en nombre: {full_name} → {player['id']}")
-                return player['id']
-
-        # Estrategia 3: Coincidencia parcial (el nombre de la API contiene el nombre de la BD o viceversa)
-        for player in response.data:
-            full_name = f"{player.get('first_name', '')} {player.get('last_name', '')}".lower().strip()
-            short = player.get('short_name', '').lower()
-
-            # Verificar si hay coincidencia significativa
-            if player_name_lower in full_name or full_name in player_name_lower:
-                print(f"      🔍 Encontrado por coincidencia parcial: '{full_name}' ~ '{player_name}' → {player['id']}")
-                return player['id']
-
-            # Verificar con short_name
-            if short and (short in player_name_lower or player_name_lower.endswith(short)):
-                print(f"      🔍 Encontrado por short_name parcial: '{short}' en '{player_name}' → {player['id']}")
-                return player['id']
-
-        # Estrategia 4: Coincidencia fonética aproximada (primera y última letra + longitud similar)
-        for player in response.data:
-            full_name = f"{player.get('first_name', '')} {player.get('last_name', '')}".lower().strip()
-            if len(full_name) > 3 and len(player_name_lower) > 3:
-                # Mismo rango de longitud y primera letra similar
-                if abs(len(full_name) - len(player_name_lower)) <= 3 and full_name[0] == player_name_lower[0]:
-                    # Contar palabras comunes
-                    name_words = set(player_name_lower.split())
-                    full_words = set(full_name.split())
-                    common = name_words & full_words
-                    if len(common) >= 1:
-                        print(f"      🔍 Encontrado por aproximación: '{full_name}' ~ '{player_name}' → {player['id']}")
-                        return player['id']
-
-        # No se encontró
-        print(f"      ⚠️ No se encontró jugador: API='{player_name}', Team={team_id}, Options: {[p.get('short_name') for p in response.data[:5]]}")
+        # No encontrado por ID — omitir este jugador
+        print(f"      ⚠️ Jugador no encontrado en BD por ID: {api_player_id} ({player_name})")
         return api_player_id
 
     def update_match_score(self, match_ended=False, current_minute=0):
@@ -1021,8 +967,9 @@ class MatchEventDownloader:
 
             # Si no se encontró el jugador, saltar este registro
             if db_player_id == player_id:
-                # Verificar si realmente existe en la BD
-                exists = self.supabase.table('players').select('id').eq('id', player_id).eq('team_id', team_id).execute()
+                # Verificar que el jugador existe en la BD (solo por ID, sin restricción de equipo:
+                # un jugador puede estar en BD con team_id de club pero jugar en selección nacional)
+                exists = self.supabase.table('players').select('id').eq('id', player_id).execute()
                 if not exists.data:
                     print(f"   ⚠️ Saltando {self.player_names.get(player_id, player_id)}: no encontrado en BD")
                     continue

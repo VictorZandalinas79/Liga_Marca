@@ -629,16 +629,15 @@ def find_player_match_reversed(csv_player_row, indexed_api_players):
     return None, best_score, best_candidate_name
 
 def sync_players_with_csv(squads_data):
-    """Sincroniza en Supabase UNICAMENTE los jugadores del CSV que tengan un match exitoso en la API."""
-    print(f"\n🔗 Sincronizando jugadores (CSV dicta quién entra al juego, API dicta sus IDs y metadatos)...")
+    """Sincroniza TODOS los jugadores de la API y usa el CSV solo para agregar foto y precio."""
+    print(f"\n🔗 Sincronizando jugadores (API dicta quién entra, CSV solo enriquece foto y precio)...")
 
     csv_players_by_team = load_csv_players()
-    if not csv_players_by_team:
-        print("❌ Operación cancelada: No se pudieron cargar jugadores del CSV")
-        return False
+    csv_teams = list(csv_players_by_team.keys()) if csv_players_by_team else []
 
-    csv_teams = list(csv_players_by_team.keys())
-    
+    if not csv_players_by_team:
+        print("⚠️ No se encontró CSV o está vacío. Se subirán todos los jugadores de la API sin foto ni precio.")
+
     # 1. Mapear los equipos de la API con los del CSV
     csv_to_api_team_map = {}
     for squad in squads_data:
@@ -648,146 +647,145 @@ def sync_players_with_csv(squads_data):
         
         if not api_team_id: continue
         
-        csv_team_name, _ = find_team_match(api_team_name, csv_teams)
-        if csv_team_name:
-            csv_to_api_team_map[csv_team_name] = {
-                "team_id": api_team_id,
-                "players": squad.get('players', [])
-            }
+        if csv_teams:
+            csv_team_name, _ = find_team_match(api_team_name, csv_teams)
+            if csv_team_name:
+                csv_to_api_team_map[csv_team_name] = {
+                    "team_id": api_team_id,
+                    "players": squad.get('players', [])
+                }
 
-    total_csv_players = 0
-    total_matched = 0
-    total_no_match = 0
-    players_payload = []
-    jugadores_sin_match = []
-
-    # 2. Recorrer el CSV (Él decide quién califica para entrar al juego)
+    # 2. Hacer los matches previamente y guardar la relación: API_ID -> DATOS_DEL_CSV
+    # Reutilizamos tu función inteligente de match sin perder calidad.
+    api_id_to_csv_data = {}
+    
     for csv_team_name, csv_players_list in csv_players_by_team.items():
         api_team_data = csv_to_api_team_map.get(csv_team_name)
-        
         if not api_team_data:
-            # Si el equipo entero del CSV no existe en la API, saltamos y reportamos a todos sus jugadores
-            print(f"   ⚠️ El equipo '{csv_team_name}' del CSV no se encontró en la API. Saltando sus jugadores.")
-            for csv_player in csv_players_list:
-                total_csv_players += 1
-                total_no_match += 1
-                jugadores_sin_match.append(f"- [{csv_team_name}] {csv_player.get('Nombre')} | MOTIVO: El equipo nacional completo no fue encontrado en la API de Opta.")
             continue
 
-        team_id = api_team_data["team_id"]
-        
-        # Pool de jugadores de la API: el CSV ya controla quién entra, no filtramos por 'active'
-        # para no excluir jugadores que la API pueda tener marcados de forma distinta
-        api_players_pool = [
-            p for p in api_team_data["players"]
-            if p.get('type') == 'player'
-        ]
-
-        print(f"   [{csv_team_name}] Pool API: {len(api_players_pool)} jugadores | CSV: {len(csv_players_list)} jugadores")
-        if not api_players_pool:
-            print(f"      ⚠️  Pool vacío. Claves crudas del equipo: {list(api_team_data.get('players', {})[:1])}")
+        api_players_pool = [p for p in api_team_data["players"] if p.get('type') == 'player']
 
         for csv_player in csv_players_list:
-            total_csv_players += 1
-            csv_raw_name = csv_player.get('Nombre', '').strip()
-            if not csv_raw_name: continue
-
-            # Buscar este jugador del CSV en el pool de jugadores oficiales de la API
-            matched_api, score, best_candidate_name = find_player_match_reversed(csv_player, api_players_pool)
-
+            matched_api, score, _ = find_player_match_reversed(csv_player, api_players_pool)
             if matched_api:
-                # === MATCH EXITOSO ===
-                # El jugador entra a la base de datos con su ID oficial y los datos del CSV
-                total_matched += 1
                 player_id = matched_api.get('id')
-                
-                pos_map = {
-                    "Goalkeeper": "Goalkeeper", "Defender": "Defender",
-                    "Midfielder": "Midfielder", "Forward": "Forward", "Attacker": "Forward"
-                }
-                position = pos_map.get(matched_api.get('position', 'Forward'), "Forward")
-
-                # Insertamos en el payload usando la metadata oficial del JSON + Foto y Precio del CSV
-                players_payload.append({
-                    "id": player_id,
-                    "team_id": team_id,
-                    "first_name": matched_api.get('firstName'),
-                    "last_name": matched_api.get('lastName'),
-                    "short_name": matched_api.get('matchName') or matched_api.get('shortLastName') or csv_raw_name,
-                    "position": position,
-                    "status": matched_api.get('status', 'active'),
-                    "photo": csv_player.get('Foto'),  # Foto de tu CSV
-                    "precio": int(float(csv_player['Precio_Normalizado'])) if csv_player.get('Precio_Normalizado') else 1000000, # Precio de tu CSV
-                    "date_of_birth": matched_api.get('dateOfBirth'),
-                    "nationality": matched_api.get('nationality'),
-                    "height": matched_api.get('height'),
-                    "weight": matched_api.get('weight'),
-                    "foot": matched_api.get('foot'),
-                    "shirt_number": matched_api.get('shirtNumber'),
-                })
-                
-                # Lo removemos del pool temporal de este equipo para evitar emparejamientos duplicados
+                api_id_to_csv_data[player_id] = csv_player
+                # Lo removemos del pool temporal
                 api_players_pool = [x for x in api_players_pool if x.get('id') != player_id]
+
+    # 3. Recorrer TODOS los jugadores de la API para armar el payload final (Entran todos)
+    players_payload = []
+    total_api_players = 0
+    total_enriched = 0
+    total_no_match = 0
+    jugadores_sin_csv = []
+    
+    pos_map = {
+        "Goalkeeper": "Goalkeeper", "Defender": "Defender",
+        "Midfielder": "Midfielder", "Forward": "Forward", "Attacker": "Forward"
+    }
+
+    for squad in squads_data:
+        team_id = squad.get('team', {}).get('id')
+        api_team_name = squad.get('team', {}).get('name', '')
+        
+        if not team_id: continue
+        
+        # Iterar todos los jugadores del equipo en la API
+        for api_player in squad.get('players', []):
+            if api_player.get('type') != 'player': continue
+            
+            total_api_players += 1
+            player_id = api_player.get('id')
+            first_name = api_player.get('firstName')
+            last_name = api_player.get('lastName')
+            match_name = api_player.get('matchName') or api_player.get('shortLastName') or f"{first_name or ''} {last_name or ''}".strip()
+            
+            # Buscar si este ID de la API logró emparejarse con un CSV en el paso anterior
+            csv_match = api_id_to_csv_data.get(player_id)
+            
+            # Por defecto: Vacíos si no hay match
+            foto = None
+            precio = None
+            
+            if csv_match:
+                # Si hay match, le asignamos la foto y convertimos el precio
+                total_enriched += 1
+                foto = csv_match.get('Foto')
+                raw_precio = csv_match.get('Precio_Normalizado')
+                if raw_precio:
+                    try:
+                        precio = int(float(raw_precio))
+                    except ValueError:
+                        precio = None
             else:
-                # === SIN MATCH ===
-                # No entra a la base de datos (se salta) y reportamos el porqué detalladamente
                 total_no_match += 1
+                jugadores_sin_csv.append(f"- [{api_team_name}] {match_name} | Subido a BD pero sin foto ni precio (No encontrado en el CSV)")
 
-                pool_size = len(api_players_pool)
-                if not api_players_pool:
-                    motivo = "Pool de la API vacío para este equipo (0 jugadores descargados)."
-                elif best_candidate_name:
-                    motivo = f"Mejor candidato en la API fue '{best_candidate_name}' al {score*100:.0f}% (pool={pool_size} jugadores). Se requiere >65%."
-                else:
-                    motivo = f"No se encontró ningún jugador parecido (pool={pool_size} jugadores)."
+            position = pos_map.get(api_player.get('position', 'Forward'), "Forward")
 
-                # DEBUG: mostrar nombres restantes en el pool para diagnosticar
-                pool_names = [p.get('matchName') or f"{p.get('firstName','')} {p.get('lastName','')}".strip() for p in api_players_pool]
-                print(f"      ❌ SIN MATCH: '{csv_raw_name}' | Pool restante ({pool_size}): {pool_names}")
+            players_payload.append({
+                "id": player_id,
+                "team_id": team_id,
+                "first_name": first_name,
+                "last_name": last_name,
+                "short_name": match_name,
+                "position": position,
+                "status": api_player.get('status', 'active'),
+                "photo": foto,
+                "precio": precio,
+                "date_of_birth": api_player.get('dateOfBirth'),
+                "nationality": api_player.get('nationality'),
+                "height": api_player.get('height'),
+                "weight": api_player.get('weight'),
+                "foot": api_player.get('foot'),
+                "shirt_number": api_player.get('shirtNumber'),
+            })
 
-                jugadores_sin_match.append(f"- [{csv_team_name}] {csv_raw_name} | MOTIVO: {motivo}")
-
-    # 3. Subir a Supabase SOLAMENTE los que tuvieron éxito
+    # 4. Subir a Supabase TODOS los jugadores
     if players_payload:
         try:
-            # Detectar jugadores nuevos antes del upsert
+            # Detectar jugadores nuevos para las notificaciones
             try:
                 existing_ids_resp = supabase.table("players").select("id").execute()
                 existing_player_ids = {r['id'] for r in (existing_ids_resp.data or [])}
             except Exception:
                 existing_player_ids = set()
 
-            # upsert con ignore_duplicates=True para proteger registros existentes
-            result = supabase.table("players").upsert(players_payload, ignore_duplicates=True).execute()
+            # IMPORTANTE: ignore_duplicates=False para que actualice fotos y precios 
+            # a jugadores que ya existían pero se les acaba de agregar data en el CSV.
+            result = supabase.table("players").upsert(players_payload, ignore_duplicates=False).execute()
 
             new_player_notifications = []
             for p in players_payload:
                 if p.get('id') and p['id'] not in existing_player_ids:
-                    name = p.get('short_name') or f"{p.get('first_name', '')} {p.get('last_name', '')}".strip()
+                    name = p.get('short_name')
                     new_player_notifications.append({
                         "type": "new_player",
                         "title": "Nuevo jugador disponible",
                         "body": f"{name} ({p.get('position', '')}) ha sido añadido al juego"
                     })
+            
             save_notifications(new_player_notifications)
 
             print(f"\n✅ Sincronización finalizada correctamente.")
-            print(f"   Total jugadores procesados del CSV: {total_csv_players}")
-            print(f"   Sincronizados con éxito (Entran al juego): {total_matched}")
-            print(f"   Descartados por falta de match (No entran al juego): {total_no_match}")
+            print(f"   Total jugadores de la API (Todos subidos a Supabase): {total_api_players}")
+            print(f"   Enriquecidos (Encontraron Foto/Precio en CSV): {total_enriched}")
+            print(f"   Básicos (Subidos SIN Foto ni Precio): {total_no_match}")
             
-            # Escribir el reporte final de descartados
-            with open("reporte_sin_match.txt", "w", encoding="utf-8") as f:
-                f.write("=== JUGADORES DEL CSV QUE NO TUVIERON MATCH EN LA API Y FUERON EXCLUIDOS DEL JUEGO ===\n")
-                for line in jugadores_sin_match:
+            # Actualizamos el reporte
+            with open("reporte_sin_csv.txt", "w", encoding="utf-8") as f:
+                f.write("=== JUGADORES DE LA API SUBIDOS SIN FOTO NI PRECIO (No match en CSV) ===\n")
+                for line in jugadores_sin_csv:
                     f.write(line + "\n")
-            print("   📄 Reporte actualizado en 'reporte_sin_match.txt'")
+            print("   📄 Reporte actualizado en 'reporte_sin_csv.txt'")
             return True
         except Exception as e:
             print(f"❌ Error subiendo jugadores a Supabase: {e}")
             return False
 
-    print("⚠️ No hay jugadores válidos para subir a Supabase.")
+    print("⚠️ No hay jugadores válidos en la API para subir a Supabase.")
     return False
 
 def main():

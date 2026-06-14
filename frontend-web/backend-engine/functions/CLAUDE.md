@@ -1,6 +1,3 @@
-@AGENTS.md
-
-
 <claude-mem-context>
 # Recent Activity
 
@@ -12,5 +9,4 @@
 |----|------|---|-------|------|
 | #1327 | 8:23 AM | 🔵 | Core event processing and player ID mapping system identified | ~585 |
 | #1326 | 8:22 AM | 🔵 | Player statistics processing pipeline architecture identified | ~519 |
-| #1325 | 8:21 AM | 🔵 | Investigation started on player statistics attribution bug | ~446 |
 </claude-mem-context>
