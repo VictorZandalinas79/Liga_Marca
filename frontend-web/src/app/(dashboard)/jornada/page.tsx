@@ -707,35 +707,34 @@ export default function JornadaPage() {
             >
               <CardContent className="p-0">
                 {/* Cabecera del equipo */}
-                <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-4 py-3 border-b border-slate-300">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                        displayPos === 1 ? 'bg-yellow-500' :
-                        displayPos === 2 ? 'bg-gray-400' :
-                        displayPos === 3 ? 'bg-amber-600' :
-                        'bg-emerald-600'
-                      }`}>
-                        <span className="text-white font-bold">{displayPos}º</span>
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-slate-900 truncate">{team.user_name}</h3>
-                        <p className="text-xs text-slate-500 truncate">{team.team_name}</p>
-                      </div>
+                <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-4 py-3 border-b border-slate-600">
+                  {/* Fila 1: posición + nombre usuario */}
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      displayPos === 1 ? 'bg-yellow-500' :
+                      displayPos === 2 ? 'bg-gray-400' :
+                      displayPos === 3 ? 'bg-amber-600' :
+                      'bg-emerald-600'
+                    }`}>
+                      <span className="text-white text-sm font-bold">{displayPos}º</span>
                     </div>
-                    <div className="flex items-center gap-4 shrink-0">
-                      <div className="text-right">
-                        <p className="text-xs text-slate-500">Sistema</p>
-                        <p className="text-sm font-mono font-bold text-slate-700">{getFormacion(team.jugadores)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-slate-500">Valor</p>
-                        <p className="text-lg font-bold text-slate-700">{fmtValor(team.valor_total)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-slate-500">Puntos</p>
-                        <p className="text-2xl font-bold text-emerald-600">{Math.round(team.puntos_totales * 10) / 10}</p>
-                      </div>
+                    <h3 className="font-bold text-white truncate text-base">{team.user_name}</h3>
+                  </div>
+                  {/* Fila 2: Sistema · Valor · Puntos centrados */}
+                  <div className="flex items-center justify-center gap-6">
+                    <div className="text-center">
+                      <p className="text-xs text-slate-400">Sistema</p>
+                      <p className="text-sm font-mono font-bold text-slate-200">{getFormacion(team.jugadores)}</p>
+                    </div>
+                    <div className="w-px h-8 bg-slate-600" />
+                    <div className="text-center">
+                      <p className="text-xs text-slate-400">Valor</p>
+                      <p className="text-base font-bold text-slate-200">{fmtValor(team.valor_total)}</p>
+                    </div>
+                    <div className="w-px h-8 bg-slate-600" />
+                    <div className="text-center">
+                      <p className="text-xs text-slate-400">Puntos</p>
+                      <p className="text-xl font-bold text-emerald-400">{Math.round(team.puntos_totales * 10) / 10}</p>
                     </div>
                   </div>
                 </div>
