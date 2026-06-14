@@ -357,8 +357,15 @@ export default function PartidosPage() {
     return `${diffDays}d ${diffHours % 24}h`
   }
 
-  const getStatusBadge = (isComplete?: boolean) => {
-    // Verde si el partido está completo, rojo en cualquier otro caso
+  const getStatusBadge = (isComplete?: boolean, status?: string) => {
+    if (status === 'live') {
+      return (
+        <Badge className="bg-red-600 text-white text-xs flex items-center gap-1.5 animate-pulse">
+          <span className="w-2 h-2 rounded-full bg-white inline-block" />
+          En Juego
+        </Badge>
+      )
+    }
     if (isComplete) {
       return (
         <Badge className="bg-emerald-600 text-white text-xs flex items-center gap-1">
@@ -367,7 +374,6 @@ export default function PartidosPage() {
         </Badge>
       )
     }
-
     return (
       <Badge className="bg-red-500 text-white text-xs flex items-center gap-1">
         <AlertCircle className="w-3 h-3" />
@@ -649,6 +655,7 @@ export default function PartidosPage() {
                 <Card
                   key={fixture.id}
                   className={`!bg-slate-800 border-slate-700 hover:shadow-lg transition-all cursor-pointer ${
+                    fixture.status === 'live' ? 'ring-2 ring-red-500 animate-pulse' :
                     startsSoon ? 'ring-2 ring-green-500 animate-pulse' : ''
                   } ${fixture.is_complete ? 'border-emerald-600 ring-1 ring-emerald-600' : ''}`}
                 >
@@ -656,7 +663,7 @@ export default function PartidosPage() {
                     <div className="w-full h-full" onClick={() => handleMatchClick(fixture)}>
                       {/* Estado y hora */}
                       <div className="flex items-center justify-between mb-4">
-                        {getStatusBadge(fixture.is_complete)}
+                        {getStatusBadge(fixture.is_complete, fixture.status)}
                         <div className="flex items-center gap-1 text-sm text-slate-300">
                           <Clock className="w-4 h-4" />
                           {formatTime(fixture.start_time)}
