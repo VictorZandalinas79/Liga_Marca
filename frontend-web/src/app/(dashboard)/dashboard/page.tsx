@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
+import { useLockedTeams } from '@/lib/locked-teams'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Save, X, Check, Search, Lock, UserPlus, Trophy, TrendingUp, Users } from 'lucide-react'
@@ -59,6 +60,13 @@ export default function DashboardPage() {
   const [playerPoints, setPlayerPoints] = useState<Map<string, number>>(new Map())
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento } = useMatchdayLock()
+  // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
+  // Estos jugadores no se pueden cambiar aunque el mercado general esté abierto.
+  const lockedTeams = useLockedTeams()
+  const lockedTeamIds = new Set(lockedTeams.map(l => l.teamId))
+  const isTeamLocked = (teamId?: string | null) => !!teamId && lockedTeamIds.has(teamId)
+  const isPlayerLocked = (playerId: string) =>
+    isTeamLocked(players.find(p => p.id === playerId)?.team_id)
   // Evita generar/heredar el once dos veces (el efecto puede re-ejecutarse por
   // React Strict Mode o por cambios de activeMatchday mientras el hook resuelve).
   // Guardamos las claves `${teamId}-${matchday}` que ya estamos procesando.
@@ -470,6 +478,10 @@ export default function DashboardPage() {
       alert('No se pueden realizar cambios durante el tramo de jornada')
       return
     }
+    if (isPlayerLocked(newPlayerId)) {
+      alert('Este jugador está bloqueado: su equipo tiene un partido fuera de la jornada y no puede ficharse hasta que se resuelva.')
+      return
+    }
     if (playerToSwap) {
       setChangeHistory(prev => [...prev, { outId: playerToSwap, inId: newPlayerId }])
       setSelectedPlayers(prev => prev.map(id => id === playerToSwap ? newPlayerId : id))
@@ -485,6 +497,10 @@ export default function DashboardPage() {
   const openPlayerSelector = (playerId: string) => {
     if (isUnlockWindowOpen) {
       alert('No se pueden realizar cambios durante el tramo de jornada')
+      return
+    }
+    if (isPlayerLocked(playerId)) {
+      alert('Este jugador está bloqueado: su equipo tiene un partido fuera de la jornada y no puede cambiarse hasta que se resuelva.')
       return
     }
     setPlayerToSwap(playerId)
@@ -576,6 +592,27 @@ export default function DashboardPage() {
 
   const changedCount = changeHistory.length
 
+  // Avisos permanentes de equipos bloqueados, agrupados por partido fuera de orden.
+  const teamNameById = new Map<string, string>()
+  for (const p of players) {
+    if (p.team_id && p.team?.name) teamNameById.set(p.team_id, p.team.name)
+  }
+  const lockGroups = new Map<string, { teams: string[]; type: string; ownMatchday: number; until: Date }>()
+  for (const lt of lockedTeams) {
+    if (!lockGroups.has(lt.fixtureId)) {
+      lockGroups.set(lt.fixtureId, { teams: [], type: lt.type, ownMatchday: lt.ownMatchday, until: lt.until })
+    }
+    lockGroups.get(lt.fixtureId)!.teams.push(teamNameById.get(lt.teamId) || 'Equipo')
+  }
+  const lockBanners = Array.from(lockGroups.values()).map(g => {
+    const teams = g.teams.join(' y ')
+    const until = new Date(g.until).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+    const motivo = g.type === 'delayed'
+      ? `partido de la J${g.ownMatchday} aplazado`
+      : `partido de la J${g.ownMatchday} adelantado`
+    return `Jugadores de ${teams} bloqueados (${motivo}) hasta el ${until}.`
+  })
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando...</div>
   }
@@ -608,6 +645,20 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-2 pb-4">
+      {/* Aviso permanente: equipos bloqueados por partidos fuera de orden de jornada */}
+      {lockBanners.length > 0 && (
+        <Card className="!bg-red-50 border-red-200">
+          <CardContent className="p-3 flex items-start gap-3">
+            <Lock className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              {lockBanners.map((msg, i) => (
+                <p key={i} className="text-sm font-semibold text-red-900">{msg}</p>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Mensaje de bloqueo durante tramo de jornada */}
       {isUnlockWindowOpen && (
         <>
@@ -677,6 +728,7 @@ export default function DashboardPage() {
               const isSessionChange = changeHistory.some(ch => ch.inId === player.id)
               const isCrossSessionChange = !isSessionChange && basePlayers.length > 0 && !basePlayers.includes(player.id)
               const isChanged = isSessionChange || isCrossSessionChange
+              const isLockedPlayer = isTeamLocked(player.team_id)
               return (
                 <div
                   key={player.id}
@@ -684,11 +736,18 @@ export default function DashboardPage() {
                   className={`relative p-3 rounded-xl transition-all border-2 ${
                     isUnlockWindowOpen
                       ? 'bg-slate-800 border-transparent opacity-50 cursor-not-allowed'
-                      : isChanged
-                        ? 'bg-emerald-900 border-emerald-500 hover:bg-slate-700 cursor-pointer'
-                        : 'bg-slate-800 border-transparent hover:bg-slate-700 cursor-pointer'
+                      : isLockedPlayer
+                        ? 'bg-slate-800 border-red-500 opacity-60 cursor-not-allowed'
+                        : isChanged
+                          ? 'bg-emerald-900 border-emerald-500 hover:bg-slate-700 cursor-pointer'
+                          : 'bg-slate-800 border-transparent hover:bg-slate-700 cursor-pointer'
                   }`}
                 >
+                  {isLockedPlayer && (
+                    <div className="absolute -top-1 -left-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md z-10" title="Jugador bloqueado: partido fuera de jornada">
+                      <Lock className="w-3.5 h-3.5 text-white" />
+                    </div>
+                  )}
                   {isSessionChange && (
                     <button
                       onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
@@ -863,14 +922,25 @@ export default function DashboardPage() {
                 <p className="text-center text-slate-500 py-8">No hay jugadores disponibles</p>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {filteredAvailablePlayers.map((player) => (
+                  {filteredAvailablePlayers.map((player) => {
+                    const lockedPlayer = isTeamLocked(player.team_id)
+                    return (
                     <div
                       key={player.id}
                       onClick={() => swapPlayer(player.id)}
-                      className="p-3 bg-slate-50 hover:bg-emerald-50 rounded-xl cursor-pointer transition-colors"
+                      className={`p-3 rounded-xl transition-colors ${
+                        lockedPlayer
+                          ? 'bg-red-50 border border-red-200 opacity-60 cursor-not-allowed'
+                          : 'bg-slate-50 hover:bg-emerald-50 cursor-pointer'
+                      }`}
                     >
                       <div className="flex flex-col items-center gap-2">
                         <div className="relative">
+                          {lockedPlayer && (
+                            <div className="absolute -top-1 -left-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md z-10" title="Jugador bloqueado: partido fuera de jornada">
+                              <Lock className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          )}
                           {player.photo ? (
                             <img
                               src={player.photo}
@@ -904,7 +974,8 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

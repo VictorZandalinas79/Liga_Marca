@@ -16,6 +16,7 @@ import unicodedata
 from difflib import SequenceMatcher
 import requests
 import time
+from datetime import datetime
 from supabase import create_client, Client
 from pathlib import Path
 from dotenv import load_dotenv
@@ -57,7 +58,73 @@ def save_notifications(notifications: list):
         supabase.table("sync_notifications").insert(notifications).execute()
         print(f"🔔 {len(notifications)} notificación(es) guardada(s)")
     except Exception as e:
-        print(f"⚠️ Error guardando notificaciones: {e}")
+        # Si el lote falla (p. ej. un tipo nuevo cuya migración aún no se aplicó),
+        # insertamos una a una para no perder las notificaciones válidas.
+        print(f"⚠️ Insert en lote falló ({e}); reintentando una a una...")
+        ok = 0
+        for n in notifications:
+            try:
+                supabase.table("sync_notifications").insert(n).execute()
+                ok += 1
+            except Exception as e2:
+                print(f"   ⚠️ No se pudo guardar notificación {n.get('type')}: {e2}")
+        print(f"🔔 {ok}/{len(notifications)} notificación(es) guardada(s)")
+
+
+def _parse_ts(s):
+    try:
+        return datetime.fromisoformat((s or "").replace("Z", ""))
+    except Exception:
+        return None
+
+
+def detect_out_of_order(fixtures_payload):
+    """Detecta partidos cuyo matchday NO coincide con su hueco cronológico real.
+
+    Mismo algoritmo que el frontend (locked-teams.ts): el tiempo representativo
+    de cada jornada es la mediana de sus start_time (robusta a un outlier), y el
+    hueco cronológico de un partido es la jornada cuya mediana queda más cerca.
+
+    Devuelve dict fixture_id -> (tipo, matchday), donde tipo es:
+      'delayed'  -> pertenece a una jornada anterior pero se juega más tarde
+      'advanced' -> pertenece a una jornada posterior pero se juega antes
+    """
+    rows = []
+    for f in fixtures_payload:
+        md = f.get("matchday")
+        st = _parse_ts(f.get("start_time", ""))
+        if md and md > 0 and st:
+            rows.append((f["id"], md, st))
+    if not rows:
+        return {}
+
+    by_md = {}
+    for _, md, st in rows:
+        by_md.setdefault(md, []).append(st)
+
+    rep = {}
+    for md, times in by_md.items():
+        times.sort()
+        rep[md] = times[len(times) // 2]
+
+    chrono = sorted(rep.keys(), key=lambda m: rep[m])
+
+    def slot_for(t):
+        for i, cur in enumerate(chrono):
+            nxt = chrono[i + 1] if i + 1 < len(chrono) else None
+            if nxt is None:
+                return cur
+            boundary = rep[cur] + (rep[nxt] - rep[cur]) / 2
+            if t <= boundary:
+                return cur
+        return chrono[-1]
+
+    result = {}
+    for fid, md, st in rows:
+        slot = slot_for(st)
+        if slot != md:
+            result[fid] = ("delayed" if md < slot else "advanced", md)
+    return result
 
 
 def load_headers():
@@ -341,6 +408,9 @@ def upload_fixtures_to_supabase(matches):
     except Exception:
         existing_map = {}
 
+    # Partidos que quedan fuera del orden de su jornada (aplazados/adelantados).
+    out_of_order = detect_out_of_order(fixtures_payload)
+
     schedule_notifications = []
     for f in fixtures_payload:
         fid = f.get('id')
@@ -355,6 +425,18 @@ def upload_fixtures_to_supabase(matches):
                 "title": "Cambio de horario",
                 "body": f"{display}: {old_fmt} → {new_fmt}"
             })
+            # Si el nuevo horario deja el partido fuera de su jornada, los
+            # jugadores de ambos equipos quedan bloqueados: avisamos en la campana.
+            if fid in out_of_order:
+                tipo, md = out_of_order[fid]
+                motivo = ("aplazado a una jornada posterior" if tipo == "delayed"
+                          else "adelantado a una jornada anterior")
+                schedule_notifications.append({
+                    "type": "players_locked",
+                    "title": "Jugadores bloqueados",
+                    "body": (f"{display}: partido de la J{md} {motivo}. "
+                             f"Sus jugadores quedan bloqueados hasta que se resuelva.")
+                })
 
     # Subir a Supabase
     try:

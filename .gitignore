@@ -1,2 +1,6 @@
 node_modules/
 .next/
+
+# Python
+__pycache__/
+*.pyc

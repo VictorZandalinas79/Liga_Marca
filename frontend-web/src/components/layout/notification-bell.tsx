@@ -5,7 +5,7 @@ import { Bell } from 'lucide-react'
 
 interface Notification {
   id: string
-  type: 'fixture_changed' | 'new_player' | 'sync_complete'
+  type: 'fixture_changed' | 'new_player' | 'sync_complete' | 'players_locked'
   title: string
   body: string
   created_at: string
@@ -67,6 +67,7 @@ export function NotificationBell() {
     fixture_changed: '📅',
     new_player: '⚽',
     sync_complete: '✅',
+    players_locked: '🔒',
   }
 
   return (
