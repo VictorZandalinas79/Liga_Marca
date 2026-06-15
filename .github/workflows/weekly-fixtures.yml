@@ -22,7 +22,8 @@ jobs:
       - name: Install dependencies
         # El script solo necesita estas librerías (el resto del root requirements
         # incluye selenium/pandas que no hacen falta aquí y ralentizan el job).
-        run: pip install "supabase>=2.0.0" "python-dotenv>=1.0.0" "requests>=2.31.0"
+        # deep-translator lo usa para traducir nombres de equipos al cruzar el CSV.
+        run: pip install "supabase>=2.0.0" "python-dotenv>=1.0.0" "requests>=2.31.0" "deep-translator>=1.11.0"
 
       - name: Run weekly fixtures sync
         env:
