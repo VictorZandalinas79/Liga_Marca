@@ -5,9 +5,10 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 import { useLockedTeams } from '@/lib/locked-teams'
+import { useLeagueConfig } from '@/lib/league-config'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock, UserPlus, Trophy, TrendingUp, Users } from 'lucide-react'
+import { Save, X, Check, Search, Lock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle } from 'lucide-react'
 
 interface Player {
   id: string
@@ -63,6 +64,10 @@ export default function DashboardPage() {
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
   // Estos jugadores no se pueden cambiar aunque el mercado general esté abierto.
   const lockedTeams = useLockedTeams()
+  const config = useLeagueConfig()
+  // Jugadores vetados por exclusividad: los tiene otro usuario en la jornada
+  // previa comprometida y yo no (modelo de retención; en J1 no aplica).
+  const [offLimitPlayerIds, setOffLimitPlayerIds] = useState<Set<string>>(new Set())
   const lockedTeamIds = new Set(lockedTeams.map(l => l.teamId))
   const isTeamLocked = (teamId?: string | null) => !!teamId && lockedTeamIds.has(teamId)
   const isPlayerLocked = (playerId: string) =>
@@ -363,6 +368,33 @@ export default function DashboardPage() {
     return () => clearInterval(interval)
   }, [isUnlockWindowOpen, userTeamId, selectedPlayers, activeMatchday])
 
+  // Carga los jugadores vetados por exclusividad: los tenía otro usuario en la
+  // jornada previa comprometida y yo no (si yo lo tenía, lo retengo). En J1 no aplica.
+  useEffect(() => {
+    const fetchOffLimits = async () => {
+      const md = typeof activeMatchday === 'number' ? activeMatchday : 1
+      const prevMd = md - 1
+      if (!userTeamId || prevMd < 1) {
+        setOffLimitPlayerIds(new Set())
+        return
+      }
+      const { data: rows } = await supabase
+        .from('team_players')
+        .select('player_id, team_id')
+        .eq('matchday', prevMd)
+      const heldByMe = new Set<string>()
+      const heldByOthers = new Set<string>()
+      for (const r of rows || []) {
+        if (r.team_id === userTeamId) heldByMe.add(r.player_id)
+        else heldByOthers.add(r.player_id)
+      }
+      const offLimits = new Set<string>()
+      for (const pid of heldByOthers) if (!heldByMe.has(pid)) offLimits.add(pid)
+      setOffLimitPlayerIds(offLimits)
+    }
+    fetchOffLimits()
+  }, [userTeamId, activeMatchday])
+
   const saveTeam = async () => {
     if (isUnlockWindowOpen) {
       alert('No se pueden realizar cambios durante el tramo de jornada')
@@ -613,6 +645,39 @@ export default function DashboardPage() {
     return `Jugadores de ${teams} bloqueados (${motivo}) hasta el ${until}.`
   })
 
+  // Avisos de reglas (modelo permitir + sancionar): no bloquean el guardado,
+  // pero avisan de lo que será sancionado al empezar la jornada.
+  const ruleWarnings: string[] = []
+  const teamCounts = new Map<string, number>()
+  for (const p of selectedPlayersData) {
+    if (p.team_id) teamCounts.set(p.team_id, (teamCounts.get(p.team_id) || 0) + 1)
+  }
+  const gkCount = selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length
+  const defCount = selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length
+  const midCount = selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length
+  const fwdCount = selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length
+  const formationStr = `${defCount}-${midCount}-${fwdCount}`
+
+  if (selectedPlayersData.length !== 11) {
+    ruleWarnings.push(`Tienes ${selectedPlayersData.length}/11 jugadores.`)
+  }
+  if (teamStats.precioTotal > config.budget_limit) {
+    ruleWarnings.push(`Presupuesto superado: ${teamStats.precioTotal}M de ${config.budget_limit}M permitidos.`)
+  }
+  for (const [tid, count] of teamCounts) {
+    if (count > config.max_players_per_team) {
+      ruleWarnings.push(`${count} jugadores de ${teamNameById.get(tid) || 'un mismo equipo'} (máx. ${config.max_players_per_team}).`)
+    }
+  }
+  if (selectedPlayersData.length === 11 && !(gkCount === 1 && config.formations.includes(formationStr))) {
+    ruleWarnings.push(`Táctica ${gkCount === 1 ? formationStr : `${gkCount} porteros`} no permitida.`)
+  }
+  for (const p of selectedPlayersData) {
+    if (offLimitPlayerIds.has(p.id)) {
+      ruleWarnings.push(`${p.short_name || p.first_name} pertenece a otro usuario (será sancionado).`)
+    }
+  }
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando...</div>
   }
@@ -653,6 +718,21 @@ export default function DashboardPage() {
             <div className="space-y-1">
               {lockBanners.map((msg, i) => (
                 <p key={i} className="text-sm font-semibold text-red-900">{msg}</p>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Avisos de reglas (no bloquean, pero serán sancionados al empezar la jornada) */}
+      {!isUnlockWindowOpen && ruleWarnings.length > 0 && (
+        <Card className="!bg-amber-50 border-amber-200">
+          <CardContent className="p-3 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-amber-900">Avisos (se sancionarán al empezar la jornada):</p>
+              {ruleWarnings.map((msg, i) => (
+                <p key={i} className="text-sm font-medium text-amber-800">• {msg}</p>
               ))}
             </div>
           </CardContent>
