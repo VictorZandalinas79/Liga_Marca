@@ -5,6 +5,7 @@ import {
   Search, Download, ShieldCheck, CheckCircle2, XCircle, Users, RefreshCw, Euro,
   Pencil, Trash2, X, AlertTriangle,
 } from 'lucide-react'
+import { LeagueConfigPanel } from './LeagueConfigPanel'
 
 type AdminUser = {
   id: string
@@ -332,6 +333,9 @@ export default function AdminPage() {
       <p className="text-xs text-slate-400 text-center">
         Mostrando {filtered.length} de {users.length} usuarios. La cuenta de administración no aparece en esta lista.
       </p>
+
+      {/* Configuración de las reglas del juego */}
+      <LeagueConfigPanel />
 
       {editUser && (
         <EditModal

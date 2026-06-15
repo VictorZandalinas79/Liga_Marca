@@ -28,6 +28,20 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
     const fetchMatchdayTimes = async () => {
       const supabase = createClient()
 
+      // Offsets configurables (Admin → Reglas del Juego): cuándo empieza la
+      // jornada (cierra el mercado) y cuándo se considera cerrada.
+      let unlockOffsetMs = 60 * 60 * 1000      // 1h antes del primer partido
+      let lockOffsetMs = 2 * 60 * 60 * 1000    // 2h después del último partido
+      const { data: cfg } = await supabase
+        .from('league_config')
+        .select('matchday_start_hours_before, matchday_end_hours_after')
+        .eq('id', 1)
+        .maybeSingle()
+      if (cfg) {
+        if (cfg.matchday_start_hours_before != null) unlockOffsetMs = Number(cfg.matchday_start_hours_before) * 60 * 60 * 1000
+        if (cfg.matchday_end_hours_after != null) lockOffsetMs = Number(cfg.matchday_end_hours_after) * 60 * 60 * 1000
+      }
+
       // Obtener todos los fixtures ordenados por fecha
       const { data: allFixtures } = await supabase
         .from('fixtures')
@@ -122,8 +136,8 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
 
           const firstMatchTime = new Date(fixtures[0].start_time)
           const lastMatchTime = new Date(fixtures[fixtures.length - 1].start_time)
-          const unlockTime = firstMatchTime.getTime() - 60 * 60 * 1000
-          const lockTime = lastMatchTime.getTime() + 2 * 60 * 60 * 1000
+          const unlockTime = firstMatchTime.getTime() - unlockOffsetMs
+          const lockTime = lastMatchTime.getTime() + lockOffsetMs
 
           if (now.getTime() >= unlockTime && now.getTime() <= lockTime) {
             activeJornada = jornada
@@ -144,7 +158,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
             )
 
             const firstMatchTime = new Date(fixtures[0].start_time)
-            const unlockTime = firstMatchTime.getTime() - 60 * 60 * 1000
+            const unlockTime = firstMatchTime.getTime() - unlockOffsetMs
 
             if (unlockTime > now.getTime()) {
               nextJornada = jornada
@@ -179,8 +193,8 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       const firstMatchTime = new Date(fixtures[0].start_time)
       const lastMatchTime = new Date(fixtures[fixtures.length - 1].start_time)
 
-      const unlockTimeDate = new Date(firstMatchTime.getTime() - 60 * 60 * 1000)
-      const lockTimeDate = new Date(lastMatchTime.getTime() + 2 * 60 * 60 * 1000)
+      const unlockTimeDate = new Date(firstMatchTime.getTime() - unlockOffsetMs)
+      const lockTimeDate = new Date(lastMatchTime.getTime() + lockOffsetMs)
 
       const isUnlockWindowOpen = now.getTime() >= unlockTimeDate.getTime() && now.getTime() <= lockTimeDate.getTime()
       const isLocked = !isUnlockWindowOpen
