@@ -230,6 +230,19 @@ export default function ClasificacionPage() {
         }
       }
 
+      // Restar las SANCIONES (tabla penalties) para mostrar puntos NETOS por jornada.
+      const { data: penaltiesData } = await supabase
+        .from('penalties')
+        .select('user_id, matchday, points')
+      for (const pen of penaltiesData || []) {
+        const uid = pen.user_id as string | null
+        const md = pen.matchday as number
+        if (!uid || !md || md <= 0) continue
+        const userMap = userPointsByMatchday.get(uid)
+        if (!userMap || !userMap.has(md)) continue
+        userMap.set(md, (userMap.get(md) || 0) - (pen.points || 0))
+      }
+
       const podiumCount = new Map<string, number>()
       const bottomCount = new Map<string, number>()
 

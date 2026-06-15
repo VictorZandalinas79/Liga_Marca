@@ -1,0 +1,36 @@
+name: Sanciones y Pagos por Jornada
+
+on:
+  schedule:
+    # A diario (04:00 UTC). El script procesa la última jornada finalizada y es
+    # idempotente, así que reejecutar no cobra dos veces ni duplica sanciones.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      matchday:
+        description: 'Jornada a procesar (vacío = última jornada finalizada)'
+        required: false
+        default: ''
+
+jobs:
+  sanctions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install "supabase>=2.0.0" "python-dotenv>=1.0.0"
+
+      - name: Calcular sanciones y pagos
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SANCTION_MATCHDAY: ${{ github.event.inputs.matchday }}
+        run: python "3. calcular_sanciones_y_pagos.py"
