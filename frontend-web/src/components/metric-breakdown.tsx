@@ -22,7 +22,6 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   const GOAL           = { POR: 6,    DEF: 6,    MED: 5,    DEL: 4    } as const
   const CLEAN_SHEET    = { POR: 4,    DEF: 3,    MED: 2,    DEL: 1    } as const
   const GOAL_CONCEDED  = { POR: -2,   DEF: -2,   MED: -1,   DEL: -1   } as const
-  const INTERCEPTION   = { POR: 0.1,  DEF: 0.3,  MED: 0.3,  DEL: 0.1  } as const
   const BALL_RECOVERY  = { POR: 0.1,  DEF: 0.2,  MED: 0.2,  DEL: 0.1  } as const
 
   interface Row  { label: string; count: number; unit: number; points: number; flat?: boolean }
@@ -83,7 +82,9 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   if (n(player.takeons_won) > 0)        b7.push(u(n(player.takeons_won), 0.5, 'Regates ganados'))
   if (n(player.long_balls_completed) > 0) b7.push(u(n(player.long_balls_completed), 0.5, 'Pases largos completados'))
   if (n(player.shots_on_target) > 0)    b7.push(u(n(player.shots_on_target), 0.3, 'Tiros a puerta'))
-  if (n(player.interceptions) > 0)      b7.push(u(n(player.interceptions), INTERCEPTION[pos], `Intercepciones (${pos})`))
+  if (n(player.interceptions_high) > 0) b7.push(u(n(player.interceptions_high), 0.3, 'Interceptación zona alta'))
+  if (n(player.interceptions_med) > 0)  b7.push(u(n(player.interceptions_med), 0.2, 'Interceptación zona media'))
+  if (n(player.interceptions_low) > 0)  b7.push(u(n(player.interceptions_low), 0.1, 'Interceptación zona baja'))
   const hasZoneRecoveries = n(player.recoveries_high) + n(player.recoveries_med) + n(player.recoveries_low) > 0
   if (hasZoneRecoveries) {
     if (n(player.recoveries_high) > 0)  b7.push(u(n(player.recoveries_high), 0.3, 'Recuperación zona alta'))
