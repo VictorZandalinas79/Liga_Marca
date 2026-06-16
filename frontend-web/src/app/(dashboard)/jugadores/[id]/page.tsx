@@ -81,6 +81,9 @@ interface PlayerScore {
   clearances_last_line: number
   blocked_crosses: number
   interceptions: number
+  interceptions_high: number
+  interceptions_med: number
+  interceptions_low: number
   tackles_won: number
   tackles_lost: number
   blocked_shots: number
@@ -365,6 +368,9 @@ export default function JugadorDetallePage() {
       recoveries_high: 0.3,        // recoveries_high
       recoveries_med: 0.2,         // recoveries_med
       recoveries_low: 0.1,         // recoveries_low
+      interceptions_high: 0.3,     // interceptions_high
+      interceptions_med: 0.2,      // interceptions_med
+      interceptions_low: 0.1,      // interceptions_low
       long_balls_completed: 0.5,   // long_balls_completed
     },
     // Penalización por balón perdido: -0.1 uniforme (scoring_rules.json)
@@ -444,6 +450,9 @@ export default function JugadorDetallePage() {
     if (g('recoveries_high') > 0) b7.push(u(g('recoveries_high'), SR.per_unit.recoveries_high, 'Recuperación alta'))
     if (g('recoveries_med') > 0) b7.push(u(g('recoveries_med'), SR.per_unit.recoveries_med, 'Recuperación media'))
     if (g('recoveries_low') > 0) b7.push(u(g('recoveries_low'), SR.per_unit.recoveries_low, 'Recuperación baja'))
+    if (g('interceptions_high') > 0) b7.push(u(g('interceptions_high'), SR.per_unit.interceptions_high, 'Interceptación alta'))
+    if (g('interceptions_med') > 0) b7.push(u(g('interceptions_med'), SR.per_unit.interceptions_med, 'Interceptación media'))
+    if (g('interceptions_low') > 0) b7.push(u(g('interceptions_low'), SR.per_unit.interceptions_low, 'Interceptación baja'))
     if (score.clearances > 0) b7.push(u(score.clearances, SR.per_unit.clearances, 'Despejes'))
 
     // BLOQUE 8: Penalizaciones

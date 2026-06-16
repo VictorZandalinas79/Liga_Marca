@@ -1,0 +1,130 @@
+-- 008_scoring_config: sistema de puntuación editable desde Admin.
+--
+-- Guarda las reglas de puntuación (RELEVO v3) en una tabla single-row. El editor
+-- de Admin lee/escribe aquí y el motor Python (trigger_descarga_eventos.py) las
+-- lee con fallback al scoring_rules.json de la raíz del repo.
+
+CREATE TABLE IF NOT EXISTS scoring_config (
+    id INT PRIMARY KEY DEFAULT 1,
+    -- Reglas completas (events, bonuses_per_X, penalties_per_X, relevo_rules, mappings…).
+    rules JSONB NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT scoring_config_singleton CHECK (id = 1)
+);
+
+-- Siembra la fila id=1 con el contenido actual de scoring_rules.json (raíz).
+INSERT INTO scoring_config (id, rules)
+VALUES (1, '{
+  "version": "3.1 - RELEVO Decimal",
+  "game_name": "Biwenger RELEVO Avanzado",
+  "description": "Sistema oficial de puntuación adaptado con penalizaciones posicionales, Puntos RELEVO y métricas decimales al detalle.",
+  "participation": {
+    "starter_bonus": 2,
+    "substitute_bonus": 1,
+    "minutes_threshold": 60
+  },
+  "positions": {
+    "POR": "Portero",
+    "DEF": "Defensa",
+    "MED": "Centrocampista",
+    "DEL": "Delantero"
+  },
+  "events": {
+    "goal": { "POR": 6, "DEF": 6, "MED": 5, "DEL": 4 },
+    "own_goal": { "all": -2 },
+    "assist_goal": { "all": 3, "typeId": 1, "qualifierId": 210, "qualifierValues": [16] },
+    "assist_no_goal": { "all": 1, "typeId": 1, "qualifierId": 210, "qualifierValues": [13, 14, 15] },
+    "penalty_won": { "all": 2, "typeId": 4, "outcome": 1, "qualifierId": 9, "description": "Falta recibida (typeId 4, outcome 1) que resulta en penalti (qualifier 9)" },
+    "penalty_conceded": { "all": -2, "typeId": 4, "outcome": 0, "qualifierId": 9, "description": "Falta cometida (typeId 4, outcome 0) que resulta en penalti (qualifier 9)" },
+    "goal_conceded": { "POR": -2, "DEF": -2, "MED": -1, "DEL": -1, "typeId": 16, "logic": "contestantId != player_contestantId OR qualifierId == 28", "description": "Gol del equipo rival o gol en propia mientras el jugador está en el campo" },
+    "clean_sheet": { "POR": 4, "DEF": 3, "MED": 2, "DEL": 1, "min_minutes": 60, "requires_zero": "goal_conceded", "description": "Otorgar si juega >= 60 min y suma 0 en goal_conceded" },
+    "save": { "all": 0.5, "description": "Por cada parada (typeId 10)" },
+    "punch_ok": { "all": 0.2, "description": "Despeje de puños exitoso (typeId 41, outcome 1)" },
+    "punch_fail": { "all": 0.1, "description": "Despeje de puños fallido (typeId 41, outcome 0)" },
+    "claim": { "all": 0.1, "description": "Blocaje de portero (typeId 11)" },
+    "sweeper": { "all": 0.1, "description": "Salida del área (typeId 59)" },
+    "penalty_save": { "all": 5 },
+    "penalty_missed": { "all": -2 },
+    "yellow_card": { "all": -1 },
+    "second_yellow_card": { "all": -1 },
+    "red_card": { "all": -3 }
+  },
+  "bonuses_per_X": {
+    "passes_completed": { "required": 1, "points": 0.05, "description": "0.05 puntos por cada pase completado" },
+    "forward_passes": { "required": 1, "points": 0.2, "description": "0.2 por cada pase hacia adelante (end_x >= x + 10, y_desviación entre -10 y 10)" },
+    "shots_on_target": { "required": 1, "points": 0.3 },
+    "takeons_won": { "required": 1, "points": 0.5 },
+    "box_entries": { "required": 1, "points": 0.1, "description": "Pases que acaban en el área (end_x > 83 y end_y entre 21.1 y 78.9)" },
+    "recoveries_high": { "required": 1, "points": 0.3, "description": "Recuperaciones donde X > 66.6" },
+    "recoveries_med": { "required": 1, "points": 0.2, "description": "Recuperaciones donde X está entre 33.3 y 66.6" },
+    "recoveries_low": { "required": 1, "points": 0.1, "description": "Recuperaciones donde X < 33.3" },
+    "interceptions_high": { "required": 1, "points": 0.3, "description": "Interceptaciones donde X > 66.6" },
+    "interceptions_med": { "required": 1, "points": 0.2, "description": "Interceptaciones donde X está entre 33.3 y 66.6" },
+    "interceptions_low": { "required": 1, "points": 0.1, "description": "Interceptaciones donde X < 33.3" },
+    "clearances": { "required": 1, "points": 0.5 },
+    "set_pieces_taken": { "required": 1, "points": 0.2, "description": "Lanzamiento de córner, o falta donde X > 60" },
+    "successful_crosses": { "required": 1, "points": 0.3, "description": "Centros buenos con outcome 1" },
+    "long_balls_completed": { "required": 1, "points": 0.5, "description": "Pase largo bueno: typeId 1, outcome 1, qualifier 1 presente" }
+  },
+  "penalties_per_X": {
+    "lost_balls": {
+      "POR": { "required": 1, "points": -0.1 },
+      "DEF": { "required": 1, "points": -0.1 },
+      "MED": { "required": 1, "points": -0.1 },
+      "DEL": { "required": 1, "points": -0.1 }
+    }
+  },
+  "relevo_rules": {
+    "participation_step_percent": 10,
+    "participation_points_per_step": 1,
+    "min_passes": 10,
+    "pass_accuracy_high": 85,
+    "pass_accuracy_excel": 92,
+    "pass_accuracy_low": 65,
+    "min_opp_half_passes": 10,
+    "opp_half_accuracy_high": 75,
+    "min_shots": 2,
+    "shot_accuracy_high": 50,
+    "min_duels": 5,
+    "duels_won_high": 60,
+    "duels_won_low": 30,
+    "min_aerials": 3,
+    "aerials_won_high": 60,
+    "aerials_won_low": 30
+  },
+  "typeId_mapping": {
+    "1": "pass", "3": "takeon", "4": "foul", "7": "tackle", "8": "interception",
+    "10": "save", "11": "claim", "12": "clearance", "13": "shot_miss", "14": "shot_post",
+    "15": "shot_on_target", "16": "goal", "17": "card", "18": "sub_off", "19": "sub_on",
+    "34": "lineup", "41": "punch", "44": "aerial", "49": "recovery", "50": "dispossessed",
+    "58": "penalty_faced", "59": "sweeper", "61": "ball_touch"
+  },
+  "qualifier_mapping": {
+    "1": "long_ball", "2": "cross", "4": "through_ball", "9": "penalty", "14": "last_line",
+    "15": "head", "26": "free_kick_shot", "28": "own_goal", "30": "players_involved",
+    "31": "yellow_card", "32": "second_yellow", "33": "red_card", "94": "def_block",
+    "140": "pass_end_x", "141": "pass_end_y", "154": "intent_assist", "156": "lay_off",
+    "173": "parried_safe", "174": "parried_danger", "185": "blocked_cross", "186": "pen_scored",
+    "187": "pen_saved", "188": "pen_missed", "195": "pull_back", "196": "switch_play",
+    "210": "assist", "211": "overrun", "214": "big_chance", "218": "second_assist",
+    "236": "blocked_pass", "381": "fumble"
+  }
+}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE scoring_config ENABLE ROW LEVEL SECURITY;
+
+-- Cualquier usuario autenticado puede leer la configuración.
+DROP POLICY IF EXISTS "Authenticated can read scoring_config" ON scoring_config;
+CREATE POLICY "Authenticated can read scoring_config"
+    ON scoring_config FOR SELECT
+    TO authenticated
+    USING (true);
+
+-- Solo el service role (vía API admin) puede modificarla.
+DROP POLICY IF EXISTS "Service role can update scoring_config" ON scoring_config;
+CREATE POLICY "Service role can update scoring_config"
+    ON scoring_config FOR UPDATE
+    TO service_role
+    USING (true)
+    WITH CHECK (true);

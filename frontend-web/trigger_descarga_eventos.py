@@ -72,9 +72,35 @@ Q_ERROR_LED_GOAL = 170
 Q_OVERRUN = 211
 
 
+def load_scoring_rules_from_supabase():
+    """Intenta cargar las reglas desde la tabla scoring_config en Supabase.
+
+    Devuelve el dict de reglas o None si no hay credenciales, no existe la fila
+    o falla la consulta (nunca lanza: la puntuación cae al JSON del repo)."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return None
+    try:
+        client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        response = client.table('scoring_config').select('rules').eq('id', 1).single().execute()
+        rules = getattr(response, 'data', None)
+        rules = rules.get('rules') if isinstance(rules, dict) else None
+        if rules:
+            print("✅ Reglas de puntuación cargadas desde Supabase (scoring_config)")
+            print(f"   Versión: {rules.get('version', 'N/A')}")
+            return rules
+    except Exception as e:
+        print(f"⚠️ No se pudieron leer reglas de Supabase, usando JSON local: {e}")
+    return None
+
+
 def load_scoring_rules():
-    """Carga las reglas de puntuación desde scoring_rules.json"""
-    # Buscar el archivo en la raíz del proyecto
+    """Carga las reglas de puntuación: primero Supabase, luego scoring_rules.json."""
+    # 1) Fuente de verdad editable desde Admin: tabla scoring_config en Supabase.
+    rules = load_scoring_rules_from_supabase()
+    if rules:
+        return rules
+
+    # 2) Fallback: scoring_rules.json en la raíz del proyecto.
     possible_paths = [
         Path(__file__).parent.parent / 'scoring_rules.json',
         Path(__file__).parent / 'scoring_rules.json',
@@ -338,7 +364,8 @@ class MatchEventDownloader:
                 'shots_on_target': 0, 'shots_off_target': 0, 'shots_hit_woodwork': 0,
                 'big_chances_created': 0, 'big_chances_missed': 0,
                 'clearances': 0, 'clearances_last_line': 0, 'blocked_crosses': 0,
-                'interceptions': 0, 'tackles_won': 0, 'tackles_lost': 0,
+                'interceptions': 0, 'interceptions_high': 0, 'interceptions_med': 0, 'interceptions_low': 0,
+                'tackles_won': 0, 'tackles_lost': 0,
                 'blocked_shots': 0, 'blocked_passes': 0, 'ball_recoveries': 0,
                 'offsides_provoked': 0, 'challenges_lost': 0,
                 'errors_leading_to_shot': 0, 'errors_leading_to_goal': 0,
@@ -553,6 +580,9 @@ class MatchEventDownloader:
         points += apply_bonus('recoveries_high', bonuses.get('recoveries_high', {}))
         points += apply_bonus('recoveries_med', bonuses.get('recoveries_med', {}))
         points += apply_bonus('recoveries_low', bonuses.get('recoveries_low', {}))
+        points += apply_bonus('interceptions_high', bonuses.get('interceptions_high', {}))
+        points += apply_bonus('interceptions_med', bonuses.get('interceptions_med', {}))
+        points += apply_bonus('interceptions_low', bonuses.get('interceptions_low', {}))
         points += apply_bonus('clearances', bonuses.get('clearances', {}))
         points += apply_bonus('forward_passes', bonuses.get('forward_passes', {}))
         points += apply_bonus('set_pieces_taken', bonuses.get('set_pieces_taken', {}))
@@ -788,7 +818,19 @@ class MatchEventDownloader:
             self.apply_points(pid, 'tackles_lost', 1, current_min)
 
     def _handle_interception(self, event, current_min):
-        self.apply_points(event.get('playerId'), 'interceptions', 1, current_min)
+        pid = event.get('playerId')
+        x_coord = event.get('x', 0)
+
+        # Lógica de zonas para interceptaciones (igual que recuperaciones)
+        if x_coord > 66.6:
+            self.apply_points(pid, 'interceptions_high', 1, current_min)
+        elif 33.3 <= x_coord <= 66.6:
+            self.apply_points(pid, 'interceptions_med', 1, current_min)
+        else:
+            self.apply_points(pid, 'interceptions_low', 1, current_min)
+
+        # Contador agregado (para estadísticas)
+        self.apply_points(pid, 'interceptions', 1, current_min)
 
     def _handle_recovery(self, event, current_min):
         pid = event.get('playerId')
@@ -1061,11 +1103,17 @@ class MatchEventDownloader:
                 'clearances_last_line': stats.get('clearances_last_line', 0),
                 'blocked_crosses': stats.get('blocked_crosses', 0),
                 'interceptions': stats.get('interceptions', 0),
+                'interceptions_high': stats.get('interceptions_high', 0),
+                'interceptions_med': stats.get('interceptions_med', 0),
+                'interceptions_low': stats.get('interceptions_low', 0),
                 'tackles_won': stats.get('tackles_won', 0),
                 'tackles_lost': stats.get('tackles_lost', 0),
                 'blocked_shots': stats.get('blocked_shots', 0),
                 'blocked_passes': stats.get('blocked_passes', 0),
                 'ball_recoveries': stats.get('ball_recoveries', 0),
+                'recoveries_high': stats.get('recoveries_high', 0),
+                'recoveries_med': stats.get('recoveries_med', 0),
+                'recoveries_low': stats.get('recoveries_low', 0),
                 'offsides_provoked': stats.get('offsides_provoked', 0),
                 'challenges_lost': stats.get('challenges_lost', 0),
                 'errors_leading_to_shot': stats.get('errors_leading_to_shot', 0),

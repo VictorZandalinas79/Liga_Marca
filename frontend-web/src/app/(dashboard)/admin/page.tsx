@@ -6,6 +6,7 @@ import {
   Pencil, Trash2, X, AlertTriangle,
 } from 'lucide-react'
 import { LeagueConfigPanel } from './LeagueConfigPanel'
+import { ScoringConfigPanel } from './ScoringConfigPanel'
 
 type AdminUser = {
   id: string
@@ -336,6 +337,9 @@ export default function AdminPage() {
 
       {/* Configuración de las reglas del juego */}
       <LeagueConfigPanel />
+
+      {/* Configuración del sistema de puntuación */}
+      <ScoringConfigPanel />
 
       {editUser && (
         <EditModal

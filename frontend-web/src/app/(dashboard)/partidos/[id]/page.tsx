@@ -38,6 +38,9 @@ interface Player {
   tackles_won?: number
   tackles_lost?: number
   interceptions?: number
+  interceptions_high?: number
+  interceptions_med?: number
+  interceptions_low?: number
   clearances?: number
   clearances_last_line?: number
   blocked_shots?: number
@@ -234,6 +237,9 @@ export default function PartidoDetallePage() {
           tackles_won: score?.tackles_won || 0,
           tackles_lost: score?.tackles_lost || 0,
           interceptions: score?.interceptions || 0,
+          interceptions_high: score?.interceptions_high || 0,
+          interceptions_med: score?.interceptions_med || 0,
+          interceptions_low: score?.interceptions_low || 0,
           clearances: score?.clearances || 0,
           clearances_last_line: score?.clearances_last_line || 0,
           blocked_shots: score?.blocked_shots || 0,
