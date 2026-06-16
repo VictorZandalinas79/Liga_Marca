@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, TrendingUp, Goal, Ticket, X, Calendar, MapPin, Clock } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
+import { useScoringRules, resolveRates } from '@/lib/scoring-config'
 
 interface Player {
   id: string
@@ -171,6 +172,8 @@ export default function JugadorDetallePage() {
   const [player, setPlayer] = useState<Player | null>(null)
   const [scores, setScores] = useState<PlayerScore[]>([])
   const [selectedMatch, setSelectedMatch] = useState<PlayerScore | null>(null)
+  // Tarifas de puntuación desde scoring_config (editables en Admin)
+  const scoringRules = useScoringRules()
   const supabase = createClient()
   const router = useRouter()
   const params = useParams()
@@ -335,47 +338,9 @@ export default function JugadorDetallePage() {
   // ============================================================
   type Pos = 'POR' | 'DEF' | 'MED' | 'DEL'
 
-  const SR = {
-    participation: { starter_bonus: 2, substitute_bonus: 1, minutes_threshold: 60 },
-    goal: { POR: 6, DEF: 6, MED: 5, DEL: 4 } as Record<Pos, number>,
-    own_goal: -2,
-    assist_goal: 3,        // Asistencia que acaba en gol
-    assist_no_goal: 1,     // Asistencia que no acaba en gol (intento)
-    clean_sheet: { POR: 4, DEF: 3, MED: 2, DEL: 1 } as Record<Pos, number>,
-    goal_conceded: { POR: -2, DEF: -2, MED: -1, DEL: -1 } as Record<Pos, number>, // Por gol encajado
-    penalty_save: 5,
-    penalty_missed: -2,
-    penalty_won: 2,        // Penalti provocado
-    penalty_conceded: -2,  // Penalti cometido
-    yellow_card: -1,
-    second_yellow_card: -1,
-    red_card: -3,
-    // Bonus DECIMALES por unidad — valores EXACTOS de scoring_rules.json
-    per_unit: {
-      saves: 0.5,              // save
-      punches_ok: 0.2,         // punch_ok
-      punches_fail: 0.1,       // punch_fail
-      claims: 0.1,             // claim (blocaje)
-      sweepers: 0.1,           // sweeper (salida del área)
-      shots_on_target: 0.3,    // shots_on_target
-      takeons_won: 0.5,        // takeons_won
-      box_entries: 0.1,        // box_entries
-      clearances: 0.5,         // clearances
-      passes_completed: 0.05,  // passes_completed
-      forward_passes: 0.2,     // forward_passes
-      set_pieces_taken: 0.2,   // set_pieces_taken
-      successful_crosses: 0.3, // successful_crosses
-      recoveries_high: 0.3,        // recoveries_high
-      recoveries_med: 0.2,         // recoveries_med
-      recoveries_low: 0.1,         // recoveries_low
-      interceptions_high: 0.3,     // interceptions_high
-      interceptions_med: 0.2,      // interceptions_med
-      interceptions_low: 0.1,      // interceptions_low
-      long_balls_completed: 0.5,   // long_balls_completed
-    },
-    // Penalización por balón perdido: -0.1 uniforme (scoring_rules.json)
-    lost_balls: -0.1,
-  }
+  // Tarifas resueltas desde scoring_config (con fallback a los valores oficiales).
+  // Reflejan lo editado en Admin, así que el "× valor" de cada métrica cuadra.
+  const SR = resolveRates(scoringRules)
   const r2 = (v: number) => Math.round(v * 100) / 100
   const fmtPts = (v: number): string => String(parseFloat(r2(v).toFixed(2)))
 
@@ -458,7 +423,7 @@ export default function JugadorDetallePage() {
     // BLOQUE 8: Penalizaciones
     const b8: ScoreRow[] = []
     const lostBalls = (score.dispossessed || 0) + (score.bad_touches || 0)
-    if (lostBalls > 0) b8.push(u(lostBalls, SR.lost_balls, 'Balón perdido'))
+    if (lostBalls > 0) b8.push(u(lostBalls, SR.lost_balls[pos], 'Balón perdido'))
 
     // BLOQUE 9: Puntos RELEVO
     const b9: ScoreRow[] = []

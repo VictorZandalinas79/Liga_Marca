@@ -6,6 +6,9 @@
 // preservan tal cual en el servidor. Aquí sólo definimos QUÉ se edita y con
 // qué etiqueta, no los valores (que vienen del GET).
 
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+
 // El JSON tiene formas mixtas por clave, así que tipamos de forma laxa.
 export type ScoringRules = Record<string, unknown>
 
@@ -79,4 +82,182 @@ export function num(obj: unknown, key: string): number {
     if (typeof v === 'number' && Number.isFinite(v)) return v
   }
   return 0
+}
+
+// ============================================================================
+// Tarifas resueltas para los DESGLOSES (página Jugador y Partido).
+//
+// Los componentes de desglose mostraban valores hardcodeados que no reflejaban
+// las ediciones del Admin. `resolveRates` extrae las tarifas de las reglas de
+// `scoring_config` (con DEFAULT_RATES como fallback), y `useScoringRules` las
+// carga en cliente. Así el "× 0.05" junto a cada métrica refleja lo editado.
+// ============================================================================
+
+export interface ScoringRates {
+  participation: { starter_bonus: number; substitute_bonus: number; minutes_threshold: number }
+  goal: Record<Position, number>
+  own_goal: number
+  assist_goal: number
+  assist_no_goal: number
+  clean_sheet: Record<Position, number>
+  goal_conceded: Record<Position, number>
+  penalty_save: number
+  penalty_missed: number
+  penalty_won: number
+  penalty_conceded: number
+  yellow_card: number
+  second_yellow_card: number
+  red_card: number
+  per_unit: {
+    saves: number
+    punches_ok: number
+    punches_fail: number
+    claims: number
+    sweepers: number
+    shots_on_target: number
+    takeons_won: number
+    box_entries: number
+    clearances: number
+    passes_completed: number
+    forward_passes: number
+    set_pieces_taken: number
+    successful_crosses: number
+    recoveries_high: number
+    recoveries_med: number
+    recoveries_low: number
+    interceptions_high: number
+    interceptions_med: number
+    interceptions_low: number
+    long_balls_completed: number
+  }
+  lost_balls: Record<Position, number>
+}
+
+// Valores por defecto (espejo de scoring_rules.json) usados como fallback.
+export const DEFAULT_RATES: ScoringRates = {
+  participation: { starter_bonus: 2, substitute_bonus: 1, minutes_threshold: 60 },
+  goal: { POR: 6, DEF: 6, MED: 5, DEL: 4 },
+  own_goal: -2,
+  assist_goal: 3,
+  assist_no_goal: 1,
+  clean_sheet: { POR: 4, DEF: 3, MED: 2, DEL: 1 },
+  goal_conceded: { POR: -2, DEF: -2, MED: -1, DEL: -1 },
+  penalty_save: 5,
+  penalty_missed: -2,
+  penalty_won: 2,
+  penalty_conceded: -2,
+  yellow_card: -1,
+  second_yellow_card: -1,
+  red_card: -3,
+  per_unit: {
+    saves: 0.5, punches_ok: 0.2, punches_fail: 0.1, claims: 0.1, sweepers: 0.1,
+    shots_on_target: 0.3, takeons_won: 0.5, box_entries: 0.1, clearances: 0.5,
+    passes_completed: 0.05, forward_passes: 0.2, set_pieces_taken: 0.2, successful_crosses: 0.3,
+    recoveries_high: 0.3, recoveries_med: 0.2, recoveries_low: 0.1,
+    interceptions_high: 0.3, interceptions_med: 0.2, interceptions_low: 0.1,
+    long_balls_completed: 0.5,
+  },
+  lost_balls: { POR: -0.1, DEF: -0.1, MED: -0.1, DEL: -0.1 },
+}
+
+// Lee un valor de evento por posición (cae a 'all' y luego al fallback).
+function eventVal(rules: ScoringRules | null, key: string, pos: Position, fallback: number): number {
+  const events = rules?.events as Record<string, Record<string, unknown>> | undefined
+  const rule = events?.[key]
+  if (rule) {
+    const v = rule[pos] ?? rule['all']
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+  }
+  return fallback
+}
+
+function bonusVal(rules: ScoringRules | null, key: string, fallback: number): number {
+  const bonuses = rules?.bonuses_per_X as Record<string, Record<string, unknown>> | undefined
+  const v = bonuses?.[key]?.points
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback
+}
+
+function lostBallVal(rules: ScoringRules | null, pos: Position, fallback: number): number {
+  const lb = (rules?.penalties_per_X as Record<string, Record<string, Record<string, unknown>>> | undefined)?.lost_balls
+  const v = lb?.[pos]?.points
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback
+}
+
+/** Construye las tarifas de desglose desde las reglas de scoring_config. */
+export function resolveRates(rules: ScoringRules | null): ScoringRates {
+  if (!rules) return DEFAULT_RATES
+  const part = rules.participation as Record<string, unknown> | undefined
+  const pn = (k: string, fb: number) => {
+    const v = part?.[k]
+    return typeof v === 'number' && Number.isFinite(v) ? v : fb
+  }
+  const byPos = (key: string, d: ScoringRates['goal']): Record<Position, number> => ({
+    POR: eventVal(rules, key, 'POR', d.POR),
+    DEF: eventVal(rules, key, 'DEF', d.DEF),
+    MED: eventVal(rules, key, 'MED', d.MED),
+    DEL: eventVal(rules, key, 'DEL', d.DEL),
+  })
+  const d = DEFAULT_RATES
+  return {
+    participation: {
+      starter_bonus: pn('starter_bonus', d.participation.starter_bonus),
+      substitute_bonus: pn('substitute_bonus', d.participation.substitute_bonus),
+      minutes_threshold: pn('minutes_threshold', d.participation.minutes_threshold),
+    },
+    goal: byPos('goal', d.goal),
+    own_goal: eventVal(rules, 'own_goal', 'MED', d.own_goal),
+    assist_goal: eventVal(rules, 'assist_goal', 'MED', d.assist_goal),
+    assist_no_goal: eventVal(rules, 'assist_no_goal', 'MED', d.assist_no_goal),
+    clean_sheet: byPos('clean_sheet', d.clean_sheet),
+    goal_conceded: byPos('goal_conceded', d.goal_conceded),
+    penalty_save: eventVal(rules, 'penalty_save', 'MED', d.penalty_save),
+    penalty_missed: eventVal(rules, 'penalty_missed', 'MED', d.penalty_missed),
+    penalty_won: eventVal(rules, 'penalty_won', 'MED', d.penalty_won),
+    penalty_conceded: eventVal(rules, 'penalty_conceded', 'MED', d.penalty_conceded),
+    yellow_card: eventVal(rules, 'yellow_card', 'MED', d.yellow_card),
+    second_yellow_card: eventVal(rules, 'second_yellow_card', 'MED', d.second_yellow_card),
+    red_card: eventVal(rules, 'red_card', 'MED', d.red_card),
+    per_unit: {
+      saves: eventVal(rules, 'save', 'MED', d.per_unit.saves),
+      punches_ok: eventVal(rules, 'punch_ok', 'MED', d.per_unit.punches_ok),
+      punches_fail: eventVal(rules, 'punch_fail', 'MED', d.per_unit.punches_fail),
+      claims: eventVal(rules, 'claim', 'MED', d.per_unit.claims),
+      sweepers: eventVal(rules, 'sweeper', 'MED', d.per_unit.sweepers),
+      shots_on_target: bonusVal(rules, 'shots_on_target', d.per_unit.shots_on_target),
+      takeons_won: bonusVal(rules, 'takeons_won', d.per_unit.takeons_won),
+      box_entries: bonusVal(rules, 'box_entries', d.per_unit.box_entries),
+      clearances: bonusVal(rules, 'clearances', d.per_unit.clearances),
+      passes_completed: bonusVal(rules, 'passes_completed', d.per_unit.passes_completed),
+      forward_passes: bonusVal(rules, 'forward_passes', d.per_unit.forward_passes),
+      set_pieces_taken: bonusVal(rules, 'set_pieces_taken', d.per_unit.set_pieces_taken),
+      successful_crosses: bonusVal(rules, 'successful_crosses', d.per_unit.successful_crosses),
+      recoveries_high: bonusVal(rules, 'recoveries_high', d.per_unit.recoveries_high),
+      recoveries_med: bonusVal(rules, 'recoveries_med', d.per_unit.recoveries_med),
+      recoveries_low: bonusVal(rules, 'recoveries_low', d.per_unit.recoveries_low),
+      interceptions_high: bonusVal(rules, 'interceptions_high', d.per_unit.interceptions_high),
+      interceptions_med: bonusVal(rules, 'interceptions_med', d.per_unit.interceptions_med),
+      interceptions_low: bonusVal(rules, 'interceptions_low', d.per_unit.interceptions_low),
+      long_balls_completed: bonusVal(rules, 'long_balls_completed', d.per_unit.long_balls_completed),
+    },
+    lost_balls: {
+      POR: lostBallVal(rules, 'POR', d.lost_balls.POR),
+      DEF: lostBallVal(rules, 'DEF', d.lost_balls.DEF),
+      MED: lostBallVal(rules, 'MED', d.lost_balls.MED),
+      DEL: lostBallVal(rules, 'DEL', d.lost_balls.DEL),
+    },
+  }
+}
+
+/** Hook cliente: carga las reglas de scoring_config (null hasta que cargan). */
+export function useScoringRules(): ScoringRules | null {
+  const [rules, setRules] = useState<ScoringRules | null>(null)
+  useEffect(() => {
+    const run = async () => {
+      const supabase = createClient()
+      const { data } = await supabase.from('scoring_config').select('rules').eq('id', 1).maybeSingle()
+      if (data?.rules) setRules(data.rules as ScoringRules)
+    }
+    run()
+  }, [])
+  return rules
 }
