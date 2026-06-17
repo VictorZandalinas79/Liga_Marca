@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, Users, ChevronLeft, ChevronRight, Radio, X, TrendingUp } from 'lucide-react'
+import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp } from 'lucide-react'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 
 interface Player {
@@ -73,6 +73,7 @@ export default function JornadaPage() {
   const [availableMatchdays, setAvailableMatchdays] = useState<MatchdayInfo[]>([])
   const [userTeams, setUserTeams] = useState<UserTeam[]>([])
   const [sortBy, setSortBy] = useState<'puntos' | 'promedio'>('puntos')
+  const [showEquipos, setShowEquipos] = useState(false)
   const [modalPlayer, setModalPlayer] = useState<Record<string, any> | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -512,6 +513,14 @@ export default function JornadaPage() {
     return colors[code] || 'bg-slate-500 text-white'
   }
 
+  const getPositionMedal = (position: number, isLast: boolean = false) => {
+    if (position === 1) return <Medal className="w-5 h-5 text-yellow-500" />
+    if (position === 2) return <Medal className="w-5 h-5 text-slate-400" />
+    if (position === 3) return <Medal className="w-5 h-5 text-amber-600" />
+    if (isLast) return <span className="text-4xl leading-none">🐖</span>
+    return <span className="text-lg font-bold text-slate-600 w-5 text-center">{position}</span>
+  }
+
   const currentInfo = availableMatchdays.find(m => m.matchday === selectedMatchday)
   const getMatchdayLabel = (info?: MatchdayInfo) => {
     if (!info) return `Jornada ${selectedMatchday}`
@@ -557,7 +566,7 @@ export default function JornadaPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       {/* Cabecera con selector de jornada por flechas */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -603,9 +612,21 @@ export default function JornadaPage() {
         )}
       </div>
 
-      {/* Clasificación de la jornada */}
+      {/* Botón para desplegar/ocultar los equipos */}
+      <button
+        onClick={() => setShowEquipos(v => !v)}
+        className="flex items-center justify-between w-full px-4 py-3 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          <Users className="w-5 h-5 text-emerald-400" />
+          Equipos
+        </span>
+        {showEquipos ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+      </button>
+
+      {/* Clasificación de la jornada (baja al fondo cuando se abren los equipos) */}
       {userTeams.length > 0 && (
-        <Card className="!bg-slate-800 border-slate-700">
+        <Card className={`!bg-slate-800 border-slate-700 ${showEquipos ? 'order-last' : ''}`}>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -638,22 +659,10 @@ export default function JornadaPage() {
                       }}
                     >
                       <td className="py-3 px-2">
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          {pos === 1 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500" />}
-                          {pos === 2 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400" />}
-                          {pos === 3 && <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-amber-600" />}
-                          {isLast && pos > 3 && (
-                            <span className="text-base sm:text-lg">🐷</span>
-                          )}
-                          {!isLast && (
-                            <span className={`font-bold text-xs sm:text-sm ${pos <= 3 ? 'text-emerald-400' : 'text-slate-300'}`}>
-                              {pos}º
-                            </span>
-                          )}
-                        </div>
+                        {getPositionMedal(pos, isLast)}
                       </td>
                       <td className="py-3 px-2 max-w-[120px] sm:max-w-none">
-                        <span className="font-medium text-white text-xs sm:text-sm">{team.team_name}</span>
+                        <span className="font-semibold text-white text-xs uppercase">{team.team_name}</span>
                         <span className="block text-xs text-slate-400">
                           {jugaron} / {total} jugaron
                         </span>
@@ -666,15 +675,17 @@ export default function JornadaPage() {
                       <td className="py-3 px-2 text-right">
                         <span className="text-xs sm:text-sm font-semibold text-slate-200">{fmtValor(team.valor_total)}</span>
                       </td>
-                      <td className="py-3 px-2 text-right">
-                        <Badge className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 whitespace-nowrap ${sortBy === 'puntos' ? 'bg-emerald-600 text-white' : 'bg-slate-600 text-slate-200'}`}>
+                      <td className="py-3 px-2 text-right whitespace-nowrap">
+                        <span className="text-base font-bold text-emerald-400">
                           {Math.round(team.puntos_totales * 10) / 10}
-                        </Badge>
+                        </span>
+                        <span className="text-xs text-slate-400 ml-1">pts</span>
                       </td>
-                      <td className="py-3 px-2 text-right">
-                        <Badge className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 whitespace-nowrap ${sortBy === 'promedio' ? 'bg-emerald-600 text-white' : 'bg-slate-600 text-slate-200'}`}>
+                      <td className="py-3 px-2 text-right whitespace-nowrap">
+                        <span className="text-sm font-semibold text-slate-200">
                           {jugaron > 0 ? Math.round(promedio * 10) / 10 : '—'}
-                        </Badge>
+                        </span>
+                        <span className="text-xs text-slate-400 ml-1">pts/j</span>
                       </td>
                     </tr>
                   )
@@ -686,14 +697,9 @@ export default function JornadaPage() {
         </Card>
       )}
 
-      {/* Equipos de usuarios - Mini tablas por usuario */}
-      {userTeams.length > 0 ? (
+      {/* Equipos de usuarios - Mini tablas por usuario (desplegable) */}
+      {showEquipos && (userTeams.length > 0 ? (
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-slate-600" />
-            <h2 className="text-lg font-bold text-slate-900">Equipos por Usuario</h2>
-          </div>
-
           {sortedTeams.map((team, index) => {
             const displayPos = index + 1
             const isCurrentUser = currentUserId === team.user_id
@@ -852,7 +858,7 @@ export default function JornadaPage() {
             )}
           </CardContent>
         </Card>
-      )}
+      ))}
 
       {/* Modal de estadísticas del jugador */}
       {modalPlayer !== null && (

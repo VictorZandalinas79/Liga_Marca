@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, TrendingUp, TrendingDown, Minus, Medal, User, Filter, ArrowUpDown, Target, CheckCircle, Users, ChevronRight } from 'lucide-react'
+import { Trophy, TrendingUp, TrendingDown, Minus, Medal, Filter, ArrowUpDown, Target, CheckCircle, Users, ChevronRight } from 'lucide-react'
 
 interface UserStanding {
   user_id: string
@@ -528,7 +528,7 @@ export default function ClasificacionPage() {
     if (position === 1) return <Medal className="w-5 h-5 text-yellow-500" />
     if (position === 2) return <Medal className="w-5 h-5 text-slate-400" />
     if (position === 3) return <Medal className="w-5 h-5 text-amber-600" />
-    if (isLast) return <span className="text-lg w-5 text-center">🐷</span>
+    if (isLast) return <span className="text-4xl leading-none">🐖</span>
     return <span className="text-lg font-bold text-slate-600 w-5 text-center">{position}</span>
   }
 
@@ -727,18 +727,13 @@ export default function ClasificacionPage() {
                       {getPositionMedal(standing.current_position, isLast)}
                     </td>
                     <td className="px-2 py-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="flex w-7 h-7 rounded-full bg-slate-600 items-center justify-center shrink-0">
-                          <User className="w-3 h-3 text-slate-300" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-white text-xs whitespace-nowrap uppercase">{standing.user_name}</p>
-                          {standing.best_matchday_points > 0 && (
-                            <p className="text-xs text-amber-400 font-medium whitespace-nowrap">
-                              Mejor: {Math.round(standing.best_matchday_points * 10) / 10} pts (J{standing.best_matchday})
-                            </p>
-                          )}
-                        </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-white text-xs whitespace-nowrap uppercase">{standing.user_name}</p>
+                        {standing.best_matchday_points > 0 && (
+                          <p className="text-xs text-amber-400 font-medium whitespace-nowrap">
+                            Mejor: {Math.round(standing.best_matchday_points * 10) / 10} pts (J{standing.best_matchday})
+                          </p>
+                        )}
                       </div>
                     </td>
                     <td className="px-2 py-3 text-right whitespace-nowrap">
