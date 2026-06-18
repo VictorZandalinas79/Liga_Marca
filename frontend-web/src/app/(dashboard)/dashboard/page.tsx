@@ -1071,7 +1071,15 @@ export default function DashboardPage() {
                     <div className={`text-sm px-3 py-1 w-full text-center font-semibold text-white rounded-md ${getPositionColor(player.position)}`}>
                       {getPositionLabel(player.position)}
                     </div>
-                    <p className="text-sm md:text-base font-bold text-white truncate w-full text-center">
+                    <p className={`font-bold text-white w-full text-center break-words leading-tight ${
+                      (player.short_name || player.first_name || '').length > 14
+                        ? 'text-[10px] md:text-sm'
+                        : (player.short_name || player.first_name || '').length > 10
+                        ? 'text-[11px] md:text-sm'
+                        : (player.short_name || player.first_name || '').length > 7
+                        ? 'text-xs md:text-base'
+                        : 'text-sm md:text-base'
+                    }`}>
                       {player.short_name || player.first_name}
                     </p>
                     <p className="text-xs text-slate-300 truncate w-full text-center">

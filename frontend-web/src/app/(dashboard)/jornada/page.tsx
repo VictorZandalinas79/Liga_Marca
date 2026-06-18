@@ -1007,7 +1007,13 @@ export default function JornadaPage() {
                                   )}
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className={`font-semibold truncate ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
+                                      <span className={`font-semibold break-words leading-tight ${
+                                        (player.short_name || player.first_name || '').length > 15
+                                          ? 'text-[10px]'
+                                          : (player.short_name || player.first_name || '').length > 11
+                                          ? 'text-xs'
+                                          : 'text-sm'
+                                      } ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
                                         {player.short_name || player.first_name}
                                       </span>
                                       {isPenalized && (
