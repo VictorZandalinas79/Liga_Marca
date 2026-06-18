@@ -1,0 +1,38 @@
+{
+  "J8": {
+    "initial_run": false,
+    "final_run": false
+  },
+  "J7": {
+    "initial_run": false,
+    "final_run": false
+  },
+  "J9": {
+    "initial_run": false,
+    "final_run": false
+  },
+  "J1": {
+    "initial_run": true,
+    "final_run": true
+  },
+  "J5": {
+    "initial_run": false,
+    "final_run": false
+  },
+  "J2": {
+    "initial_run": true,
+    "final_run": false
+  },
+  "J4": {
+    "initial_run": false,
+    "final_run": false
+  },
+  "J6": {
+    "initial_run": false,
+    "final_run": false
+  },
+  "J3": {
+    "initial_run": false,
+    "final_run": false
+  }
+}

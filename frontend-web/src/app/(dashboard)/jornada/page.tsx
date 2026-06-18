@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search } from 'lucide-react'
+import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle } from 'lucide-react'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 
 interface Player {
@@ -74,11 +74,13 @@ export default function JornadaPage() {
   const [userTeams, setUserTeams] = useState<UserTeam[]>([])
   const [sortBy, setSortBy] = useState<'puntos' | 'promedio'>('puntos')
   const [showEquipos, setShowEquipos] = useState(false)
+  const [showSanciones, setShowSanciones] = useState(false)
   const [modalPlayer, setModalPlayer] = useState<Record<string, any> | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchActiveIndex, setSearchActiveIndex] = useState(0)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [matchdayInfractions, setMatchdayInfractions] = useState<any[]>([])
   const supabase = createClient()
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const playerRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -237,22 +239,25 @@ export default function JornadaPage() {
 
     const teamIdsUser = userTeamsData.map(t => t.id)
 
-    // team_players de esta jornada (con fallback al último matchday alineado <= jornada)
-    let { data: teamPlayersData } = await supabase
+    // Cargar todos los team_players hasta la jornada actual
+    const { data: allTeamPlayers } = await supabase
       .from('team_players')
       .select('team_id, player_id, is_starter, is_captain, matchday')
       .in('team_id', teamIdsUser)
-      .eq('matchday', matchday)
+      .lte('matchday', matchday)
+      .order('matchday', { ascending: false })
 
-    if (!teamPlayersData || teamPlayersData.length === 0) {
-      const { data: fallbackPlayers } = await supabase
-        .from('team_players')
-        .select('team_id, player_id, is_starter, is_captain, matchday')
-        .in('team_id', teamIdsUser)
-        .lte('matchday', matchday)
-        .order('matchday', { ascending: false })
-      teamPlayersData = fallbackPlayers
-    }
+    // Para cada equipo, encontrar su jornada máxima registrada <= matchday
+    const maxMatchdayByTeam = new Map<string, number>()
+    allTeamPlayers?.forEach(p => {
+      const currentMax = maxMatchdayByTeam.get(p.team_id)
+      if (currentMax === undefined || p.matchday > currentMax) {
+        maxMatchdayByTeam.set(p.team_id, p.matchday)
+      }
+    })
+
+    // Filtrar los jugadores de cada equipo correspondientes a su última jornada registrada
+    let teamPlayersData = allTeamPlayers?.filter(p => p.matchday === maxMatchdayByTeam.get(p.team_id)) || []
 
     if (!teamPlayersData || teamPlayersData.length === 0) {
       setUserTeams([])
@@ -481,10 +486,35 @@ export default function JornadaPage() {
   }, [])
 
   useEffect(() => {
-    if (selectedMatchday && availableMatchdays.length > 0) {
+    if (selectedMatchday > 0) {
       loadUserTeamsForMatchday(selectedMatchday)
+
+      const fetchInfractions = async () => {
+        const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
+        if (!info) return
+
+        let infractionsData: any[] = []
+        // 1. Siempre intentar obtener las sanciones consolidadas de la base de datos
+        const { data: dbPenalties } = await supabase
+          .from('penalties')
+          .select('id, matchday, description, points, user_id, profiles(full_name)')
+          .eq('matchday', selectedMatchday)
+
+        if (dbPenalties && dbPenalties.length > 0) {
+          infractionsData = dbPenalties
+        } else if (info.live) {
+          // 2. Si no hay sanciones en base de datos y la jornada está en vivo, buscar las dinámicas en tiempo real
+          const res = await fetch('/api/penalties/live')
+          if (res.ok) {
+            const data = await res.json()
+            infractionsData = data.infractions || []
+          }
+        }
+        setMatchdayInfractions(infractionsData)
+      }
+      fetchInfractions()
     }
-  }, [selectedMatchday, availableMatchdays.length])
+  }, [selectedMatchday, availableMatchdays])
 
   // Polling en tiempo real cuando la jornada seleccionada está en directo
   useEffect(() => {
@@ -669,10 +699,52 @@ export default function JornadaPage() {
         )}
       </div>
 
+      {/* Botón para desplegar/ocultar las sanciones */}
+      <button
+        onClick={() => setShowSanciones(v => !v)}
+        className="flex items-center justify-between w-full px-4 py-3 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors mt-4"
+      >
+        <span className="flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-red-400" />
+          Sanciones {matchdayInfractions.length > 0 ? `(${matchdayInfractions.length})` : ''}
+        </span>
+        {showSanciones ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+      </button>
+
+      {/* Sanciones de la Jornada */}
+      {showSanciones && (
+        <Card className="!bg-red-50 border-red-200 mt-2">
+          <CardContent className="p-4">
+            {matchdayInfractions.length === 0 ? (
+              <p className="text-xs text-slate-600 italic">No hay sanciones registradas en esta jornada.</p>
+            ) : (
+              <div className="space-y-2">
+                {matchdayInfractions.map((inf: any) => {
+                  const userName = inf.full_name || (inf.profiles ? (Array.isArray(inf.profiles) ? inf.profiles[0]?.full_name : inf.profiles.full_name) : 'Usuario')
+                  const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
+                  const isLive = info?.live || false
+                  return (
+                    <div key={inf.id} className="flex justify-between items-start text-xs bg-white rounded p-2 border border-red-100 shadow-sm">
+                      <div>
+                        <span className="font-bold text-slate-800 mr-1">[{userName}]</span>
+                        <span className="text-slate-700 font-medium">{inf.description}</span>
+                      </div>
+                      <span className={`font-bold shrink-0 ml-2 ${inf.is_pending || (inf.points === 0 && isLive) ? 'text-amber-600' : 'text-red-600'}`}>
+                        {inf.is_pending || (inf.points === 0 && isLive) ? 'PENDIENTE' : `-${inf.points} pts`}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Botón para desplegar/ocultar los equipos */}
       <button
         onClick={() => setShowEquipos(v => !v)}
-        className="flex items-center justify-between w-full px-4 py-3 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors"
+        className="flex items-center justify-between w-full px-4 py-3 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors mt-4"
       >
         <span className="flex items-center gap-2">
           <Users className="w-5 h-5 text-emerald-400" />
@@ -869,13 +941,37 @@ export default function JornadaPage() {
                               const matchKey = `${team.team_id}-${player.id}`
                               const isMatch = matchSet.has(matchKey)
                               const isActive = matchKey === activeMatchKey
+
+                              const isPenalized = matchdayInfractions.some((inf: any) => {
+                                const matchesUser = inf.user_id === team.user_id || inf.team_id === team.team_id
+                                if (!matchesUser) return false
+
+                                const descLower = (inf.description || '').toLowerCase()
+                                
+                                // 1. Mencion de nombre de jugador
+                                const shortName = (player.short_name || '').toLowerCase().trim()
+                                const firstName = (player.first_name || '').toLowerCase().trim()
+                                if (shortName && descLower.includes(shortName)) return true
+                                if (firstName && descLower.includes(firstName)) return true
+
+                                // 2. Mencion de equipo real en sancion de max por equipo
+                                const realTeamName = (player.team?.name || '').toLowerCase().trim()
+                                if (realTeamName && descLower.includes(realTeamName) && descLower.includes('jugadores de')) {
+                                  return true
+                                }
+
+                                return false
+                              })
+
                               return (
                               <div
                                 key={player.id}
                                 ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
                                 onClick={() => openPlayerStats(player.id)}
                                 className={`flex items-center justify-between p-3 rounded-lg transition-colors gap-2 cursor-pointer ${
-                                  isActive
+                                  isPenalized
+                                    ? 'bg-red-50 border-2 border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-md ring-2 ring-red-300'
+                                    : isActive
                                     ? 'bg-orange-200 ring-2 ring-orange-400 hover:bg-orange-300'
                                     : isMatch
                                     ? 'bg-yellow-100 ring-1 ring-yellow-300 hover:bg-yellow-200'
@@ -890,18 +986,33 @@ export default function JornadaPage() {
                                     <img
                                       src={player.photo}
                                       alt={player.short_name || ''}
-                                      className={`w-10 h-10 rounded-full object-cover border-2 shrink-0 ${player.hasPlayed ? 'border-slate-400 opacity-70' : 'border-slate-300'}`}
+                                      className={`w-10 h-10 rounded-full object-cover border-2 shrink-0 ${
+                                        isPenalized
+                                          ? 'border-red-500 ring-2 ring-red-200'
+                                          : player.hasPlayed
+                                          ? 'border-slate-400 opacity-70'
+                                          : 'border-slate-300'
+                                      }`}
                                     />
                                   ) : (
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 shrink-0 ${player.hasPlayed ? 'bg-slate-400 text-slate-700 border-slate-500' : 'bg-slate-300 text-slate-600 border-slate-400'}`}>
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 shrink-0 ${
+                                      isPenalized
+                                        ? 'bg-red-100 text-red-700 border-red-500 ring-2 ring-red-200'
+                                        : player.hasPlayed
+                                        ? 'bg-slate-400 text-slate-700 border-slate-500'
+                                        : 'bg-slate-300 text-slate-600 border-slate-400'
+                                    }`}>
                                       {player.shirt_number || '?'}
                                     </div>
                                   )}
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className={`font-semibold truncate ${player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
+                                      <span className={`font-semibold truncate ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
                                         {player.short_name || player.first_name}
                                       </span>
+                                      {isPenalized && (
+                                        <AlertTriangle className="w-4 h-4 text-red-600 animate-pulse shrink-0" />
+                                      )}
                                       <Badge className={`text-xs ${getPositionColor(player.position)}`}>
                                         {getPositionLabel(player.position)}
                                       </Badge>

@@ -201,8 +201,18 @@ export default function ClasificacionPage() {
         for (const team of teams) {
           const teamMatchdays = teamPlayersByMatchday.get(team.teamId)
           if (teamMatchdays) {
-            for (const [md, players] of teamMatchdays.entries()) {
-              if (md <= 0) continue
+            // Recorrer todas las jornadas hasta la actual para heredar alineaciones no modificadas
+            for (let md = 1; md <= currentMatchday; md++) {
+              let activeMd = -1
+              for (const savedMd of teamMatchdays.keys()) {
+                if (savedMd <= md && savedMd > activeMd) {
+                  activeMd = savedMd
+                }
+              }
+
+              if (activeMd === -1) continue // No hay alineación guardada aún para este equipo
+
+              const players = teamMatchdays.get(activeMd) || []
 
               if (!userPointsByMatchday.get(userId)!.has(md)) {
                 userPointsByMatchday.get(userId)!.set(md, 0)
@@ -433,22 +443,17 @@ export default function ClasificacionPage() {
     const teamId = userTeamsData[0].id
     const teamName = userTeamsData[0].name
 
-    // Obtener jugadores del equipo en la jornada seleccionada
+    // Obtener jugadores del equipo en la jornada seleccionada o anterior disponible
     let { data: teamPlayersData } = await supabase
       .from('team_players')
-      .select('player_id, is_starter, is_captain')
+      .select('player_id, is_starter, is_captain, matchday')
       .eq('team_id', teamId)
-      .eq('matchday', targetMatchday)
+      .lte('matchday', targetMatchday)
+      .order('matchday', { ascending: false })
 
-    if (!teamPlayersData || teamPlayersData.length === 0) {
-      const { data: fallbackData } = await supabase
-        .from('team_players')
-        .select('player_id, is_starter, is_captain')
-        .eq('team_id', teamId)
-        .lte('matchday', targetMatchday)
-        .order('matchday', { ascending: false })
-        .limit(15)
-      teamPlayersData = fallbackData
+    if (teamPlayersData && teamPlayersData.length > 0) {
+      const maxMd = teamPlayersData[0].matchday
+      teamPlayersData = teamPlayersData.filter(tp => tp.matchday === maxMd)
     }
 
     if (!teamPlayersData || teamPlayersData.length === 0) {

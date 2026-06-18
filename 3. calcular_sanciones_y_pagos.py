@@ -163,9 +163,11 @@ def compute_team_sanctions(lineup, prev_mine, held_by_others_prev, points, playe
     for pid in lineup:
         if pid in held_by_others_prev and pid not in prev_mine:
             name = player_meta.get(pid, {}).get("name", pid)
+            owners = held_by_others_prev.get(pid, ["otro usuario"])
+            owners_str = ", ".join(owners)
             offender = pid
             rest = best_player([p for p in lineup if p != offender], zeroed, points)
-            zero([offender, rest], f"Jugador de otro usuario: {name}")
+            zero([offender, rest], f"Jugador de {owners_str}: {name}")
 
     # 2) Superado el nº de jugadores de un mismo equipo real
     real_team_count = {}
@@ -227,16 +229,50 @@ def run_matchday(sb, matchday):
     user_teams = fetch_all(sb, "user_teams", "id,user_id")
     team_to_user = {t["id"]: t["user_id"] for t in user_teams}
 
-    # Alineaciones de la jornada N y N-1
-    tp_now = fetch_all(sb, "team_players", "team_id,player_id", eq={"matchday": matchday})
-    tp_prev = fetch_all(sb, "team_players", "team_id,player_id", eq={"matchday": matchday - 1})
+    # Perfiles de usuario para obtener nombres
+    profiles = fetch_all(sb, "profiles", "id,full_name,email")
+    user_names = {
+        p["id"]: p.get("full_name") or (p.get("email") or "").split("@")[0] or "otro usuario"
+        for p in profiles
+    }
+    team_to_username = {
+        t["id"]: user_names.get(t["user_id"], "otro usuario")
+        for t in user_teams
+    }
+
+    # 1. Obtener todas las alineaciones registradas hasta la jornada actual
+    all_tp = fetch_all(sb, "team_players", "team_id,player_id,matchday")
+
+    # 2. Filtrar para la jornada N: buscar la última jornada registrada <= matchday por equipo
+    max_md_now = {}
+    for r in all_tp:
+        md = r["matchday"]
+        tid = r["team_id"]
+        if md <= matchday:
+            if tid not in max_md_now or md > max_md_now[tid]:
+                max_md_now[tid] = md
 
     lineup_now = {}
-    for r in tp_now:
-        lineup_now.setdefault(r["team_id"], []).append(r["player_id"])
+    for r in all_tp:
+        tid = r["team_id"]
+        if r["matchday"] == max_md_now.get(tid):
+            lineup_now.setdefault(tid, []).append(r["player_id"])
+
+    # 3. Filtrar para la jornada N-1: buscar la última jornada registrada <= matchday - 1 por equipo
+    prev_matchday = matchday - 1
+    max_md_prev = {}
+    for r in all_tp:
+        md = r["matchday"]
+        tid = r["team_id"]
+        if md <= prev_matchday:
+            if tid not in max_md_prev or md > max_md_prev[tid]:
+                max_md_prev[tid] = md
+
     lineup_prev = {}
-    for r in tp_prev:
-        lineup_prev.setdefault(r["team_id"], set()).add(r["player_id"])
+    for r in all_tp:
+        tid = r["team_id"]
+        if r["matchday"] == max_md_prev.get(tid):
+            lineup_prev.setdefault(tid, set()).add(r["player_id"])
 
     if not lineup_now:
         log(f"ℹ️ No hay alineaciones para la jornada {matchday}; nada que procesar")
@@ -245,14 +281,14 @@ def run_matchday(sb, matchday):
     # Jugadores que en N-1 tenía OTRO usuario (para la regla de exclusividad)
     held_prev_by_team = lineup_prev  # team_id -> set(player_id)
 
-    # Catálogo de jugadores (posición, equipo real, precio)
-    players = fetch_all(sb, "players", "id,position,team_id,precio")
+    # Catálogo de jugadores (posición, equipo real, precio, nombres)
+    players = fetch_all(sb, "players", "id,position,team_id,precio,short_name,first_name")
     player_meta = {
         p["id"]: {
             "position": p.get("position"),
             "real_team": p.get("team_id"),
             "precio": p.get("precio") or 0,
-            "name": p.get("id"),
+            "name": p.get("short_name") or p.get("first_name") or p.get("id"),
         }
         for p in players
     }
@@ -274,10 +310,12 @@ def run_matchday(sb, matchday):
     for team_id, lineup in lineup_now.items():
         user_id = team_to_user.get(team_id)
         prev_mine = held_prev_by_team.get(team_id, set())
-        held_by_others_prev = set()
-        for tid, pids in held_prev_by_team.items():
-            if tid != team_id:
-                held_by_others_prev |= pids
+        held_by_others_prev = {}
+        for owner_tid, pids in held_prev_by_team.items():
+            if owner_tid != team_id:
+                owner_name = team_to_username.get(owner_tid, "otro usuario")
+                for pid in pids:
+                    held_by_others_prev.setdefault(pid, []).append(owner_name)
 
         raw = sum(points.get(p, 0) for p in lineup)
         sanctions = compute_team_sanctions(
@@ -286,11 +324,10 @@ def run_matchday(sb, matchday):
         )
         penalty_total = sum(pts for _, pts in sanctions)
         for desc, pts in sanctions:
-            if pts > 0:
-                penalty_rows.append({
-                    "team_id": team_id, "user_id": user_id,
-                    "matchday": matchday, "description": desc, "points": pts,
-                })
+            penalty_rows.append({
+                "team_id": team_id, "user_id": user_id,
+                "matchday": matchday, "description": desc, "points": pts,
+            })
         results.append((team_id, user_id, raw, penalty_total, raw - penalty_total))
 
     if penalty_rows:

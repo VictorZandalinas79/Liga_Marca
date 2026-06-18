@@ -8,7 +8,7 @@ import { useLockedTeams } from '@/lib/locked-teams'
 import { useLeagueConfig } from '@/lib/league-config'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle } from 'lucide-react'
+import { Save, X, Check, Search, Lock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown } from 'lucide-react'
 
 interface Player {
   id: string
@@ -68,6 +68,25 @@ export default function DashboardPage() {
   // Jugadores vetados por exclusividad: los tiene otro usuario en la jornada
   // previa comprometida y yo no (modelo de retención; en J1 no aplica).
   const [offLimitPlayerIds, setOffLimitPlayerIds] = useState<Set<string>>(new Set())
+  interface Penalty {
+    id: string
+    matchday: number
+    description: string
+    points: number
+    user_id: string
+    profiles?: { full_name: string } | { full_name: string }[]
+  }
+  const [allPenalties, setAllPenalties] = useState<Penalty[]>([])
+  interface LiveInfraction {
+    id: string
+    user_id: string
+    full_name: string
+    matchday: number
+    description: string
+    is_pending: boolean
+  }
+  const [liveInfractions, setLiveInfractions] = useState<LiveInfraction[]>([])
+  const [showAllHistory, setShowAllHistory] = useState(false)
   const lockedTeamIds = new Set(lockedTeams.map(l => l.teamId))
   const isTeamLocked = (teamId?: string | null) => !!teamId && lockedTeamIds.has(teamId)
   const isPlayerLocked = (playerId: string) =>
@@ -394,6 +413,32 @@ export default function DashboardPage() {
     }
     fetchOffLimits()
   }, [userTeamId, activeMatchday])
+
+  useEffect(() => {
+    const fetchAllPenalties = async () => {
+      const { data, error } = await supabase
+        .from('penalties')
+        .select('id, matchday, description, points, user_id, profiles(full_name)')
+        .order('matchday', { ascending: false })
+      if (!error && data) {
+        setAllPenalties(data)
+      }
+    }
+    fetchAllPenalties()
+  }, [])
+
+  useEffect(() => {
+    const fetchLiveInfractions = async () => {
+      try {
+        const res = await fetch('/api/penalties/live')
+        if (res.ok) {
+          const data = await res.json()
+          setLiveInfractions(data.infractions || [])
+        }
+      } catch {}
+    }
+    fetchLiveInfractions()
+  }, [activeMatchday])
 
   const saveTeam = async () => {
     if (isUnlockWindowOpen) {
@@ -779,34 +824,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-2 pb-4">
-      {/* Aviso permanente: equipos bloqueados por partidos fuera de orden de jornada */}
-      {lockBanners.length > 0 && (
-        <Card className="!bg-red-50 border-red-200">
-          <CardContent className="p-3 flex items-start gap-3">
-            <Lock className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              {lockBanners.map((msg, i) => (
-                <p key={i} className="text-sm font-semibold text-red-900">{msg}</p>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Avisos de reglas - NO mostrar durante período de cambios */}
-      {isUnlockWindowOpen && ruleWarnings.length > 0 && (
-        <Card className="!bg-amber-50 border-amber-200">
-          <CardContent className="p-3 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-amber-900">Infracciones detectadas (se sancionarán al empezar la jornada):</p>
-              {ruleWarnings.map((msg, i) => (
-                <p key={i} className="text-sm font-medium text-amber-800">• {msg}</p>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Mensaje de bloqueo durante tramo de jornada */}
       {isUnlockWindowOpen && (
@@ -866,6 +883,112 @@ export default function DashboardPage() {
                   <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.mediaPuntos * 10) / 10}</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Historial de Sanciones */}
+          {/* Historial de Sanciones (Liga) - Colapsable */}
+          <Card className="!bg-slate-50 border-slate-200 mt-2 shadow-sm">
+            <CardContent className="p-4">
+              <button
+                onClick={() => setShowAllHistory(!showAllHistory)}
+                className="w-full flex items-center justify-between font-bold text-slate-800 hover:text-slate-900 focus:outline-none cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-slate-500" />
+                  <span className="text-sm">Historial de Sanciones (Liga)</span>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${showAllHistory ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showAllHistory && (
+                <div className="mt-3 pt-3 border-t border-slate-200 space-y-3">
+                  <p className="text-xs font-bold text-slate-500 uppercase">Todas las Sanciones de la Liga</p>
+                  {allPenalties.length === 0 && liveInfractions.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic">No hay sanciones registradas en la liga.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                      {/* Sanciones dinámicas activas de todos los usuarios */}
+                      {liveInfractions
+                        .filter(inf => !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday))
+                        .map((inf) => (
+                        <div key={inf.id} className="flex justify-between items-start text-xs bg-amber-50 rounded p-2 border border-amber-200 shadow-sm animate-pulse">
+                          <div>
+                            <span className="font-bold text-amber-900 mr-1">[{inf.full_name}]</span>
+                            <span className="font-semibold text-amber-955 mr-2">J{inf.matchday}:</span>
+                            <span className="text-amber-800 font-medium">{inf.description}</span>
+                          </div>
+                          <span className="font-bold text-amber-600 shrink-0 ml-2 text-[10px] uppercase">Pendiente</span>
+                        </div>
+                      ))}
+
+                      {/* Sanciones consolidadas históricas */}
+                      {allPenalties.map((p) => {
+                        const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
+                        const userName = profileObj?.full_name || 'Usuario'
+                        return (
+                          <div key={p.id} className="flex justify-between items-start text-xs bg-white rounded p-2 border border-slate-100 shadow-sm">
+                            <div>
+                              <span className="font-bold text-slate-800 mr-1">[{userName}]</span>
+                              <span className="font-semibold text-red-955 mr-2">J{p.matchday}:</span>
+                              <span className="text-slate-700 font-medium">{p.description}</span>
+                            </div>
+                            <span className={`font-bold shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : p.matchday === activeMatchday ? 'text-amber-600 text-[10px] uppercase' : 'text-slate-500'}`}>
+                              {p.points > 0 ? `-${p.points} pts` : p.matchday === activeMatchday ? 'Pendiente' : '0 pts'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Tus Sanciones (Jornada Activa) - Siempre Visible */}
+          <Card className="!bg-red-50 border-red-200 mt-2 shadow-sm">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2 pb-1.5 border-b border-red-100">
+                <AlertTriangle className="w-4 h-4 text-red-600" />
+                <h3 className="text-sm font-bold text-red-900">Tus Sanciones (Jornada Activa J{activeMatchday})</h3>
+              </div>
+              {allPenalties.filter(p => p.user_id === user?.id && p.matchday === activeMatchday).length === 0 &&
+               liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday)).length === 0 ? (
+                <p className="text-xs text-emerald-800 font-medium bg-emerald-50 border border-emerald-100 p-2 rounded">
+                  ¡Estás libre de sanciones en esta jornada!
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {/* Sanciones consolidadas en BD */}
+                  {allPenalties
+                    .filter(p => p.user_id === user?.id && p.matchday === activeMatchday)
+                    .map((p) => (
+                      <div key={p.id} className="flex justify-between items-start text-xs bg-red-100 rounded p-2 border border-red-200">
+                        <div>
+                          <span className="font-bold text-red-900 mr-2">J{p.matchday}:</span>
+                          <span className="text-red-955 font-semibold">{p.description}</span>
+                        </div>
+                        <span className={`font-bold shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : 'text-amber-600 text-[10px] uppercase'}`}>
+                          {p.points > 0 ? `-${p.points} pts` : 'Pendiente'}
+                        </span>
+                      </div>
+                    ))}
+
+                  {/* Advertencias dinámicas activas (infracciones actuales del usuario) */}
+                  {liveInfractions
+                    .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday))
+                    .map((inf) => (
+                      <div key={inf.id} className="flex justify-between items-start text-xs bg-amber-100 rounded p-2 border border-amber-200">
+                        <div>
+                          <span className="font-bold text-amber-900 mr-2">J{activeMatchday}:</span>
+                          <span className="text-amber-955 font-semibold">{inf.description}</span>
+                        </div>
+                        <span className="font-bold text-amber-600 shrink-0 ml-2 text-[10px] uppercase">Pendiente</span>
+                      </div>
+                    ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </>

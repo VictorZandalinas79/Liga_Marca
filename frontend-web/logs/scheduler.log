@@ -1,0 +1,48 @@
+[2026-06-18 18:10:35] ============================================================
+[2026-06-18 18:10:35] 🕐 Scheduler de Partidos en Vivo INICIADO
+[2026-06-18 18:10:35] ============================================================
+[2026-06-18 18:10:35] ⚡ Mercado cerrado para Jornada 1. Ejecutando cálculo inicial de sanciones...
+[2026-06-18 18:10:39] ============================================================
+🏁 Procesando sanciones y pagos de la jornada 1
+============================================================
+⚙️  Config: presupuesto=300M, máx/equipo=4, pagos(g/p/r)=0/2/1
+⚖️  3 sanción(es) registrada(s) en la jornada 1
+💶  Pagos aplicados: 3 ganador(es), 3 perdedor(es), 3 resto
+✅ Hecho
+
+[2026-06-18 18:10:39] ✅ Cálculo inicial de sanciones completado para Jornada 1
+[2026-06-18 18:10:39] 🏁 Todos los partidos de la Jornada 1 han terminado. Ejecutando liquidación final de sanciones y pagos...
+[2026-06-18 18:10:42] ============================================================
+🏁 Procesando sanciones y pagos de la jornada 1
+============================================================
+⚙️  Config: presupuesto=300M, máx/equipo=4, pagos(g/p/r)=0/2/1
+⚖️  3 sanción(es) registrada(s) en la jornada 1
+💶  Pagos aplicados: 3 ganador(es), 3 perdedor(es), 3 resto
+✅ Hecho
+
+[2026-06-18 18:10:42] ✅ Liquidación final completada para Jornada 1
+[2026-06-18 18:10:42] ⚡ Mercado cerrado para Jornada 2. Ejecutando cálculo inicial de sanciones...
+[2026-06-18 18:10:46] ============================================================
+🏁 Procesando sanciones y pagos de la jornada 2
+============================================================
+⚙️  Config: presupuesto=300M, máx/equipo=4, pagos(g/p/r)=0/2/1
+⚖️  12 sanción(es) registrada(s) en la jornada 2
+💶  Pagos aplicados: 3 ganador(es), 3 perdedor(es), 3 resto
+✅ Hecho
+
+[2026-06-18 18:10:46] ✅ Cálculo inicial de sanciones completado para Jornada 2
+[2026-06-18 18:10:46] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:11:47] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:12:48] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:13:49] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:14:50] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:15:51] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:16:51] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:17:52] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:18:52] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:19:53] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:20:53] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:21:54] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:22:55] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:23:55] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)
+[2026-06-18 18:24:56] 📊 Estado: 0 partido(s) en seguimiento, 0 proceso(s) activo(s)

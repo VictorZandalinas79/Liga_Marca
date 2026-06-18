@@ -1,19 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { getLiveInfractions, getCurrentMatchday } from '@/lib/infractions'
 
 export async function GET() {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await supabase
+  // 1. Obtener notificaciones estándar
+  const { data: standardNotifications, error: notifError } = await supabase
     .from('sync_notifications')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(50)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ notifications: data })
+  if (notifError) return NextResponse.json({ error: notifError.message }, { status: 500 })
+
+  // 2. Obtener la jornada en marcha para mostrar sus multas
+  const currentMatchday = await getCurrentMatchday(supabase)
+
+  let penaltyNotifications: any[] = []
+  if (currentMatchday) {
+    // A. Sanciones consolidadas en base de datos
+    const { data: penalties } = await supabase
+      .from('penalties')
+      .select('id, matchday, description, points, user_id, profiles(full_name)')
+      .eq('matchday', currentMatchday)
+
+    if (penalties) {
+      penaltyNotifications = penalties.map(p => {
+        const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
+        const name = profileObj?.full_name || 'Usuario'
+        return {
+          id: `penalty-${p.id}`,
+          type: 'players_locked',
+          title: `Multa J${p.matchday}: ${name}`,
+          body: `${p.description} (${p.points > 0 ? `-${p.points} pts` : 'Pendiente'})`,
+          created_at: new Date().toISOString(),
+          read_at: null
+        }
+      })
+    }
+
+    // B. Sanciones/Infracciones en vivo (dinámicas y pendientes de la jornada activa)
+    // Si ya hay sanciones oficiales en la BD para esta jornada (mercado cerrado),
+    // no mostramos las advertencias dinámicas duplicadas.
+    let liveNotifications: any[] = []
+    if (!penalties || penalties.length === 0) {
+      const liveInfractions = await getLiveInfractions(supabase, currentMatchday)
+      liveNotifications = liveInfractions.map(inf => ({
+        id: `live-inf-${inf.id}`,
+        type: 'players_locked',
+        title: `Advertencia J${inf.matchday}: ${inf.full_name}`,
+        body: `${inf.description} (Pendiente de aplicar al empezar la jornada)`,
+        created_at: new Date().toISOString(),
+        read_at: null
+      }))
+    }
+
+    penaltyNotifications.push(...liveNotifications)
+  }
+
+  // Combinar ambas listas
+  const combined = [...penaltyNotifications, ...(standardNotifications || [])]
+
+  return NextResponse.json({ notifications: combined })
 }
 
 export async function PATCH(request: NextRequest) {

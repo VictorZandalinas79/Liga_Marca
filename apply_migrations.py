@@ -33,7 +33,7 @@ for filename in migration_files:
     try:
         # Ejecutar el SQL usando la API REST de Supabase
         # Nota: Para crear tablas necesitamos usar el cliente directamente
-        result = supabase.rpc('exec_sql', {'sql': sql_content})
+        result = supabase.rpc('exec_sql', {'sql': sql_content}).execute()
         print(f"✅ {filename} completada")
     except Exception as e:
         # Si falla el RPC, intentamos con una alternativa

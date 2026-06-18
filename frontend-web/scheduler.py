@@ -13,6 +13,7 @@ import os
 import sys
 import time
 import subprocess
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from supabase import create_client
@@ -86,6 +87,96 @@ def get_active_sync_processes():
         return []
     except Exception:
         return []
+STATE_FILE = Path(".processed_matchdays.json")
+
+
+def get_processed_state():
+    if STATE_FILE.exists():
+        try:
+            with open(STATE_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def save_processed_state(state):
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump(state, f, indent=2)
+    except Exception as e:
+        log(f"⚠️ Error al guardar estado de jornadas: {e}")
+
+
+def check_and_run_sanctions():
+    """
+    Verifica si hay jornadas que requieren calcular sanciones/pagos.
+    1. Cálculo Inicial: Al cerrar el mercado (is_open = False), si no se ha ejecutado antes.
+    2. Cálculo Final: Cuando terminan todos los partidos de la jornada (status = finished).
+    """
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        state = get_processed_state()
+        
+        # Obtener estado de las jornadas
+        res_status = supabase.table("matchday_status").select("*").execute()
+        matchdays_status = res_status.data or []
+        
+        state_changed = False
+        
+        for md_status in matchdays_status:
+            matchday = md_status["matchday"]
+            is_open = md_status["is_open"]
+            md_key = f"J{matchday}"
+            
+            if md_key not in state:
+                state[md_key] = {"initial_run": False, "final_run": False}
+            
+            # 1. Si el mercado está cerrado (deadline pasado) y no se ha ejecutado el cálculo inicial
+            if not is_open and not state[md_key]["initial_run"]:
+                log(f"⚡ Mercado cerrado para Jornada {matchday}. Ejecutando cálculo inicial de sanciones...")
+                script_path = "../3. calcular_sanciones_y_pagos.py"
+                env = os.environ.copy()
+                env["SANCTION_MATCHDAY"] = str(matchday)
+                
+                # Ejecutar script
+                res = subprocess.run(["python3", script_path], env=env, capture_output=True, text=True)
+                log(res.stdout)
+                if res.returncode == 0:
+                    state[md_key]["initial_run"] = True
+                    state_changed = True
+                    log(f"✅ Cálculo inicial de sanciones completado para Jornada {matchday}")
+                else:
+                    log(f"❌ Error en cálculo inicial para Jornada {matchday}: {res.stderr}")
+            
+            # 2. Si el mercado está cerrado y no se ha ejecutado el cálculo final
+            if not is_open and not state[md_key]["final_run"]:
+                # Verificar si todos los partidos de la jornada han terminado
+                res_fixtures = supabase.table("fixtures").select("status").eq("matchday", matchday).execute()
+                fixtures = res_fixtures.data or []
+                
+                if fixtures:
+                    all_finished = all((f.get("status") or "").lower() == "finished" for f in fixtures)
+                    if all_finished:
+                        log(f"🏁 Todos los partidos de la Jornada {matchday} han terminado. Ejecutando liquidación final de sanciones y pagos...")
+                        script_path = "../3. calcular_sanciones_y_pagos.py"
+                        env = os.environ.copy()
+                        env["SANCTION_MATCHDAY"] = str(matchday)
+                        
+                        res = subprocess.run(["python3", script_path], env=env, capture_output=True, text=True)
+                        log(res.stdout)
+                        if res.returncode == 0:
+                            state[md_key]["final_run"] = True
+                            state_changed = True
+                            log(f"✅ Liquidación final completada para Jornada {matchday}")
+                        else:
+                            log(f"❌ Error en liquidación final para Jornada {matchday}: {res.stderr}")
+                            
+        if state_changed:
+            save_processed_state(state)
+            
+    except Exception as e:
+        log(f"⚠️ Error al verificar sanciones automáticas: {e}")
 
 
 def main():
@@ -98,6 +189,9 @@ def main():
 
     while True:
         try:
+            # Verificar y ejecutar cálculo de sanciones/pagos (al inicio y al final de jornada)
+            check_and_run_sanctions()
+
             # Comprobar partidos próximos
             upcoming = check_upcoming_matches()
 
