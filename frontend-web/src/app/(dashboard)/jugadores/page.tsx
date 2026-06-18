@@ -334,7 +334,9 @@ export default function JugadoresPage() {
                   <div className="text-center">
                     <div className="flex items-center justify-center space-x-1 text-emerald-400">
                       <TrendingUp className="h-4 w-4" />
-                      <span className="text-2xl font-bold">{player.stats?.total_points || 0}</span>
+                      <span className="text-2xl font-bold">
+                        {player.stats ? Math.round(player.stats.total_points * 10) / 10 : 0}
+                      </span>
                     </div>
                     <p className="text-xs text-slate-400">Puntos</p>
                   </div>

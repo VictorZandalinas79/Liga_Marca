@@ -599,7 +599,7 @@ export default function JugadorDetallePage() {
           <CardContent className="p-4 text-center">
             <TrendingUp className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
             <p className="text-emerald-800 text-sm font-semibold">Puntos Totales</p>
-            <p className="text-4xl font-bold text-emerald-600">{totalStats.total_points}</p>
+            <p className="text-4xl font-bold text-emerald-600">{Math.round((totalStats.total_points || 0) * 10) / 10}</p>
             <p className="text-emerald-600 text-xs mt-1">Media: {avgPoints} pts</p>
           </CardContent>
         </Card>
@@ -751,7 +751,7 @@ export default function JugadorDetallePage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-bold text-emerald-600">{score.total_points}</p>
+                  <p className="text-xl font-bold text-emerald-600">{Math.round((score.total_points || 0) * 10) / 10}</p>
                   <p className="text-xs text-slate-500">{score.minutes_played}' {score.is_starter ? '(T)' : '(S)'}</p>
                 </div>
               </div>
@@ -806,7 +806,7 @@ export default function JugadorDetallePage() {
             {/* Resumen */}
             <div className="p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 bg-slate-50">
               <div className="text-center">
-                <p className="text-3xl font-bold text-emerald-600">{selectedMatch.total_points}</p>
+                <p className="text-3xl font-bold text-emerald-600">{Math.round((selectedMatch.total_points || 0) * 10) / 10}</p>
                 <p className="text-xs text-slate-600">Puntos</p>
               </div>
               <div className="text-center">
@@ -870,7 +870,7 @@ export default function JugadorDetallePage() {
               {/* Ajuste de redondeo + total oficial */}
               {(() => {
                 const desglose = sumBlockPoints(selectedMatch)
-                const oficial = selectedMatch.total_points || 0
+                const oficial = Math.round((selectedMatch.total_points || 0) * 10) / 10
                 const ajuste = r2(oficial - desglose)
                 return (
                   <>

@@ -38,9 +38,52 @@ export function NotificationBell() {
       const res = await fetch('/api/notifications')
       if (res.ok) {
         const data = await res.json()
-        setNotifications(data.notifications || [])
+        const rawNotifs = data.notifications || []
+
+        // Cargar IDs leídos localmente
+        let readIds: string[] = []
+        try {
+          const stored = localStorage.getItem('read_notifications')
+          if (stored) readIds = JSON.parse(stored)
+        } catch {}
+
+        // Mapear combinando read_at de la base de datos y de localStorage
+        const processed = rawNotifs.map((n: Notification) => {
+          if (readIds.includes(n.id)) {
+            return { ...n, read_at: n.read_at || new Date().toISOString() }
+          }
+          return n
+        })
+
+        setNotifications(processed)
       }
     } catch {}
+  }
+
+  async function markRead(id: string) {
+    if (id.startsWith('penalty-') || id.startsWith('live-inf-')) {
+      // Guardar en localStorage las dinámicas que no están en sync_notifications
+      try {
+        let readIds: string[] = []
+        const stored = localStorage.getItem('read_notifications')
+        if (stored) readIds = JSON.parse(stored)
+        if (!readIds.includes(id)) {
+          readIds.push(id)
+          localStorage.setItem('read_notifications', JSON.stringify(readIds))
+        }
+      } catch {}
+    } else {
+      // Notificación estándar en base de datos
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+    }
+
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n)
+    )
   }
 
   async function markAllRead() {
@@ -49,6 +92,17 @@ export function NotificationBell() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     })
+
+    // Guardar todos los IDs actuales en localStorage
+    const currentIds = notifications.map(n => n.id)
+    try {
+      let readIds: string[] = []
+      const stored = localStorage.getItem('read_notifications')
+      if (stored) readIds = JSON.parse(stored)
+      const newReadIds = Array.from(new Set([...readIds, ...currentIds]))
+      localStorage.setItem('read_notifications', JSON.stringify(newReadIds))
+    } catch {}
+
     setNotifications(prev =>
       prev.map(n => ({ ...n, read_at: n.read_at ?? new Date().toISOString() }))
     )
@@ -111,13 +165,17 @@ export function NotificationBell() {
                   return (
                     <div
                       key={n.id}
+                      onClick={() => !n.read_at && markRead(n.id)}
                       className={`p-4 rounded-xl border-2 transition-all ${
+                        !n.read_at ? 'cursor-pointer hover:border-slate-400' : ''
+                      } ${
                         isWarning
                           ? '!bg-red-50 border-red-300'
                           : !n.read_at
                             ? 'bg-blue-50 border-blue-300'
                             : 'bg-slate-50 border-slate-200'
                       }`}
+                      title={!n.read_at ? 'Hacer clic para marcar como leído' : undefined}
                     >
                       <div className="flex items-start gap-3">
                         <span className="text-2xl shrink-0">{typeIcon[n.type] ?? '🔔'}</span>
