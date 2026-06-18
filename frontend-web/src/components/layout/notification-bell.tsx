@@ -86,44 +86,66 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-            <span className="font-semibold text-white text-sm">Notificaciones</span>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllRead}
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                Marcar todo como leído
-              </button>
-            )}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+          <div className="relative w-full max-w-2xl bg-white border border-slate-300 rounded-2xl shadow-2xl z-50">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-800">
+            <span className="font-bold text-white text-lg">📢 Notificaciones</span>
+            <button
+              onClick={() => setOpen(false)}
+              className="text-slate-400 hover:text-slate-200 transition-colors text-2xl"
+            >
+              ×
+            </button>
           </div>
 
-          <div className="max-h-80 overflow-y-auto divide-y divide-slate-700">
+          <div className="max-h-[70vh] overflow-y-auto p-6">
             {notifications.length === 0 ? (
-              <p className="text-slate-400 text-sm text-center py-8">Sin notificaciones</p>
+              <div className="text-center py-12">
+                <p className="text-slate-400 text-sm">Sin notificaciones</p>
+              </div>
             ) : (
-              notifications.map(n => (
-                <div
-                  key={n.id}
-                  className={`px-4 py-3 ${!n.read_at ? 'bg-slate-700/40' : ''}`}
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-base shrink-0 mt-0.5">{typeIcon[n.type] ?? '🔔'}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-white text-sm font-medium truncate">{n.title}</p>
-                        {!n.read_at && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-blue-400 shrink-0" />
-                        )}
+              <div className="space-y-4">
+                {notifications.map(n => {
+                  const isWarning = n.type.includes('lock') || n.body.includes('multa') || n.body.includes('sanción')
+                  return (
+                    <div
+                      key={n.id}
+                      className={`p-4 rounded-xl border-2 transition-all ${
+                        isWarning
+                          ? '!bg-red-50 border-red-300'
+                          : !n.read_at
+                            ? 'bg-blue-50 border-blue-300'
+                            : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl shrink-0">{typeIcon[n.type] ?? '🔔'}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className={`font-bold truncate ${isWarning ? 'text-red-900' : 'text-slate-900'}`}>{n.title}</p>
+                            {!n.read_at && (
+                              <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${isWarning ? 'bg-red-500' : 'bg-blue-500'}`} />
+                            )}
+                          </div>
+                          <p className={`text-sm mt-1 leading-snug ${isWarning ? 'text-red-800' : 'text-slate-700'}`}>{n.body}</p>
+                          <p className="text-xs text-slate-500 mt-2">{formatDate(n.created_at)}</p>
+                        </div>
                       </div>
-                      <p className="text-slate-300 text-xs mt-0.5 leading-snug">{n.body}</p>
-                      <p className="text-slate-500 text-xs mt-1">{formatDate(n.created_at)}</p>
                     </div>
-                  </div>
-                </div>
-              ))
+                  )
+                })}
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllRead}
+                    className="w-full mt-6 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-medium transition-colors text-sm"
+                  >
+                    Marcar todo como leído
+                  </button>
+                )}
+              </div>
             )}
+          </div>
           </div>
         </div>
       )}

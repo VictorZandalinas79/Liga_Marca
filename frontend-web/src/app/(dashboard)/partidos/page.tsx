@@ -18,6 +18,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 
 interface Fixture {
   id: string
@@ -54,10 +55,16 @@ export default function PartidosPage() {
   const [allFixturesGlobal, setAllFixturesGlobal] = useState<Fixture[]>([])
   const supabase = createClient()
   const router = useRouter()
+  const { currentMatchday: hookMatchday, unlockTime: hookUnlockTime } = useMatchdayLock()
+
+  // Esperar a que el hook resuelva la jornada real antes de cargar fixtures.
+  // Mientras tanto, la página muestra "Cargando jornada..." sin flashear la J1.
+  const hookReady = hookUnlockTime !== null
 
   useEffect(() => {
+    if (!hookReady) return
     fetchMatchdaysAndFixtures()
-  }, [])
+  }, [hookReady, hookMatchday])
 
   const fetchMatchdaysAndFixtures = async () => {
     setLoading(true)
@@ -143,58 +150,65 @@ export default function PartidosPage() {
     setAvailableMatchdays(matchdays)
 
     // 6. Encontrar la jornada por defecto.
-    //    Prioridad: la jornada EN JUEGO ahora mismo > la última disputada > la primera.
+    //    Prioridad: usar la jornada del hook useMatchdayLock (que ya sabe cuál es
+    //    la activa/próxima). Como fallback, calcular manualmente.
     const now = new Date()
     const nowMs = now.getTime()
     let closestMatchday = matchdays.length > 0 ? matchdays[0] : 1
 
-    // Duración aproximada de un partido (90' + descanso + añadido) para considerar
-    // una jornada "en juego" desde su primer partido hasta que acaba el último.
-    const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
+    // Si el hook ya resolvió la jornada activa y existe en nuestros matchdays, usarla directamente
+    if (hookMatchday && hookMatchday > 0 && matchdays.includes(hookMatchday)) {
+      closestMatchday = hookMatchday
+      console.log(`🎥 [PARTIDOS] Usando jornada del hook: ${closestMatchday}`)
+    } else {
+      // Fallback: calcular manualmente
+      const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
+      const PRE_MATCH_LEAD_MS = 2 * 60 * 60 * 1000
 
-    // Trabajamos con TODOS los fixtures con jornada (independiente del momento),
-    // para que el cálculo de "en juego" / "última jugada" sea siempre fiable.
-    const datedFixtures = allFixtures.filter(f => f.matchday > 0 && f.start_time)
-
-    // Ventana temporal de cada jornada: [primer partido, último partido]
-    const matchdayWindows = new Map<number, { first: number; last: number }>()
-    for (const f of datedFixtures) {
-      const t = new Date(f.start_time).getTime()
-      const w = matchdayWindows.get(f.matchday)
-      if (!w) {
-        matchdayWindows.set(f.matchday, { first: t, last: t })
-      } else {
-        w.first = Math.min(w.first, t)
-        w.last = Math.max(w.last, t)
+      const datedFixtures = allFixtures.filter(f => f.matchday > 0 && f.start_time)
+      const matchdayWindows = new Map<number, { first: number; last: number }>()
+      for (const f of datedFixtures) {
+        const t = new Date(f.start_time).getTime()
+        const w = matchdayWindows.get(f.matchday)
+        if (!w) {
+          matchdayWindows.set(f.matchday, { first: t, last: t })
+        } else {
+          w.first = Math.min(w.first, t)
+          w.last = Math.max(w.last, t)
+        }
       }
-    }
 
-    // ¿Hay una jornada en juego ahora mismo? (now dentro de su ventana + duración)
-    // Si varias se solapan (p. ej. un partido aplazado), nos quedamos con la más alta.
-    let liveMatchday: number | null = null
-    for (const [md, w] of matchdayWindows) {
-      if (nowMs >= w.first && nowMs <= w.last + MATCH_DURATION_MS) {
-        if (liveMatchday === null || md > liveMatchday) liveMatchday = md
+      let liveMatchday: number | null = null
+      for (const [md, w] of matchdayWindows) {
+        if (nowMs >= w.first && nowMs <= w.last + MATCH_DURATION_MS) {
+          if (liveMatchday === null || md > liveMatchday) liveMatchday = md
+        }
       }
-    }
 
-    // Filtrar los partidos que ya han comenzado o terminado (fecha anterior o igual a ahora)
-    const pastFixtures = datedFixtures.filter(f => new Date(f.start_time) <= now)
+      let upcomingMatchday: number | null = null
+      for (const [md, w] of matchdayWindows) {
+        const timeUntilStart = w.first - nowMs
+        if (timeUntilStart > 0 && timeUntilStart <= PRE_MATCH_LEAD_MS) {
+          if (upcomingMatchday === null || md < upcomingMatchday) upcomingMatchday = md
+        }
+      }
 
-    if (liveMatchday !== null) {
-      // Hay partidos en juego: arrancamos en esa jornada
-      closestMatchday = liveMatchday
-      console.log(`🟢 Jornada en juego: ${closestMatchday}`)
-    } else if (pastFixtures.length > 0) {
-      // Ordenamos de más reciente a más antiguo
-      pastFixtures.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
-      // Cogemos la jornada del partido más reciente que se ha jugado
-      closestMatchday = pastFixtures[0].matchday
-      console.log(`✅ Jornada actual/última disputada: ${closestMatchday}`)
-    } else if (matchdays.length > 0) {
-      // Si no hay partidos pasados (ej. pretemporada), cogemos la primera jornada disponible
-      closestMatchday = Math.min(...matchdays)
-      console.log(`✅ Inicio de temporada. Jornada: ${closestMatchday}`)
+      const pastFixtures = datedFixtures.filter(f => new Date(f.start_time) <= now)
+
+      if (liveMatchday !== null) {
+        closestMatchday = liveMatchday
+        console.log(`🟢 Jornada en juego: ${closestMatchday}`)
+      } else if (upcomingMatchday !== null) {
+        closestMatchday = upcomingMatchday
+        console.log(`⏰ Jornada próxima (< 2h): ${closestMatchday}`)
+      } else if (pastFixtures.length > 0) {
+        pastFixtures.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
+        closestMatchday = pastFixtures[0].matchday
+        console.log(`✅ Jornada última disputada: ${closestMatchday}`)
+      } else if (matchdays.length > 0) {
+        closestMatchday = Math.min(...matchdays)
+        console.log(`✅ Inicio de temporada. Jornada: ${closestMatchday}`)
+      }
     }
 
     // Si no hay matchdays (> 0), cargar por momento (ej: Fase Final, Promotion Play-offs)

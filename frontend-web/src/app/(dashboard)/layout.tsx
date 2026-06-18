@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 import { AuthGuard } from '@/components/layout/auth-guard'
 import { NotificationBell } from '@/components/layout/notification-bell'
+import { CountdownTimer } from '@/components/layout/countdown-timer'
 
 const navigation = [
   { name: 'Inicio', href: '/dashboard', icon: Home },
@@ -113,6 +114,7 @@ export default function DashboardLayout({
             </nav>
 
             <div className="flex items-center gap-3">
+              <CountdownTimer />
               <NotificationBell />
               <span className="text-sm text-slate-300">{userName}</span>
               <button

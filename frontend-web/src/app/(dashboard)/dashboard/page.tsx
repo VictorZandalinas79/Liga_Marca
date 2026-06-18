@@ -49,8 +49,8 @@ export default function DashboardPage() {
   const [cancelConfirmPlayerId, setCancelConfirmPlayerId] = useState<string | null>(null)
   const [userTeamId, setUserTeamId] = useState<string | null>(null)
   const [isRegistered, setIsRegistered] = useState<boolean>(false)
-  const [showSaveConfirm, setShowSaveConfirm] = useState(false)
-  const [showSaveSuccess, setShowSaveSuccess] = useState(false)
+  const [showSwapConfirm, setShowSwapConfirm] = useState(false)
+  const [pendingSwap, setPendingSwap] = useState<{ outId: string; inId: string } | null>(null)
   const [currentMatchday, setCurrentMatchday] = useState<number>(1)
   const [playerToSwap, setPlayerToSwap] = useState<string | null>(null)
   const [searchFilter, setSearchFilter] = useState('')
@@ -471,7 +471,7 @@ export default function DashboardPage() {
         matchday: matchdayToSave, 
       }))
 
-      console.log('[GUARDAR] Insertando jugadores en matchday 0')
+      console.log(`[GUARDAR] Insertando jugadores en matchday ${matchdayToSave}`)
       console.log('[GUARDAR] Payload:', JSON.stringify(teamPlayers, null, 2))
 
       const { data, error } = await supabase.from('team_players').insert(teamPlayers).select()
@@ -484,24 +484,56 @@ export default function DashboardPage() {
         console.log('[GUARDAR] Equipo guardado correctamente:', data?.length, 'jugadores')
         setSavedPlayers(selectedPlayers)
         setChangeHistory([])
-        setShowSaveConfirm(false)
-        setShowSaveSuccess(true)
-        // Cerrar el mensaje de éxito después de 3 segundos
-        setTimeout(() => setShowSaveSuccess(false), 3000)
       }
     }
   }
 
-  const cancelChange = (playerId: string) => {
+  const cancelChange = async (playerId: string) => {
+    // 1. Intentar revertir desde changeHistory (cambio de esta sesión)
     const change = [...changeHistory].reverse().find(ch => ch.inId === playerId)
-    if (!change) return
-    setSelectedPlayers(prev => prev.map(id => id === playerId ? change.outId : id))
-    setChangeHistory(prev => {
-      const revIdx = [...prev].reverse().findIndex(ch => ch.inId === playerId)
-      if (revIdx === -1) return prev
-      const realIdx = prev.length - 1 - revIdx
-      return [...prev.slice(0, realIdx), ...prev.slice(realIdx + 1)]
-    })
+    if (change) {
+      setSelectedPlayers(prev => prev.map(id => id === playerId ? change.outId : id))
+      setChangeHistory(prev => {
+        const revIdx = [...prev].reverse().findIndex(ch => ch.inId === playerId)
+        if (revIdx === -1) return prev
+        const realIdx = prev.length - 1 - revIdx
+        return [...prev.slice(0, realIdx), ...prev.slice(realIdx + 1)]
+      })
+      setCancelConfirmPlayerId(null)
+      return
+    }
+
+    // 2. Cambio cross-session: el jugador no está en basePlayers pero sí en el equipo actual.
+    //    Encontrar qué jugador de basePlayers ocupaba esta posición y restaurarlo.
+    if (basePlayers.length > 0 && !basePlayers.includes(playerId)) {
+      const currentPlayer = players.find(p => p.id === playerId)
+      const currentPosCode = currentPlayer ? getPositionCode(currentPlayer.position) : ''
+      // Buscar en basePlayers un jugador de la misma posición que ya no esté en selectedPlayers
+      const originalId = basePlayers.find(bpId => {
+        if (selectedPlayers.includes(bpId)) return false // ya está en el equipo
+        const bp = players.find(p => p.id === bpId)
+        return bp && getPositionCode(bp.position) === currentPosCode
+      })
+      if (originalId) {
+        const newSelected = selectedPlayers.map(id => id === playerId ? originalId : id)
+        setSelectedPlayers(newSelected)
+
+        // Auto-guardar la reversión en la BD
+        if (userTeamId) {
+          const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+          await supabase.from('team_players').delete().eq('team_id', userTeamId).eq('matchday', matchdayToSave)
+          const teamPlayers = newSelected.map((pid, index) => ({
+            team_id: userTeamId,
+            player_id: pid,
+            is_starter: true,
+            is_captain: index === 0,
+            order: index,
+            matchday: matchdayToSave,
+          }))
+          await supabase.from('team_players').insert(teamPlayers)
+        }
+      }
+    }
     setCancelConfirmPlayerId(null)
   }
 
@@ -515,15 +547,52 @@ export default function DashboardPage() {
       return
     }
     if (playerToSwap) {
-      setChangeHistory(prev => [...prev, { outId: playerToSwap, inId: newPlayerId }])
-      setSelectedPlayers(prev => prev.map(id => id === playerToSwap ? newPlayerId : id))
+      setPendingSwap({ outId: playerToSwap, inId: newPlayerId })
+      setShowSwapConfirm(true)
+      closePlayerSelector()
     }
-    setPlayerToSwap(null)
-    setSearchFilter('')
-    setPositionFilter('ALL')
-    setTeamFilter('')
-    setPriceMinFilter('')
-    setPriceMaxFilter('')
+  }
+
+  const confirmSwap = async () => {
+    if (!pendingSwap) return
+
+    const { outId, inId } = pendingSwap
+    setChangeHistory(prev => [...prev, { outId, inId }])
+    setSelectedPlayers(prev => prev.map(id => id === outId ? inId : id))
+
+    // Guardar automáticamente en la BD
+    if (!userTeamId) return
+
+    const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+
+    // Actualizar el equipo en la BD
+    const { error: deleteError } = await supabase
+      .from('team_players')
+      .delete()
+      .eq('team_id', userTeamId)
+      .eq('matchday', matchdayToSave)
+
+    if (!deleteError) {
+      const newSelected = selectedPlayers.map(id => id === outId ? inId : id)
+      const teamPlayers = newSelected.map((playerId, index) => ({
+        team_id: userTeamId,
+        player_id: playerId,
+        is_starter: true,
+        is_captain: index === 0,
+        order: index,
+        matchday: matchdayToSave,
+      }))
+
+      await supabase.from('team_players').insert(teamPlayers)
+    }
+
+    setPendingSwap(null)
+    setShowSwapConfirm(false)
+  }
+
+  const cancelSwap = () => {
+    setPendingSwap(null)
+    setShowSwapConfirm(false)
   }
 
   const openPlayerSelector = (playerId: string) => {
@@ -724,13 +793,13 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Avisos de reglas (no bloquean, pero serán sancionados al empezar la jornada) */}
-      {!isUnlockWindowOpen && ruleWarnings.length > 0 && (
+      {/* Avisos de reglas - NO mostrar durante período de cambios */}
+      {isUnlockWindowOpen && ruleWarnings.length > 0 && (
         <Card className="!bg-amber-50 border-amber-200">
           <CardContent className="p-3 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p className="text-sm font-bold text-amber-900">Avisos (se sancionarán al empezar la jornada):</p>
+              <p className="text-sm font-bold text-amber-900">Infracciones detectadas (se sancionarán al empezar la jornada):</p>
               {ruleWarnings.map((msg, i) => (
                 <p key={i} className="text-sm font-medium text-amber-800">• {msg}</p>
               ))}
@@ -743,12 +812,20 @@ export default function DashboardPage() {
       {isUnlockWindowOpen && (
         <>
           <Card className="!bg-amber-50 border-amber-200">
-            <CardContent className="p-3 flex items-center gap-3">
-              <Lock className="w-5 h-5 text-amber-600 animate-pulse shrink-0" />
-              <p className="text-sm font-semibold text-amber-900">
-                Cambios bloqueados — tramo de jornada activo
-                {timeUntilLock && timeUntilLock !== 'Finalizada' && <span className="ml-1 font-normal">(cierra en {timeUntilLock})</span>}
-              </p>
+            <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 justify-between">
+              <div className="flex items-center gap-3">
+                <Lock className="w-5 h-5 text-amber-600 animate-pulse shrink-0" />
+                <p className="text-sm font-semibold text-amber-900">
+                  Los cambios están bloqueados — Jornada en directo
+                </p>
+              </div>
+              {timeUntilLock && timeUntilLock !== 'Finalizada' && (
+                <div className="bg-amber-100 px-3 py-2 rounded-lg">
+                  <p className="text-sm font-bold text-amber-900">
+                    Cierra en: <span className="text-lg">{timeUntilLock}</span>
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -838,9 +915,13 @@ export default function DashboardPage() {
                     </button>
                   )}
                   {isCrossSessionChange && (
-                    <div className="absolute -top-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center shadow-md">
-                      <Check className="w-4 h-4 text-white" />
-                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
+                      className="absolute -top-1 -right-1 w-6 h-6 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center shadow-md z-10 transition-colors"
+                      title="Cancelar cambio"
+                    >
+                      <X className="w-3.5 h-3.5 text-white" />
+                    </button>
                   )}
                   <div className="flex flex-col items-center gap-2">
                     <span className="text-sm font-bold text-slate-300">{idx + 1}</span>
@@ -884,30 +965,28 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Botón guardar */}
-      <div className={`flex items-center gap-2 justify-end ${isUnlockWindowOpen ? 'opacity-50 pointer-events-none' : ''}`}>
-        {changedCount > 0 && (
-          <>
-            <button
-              onClick={undoLastChange}
-              className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
-            >
-              <X className="w-4 h-4" />
-              <span className="hidden sm:inline">Deshacer ({changedCount})</span>
-            </button>
-            <span className="text-sm text-emerald-600 font-medium">
-              {changedCount} cambio{changedCount !== 1 ? 's' : ''}
-            </span>
-          </>
-        )}
-        <button
-          onClick={() => setShowSaveConfirm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-        >
-          <Save className="w-4 h-4" />
-          Guardar
-        </button>
-      </div>
+      {/* Indicador de cambios guardados automáticamente */}
+      {!isUnlockWindowOpen && (
+        <div className={`flex items-center gap-2 justify-between ${isUnlockWindowOpen ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div className="text-xs text-slate-500">
+            Los cambios se guardan automáticamente
+          </div>
+          {changedCount > 0 && (
+            <>
+              <button
+                onClick={undoLastChange}
+                className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+              >
+                <X className="w-4 h-4" />
+                <span className="hidden sm:inline">Deshacer ({changedCount})</span>
+              </button>
+              <span className="text-sm text-emerald-600 font-medium">
+                {changedCount} cambio{changedCount !== 1 ? 's' : ''}
+              </span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Modal de selector de jugador con filtros */}
       {playerToSwap && (
@@ -1063,75 +1142,85 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Modal de confirmación con resumen de cambios */}
-      {showSaveConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="text-xl font-bold mb-2">¿Guardar equipo?</h3>
-            <p className="text-slate-600 mb-4">
-              Jornada {activeMatchday || 1}
-            </p>
+      {/* Modal de confirmación de cambio de jugador */}
+      {showSwapConfirm && pendingSwap && (() => {
+        const outPlayer = players.find(p => p.id === pendingSwap.outId)
+        const inPlayer = players.find(p => p.id === pendingSwap.inId)
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+              <h3 className="text-xl font-bold text-slate-900 mb-4 text-center">Confirmar cambio</h3>
 
-            {changedCount > 0 ? (
-              <div className="mb-4 p-3 bg-emerald-50 rounded-lg">
-                <p className="text-sm font-semibold text-emerald-800 mb-2">
-                  Cambios realizados ({changedCount}):
-                </p>
-                <ul className="space-y-2">
-                  {changeHistory.map((change, idx) => {
-                    const playerEntra = selectedPlayersData.find(p => p.id === change.inId)
-                    const playerSale = players.find(p => p.id === change.outId)
-                    return (
-                      <li key={idx} className="text-sm bg-white rounded-lg p-2 border border-emerald-200">
-                        <div className="flex items-center gap-2 text-emerald-700">
-                          <Check className="w-4 h-4" />
-                          <span className="font-semibold">Entra:</span>
-                          <span>{playerEntra?.short_name || playerEntra?.first_name} ({playerEntra ? getPositionLabel(playerEntra.position) : ''})</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-red-600 mt-1">
-                          <X className="w-4 h-4" />
-                          <span className="font-semibold">Sale:</span>
-                          <span>{playerSale?.short_name || playerSale?.first_name} ({playerSale ? getPositionLabel(playerSale.position) : ''})</span>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
+              <div className="space-y-4 mb-6">
+                <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                  <p className="text-xs text-red-600 font-medium uppercase mb-2">Sale del 11</p>
+                  <div className="flex items-center gap-3">
+                    {outPlayer?.photo ? (
+                      <img src={outPlayer.photo} alt="" className="w-12 h-12 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold">{outPlayer?.shirt_number || '?'}</div>
+                    )}
+                    <div>
+                      <p className="font-semibold text-slate-900">{outPlayer?.short_name || outPlayer?.first_name}</p>
+                      <p className="text-xs text-slate-500">{outPlayer?.team?.name}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-center">
+                  <div className="text-emerald-600 text-2xl">⇅</div>
+                </div>
+
+                <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                  <p className="text-xs text-emerald-600 font-medium uppercase mb-2">Entra al 11</p>
+                  <div className="flex items-center gap-3">
+                    {inPlayer?.photo ? (
+                      <img src={inPlayer.photo} alt="" className="w-12 h-12 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold">{inPlayer?.shirt_number || '?'}</div>
+                    )}
+                    <div>
+                      <p className="font-semibold text-slate-900">{inPlayer?.short_name || inPlayer?.first_name}</p>
+                      <p className="text-xs text-slate-500">{inPlayer?.team?.name}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <p className="text-sm text-slate-500 mb-4">Sin cambios nuevos</p>
-            )}
 
-            <div className="flex gap-3">
-              <button
-                onClick={undoLastChange}
-                disabled={changedCount === 0}
-                className="flex-1 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Descartar cambios
-              </button>
-              <button
-                onClick={() => setShowSaveConfirm(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors"
-              >
-                Seguir editando
-              </button>
-              <button
-                onClick={saveTeam}
-                className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
-              >
-                Confirmar
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelSwap}
+                  className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-lg font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmSwap}
+                  className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  Confirmar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Modal de confirmación: cancelar cambio de un jugador */}
       {cancelConfirmPlayerId && (() => {
         const player = players.find(p => p.id === cancelConfirmPlayerId)
         const change = [...changeHistory].reverse().find(ch => ch.inId === cancelConfirmPlayerId)
-        const outPlayer = change ? players.find(p => p.id === change.outId) : null
+        let outPlayer = change ? players.find(p => p.id === change.outId) : null
+        // Para cambios cross-session, buscar el jugador original de basePlayers
+        if (!outPlayer && basePlayers.length > 0 && !basePlayers.includes(cancelConfirmPlayerId)) {
+          const currentPosCode = player ? getPositionCode(player.position) : ''
+          const originalId = basePlayers.find(bpId => {
+            if (selectedPlayers.includes(bpId)) return false
+            const bp = players.find(p => p.id === bpId)
+            return bp && getPositionCode(bp.position) === currentPosCode
+          })
+          if (originalId) outPlayer = players.find(p => p.id === originalId) || null
+        }
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
@@ -1159,22 +1248,6 @@ export default function DashboardPage() {
         )
       })()}
 
-      {/* Modal de éxito tras guardar */}
-      {showSaveSuccess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 text-center">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Check className="w-8 h-8 text-emerald-600" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">
-              ¡Cambios guardados!
-            </h3>
-            <p className="text-slate-600">
-              {user?.user_metadata?.full_name || 'Usuario'}, tu equipo ha sido actualizado correctamente.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

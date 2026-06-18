@@ -239,7 +239,8 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
 
     fetchMatchdayTimes()
 
-    const interval = setInterval(fetchMatchdayTimes, 60 * 1000)
+    // Actualizar cada segundo para la cuenta atrás, o cada 60 segundos en caso contrario
+    const interval = setInterval(fetchMatchdayTimes, 1000)
     return () => clearInterval(interval)
   }, [currentMatchday])
 

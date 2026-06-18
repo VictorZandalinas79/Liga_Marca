@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp } from 'lucide-react'
+import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search } from 'lucide-react'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 
 interface Player {
@@ -76,9 +76,12 @@ export default function JornadaPage() {
   const [showEquipos, setShowEquipos] = useState(false)
   const [modalPlayer, setModalPlayer] = useState<Record<string, any> | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchActiveIndex, setSearchActiveIndex] = useState(0)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const supabase = createClient()
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const playerRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const openPlayerStats = async (playerId: string) => {
     setModalLoading(true)
@@ -551,6 +554,60 @@ export default function JornadaPage() {
     return b.puntos_totales - a.puntos_totales
   })
 
+  // Lógica de búsqueda tipo Ctrl+F: resaltar coincidencias y navegar
+  const normalizeText = (text: string) =>
+    text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+  const isPlayerMatch = useCallback((p: Player, q: string): boolean => {
+    if (!q) return false
+    const nameMatch =
+      normalizeText(p.short_name || '').includes(q) ||
+      normalizeText(p.first_name || '').includes(q) ||
+      normalizeText(p.last_name || '').includes(q)
+    const teamMatch = p.team ? normalizeText(p.team.name).includes(q) : false
+    const priceMatch = p.valor ? String(p.valor).includes(q) : false
+    return nameMatch || teamMatch || priceMatch
+  }, [])
+
+  // Lista plana de coincidencias: { teamId, playerId } para navegar
+  const searchMatches = searchQuery.trim()
+    ? sortedTeams.flatMap(team =>
+        team.jugadores
+          .filter(p => isPlayerMatch(p, normalizeText(searchQuery.trim())))
+          .map(p => ({ teamId: team.team_id, playerId: p.id, key: `${team.team_id}-${p.id}` }))
+      )
+    : []
+
+  const matchCount = searchMatches.length
+  const safeActiveIndex = matchCount > 0 ? Math.min(searchActiveIndex, matchCount - 1) : 0
+  const matchSet = new Set(searchMatches.map(m => m.key))
+  const activeMatchKey = matchCount > 0 ? searchMatches[safeActiveIndex].key : null
+
+  const goToMatch = useCallback((index: number) => {
+    if (searchMatches.length === 0) return
+    const safeIdx = ((index % searchMatches.length) + searchMatches.length) % searchMatches.length
+    setSearchActiveIndex(safeIdx)
+    const match = searchMatches[safeIdx]
+    if (match) {
+      setTimeout(() => {
+        playerRefs.current[match.key]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 50)
+    }
+  }, [searchMatches])
+
+  // Resetear índice activo al cambiar la query
+  useEffect(() => {
+    setSearchActiveIndex(0)
+    if (searchMatches.length > 0) {
+      setTimeout(() => {
+        const firstMatch = searchMatches[0]
+        if (firstMatch) {
+          playerRefs.current[firstMatch.key]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 100)
+    }
+  }, [searchQuery])
+
   const getFormacion = (jugadores: Player[]): string => {
     const starters = jugadores.filter(p => p.is_starter)
     const gk = starters.filter(p => getPositionLabel(p.position) === 'POR').length
@@ -623,6 +680,57 @@ export default function JornadaPage() {
         </span>
         {showEquipos ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
       </button>
+
+      {/* Buscador tipo Ctrl+F */}
+      {showEquipos && userTeams.length > 0 && (
+        <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm rounded-lg border border-slate-300 shadow-sm px-3 py-2 flex items-center gap-2">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Buscar por jugador, equipo o precio…"
+            className="flex-1 min-w-0 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                goToMatch(e.shiftKey ? safeActiveIndex - 1 : safeActiveIndex + 1)
+              }
+            }}
+          />
+          {searchQuery && (
+            <>
+              <span className="text-xs text-slate-500 whitespace-nowrap font-medium">
+                {matchCount > 0 ? `${safeActiveIndex + 1} / ${matchCount}` : '0 resultados'}
+              </span>
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => goToMatch(safeActiveIndex - 1)}
+                  disabled={matchCount === 0}
+                  className="p-1 rounded text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Anterior"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => goToMatch(safeActiveIndex + 1)}
+                  disabled={matchCount === 0}
+                  className="p-1 rounded text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Siguiente"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+              <button
+                onClick={() => setSearchQuery('')}
+                className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Clasificación de la jornada (baja al fondo cuando se abren los equipos) */}
       {userTeams.length > 0 && (
@@ -757,12 +865,21 @@ export default function JornadaPage() {
                         <div key={grupo}>
                           <p className="text-xs font-semibold text-slate-500 uppercase mb-2">{grupo}</p>
                           <div className="grid gap-2">
-                            {jugadoresGrupo.map((player, idx) => (
+                            {jugadoresGrupo.map((player, idx) => {
+                              const matchKey = `${team.team_id}-${player.id}`
+                              const isMatch = matchSet.has(matchKey)
+                              const isActive = matchKey === activeMatchKey
+                              return (
                               <div
                                 key={player.id}
+                                ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
                                 onClick={() => openPlayerStats(player.id)}
                                 className={`flex items-center justify-between p-3 rounded-lg transition-colors gap-2 cursor-pointer ${
-                                  player.hasPlayed
+                                  isActive
+                                    ? 'bg-orange-200 ring-2 ring-orange-400 hover:bg-orange-300'
+                                    : isMatch
+                                    ? 'bg-yellow-100 ring-1 ring-yellow-300 hover:bg-yellow-200'
+                                    : player.hasPlayed
                                     ? 'bg-slate-200 hover:bg-slate-300'
                                     : 'bg-slate-50 hover:bg-slate-100'
                                 }`}
@@ -822,7 +939,7 @@ export default function JornadaPage() {
                                   <p className="text-xs text-slate-500">puntos</p>
                                 </div>
                               </div>
-                            ))}
+                            )})}
                           </div>
                         </div>
                       )
