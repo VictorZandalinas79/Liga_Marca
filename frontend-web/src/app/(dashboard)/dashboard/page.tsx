@@ -59,6 +59,9 @@ export default function DashboardPage() {
   const [priceMinFilter, setPriceMinFilter] = useState<number | ''>('')
   const [priceMaxFilter, setPriceMaxFilter] = useState<number | ''>('')
   const [playerPoints, setPlayerPoints] = useState<Map<string, number>>(new Map())
+  const [usersOnline, setUsersOnline] = useState<Array<{ id: string; full_name: string }>>([])
+  const [onlineCount, setOnlineCount] = useState(0)
+  const [showOnlineList, setShowOnlineList] = useState(false)
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento } = useMatchdayLock()
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
@@ -439,6 +442,72 @@ export default function DashboardPage() {
     }
     fetchLiveInfractions()
   }, [activeMatchday])
+
+  useEffect(() => {
+    const fetchOnlineUsers = async () => {
+      try {
+        const { data: sessions, error: sessionsError } = await supabase
+          .from('user_sessions')
+          .select('user_id, last_activity_at')
+          .order('last_activity_at', { ascending: false })
+
+        console.log('[FETCH SESSIONS]', { sessions, sessionsError })
+
+        if (sessionsError) {
+          console.error('[FETCH SESSIONS] Error:', sessionsError)
+          return
+        }
+
+        if (sessions && sessions.length > 0) {
+          const now = Date.now()
+          const fiveMinutesAgo = now - (5 * 60 * 1000)
+
+          const sessionIds = sessions
+            .filter((s: any) => {
+              if (!s.last_activity_at) return false
+              const lastActivity = new Date(s.last_activity_at).getTime()
+              return lastActivity > fiveMinutesAgo
+            })
+            .map((s: any) => s.user_id)
+
+          console.log('[ACTIVE SESSIONS]', { sessionIds, count: sessionIds.length })
+
+          if (sessionIds.length > 0) {
+            const { data: profiles, error: profilesError } = await supabase
+              .from('profiles')
+              .select('id, full_name')
+              .in('id', sessionIds)
+
+            console.log('[PROFILES]', { profiles, profilesError })
+
+            if (profilesError) {
+              console.error('[PROFILES] Error:', profilesError)
+              return
+            }
+
+            setUsersOnline(profiles || [])
+            setOnlineCount(profiles?.length || 0)
+          } else {
+            setOnlineCount(0)
+            setUsersOnline([])
+          }
+        } else {
+          setOnlineCount(0)
+          setUsersOnline([])
+        }
+      } catch (err) {
+        console.error('[USUARIOS EN LÍNEA] Error:', err)
+        setOnlineCount(0)
+        setUsersOnline([])
+      }
+    }
+
+    if (isRegistered) {
+      fetchOnlineUsers()
+      const interval = setInterval(fetchOnlineUsers, 15000)
+      return () => clearInterval(interval)
+    }
+  }, [isRegistered, supabase])
 
   const saveTeam = async () => {
     if (isUnlockWindowOpen) {
@@ -824,6 +893,47 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-2 pb-4">
+      {/* Encabezado con usuarios en línea */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold text-slate-900">Inicio</h1>
+        {onlineCount > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setShowOnlineList(!showOnlineList)}
+              className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors relative"
+            >
+              <div className="flex items-center gap-1">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+                <span className="text-slate-600 font-medium">{onlineCount} en línea</span>
+              </div>
+            </button>
+
+            {/* Dropdown con nombres de usuarios */}
+            {showOnlineList && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-2">
+                {usersOnline.length > 0 ? (
+                  <div>
+                    {usersOnline.map((u) => (
+                      <div key={u.id} className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 flex items-center gap-2">
+                        <span className="relative flex h-2 w-2 shrink-0">
+                          <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        {u.full_name || 'Usuario'}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-2 text-sm text-slate-500">Sin usuarios en línea</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Mensaje de estado de cambios */}
       {isUnlockWindowOpen ? (

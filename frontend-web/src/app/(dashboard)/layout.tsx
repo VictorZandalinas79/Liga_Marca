@@ -46,6 +46,80 @@ export default function DashboardLayout({
     getUser()
   }, [])
 
+  useEffect(() => {
+    let sessionId: string | null = null
+
+    const updateUserSession = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          console.log('[SESSION] No user found')
+          return
+        }
+
+        const now = new Date().toISOString()
+
+        if (!sessionId) {
+          console.log('[SESSION] Creating new session for user:', user.id)
+          const { data: newSession, error: insertError } = await supabase
+            .from('user_sessions')
+            .insert({
+              user_id: user.id,
+              started_at: now,
+              last_activity_at: now
+            })
+            .select()
+
+          console.log('[SESSION] Insert result:', { newSession, insertError })
+
+          if (insertError) {
+            console.error('[SESSION] Insert error:', {
+              message: insertError.message,
+              details: insertError.details,
+              hint: insertError.hint,
+              code: insertError.code,
+              full: insertError
+            })
+            return
+          }
+
+          if (newSession && newSession.length > 0) {
+            sessionId = newSession[0].id
+            console.log('[SESSION] Session created:', sessionId)
+          }
+        } else {
+          const { error: updateError } = await supabase
+            .from('user_sessions')
+            .update({ last_activity_at: now })
+            .eq('id', sessionId)
+
+          if (updateError) {
+            console.error('[SESSION] Update error:', updateError)
+          } else {
+            console.log('[SESSION] Session updated:', sessionId)
+          }
+        }
+      } catch (err) {
+        console.error('[SESSION] Unexpected error:', err)
+      }
+    }
+
+    updateUserSession()
+    const interval = setInterval(updateUserSession, 30000)
+
+    return () => {
+      clearInterval(interval)
+      if (sessionId) {
+        console.log('[SESSION] Cleaning up session:', sessionId)
+        supabase
+          .from('user_sessions')
+          .delete()
+          .eq('id', sessionId)
+          .then(() => console.log('[SESSION] Session deleted'))
+      }
+    }
+  }, [supabase])
+
   const navItems = isAdmin ? [...navigation, adminNavItem] : navigation
 
   const handleSignOut = async () => {

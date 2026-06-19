@@ -72,7 +72,7 @@ export default function JornadaPage() {
   const [selectedMatchday, setSelectedMatchday] = useState<number>(0)
   const [availableMatchdays, setAvailableMatchdays] = useState<MatchdayInfo[]>([])
   const [userTeams, setUserTeams] = useState<UserTeam[]>([])
-  const [sortBy, setSortBy] = useState<'puntos' | 'promedio'>('puntos')
+  const [sortBy, setSortBy] = useState<'sistema' | 'valor' | 'puntos' | 'promedio'>('puntos')
   const [showEquipos, setShowEquipos] = useState(false)
   const [showSanciones, setShowSanciones] = useState(false)
   const [modalPlayer, setModalPlayer] = useState<Record<string, any> | null>(null)
@@ -579,7 +579,23 @@ export default function JornadaPage() {
     return jugaron > 0 ? team.puntos_totales / jugaron : 0
   }
 
+  const getFormacion = (jugadores: Player[]): string => {
+    const starters = jugadores.filter(p => p.is_starter)
+    const gk = starters.filter(p => getPositionLabel(p.position) === 'POR').length
+    const def = starters.filter(p => getPositionLabel(p.position) === 'DEF').length
+    const mid = starters.filter(p => getPositionLabel(p.position) === 'MED').length
+    const fwd = starters.filter(p => getPositionLabel(p.position) === 'DEL').length
+    if (gk + def + mid + fwd === 0) return '-'
+    return `${gk}-${def}-${mid}-${fwd}`
+  }
+
   const sortedTeams = [...userTeams].sort((a, b) => {
+    if (sortBy === 'sistema') {
+      const formA = getFormacion(a.jugadores)
+      const formB = getFormacion(b.jugadores)
+      return formA.localeCompare(formB)
+    }
+    if (sortBy === 'valor') return b.valor_total - a.valor_total
     if (sortBy === 'promedio') return getPromedio(b) - getPromedio(a)
     return b.puntos_totales - a.puntos_totales
   })
@@ -637,16 +653,6 @@ export default function JornadaPage() {
       }, 100)
     }
   }, [searchQuery])
-
-  const getFormacion = (jugadores: Player[]): string => {
-    const starters = jugadores.filter(p => p.is_starter)
-    const gk = starters.filter(p => getPositionLabel(p.position) === 'POR').length
-    const def = starters.filter(p => getPositionLabel(p.position) === 'DEF').length
-    const mid = starters.filter(p => getPositionLabel(p.position) === 'MED').length
-    const fwd = starters.filter(p => getPositionLabel(p.position) === 'DEL').length
-    if (gk + def + mid + fwd === 0) return '-'
-    return `${gk}-${def}-${mid}-${fwd}`
-  }
 
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando jornada...</div>
@@ -814,10 +820,30 @@ export default function JornadaPage() {
                   <tr className="border-b border-slate-700">
                     <th className="text-left py-3 px-2 text-xs sm:text-sm font-semibold text-slate-300">Pos</th>
                     <th className="text-left py-3 px-2 text-xs sm:text-sm font-semibold text-slate-300">Equipo</th>
-                    <th className="text-center py-3 px-2 text-xs sm:text-sm font-semibold text-slate-300">Sys</th>
-                    <th className="text-right py-3 px-2 text-xs sm:text-sm font-semibold text-slate-300">Valor</th>
-                    <th className={`text-right py-3 px-2 text-xs sm:text-sm font-semibold ${sortBy === 'puntos' ? 'text-emerald-400' : 'text-slate-300'}`}>Pts</th>
-                    <th className={`text-right py-3 px-2 text-xs sm:text-sm font-semibold ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}>Prom</th>
+                    <th
+                      onClick={() => setSortBy('sistema')}
+                      className={`text-center py-3 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'sistema' ? 'text-emerald-400' : 'text-slate-300'}`}
+                    >
+                      Sys
+                    </th>
+                    <th
+                      onClick={() => setSortBy('valor')}
+                      className={`text-right py-3 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'valor' ? 'text-emerald-400' : 'text-slate-300'}`}
+                    >
+                      Valor
+                    </th>
+                    <th
+                      onClick={() => setSortBy('puntos')}
+                      className={`text-right py-3 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'puntos' ? 'text-emerald-400' : 'text-slate-300'}`}
+                    >
+                      Pts
+                    </th>
+                    <th
+                      onClick={() => setSortBy('promedio')}
+                      className={`text-right py-3 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}
+                    >
+                      Prom
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, TrendingUp, TrendingDown, Minus, Medal, Filter, ArrowUpDown, Target, CheckCircle, Users, ChevronRight } from 'lucide-react'
+import { Trophy, TrendingUp, TrendingDown, Minus, Medal, ArrowUpDown, Target, CheckCircle, Users } from 'lucide-react'
 
 interface UserStanding {
   user_id: string
@@ -16,11 +16,12 @@ interface UserStanding {
   position_change: number
   teams_count: number
   matches_played: number
-  last_3_jornadas_points: number
-  last_3_trend: 'up' | 'down' | 'stable'
+  last_3_jornadas_avg: number
+  last_5_trend: 'up' | 'down' | 'stable'
   best_change_score: number
   total_changes: number
   successful_changes: number
+  change_impact_points: number
   podium_finishes: number
   bottom_finishes: number
   best_matchday_points: number
@@ -32,17 +33,15 @@ interface MatchdayStatus {
   is_open: boolean
 }
 
-type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_points' | 'best_change_score' | 'successful_changes' | 'podium_finishes' | 'bottom_finishes'
+type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_avg' | 'best_change_score' | 'change_impact_points' | 'podium_finishes' | 'bottom_finishes'
 type SortOrder = 'asc' | 'desc'
 
 export default function ClasificacionPage() {
   const [standings, setStandings] = useState<UserStanding[]>([])
   const [loading, setLoading] = useState(true)
   const [currentMatchday, setCurrentMatchday] = useState<number>(1)
-  const [selectedMatchday, setSelectedMatchday] = useState<number>(0)
   const [sortField, setSortField] = useState<SortField>('total_points')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
-  const [showFilters, setShowFilters] = useState(false)
   const [tick, setTick] = useState(0)
   const [expandedUser, setExpandedUser] = useState<string | null>(null)
   const [userTeamData, setUserTeamData] = useState<Record<string, any>>({})
@@ -115,7 +114,7 @@ export default function ClasificacionPage() {
 
       const { data: fixturesData } = await supabase
         .from('fixtures')
-        .select('id, matchday')
+        .select('id, matchday, status')
 
       const fixtureToMatchday = new Map<string, number>()
       fixturesData?.forEach(f => {
@@ -187,8 +186,60 @@ export default function ClasificacionPage() {
         teamPlayersByMatchday.get(tp.team_id)!.get(md)!.push(tp)
       }
 
+      // Jornadas que REALMENTE se han jugado (tienen puntuaciones en player_scores)
+      const playedMatchdays = new Set<number>()
+      for (const playerMds of playerPointsByMatchday.values()) {
+        for (const md of playerMds.keys()) {
+          if (md > 0) playedMatchdays.add(md)
+        }
+      }
+      const sortedPlayedMatchdays = Array.from(playedMatchdays).sort((a, b) => a - b)
+
+      // Auto-duplicar alineaciones para jornadas jugadas donde un equipo no tiene entradas.
+      // Así los usuarios que no hicieron cambios tendrán sus 11 jugadores persistidos.
+      for (const [teamId, matchdays] of teamPlayersByMatchday.entries()) {
+        for (const playedMd of sortedPlayedMatchdays) {
+          if (matchdays.has(playedMd)) continue // Ya tiene datos para esta jornada
+
+          // Buscar la alineación más reciente anterior a esta jornada
+          let activeMd = -1
+          for (const savedMd of matchdays.keys()) {
+            if (savedMd > 0 && savedMd <= playedMd && savedMd > activeMd) {
+              activeMd = savedMd
+            }
+          }
+          if (activeMd === -1) continue
+
+          const prevPlayers = matchdays.get(activeMd) || []
+          if (prevPlayers.length === 0) continue
+
+          // Crear las filas heredadas para la nueva jornada
+          const inheritedRows = prevPlayers.map((tp, index) => ({
+            team_id: teamId,
+            player_id: tp.player_id,
+            is_starter: tp.is_starter,
+            is_captain: tp.is_captain,
+            matchday: playedMd,
+          }))
+
+          // Insertar en la base de datos (persistir la herencia)
+          supabase.from('team_players').insert(inheritedRows).then(({ error }) => {
+            if (error) {
+              // Ignorar errores de duplicados (por si otra pestaña ya lo insertó)
+              console.log(`[CLASIFICACION] Auto-herencia J${playedMd} equipo ${teamId}:`, error.message)
+            }
+          })
+
+          // Actualizar el mapa local para que el cálculo de esta carga sea correcto
+          const localCopy = prevPlayers.map(tp => ({ ...tp, matchday: playedMd }))
+          matchdays.set(playedMd, localCopy)
+        }
+      }
+
       const userPointsByMatchday = new Map<string, Map<number, number>>()
       const userChangesByMatchday = new Map<string, Map<number, { total: number; successful: number }>>()
+      // Jornadas jugadas donde el usuario tiene alineación (directa o heredada)
+      const userMatchdaysFromTeamPlayers = new Map<string, Set<number>>()
 
       for (const [userId, teams] of userTeamsMap.entries()) {
         if (!userPointsByMatchday.has(userId)) {
@@ -197,12 +248,16 @@ export default function ClasificacionPage() {
         if (!userChangesByMatchday.has(userId)) {
           userChangesByMatchday.set(userId, new Map())
         }
+        if (!userMatchdaysFromTeamPlayers.has(userId)) {
+          userMatchdaysFromTeamPlayers.set(userId, new Set())
+        }
 
         for (const team of teams) {
           const teamMatchdays = teamPlayersByMatchday.get(team.teamId)
           if (teamMatchdays) {
-            // Recorrer todas las jornadas hasta la actual para heredar alineaciones no modificadas
-            for (let md = 1; md <= currentMatchday; md++) {
+            // Recorrer SOLO las jornadas JUGADAS y heredar la alineación más reciente
+            for (const md of sortedPlayedMatchdays) {
+              // Buscar la alineación guardada más reciente <= esta jornada
               let activeMd = -1
               for (const savedMd of teamMatchdays.keys()) {
                 if (savedMd <= md && savedMd > activeMd) {
@@ -210,9 +265,11 @@ export default function ClasificacionPage() {
                 }
               }
 
-              if (activeMd === -1) continue // No hay alineación guardada aún para este equipo
+              if (activeMd === -1) continue // No hay alineación guardada aún
 
               const players = teamMatchdays.get(activeMd) || []
+
+              userMatchdaysFromTeamPlayers.get(userId)!.add(md)
 
               if (!userPointsByMatchday.get(userId)!.has(md)) {
                 userPointsByMatchday.get(userId)!.set(md, 0)
@@ -294,26 +351,50 @@ export default function ClasificacionPage() {
         const user = usersMap.get(userId)
         const pointsMap = userPointsByMatchday.get(userId) || new Map()
         const changesMap = userChangesByMatchday.get(userId) || new Map()
+        // Jornadas reales que aparecen en team_players para este usuario
+        const teamPlayerMatchdays = userMatchdaysFromTeamPlayers.get(userId) || new Set<number>()
 
-        const totalPoints = Array.from(pointsMap.values()).reduce((sum, pts) => sum + pts, 0)
-        const matchesPlayed = pointsMap.size
+        let totalPoints = 0
+        for (const [md, pts] of pointsMap.entries()) {
+          if (md > 0) {
+            totalPoints += pts
+          }
+        }
+        // Promedio = puntos totales / nº de jornadas distintas en team_players
+        const matchesPlayed = teamPlayerMatchdays.size
         const averagePoints = matchesPlayed > 0 ? Math.round((totalPoints / matchesPlayed) * 10) / 10 : 0
 
-        const sortedMatchdays = Array.from(pointsMap.keys()).sort((a, b) => b - a)
+        // Ordenar jornadas de team_players de más reciente a más antigua
+        const sortedMatchdays = Array.from(teamPlayerMatchdays)
+          .sort((a, b) => b - a)
+
+        // Últimas 3 jornadas: promedio de puntos solo en las últimas 3 jornadas de team_players
         const last3Matchdays = sortedMatchdays.slice(0, 3)
         const last3Points = last3Matchdays.reduce((sum, md) => sum + (pointsMap.get(md) || 0), 0)
+        const last3Avg = last3Matchdays.length > 0 ? Math.round((last3Points / last3Matchdays.length) * 10) / 10 : 0
 
-        let last3Trend: 'up' | 'down' | 'stable' = 'stable'
-        if (last3Matchdays.length >= 2) {
-          const first = pointsMap.get(last3Matchdays[last3Matchdays.length - 1]) || 0
-          const last = pointsMap.get(last3Matchdays[0]) || 0
-          if (last > first + 5) last3Trend = 'up'
-          else if (last < first - 5) last3Trend = 'down'
+        // Tendencia: calcular pendiente (slope) sobre las últimas 5 jornadas de team_players
+        const last5Matchdays = sortedMatchdays.slice(0, 5).reverse() // ordenar de antigua a reciente
+        let last5Trend: 'up' | 'down' | 'stable' = 'stable'
+        if (last5Matchdays.length >= 2) {
+          // Regresión lineal simple: y = puntos, x = posición (0,1,2,...)
+          const n = last5Matchdays.length
+          const points5 = last5Matchdays.map(md => pointsMap.get(md) || 0)
+          const sumX = (n * (n - 1)) / 2
+          const sumY = points5.reduce((a, b) => a + b, 0)
+          const sumXY = points5.reduce((acc, y, i) => acc + i * y, 0)
+          const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6
+          const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+          
+          // Umbral: si la pendiente es significativa (>2 pts por jornada)
+          if (slope > 2) last5Trend = 'up'
+          else if (slope < -2) last5Trend = 'down'
         }
 
         let bestChangeScore = 0
         let totalChanges = 0
         let successfulChanges = 0
+        let changeImpactPoints = 0
 
         for (const changes of changesMap.values()) {
           const changeScore = changes.total > 0 ? Math.round((changes.successful / changes.total) * 100) : 0
@@ -322,6 +403,10 @@ export default function ClasificacionPage() {
           }
           totalChanges += changes.total
           successfulChanges += changes.successful
+        }
+
+        if (successfulChanges > 0) {
+          changeImpactPoints = Math.round((successfulChanges / totalChanges) * 100)
         }
 
         // Calcular la mejor puntuación en una jornada
@@ -340,11 +425,12 @@ export default function ClasificacionPage() {
           total_points: totalPoints,
           average_points: averagePoints,
           matches_played: matchesPlayed,
-          last_3_jornadas_points: last3Points,
-          last_3_trend: last3Trend,
+          last_3_jornadas_avg: last3Avg,
+          last_5_trend: last5Trend,
           best_change_score: bestChangeScore,
           total_changes: totalChanges,
           successful_changes: successfulChanges,
+          change_impact_points: changeImpactPoints,
           podium_finishes: podiumCount.get(userId) || 0,
           bottom_finishes: bottomCount.get(userId) || 0,
           current_position: 0,
@@ -356,27 +442,6 @@ export default function ClasificacionPage() {
         }
       })
 
-      if (selectedMatchday > 0) {
-        standingsData.forEach(standing => {
-          const pointsMap = userPointsByMatchday.get(standing.user_id) || new Map()
-          let accumulatedPoints = 0
-          let jornadasPlayed = 0
-          for (const [md, pts] of pointsMap.entries()) {
-            if (md > 0 && md <= selectedMatchday) {
-              accumulatedPoints += pts
-              jornadasPlayed += 1
-            }
-          }
-          standing.total_points = accumulatedPoints
-          standing.average_points = jornadasPlayed > 0 ? Math.round((accumulatedPoints / jornadasPlayed) * 10) / 10 : 0
-          standing.matches_played = jornadasPlayed
-          const sortedMds = Array.from(pointsMap.keys())
-            .filter(md => md > 0 && md <= selectedMatchday)
-            .sort((a, b) => b - a)
-            .slice(0, 3)
-          standing.last_3_jornadas_points = sortedMds.reduce((sum, md) => sum + (pointsMap.get(md) || 0), 0)
-        })
-      }
 
       standingsData.sort((a, b) => {
         if (sortOrder === 'desc') {
@@ -395,7 +460,7 @@ export default function ClasificacionPage() {
     }
 
     fetchStandings()
-  }, [selectedMatchday, sortField, sortOrder, tick])
+  }, [sortField, sortOrder, tick])
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -574,7 +639,7 @@ export default function ClasificacionPage() {
     return <div className="text-center py-8 text-slate-500">Cargando clasificación...</div>
   }
 
-  const topEvolution = [...standings].sort((a, b) => b.last_3_jornadas_points - a.last_3_jornadas_points)[0]
+  const topEvolution = [...standings].sort((a, b) => b.last_3_jornadas_avg - a.last_3_jornadas_avg)[0]
   const topChanges = [...standings].sort((a, b) => b.best_change_score - a.best_change_score)[0]
 
   return (
@@ -595,53 +660,6 @@ export default function ClasificacionPage() {
         </div>
       </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardContent className="p-4">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
-          >
-            <Filter className="w-4 h-4" />
-            Filtros y opciones
-          </button>
-
-          {showFilters && (
-            <div className="mt-4 space-y-4 pt-4 border-t border-slate-200">
-              <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase mb-2 block">
-                  Filtrar por jornada
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setSelectedMatchday(0)}
-                    className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                      selectedMatchday === 0
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Todas
-                  </button>
-                  {Array.from({ length: currentMatchday }, (_, i) => i + 1).map(md => (
-                    <button
-                      key={md}
-                      onClick={() => setSelectedMatchday(md)}
-                      className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                        selectedMatchday === md
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      Jornada {md}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Tabla de clasificación */}
       <Card className="!bg-slate-800 border-slate-700">
@@ -672,21 +690,23 @@ export default function ClasificacionPage() {
                   </th>
                   <th
                     className="text-right text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('last_3_jornadas_points')}
+                    onClick={() => handleSort('last_3_jornadas_avg')}
+                    title="Promedio de las últimas 3 jornadas"
                   >
                     <div className="flex items-center justify-end gap-1">
                       Últ. 3
-                      <SortIcon field="last_3_jornadas_points" />
+                      <SortIcon field="last_3_jornadas_avg" />
                     </div>
                   </th>
-                  <th className="text-center text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap">Tendencia</th>
+                  <th className="text-center text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap" title="Tendencia en las últimas 5 jornadas">Tendencia</th>
                   <th
                     className="text-right text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('best_change_score')}
+                    onClick={() => handleSort('change_impact_points')}
+                    title="Impacto de cambios: % de cambios que mejoraron el promedio"
                   >
                     <div className="flex items-center justify-end gap-1">
-                      % Cambios
-                      <SortIcon field="best_change_score" />
+                      Cambios
+                      <SortIcon field="change_impact_points" />
                     </div>
                   </th>
                   <th
@@ -719,9 +739,8 @@ export default function ClasificacionPage() {
                   const isExpanded = expandedUser === standing.user_id
                   const isCurrentUser = currentUserId === standing.user_id
                   return (
-                  <>
+                  <Fragment key={standing.user_id}>
                   <tr
-                    key={standing.user_id}
                     className={`border-b border-slate-700 transition-colors ${
                       isCurrentUser ? 'bg-emerald-900/30 animate-pulse' :
                       isExpanded ? 'bg-slate-600' : 'hover:bg-slate-700/50'
@@ -755,23 +774,23 @@ export default function ClasificacionPage() {
                     </td>
                     <td className="px-2 py-3 text-right whitespace-nowrap">
                       <span className="text-sm font-semibold text-blue-400">
-                        {Math.round(standing.last_3_jornadas_points * 10) / 10}
+                        {Math.round(standing.last_3_jornadas_avg * 10) / 10}
                       </span>
                     </td>
                     <td className="px-2 py-3">
                       <div className="flex justify-center">
-                        {getTrendIcon(standing.last_3_trend)}
+                        {getTrendIcon(standing.last_5_trend)}
                       </div>
                     </td>
                     <td className="px-2 py-3 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
                         <span className={`text-sm font-bold ${
-                          standing.best_change_score >= 70 ? 'text-emerald-400' :
-                          standing.best_change_score >= 40 ? 'text-amber-400' : 'text-slate-400'
+                          standing.change_impact_points >= 70 ? 'text-emerald-400' :
+                          standing.change_impact_points >= 40 ? 'text-amber-400' : 'text-slate-400'
                         }`}>
-                          {standing.best_change_score}%
+                          {standing.change_impact_points}%
                         </span>
-                        {standing.best_change_score >= 70 && (
+                        {standing.change_impact_points >= 70 && (
                           <CheckCircle className="w-3 h-3 text-emerald-400" />
                         )}
                       </div>
@@ -893,7 +912,7 @@ export default function ClasificacionPage() {
                       </td>
                     </tr>
                   )}
-                  </>
+                  </Fragment>
                   )
                 })}
               </tbody>
@@ -913,9 +932,9 @@ export default function ClasificacionPage() {
                     <TrendingUp className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs font-semibold text-emerald-700 uppercase">Mayor evolución (últimas 3 jornadas)</p>
+                    <p className="text-xs font-semibold text-emerald-700 uppercase">Mayor promedio (últimas 3 jornadas)</p>
                     <p className="text-lg font-bold text-emerald-900 uppercase">{topEvolution.user_name}</p>
-                    <p className="text-sm text-emerald-700">{topEvolution.last_3_jornadas_points} puntos</p>
+                    <p className="text-sm text-emerald-700">{topEvolution.last_3_jornadas_avg} pts/j</p>
                   </div>
                 </div>
               </CardContent>
