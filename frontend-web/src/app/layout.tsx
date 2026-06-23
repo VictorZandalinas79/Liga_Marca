@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   description: "Juego de fantasy football entre amigos",
   icons: {
     icon: '/icono_lliga.png',
+    apple: '/icono_lliga.png',
   },
 };
 
