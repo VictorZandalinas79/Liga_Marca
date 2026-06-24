@@ -285,8 +285,9 @@ export default function ClasificacionPage() {
       const userSanctionedMatchdays = new Map<string, Set<number>>()
       const userMatchdaysFromTeamPlayers = new Map<string, Set<number>>()
 
-      // Inicializar prevStartersByTeam para cada equipo
+      // Inicializar variables para herencia y sanciones
       let prevStartersByTeam = new Map<string, string[]>()
+      let prevSquadByTeam = new Map<string, string[]>()
 
       const posLabel = (pos: string) => {
         const l = (pos || '').toLowerCase()
@@ -310,6 +311,7 @@ export default function ClasificacionPage() {
         }
 
         const currentStartersByTeam = new Map<string, string[]>()
+        const currentSquadByTeam = new Map<string, string[]>()
 
         for (const [userId, teams] of userTeamsMap.entries()) {
           if (!userPointsByMatchday.has(userId)) {
