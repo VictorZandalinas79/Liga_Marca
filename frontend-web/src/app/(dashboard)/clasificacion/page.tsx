@@ -361,11 +361,12 @@ export default function ClasificacionPage() {
               }
             }
 
-            // Guardar titulares en currentStartersByTeam para la próxima jornada
+            // Guardar en estados para la próxima jornada
             currentStartersByTeam.set(team.teamId, startersList.map(s => s.id))
+            currentSquadByTeam.set(team.teamId, players.map(p => p.player_id))
 
             // Aplicar sanciones
-            const prevMine = new Set<string>(prevStartersByTeam.get(team.teamId) || [])
+            const prevMine = new Set<string>(prevSquadByTeam.get(team.teamId) || [])
 
             // Excluir a este equipo de la lista de otros poseedores en el mapa de exclusividad
             const teamHeldByOthersPrev = new Map<string, string[]>()
@@ -376,7 +377,8 @@ export default function ClasificacionPage() {
               }
             }
 
-            const sanctionResult = applySanctionsToTeam(startersList, prevMine, teamHeldByOthersPrev, leagueConfig)
+            const isMatchdayFinished = true; // Clasificacion is for past matchdays
+            const sanctionResult = applySanctionsToTeam(startersList, prevMine, teamHeldByOthersPrev, leagueConfig, !isMatchdayFinished)
 
             // Poner a 0 los puntos de los sancionados
             startersList.forEach(s => {
@@ -432,6 +434,7 @@ export default function ClasificacionPage() {
         }
 
         prevStartersByTeam = currentStartersByTeam
+        prevSquadByTeam = currentSquadByTeam
       }
 
       // Restar las SANCIONES (tabla penalties) para mostrar puntos NETOS por jornada.
@@ -698,7 +701,7 @@ export default function ClasificacionPage() {
     // Obtener los fixtures de la jornada para obtener puntos
     const { data: fixturesForMatchday } = await supabase
       .from('fixtures')
-      .select('id')
+      .select('id, status')
       .eq('matchday', actualMatchday)
 
     const fixtureIds = fixturesForMatchday?.map(f => f.id) || []
@@ -731,7 +734,7 @@ export default function ClasificacionPage() {
     // Cargar team_players de la jornada anterior de todos los equipos
     const prevMatchday = actualMatchday - 1
     const prevStartersByTeam = new Map<string, string[]>()
-    const heldByOthersPrev = new Map<string, string[]>()
+    const prevSquadByTeam = new Map<string, string[]>()
 
     if (prevMatchday >= 1) {
       // Obtener perfiles de usuario para los nombres
@@ -743,8 +746,7 @@ export default function ClasificacionPage() {
 
       const { data: prevStarters } = await supabase
         .from('team_players')
-        .select('team_id, player_id, matchday')
-        .eq('is_starter', true)
+        .select('team_id, player_id, matchday, is_starter')
         .lte('matchday', prevMatchday)
         .order('matchday', { ascending: false })
 
@@ -757,15 +759,22 @@ export default function ClasificacionPage() {
         }
       })
 
+      const heldByOthersPrev = new Map<string, string[]>()
+
       prevStarters?.forEach(p => {
         if (p.matchday === maxMdByTeam.get(p.team_id)) {
-          if (!prevStartersByTeam.has(p.team_id)) prevStartersByTeam.set(p.team_id, [])
-          prevStartersByTeam.get(p.team_id)!.push(p.player_id)
+          if (!prevSquadByTeam.has(p.team_id)) prevSquadByTeam.set(p.team_id, [])
+          prevSquadByTeam.get(p.team_id)!.push(p.player_id)
+          
+          if (p.is_starter) {
+            if (!prevStartersByTeam.has(p.team_id)) prevStartersByTeam.set(p.team_id, [])
+            prevStartersByTeam.get(p.team_id)!.push(p.player_id)
+          }
         }
       })
 
       // Ahora calcular heldByOthersPrev para teamId
-      for (const [otherTeamId, pids] of prevStartersByTeam.entries()) {
+      for (const [otherTeamId, pids] of prevSquadByTeam.entries()) {
         if (otherTeamId !== teamId) {
           const otherTeam = teamMap.get(otherTeamId)
           const otherProfile = otherTeam ? profileMap.get(otherTeam.user_id) : null
@@ -797,15 +806,18 @@ export default function ClasificacionPage() {
       }
     })
 
-    const prevMine = new Set<string>(prevStartersByTeam.get(teamId) || [])
+    const isMatchdayFinished = fixturesForMatchday ? fixturesForMatchday.every((f: any) => f.status === 'finished') : true;
+    const prevMine = new Set<string>(prevMatchday >= 1 ? (prevSquadByTeam.get(teamId) || []) : [])
     const starters = jugadores.filter(j => j.is_starter)
-    const sanctionResult = applySanctionsToTeam(starters, prevMine, heldByOthersPrev, config)
+    const sanctionResult = applySanctionsToTeam(starters, prevMine, heldByOthersPrev, config, !isMatchdayFinished)
 
     jugadores.forEach(j => {
       if (j.is_starter && sanctionResult.zeroedPlayers.has(j.id)) {
-        j.originalPuntos = j.puntos
-        j.puntos = 0
         j.sanctionReason = sanctionResult.zeroedPlayers.get(j.id)
+        if (isMatchdayFinished) {
+          j.originalPuntos = j.puntos
+          j.puntos = 0
+        }
       }
     })
 

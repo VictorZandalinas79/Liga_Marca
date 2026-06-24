@@ -34,8 +34,8 @@ export async function GET() {
         return {
           id: `penalty-${p.id}`,
           type: 'players_locked',
-          title: `Multa J${p.matchday}: ${name}`,
-          body: `${p.description} (${p.points > 0 ? `-${p.points} pts` : 'Pendiente'})`,
+          title: `Sanción Aplicada J${p.matchday}: ${name}`,
+          body: `${p.description} (Se restaron ${p.points} pts)`,
           created_at: new Date().toISOString(),
           read_at: null
         }
@@ -51,8 +51,8 @@ export async function GET() {
       liveNotifications = liveInfractions.map(inf => ({
         id: `live-inf-${inf.id}`,
         type: 'players_locked',
-        title: `Advertencia J${inf.matchday}: ${inf.full_name}`,
-        body: `${inf.description} (Pendiente de aplicar al empezar la jornada)`,
+        title: `Sanción en Juego J${inf.matchday}: ${inf.full_name}`,
+        body: `${inf.description} (Puntuarán 0 pts esta jornada)`,
         created_at: new Date().toISOString(),
         read_at: null
       }))

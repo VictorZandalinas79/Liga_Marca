@@ -24,6 +24,8 @@ interface Player {
   team_id?: string
   team?: { name: string; logo_url?: string }
   hasPlayed?: boolean
+  hasSubstitutionWarning?: boolean
+  hasMaxTeamWarning?: boolean
   replacedPlayer?: { id: string; short_name?: string; first_name?: string; photo?: string } | null
   originalPuntos?: number
   sanctionReason?: string
@@ -45,6 +47,8 @@ interface UserTeam {
   valor_total: number
   posicion?: number
   changes: ChangeItem[]
+  hasBudgetWarning?: boolean
+  hasTacticsWarning?: boolean
 }
 
 interface PlayerScoreItem {
@@ -108,7 +112,13 @@ export default function JornadaPage() {
       scoresData = data
     }
 
-    setModalPlayer({ ...(playerData || {}), ...(scoresData || {}) })
+    let sanctionReason: string | undefined
+    userTeams.forEach(team => {
+      const p = team.jugadores.find(j => j.id === playerId)
+      if (p?.sanctionReason) sanctionReason = p.sanctionReason
+    })
+
+    setModalPlayer({ ...(playerData || {}), ...(scoresData || {}), sanctionReason })
     setModalLoading(false)
   }
 
@@ -287,11 +297,17 @@ export default function JornadaPage() {
     })
 
     const prevStartersByTeam = new Map<string, string[]>()
+    const prevSquadByTeam = new Map<string, string[]>()
     prevAllData?.forEach(tp => {
-      if (!tp.is_starter) return
       if (tp.matchday !== latestMdPerTeam.get(tp.team_id)) return
-      if (!prevStartersByTeam.has(tp.team_id)) prevStartersByTeam.set(tp.team_id, [])
-      prevStartersByTeam.get(tp.team_id)!.push(tp.player_id)
+      
+      if (!prevSquadByTeam.has(tp.team_id)) prevSquadByTeam.set(tp.team_id, [])
+      prevSquadByTeam.get(tp.team_id)!.push(tp.player_id)
+      
+      if (tp.is_starter) {
+        if (!prevStartersByTeam.has(tp.team_id)) prevStartersByTeam.set(tp.team_id, [])
+        prevStartersByTeam.get(tp.team_id)!.push(tp.player_id)
+      }
     })
 
     // Equipos reales que ya han jugado en esta jornada
@@ -432,11 +448,13 @@ export default function JornadaPage() {
       })
 
       // 1. Build prevMine for this team
-      const prevMine = new Set<string>(prevStartersByTeam.get(ut.id) || [])
+      // prevMine is now used in applySanctionsToTeam, but it needs to be the WHOLE squad.
+      // So we will define prevMine later based on prevSquadByTeam.
 
       // 2. Build heldByOthersPrev for this matchday
+      // heldByOthersPrev based on WHOLE squad
       const heldByOthersPrev = new Map<string, string[]>()
-      for (const [otherTeamId, pids] of prevStartersByTeam.entries()) {
+      for (const [otherTeamId, pids] of prevSquadByTeam.entries()) {
         if (otherTeamId !== ut.id) {
           const otherTeam = userTeamsData.find(t => t.id === otherTeamId)
           const otherProfile = profiles?.find(p => p.id === otherTeam?.user_id)
@@ -449,8 +467,10 @@ export default function JornadaPage() {
       }
 
       // 3. Apply sanctions
+      const isLiveMatchday = info ? info.live || (info.started && Date.now() < new Date(info.end_time).getTime() + MATCH_DURATION_MS) : false;
       const starters = jugadores.filter(j => j.is_starter)
-      const sanctionResult = applySanctionsToTeam(starters, prevMine, heldByOthersPrev, config)
+      const prevMine = new Set<string>(prevSquadByTeam.get(ut.id) || [])
+      const sanctionResult = applySanctionsToTeam(starters, prevMine, heldByOthersPrev, config, isLiveMatchday)
 
       // 4. Update points and set sanctionReason
       jugadores.forEach(j => {
@@ -466,7 +486,7 @@ export default function JornadaPage() {
 
       // Emparejar cambios por posición: asignar replacedPlayer a cada jugador que entró
       const prevIds = prevStartersByTeam.get(ut.id) || []
-      const currentStarterIds = teamPlayers.filter(tp => tp.is_starter).map(tp => tp.player_id)
+      const currentStarterIds = starters.map(j => j.id)
       const inIds = currentStarterIds.filter(id => !prevIds.includes(id))
       const outIds = prevIds.filter(id => !currentStarterIds.includes(id))
 
@@ -481,10 +501,56 @@ export default function JornadaPage() {
       inIds.forEach(inId => {
         const pos = posLabel(allPlayersById.get(inId)?.position || '')
         const available = (outByPos[pos] || []).find(outId => !usedOutIds.has(outId))
-        if (available) {
-          usedOutIds.add(available)
-          const jug = jugadores.find(j => j.id === inId)
-          if (jug) jug.replacedPlayer = allPlayersById.get(available) || null
+        const jug = jugadores.find(j => j.id === inId)
+        if (jug) {
+          if (available) {
+            usedOutIds.add(available)
+            jug.replacedPlayer = allPlayersById.get(available) || null
+          }
+          if (inIds.length > 3) {
+            jug.hasSubstitutionWarning = true
+          }
+        }
+      })
+
+      // Validar Presupuesto
+      const valor_starters = starters.reduce((sum, p) => sum + (p.valor || 0), 0)
+      const hasBudgetWarning = valor_starters > config.budget_limit
+
+      // Validar Táctica
+      const counts = { GK: 0, DEF: 0, MID: 0, FWD: 0 }
+      starters.forEach(p => {
+        const posLower = (p.position || '').toLowerCase()
+        let code = 'MID'
+        if (posLower.includes('goalkeeper') || posLower === 'gk') code = 'GK'
+        else if (posLower.includes('defender') || posLower === 'def') code = 'DEF'
+        else if (posLower.includes('midfielder') || posLower === 'mid') code = 'MID'
+        else if (posLower.includes('forward') || posLower === 'fwd') code = 'FWD'
+        counts[code as keyof typeof counts] = (counts[code as keyof typeof counts] || 0) + 1
+      })
+      const validFormations = config.formations.map(f => {
+        const parts = f.split('-').map(n => parseInt(n.trim(), 10))
+        return { defenders: parts[0], midfielders: parts[1], forwards: parts[2] }
+      })
+      const isFormationValid = counts.GK === 1 && validFormations.some(f => 
+        f.defenders === counts.DEF && f.midfielders === counts.MID && f.forwards === counts.FWD
+      )
+      const hasTacticsWarning = !isFormationValid
+
+      // Validar Max Jugadores por Equipo
+      const teamCounts = new Map<string, number>()
+      starters.forEach(p => {
+        if (p.team_id) {
+          teamCounts.set(p.team_id, (teamCounts.get(p.team_id) || 0) + 1)
+        }
+      })
+      teamCounts.forEach((count, tId) => {
+        if (count > config.max_players_per_team) {
+          jugadores.forEach(j => {
+            if (j.is_starter && j.team_id === tId) {
+              j.hasMaxTeamWarning = true
+            }
+          })
         }
       })
 
@@ -498,6 +564,8 @@ export default function JornadaPage() {
         puntos_totales,
         valor_total,
         changes: [],
+        hasBudgetWarning,
+        hasTacticsWarning,
       })
     }
 
@@ -960,12 +1028,12 @@ export default function JornadaPage() {
                   <div className="flex items-center justify-center gap-6">
                     <div className="text-center">
                       <p className="text-xs text-slate-400">Sistema</p>
-                      <p className="text-sm font-mono font-bold text-slate-200">{getFormacion(team.jugadores)}</p>
+                      <p className={`text-sm font-mono font-bold ${team.hasTacticsWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{getFormacion(team.jugadores)}</p>
                     </div>
                     <div className="w-px h-8 bg-slate-600" />
                     <div className="text-center">
                       <p className="text-xs text-slate-400">Valor</p>
-                      <p className="text-base font-bold text-slate-200">{fmtValor(team.valor_total)}</p>
+                      <p className={`text-base font-bold ${team.hasBudgetWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{fmtValor(team.valor_total)}</p>
                     </div>
                     <div className="w-px h-8 bg-slate-600" />
                     <div className="text-center">
@@ -992,7 +1060,7 @@ export default function JornadaPage() {
                               const isMatch = matchSet.has(matchKey)
                               const isActive = matchKey === activeMatchKey
 
-                              const isPenalized = matchdayInfractions.some((inf: any) => {
+                              const isPenalized = !!player.sanctionReason || matchdayInfractions.some((inf: any) => {
                                 const matchesUser = inf.user_id === team.user_id || inf.team_id === team.team_id
                                 if (!matchesUser) return false
 
@@ -1021,6 +1089,8 @@ export default function JornadaPage() {
                                 className={`flex items-center justify-between py-1 px-2 rounded-lg transition-colors gap-2 cursor-pointer ${
                                   isPenalized
                                     ? 'bg-red-50 border-2 border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-md ring-2 ring-red-300'
+                                    : (player.hasSubstitutionWarning || player.hasMaxTeamWarning)
+                                    ? 'bg-red-100/50 border border-red-400 text-red-900 hover:bg-red-100'
                                     : isActive
                                     ? 'bg-orange-200 ring-2 ring-orange-400 hover:bg-orange-300'
                                     : isMatch
@@ -1039,6 +1109,8 @@ export default function JornadaPage() {
                                       className={`w-7 h-7 rounded-full object-cover border-2 shrink-0 ${
                                         isPenalized
                                           ? 'border-red-500 ring-2 ring-red-200'
+                                          : (player.hasSubstitutionWarning || player.hasMaxTeamWarning)
+                                          ? 'border-red-500'
                                           : player.hasPlayed
                                           ? 'border-slate-400 opacity-70'
                                           : 'border-slate-300'
@@ -1048,6 +1120,8 @@ export default function JornadaPage() {
                                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 shrink-0 ${
                                       isPenalized
                                         ? 'bg-red-100 text-red-700 border-red-500 ring-2 ring-red-200'
+                                        : (player.hasSubstitutionWarning || player.hasMaxTeamWarning)
+                                        ? 'bg-red-100 text-red-700 border-red-500'
                                         : player.hasPlayed
                                         ? 'bg-slate-400 text-slate-700 border-slate-500'
                                         : 'bg-slate-300 text-slate-600 border-slate-400'
@@ -1079,39 +1153,38 @@ export default function JornadaPage() {
                                         <span className="text-[10px] text-slate-400 font-medium">✓ jugó</span>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-2 mt-0 text-[10px] text-slate-500">
+                                    <div className="flex items-center gap-1.5 mt-0 text-[10px] text-slate-500 min-w-0">
                                       {player.team?.logo_url && (
-                                        <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain" />
+                                        <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain shrink-0" />
                                       )}
-                                      {player.team && <span className="truncate">{player.team.name}</span>}
-                                      <span className="text-slate-400">· {fmtValor(player.valor || 0)}</span>
+                                      <span className="truncate max-w-[60px]">{player.team?.name}</span>
+                                      <span className="text-slate-400 shrink-0">· {fmtValor(player.valor || 0)}</span>
+                                      
+                                      {player.replacedPlayer && (
+                                        <div className="flex items-center gap-1 shrink-0 ml-1">
+                                          <span className="text-slate-300">|</span>
+                                          <span className="text-[9px] text-slate-400">por</span>
+                                          {player.replacedPlayer.photo && (
+                                            <img src={player.replacedPlayer.photo} className="w-3 h-3 rounded-full object-cover border border-slate-300" alt="" />
+                                          )}
+                                          <span className="text-[9px] text-red-500 font-medium truncate max-w-[50px]">
+                                            {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
-                                    {player.replacedPlayer && (
-                                      <div className="flex items-center gap-1 mt-0.5">
-                                        <span className="text-[9px] text-slate-400">por</span>
-                                        {player.replacedPlayer.photo && (
-                                          <img src={player.replacedPlayer.photo} className="w-3.5 h-3.5 rounded-full object-cover border border-slate-300" alt="" />
-                                        )}
-                                        <span className="text-[9px] text-red-500 font-medium truncate">
-                                          {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
-                                        </span>
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
                                 <div className="text-right shrink-0">
                                   {player.sanctionReason ? (
-                                    <>
-                                      <span className="text-[10px] font-bold text-red-500 line-through mr-1 block">
+                                    <div className="flex flex-col items-end justify-center leading-none">
+                                      <span className="text-[10px] font-bold text-red-500 line-through mb-0.5">
                                         {Math.round((player.originalPuntos ?? 0) * 10) / 10} pts
                                       </span>
-                                      <span className="text-sm font-extrabold text-red-600 block">
+                                      <span className="text-sm font-extrabold text-red-600">
                                         0 pts
                                       </span>
-                                      <span className="text-[9px] text-red-600 font-semibold block max-w-[120px] leading-tight text-right italic">
-                                        {player.sanctionReason}
-                                      </span>
-                                    </>
+                                    </div>
                                   ) : (
                                     <div className="flex items-baseline justify-end">
                                       <span className={`text-sm font-bold ${player.hasPlayed ? 'text-slate-500' : 'text-emerald-600'}`}>
@@ -1199,14 +1272,25 @@ export default function JornadaPage() {
             <div className="p-4 sm:p-6">
               {modalLoading ? (
                 <div className="text-center py-12 text-slate-400">Cargando estadísticas...</div>
-              ) : !modalPlayer.total_points && modalPlayer.total_points !== 0 ? (
-                <div className="text-center py-12 text-slate-400">
-                  <TrendingUp className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p>Sin datos de partido para esta jornada</p>
-                </div>
               ) : (
                 <>
-                  {/* Resumen */}
+                  {modalPlayer.sanctionReason && (
+                    <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg mb-4 flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 shrink-0 text-red-500" />
+                      <div>
+                        <p className="font-bold text-sm">Sanción aplicada</p>
+                        <p className="text-sm">{modalPlayer.sanctionReason}</p>
+                      </div>
+                    </div>
+                  )}
+                  {!modalPlayer.total_points && modalPlayer.total_points !== 0 ? (
+                    <div className="text-center py-12 text-slate-400">
+                      <TrendingUp className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                      <p>Sin datos de partido para esta jornada</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Resumen */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                     <div className="bg-emerald-50 p-3 rounded-xl text-center">
                       <p className="text-emerald-700 text-xs font-semibold">Puntos</p>
@@ -1226,6 +1310,8 @@ export default function JornadaPage() {
                     </div>
                   </div>
                   <MetricBreakdown player={modalPlayer} />
+                    </>
+                  )}
                 </>
               )}
             </div>

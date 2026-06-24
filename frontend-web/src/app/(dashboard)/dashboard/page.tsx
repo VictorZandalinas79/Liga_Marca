@@ -39,60 +39,65 @@ const FORMATIONS: Formation[] = [
 function PitchPlayerCard({
   player,
   points,
+  replacedPlayer,
   getPositionColor,
   getPositionLabel,
 }: {
   player: Player
   points?: number
+  replacedPlayer?: Player
   getPositionColor: (pos: string) => string
   getPositionLabel: (pos: string) => string
 }) {
   const pts = points !== undefined ? Math.round(points * 10) / 10 : null
 
   return (
-    <div className="flex flex-col items-center p-1.5 rounded-xl bg-slate-900/70 backdrop-blur-xs border border-white/10 hover:bg-slate-900/80 transition-all w-[85px] sm:w-[105px] md:w-[115px] text-center shadow-lg relative shrink-0">
-      {pts !== null && (
-        <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-slate-950 font-extrabold text-[9px] sm:text-xs rounded-full min-w-5 h-5 flex items-center justify-center px-1 border border-slate-950 shadow-md z-10">
-          {pts >= 0 ? `+${pts}` : pts}
-        </span>
-      )}
+    <div className="flex flex-col items-center w-[58px] sm:w-[80px] text-center relative shrink-0 group">
       <div className="relative mb-1">
+        {/* Foto del jugador */}
         {player.photo ? (
           <img
             src={player.photo}
             alt={player.short_name || ''}
-            className="w-10 h-10 sm:w-14 sm:h-14 rounded-full object-cover border border-white/20 shadow-md"
+            className="w-10 h-10 sm:w-14 sm:h-14 rounded-full object-cover border-2 sm:border-[3px] border-white shadow-lg bg-slate-200"
           />
         ) : (
-          <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] sm:text-xs font-bold border border-white/20 shadow-md">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs sm:text-sm font-bold border-2 sm:border-[3px] border-white shadow-lg">
             {player.shirt_number || '?'}
           </div>
         )}
+        
+        {/* Escudo del equipo (abajo izquierda) */}
         {player.team?.logo_url && (
           <img
             src={player.team.logo_url}
             alt={player.team?.name || ''}
-            className="absolute -bottom-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white border border-white/20 shadow-md"
+            className="absolute -bottom-1 -left-2 w-5 h-5 sm:w-6 sm:h-6 object-contain drop-shadow-md bg-white rounded-full p-0.5"
           />
         )}
+
+        {/* Puntos (medio derecha) */}
+        {pts !== null && (
+          <div className="absolute top-1/2 -right-3 -translate-y-1/2 bg-white/90 backdrop-blur-sm text-emerald-700 font-extrabold text-[10px] sm:text-xs rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shadow-md border border-white">
+            {pts}
+          </div>
+        )}
+
+        {/* Precio (abajo derecha, en lugar de LIVE, desplazado) */}
+        <div className="absolute -bottom-1.5 -right-4 bg-white text-emerald-600 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-full shadow-md border border-emerald-100 min-w-[28px]">
+          {player.precio ? `${player.precio}M` : '-'}
+        </div>
       </div>
 
-      <p className="font-bold text-white text-[9px] sm:text-xs leading-tight w-full truncate mb-0.5">
+      {/* Nombre del jugador */}
+      <p className="font-extrabold text-white text-[10px] sm:text-[11px] leading-tight w-[120%] truncate drop-shadow-md mt-1">
         {player.short_name || player.first_name}
       </p>
-
-      <p className="text-[7px] sm:text-[9px] text-slate-300 truncate w-full mb-1">
-        {player.team?.name || '-'}
-      </p>
-
-      <div className="flex items-center justify-between w-full mt-auto pt-1 border-t border-white/5 gap-1">
-        <span className={`text-[7px] sm:text-[8px] px-1 py-0.5 rounded font-bold shrink-0 ${getPositionColor(player.position)}`}>
-          {getPositionLabel(player.position)}
-        </span>
-        <span className="text-[8px] sm:text-[10px] font-extrabold text-emerald-400 truncate">
-          {player.precio ? `${player.precio}M` : '-'}
-        </span>
-      </div>
+      {replacedPlayer && (
+        <p className="text-[8px] sm:text-[9px] text-red-300 font-bold truncate w-[130%] drop-shadow-md mt-0.5">
+          por {replacedPlayer.short_name || replacedPlayer.first_name}
+        </p>
+      )}
     </div>
   )
 }
@@ -816,14 +821,31 @@ export default function DashboardPage() {
     .sort((a, b) => {
       // Ordenar por posición: GK → DEF → MID → FWD
       const order = { GK: 0, DEF: 1, MID: 2, FWD: 3 }
-      const posA = getPositionCode(a.position)
-      const posB = getPositionCode(b.position)
-      if (order[posA as keyof typeof order] !== order[posB as keyof typeof order]) {
-        return order[posA as keyof typeof order] - order[posB as keyof typeof order]
+      const posA = getPositionCode(a.position) as keyof typeof order
+      const posB = getPositionCode(b.position) as keyof typeof order
+      if (order[posA] !== order[posB]) {
+        return (order[posA] ?? 4) - (order[posB] ?? 4)
       }
       // Dentro de cada posición, ordenar por orden de selección
       return selectedPlayers.indexOf(a.id) - selectedPlayers.indexOf(b.id)
     })
+
+  // Helper para buscar al jugador reemplazado (cambio)
+  const getReplacedPlayer = (inPlayerId: string): Player | undefined => {
+    const change = [...changeHistory].reverse().find(ch => ch.inId === inPlayerId)
+    if (change) return players.find(p => p.id === change.outId)
+    if (basePlayers.length > 0 && !basePlayers.includes(inPlayerId)) {
+      const player = players.find(p => p.id === inPlayerId)
+      const currentPosCode = player ? getPositionCode(player.position) : ''
+      const originalId = basePlayers.find(bpId => {
+        if (selectedPlayers.includes(bpId)) return false
+        const bp = players.find(p => p.id === bpId)
+        return bp && getPositionCode(bp.position) === currentPosCode
+      })
+      if (originalId) return players.find(p => p.id === originalId)
+    }
+    return undefined
+  }
 
   // Calcular estadísticas del equipo (solo visibles durante el tramo de jornada)
   const teamStats = {
@@ -1035,48 +1057,6 @@ export default function DashboardPage() {
         )
       )}
 
-      {/* Estadísticas del equipo */}
-      {isUnlockWindowOpen && (
-        <Card className="!bg-emerald-50 border-emerald-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Trophy className="w-4 h-4 text-emerald-600" />
-              <h3 className="text-sm font-bold text-emerald-900">Estadísticas de tu Equipo</h3>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-white rounded-lg p-3 border border-emerald-100">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Users className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-xs text-slate-500 font-medium">Sistema</span>
-                </div>
-                <p className="text-lg font-bold text-slate-900">{teamStats.formacion}</p>
-              </div>
-              <div className="bg-white rounded-lg p-3 border border-emerald-100">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-xs text-slate-500 font-medium">Valor Equipo</span>
-                </div>
-                <p className="text-lg font-bold text-slate-900">{teamStats.precioTotal > 0 ? `${teamStats.precioTotal}M` : '-'}</p>
-              </div>
-              <div className="bg-white rounded-lg p-3 border border-emerald-100">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Trophy className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-xs text-slate-500 font-medium">Puntos Totales</span>
-                </div>
-                <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.puntosTotales * 10) / 10}</p>
-              </div>
-              <div className="bg-white rounded-lg p-3 border border-emerald-100">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-xs text-slate-500 font-medium">Media por Jugador</span>
-                </div>
-                <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.mediaPuntos * 10) / 10}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Tus Sanciones (Jornada Activa) - Solo visible en jornada activa */}
       {isUnlockWindowOpen && (
         <Card className="!bg-red-50 border-red-200 mt-2 shadow-sm">
@@ -1134,19 +1114,25 @@ export default function DashboardPage() {
           </div>
 
           {isUnlockWindowOpen ? (
-            <div className="relative w-full bg-emerald-850 border border-emerald-700 rounded-xl overflow-hidden p-3 select-none min-h-[460px] sm:min-h-[520px] md:min-h-[580px] flex flex-col justify-between shadow-inner" style={{
-              backgroundImage: 'radial-gradient(circle, #065f46 0%, #064e3b 100%)',
-            }}>
+            <div className="flex flex-col lg:flex-row gap-4 items-start">
+              {/* Pitch */}
+              <div className="relative w-full lg:flex-1 max-w-md mx-auto bg-[#43a047] border-2 border-white rounded-xl overflow-hidden p-2 sm:p-3 select-none min-h-[480px] sm:min-h-[580px] flex flex-col justify-between shadow-2xl aspect-[3/4]" style={{
+                backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
+              }}>
               {/* Soccer field markings */}
-              <div className="absolute inset-0 border border-white/10 m-3 pointer-events-none rounded-lg">
+              <div className="absolute inset-0 border-2 border-white/40 m-4 pointer-events-none rounded-sm">
                 {/* Center Line */}
-                <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-white/10 -translate-y-1/2"></div>
+                <div className="absolute top-1/2 left-0 right-0 h-[2px] bg-white/40 -translate-y-1/2"></div>
                 {/* Center Circle */}
-                <div className="absolute top-1/2 left-1/2 w-20 h-20 sm:w-24 sm:h-24 border border-white/10 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                <div className="absolute top-1/2 left-1/2 w-24 h-24 sm:w-32 sm:h-32 border-2 border-white/40 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                {/* Center dot */}
+                <div className="absolute top-1/2 left-1/2 w-2 h-2 bg-white/60 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
                 {/* Top Penalty Area */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-36 h-12 sm:w-44 sm:h-16 border-b border-x border-white/10"></div>
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-44 h-16 sm:w-56 sm:h-20 border-b-2 border-x-2 border-white/40"></div>
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-6 sm:w-24 sm:h-8 border-b-2 border-x-2 border-white/40"></div>
                 {/* Bottom Penalty Area */}
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-36 h-12 sm:w-44 sm:h-16 border-t border-x border-white/10"></div>
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-44 h-16 sm:w-56 sm:h-20 border-t-2 border-x-2 border-white/40"></div>
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-6 sm:w-24 sm:h-8 border-t-2 border-x-2 border-white/40"></div>
               </div>
 
               {/* Player rows (top-down: Delanteros -> Mediocampistas -> Defensas -> Porteros) */}
@@ -1154,7 +1140,7 @@ export default function DashboardPage() {
                 {/* Delanteros */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Delanteros</div>
@@ -1164,7 +1150,7 @@ export default function DashboardPage() {
                 {/* Mediocampistas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Centrocampistas</div>
@@ -1174,7 +1160,7 @@ export default function DashboardPage() {
                 {/* Defensas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Defensas</div>
@@ -1184,7 +1170,7 @@ export default function DashboardPage() {
                 {/* Portero */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Portero</div>
@@ -1192,6 +1178,49 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            {/* Estadísticas del equipo (al lado en PC, debajo en móvil) */}
+            <div className="w-full lg:w-64 shrink-0">
+              <Card className="!bg-emerald-50 border-emerald-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Trophy className="w-4 h-4 text-emerald-600" />
+                    <h3 className="text-sm font-bold text-emerald-900">Estadísticas de tu Equipo</h3>
+                  </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
+                    <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Users className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-xs text-slate-500 font-medium">Sistema</span>
+                      </div>
+                      <p className="text-lg font-bold text-slate-900">{teamStats.formacion}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-xs text-slate-500 font-medium">Valor Equipo</span>
+                      </div>
+                      <p className="text-lg font-bold text-slate-900">{teamStats.precioTotal > 0 ? `${teamStats.precioTotal}M` : '-'}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Trophy className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-xs text-slate-500 font-medium">Puntos Totales</span>
+                      </div>
+                      <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.puntosTotales * 10) / 10}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-xs text-slate-500 font-medium">Media por Jugador</span>
+                      </div>
+                      <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.mediaPuntos * 10) / 10}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
               {selectedPlayersData.map((player, idx) => {

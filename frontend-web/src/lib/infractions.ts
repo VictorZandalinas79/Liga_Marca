@@ -11,15 +11,7 @@ export interface Infraction {
 }
 
 export async function getCurrentMatchday(supabase: SupabaseClient): Promise<number> {
-  // 1. Intentar obtener de game_settings
-  const { data: settings } = await supabase
-    .from('game_settings')
-    .select('current_matchday')
-    .limit(1)
-    .maybeSingle()
-  if (settings?.current_matchday) {
-    return settings.current_matchday
-  }
+
 
   // 2. Si no, calcular dinámicamente usando las fechas de fixtures y league_config (como useMatchdayLock)
   const { data: cfg } = await supabase
@@ -265,7 +257,8 @@ export function applySanctionsToTeam(
   starters: any[],
   prevMine: Set<string>,
   heldByOthersPrev: Map<string, string[]>,
-  config: { budget_limit: number; max_players_per_team: number; formations: string[] }
+  config: { budget_limit: number; max_players_per_team: number; formations: string[] },
+  isLive: boolean = false
 ): PlayerSanctionResult {
   const zeroedPlayers = new Map<string, string>()
 
@@ -313,110 +306,116 @@ export function applySanctionsToTeam(
       const ownersStr = owners.join(', ')
       const reason = `Exclusividad: pertenece a ${ownersStr}`
       zero([offender.id], reason)
-      if (rest) {
+      if (rest && !isLive) {
         zero([rest.id], `${reason} (Mejor del resto)`)
       }
     }
   })
 
   // 2) Max players per team
-  const realTeamCount = new Map<string, number>()
-  starters.forEach(p => {
-    if (p.team_id) {
-      realTeamCount.set(p.team_id, (realTeamCount.get(p.team_id) || 0) + 1)
-    }
-  })
-
-  for (const [rtId, count] of realTeamCount.entries()) {
-    if (count > config.max_players_per_team) {
-      const teamPlayers = starters.filter(p => p.team_id === rtId)
-      const excludeMap = new Map<string, boolean>()
-      const bestOfLineup = bestPlayer(starters, excludeMap)
-      
-      const teamName = teamPlayers[0]?.team?.name || 'equipo'
-      const reason = `Exceso jugadores de ${teamName} (${count}/${config.max_players_per_team})`
-      
-      if (bestOfLineup) {
-        zero([bestOfLineup.id], reason)
+  if (!isLive) {
+    const realTeamCount = new Map<string, number>()
+    starters.forEach(p => {
+      if (p.team_id) {
+        realTeamCount.set(p.team_id, (realTeamCount.get(p.team_id) || 0) + 1)
       }
-      
-      const introduced = teamPlayers.filter(p => !prevMine.has(p.id))
-      const excludeWithBest = new Map<string, boolean>()
-      if (bestOfLineup) excludeWithBest.set(bestOfLineup.id, true)
-      const bestIntroduced = bestPlayer(introduced, excludeWithBest)
-      if (bestIntroduced) {
-        zero([bestIntroduced.id], `${reason} (Fichaje)`)
+    })
+
+    for (const [rtId, count] of realTeamCount.entries()) {
+      if (count > config.max_players_per_team) {
+        const teamPlayers = starters.filter(p => p.team_id === rtId)
+        const excludeMap = new Map<string, boolean>()
+        const bestOfLineup = bestPlayer(starters, excludeMap)
+        
+        const teamName = teamPlayers[0]?.team?.name || 'equipo'
+        const reason = `Exceso jugadores de ${teamName} (${count}/${config.max_players_per_team})`
+        
+        if (bestOfLineup) {
+          zero([bestOfLineup.id], reason)
+        }
+        
+        const introduced = teamPlayers.filter(p => !prevMine.has(p.id))
+        const excludeWithBest = new Map<string, boolean>()
+        if (bestOfLineup) excludeWithBest.set(bestOfLineup.id, true)
+        const bestIntroduced = bestPlayer(introduced, excludeWithBest)
+        if (bestIntroduced) {
+          zero([bestIntroduced.id], `${reason} (Fichaje)`)
+        }
       }
     }
   }
 
   // 3) Budget limit
-  const totalBudget = starters.reduce((sum, p) => sum + (p.valor ?? 0), 0)
-  if (totalBudget > config.budget_limit) {
-    const first = bestPlayer(starters, new Map())
-    if (first) {
-      const reason = `Presupuesto superado (${totalBudget}M/${config.budget_limit}M)`
-      zero([first.id], reason)
-      const excludeFirst = new Map<string, boolean>([[first.id, true]])
-      const second = bestPlayer(starters, excludeFirst)
-      if (second) {
-        zero([second.id], reason)
+  if (!isLive) {
+    const totalBudget = starters.reduce((sum, p) => sum + (p.valor ?? 0), 0)
+    if (totalBudget > config.budget_limit) {
+      const first = bestPlayer(starters, new Map())
+      if (first) {
+        const reason = `Presupuesto superado (${totalBudget}M/${config.budget_limit}M)`
+        zero([first.id], reason)
+        const excludeFirst = new Map<string, boolean>([[first.id, true]])
+        const second = bestPlayer(starters, excludeFirst)
+        if (second) {
+          zero([second.id], reason)
+        }
       }
     }
   }
 
   // 4) Táctica incorrecta
-  const counts = { GK: 0, DEF: 0, MID: 0, FWD: 0 }
-  starters.forEach(p => {
-    const code = getPositionCode(p.position) as keyof typeof counts
-    counts[code] = (counts[code] || 0) + 1
-  })
+  if (!isLive) {
+    const counts = { GK: 0, DEF: 0, MID: 0, FWD: 0 }
+    starters.forEach(p => {
+      const code = getPositionCode(p.position) as keyof typeof counts
+      counts[code] = (counts[code] || 0) + 1
+    })
 
-  const validFormations = config.formations.map(f => {
-    const parts = f.split('-').map(n => parseInt(n.trim(), 10))
-    return { defenders: parts[0], midfielders: parts[1], forwards: parts[2] }
-  })
+    const validFormations = config.formations.map(f => {
+      const parts = f.split('-').map(n => parseInt(n.trim(), 10))
+      return { defenders: parts[0], midfielders: parts[1], forwards: parts[2] }
+    })
 
-  const isFormationValid = counts.GK === 1 && validFormations.some(f => 
-    f.defenders === counts.DEF && f.midfielders === counts.MID && f.forwards === counts.FWD
-  )
+    const isFormationValid = counts.GK === 1 && validFormations.some(f => 
+      f.defenders === counts.DEF && f.midfielders === counts.MID && f.forwards === counts.FWD
+    )
 
-  if (!isFormationValid) {
-    const maxDef = Math.max(...validFormations.map(f => f.defenders))
-    const maxMid = Math.max(...validFormations.map(f => f.midfielders))
-    const maxFwd = Math.max(...validFormations.map(f => f.forwards))
-    const posMax = { DEF: maxDef, MID: maxMid, FWD: maxFwd }
+    if (!isFormationValid) {
+      const maxDef = Math.max(...validFormations.map(f => f.defenders))
+      const maxMid = Math.max(...validFormations.map(f => f.midfielders))
+      const maxFwd = Math.max(...validFormations.map(f => f.forwards))
+      const posMax = { DEF: maxDef, MID: maxMid, FWD: maxFwd }
 
-    let offendingPos: 'DEF' | 'MID' | 'FWD' | null = null
-    for (const pos of ['DEF', 'MID', 'FWD'] as const) {
-      if (counts[pos] > posMax[pos]) {
-        offendingPos = pos
-        break
-      }
-    }
-
-    const tReason = `Táctica incorrecta (${counts.GK}-${counts.DEF}-${counts.MID}-${counts.FWD})`
-
-    if (offendingPos) {
-      const inPos = starters.filter(p => getPositionCode(p.position) === offendingPos)
-      const introduced = inPos.filter(p => !prevMine.has(p.id))
-      const worstIntro = bestPlayer(introduced.length > 0 ? introduced : inPos, new Map())
-      if (worstIntro) {
-        zero([worstIntro.id], tReason)
-        const excludeWorst = new Map<string, boolean>([[worstIntro.id, true]])
-        const rest = bestPlayer(starters.filter(p => p.id !== worstIntro.id), excludeWorst)
-        if (rest) {
-          zero([rest.id], tReason)
+      let offendingPos: 'DEF' | 'MID' | 'FWD' | null = null
+      for (const pos of ['DEF', 'MID', 'FWD'] as const) {
+        if (counts[pos] > posMax[pos]) {
+          offendingPos = pos
+          break
         }
       }
-    } else {
-      const first = bestPlayer(starters, new Map())
-      if (first) {
-        zero([first.id], tReason)
-        const excludeFirst = new Map<string, boolean>([[first.id, true]])
-        const rest = bestPlayer(starters.filter(p => p.id !== first.id), excludeFirst)
-        if (rest) {
-          zero([rest.id], tReason)
+
+      const tReason = `Táctica incorrecta (${counts.GK}-${counts.DEF}-${counts.MID}-${counts.FWD})`
+
+      if (offendingPos) {
+        const inPos = starters.filter(p => getPositionCode(p.position) === offendingPos)
+        const introduced = inPos.filter(p => !prevMine.has(p.id))
+        const worstIntro = bestPlayer(introduced.length > 0 ? introduced : inPos, new Map())
+        if (worstIntro) {
+          zero([worstIntro.id], tReason)
+          const excludeWorst = new Map<string, boolean>([[worstIntro.id, true]])
+          const rest = bestPlayer(starters.filter(p => p.id !== worstIntro.id), excludeWorst)
+          if (rest) {
+            zero([rest.id], tReason)
+          }
+        }
+      } else {
+        const first = bestPlayer(starters, new Map())
+        if (first) {
+          zero([first.id], tReason)
+          const excludeFirst = new Map<string, boolean>([[first.id, true]])
+          const rest = bestPlayer(starters.filter(p => p.id !== first.id), excludeFirst)
+          if (rest) {
+            zero([rest.id], tReason)
+          }
         }
       }
     }
