@@ -55,7 +55,15 @@ export function NotificationBell() {
           return n
         })
 
-        setNotifications(processed)
+        // Filtrar notificaciones para mostrar solo las de los últimos 7 días
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        
+        const recentNotifications = processed.filter((n: Notification) => {
+          return new Date(n.created_at) >= sevenDaysAgo
+        })
+
+        setNotifications(recentNotifications)
       }
     } catch {}
   }
