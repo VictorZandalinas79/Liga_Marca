@@ -178,11 +178,11 @@ def compute_team_sanctions(lineup, prev_mine, held_by_others_prev, points, playe
     for rt, count in real_team_count.items():
         if count > cfg["max_players_per_team"]:
             team_players = [p for p in lineup if player_meta.get(p, {}).get("real_team") == rt]
-            best_of_team = best_player(team_players, zeroed, points)
+            best_of_lineup = best_player(lineup, zeroed, points)
             introduced = [p for p in team_players if p not in prev_mine]
-            exclude = zeroed | ({best_of_team} if best_of_team else set())
+            exclude = zeroed | ({best_of_lineup} if best_of_lineup else set())
             best_introduced = best_player(introduced, exclude, points)
-            zero([best_of_team, best_introduced],
+            zero([best_of_lineup, best_introduced],
                  f"Más de {cfg['max_players_per_team']} jugadores de un mismo equipo ({count})")
 
     # 3) Superado el presupuesto

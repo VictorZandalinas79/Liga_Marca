@@ -6,6 +6,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle } from 'lucide-react'
 import { MetricBreakdown } from '@/components/metric-breakdown'
+import { applySanctionsToTeam } from '@/lib/infractions'
+import { useLeagueConfig } from '@/lib/league-config'
 
 interface Player {
   id: string
@@ -23,6 +25,8 @@ interface Player {
   team?: { name: string; logo_url?: string }
   hasPlayed?: boolean
   replacedPlayer?: { id: string; short_name?: string; first_name?: string; photo?: string } | null
+  originalPuntos?: number
+  sanctionReason?: string
 }
 
 interface ChangeItem {
@@ -68,6 +72,7 @@ const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
 const LOCK_LEAD_MS = 60 * 60 * 1000
 
 export default function JornadaPage() {
+  const config = useLeagueConfig()
   const [loading, setLoading] = useState(true)
   const [selectedMatchday, setSelectedMatchday] = useState<number>(0)
   const [availableMatchdays, setAvailableMatchdays] = useState<MatchdayInfo[]>([])
@@ -426,7 +431,37 @@ export default function JornadaPage() {
         return (b.puntos || 0) - (a.puntos || 0)
       })
 
-      const puntos_totales = jugadores.reduce((sum, p) => sum + (p.puntos || 0), 0)
+      // 1. Build prevMine for this team
+      const prevMine = new Set<string>(prevStartersByTeam.get(ut.id) || [])
+
+      // 2. Build heldByOthersPrev for this matchday
+      const heldByOthersPrev = new Map<string, string[]>()
+      for (const [otherTeamId, pids] of prevStartersByTeam.entries()) {
+        if (otherTeamId !== ut.id) {
+          const otherTeam = userTeamsData.find(t => t.id === otherTeamId)
+          const otherProfile = profiles?.find(p => p.id === otherTeam?.user_id)
+          const otherName = otherProfile?.full_name || otherProfile?.email?.split('@')[0] || 'otro usuario'
+          pids.forEach(pid => {
+            if (!heldByOthersPrev.has(pid)) heldByOthersPrev.set(pid, [])
+            heldByOthersPrev.get(pid)!.push(otherName)
+          })
+        }
+      }
+
+      // 3. Apply sanctions
+      const starters = jugadores.filter(j => j.is_starter)
+      const sanctionResult = applySanctionsToTeam(starters, prevMine, heldByOthersPrev, config)
+
+      // 4. Update points and set sanctionReason
+      jugadores.forEach(j => {
+        if (j.is_starter && sanctionResult.zeroedPlayers.has(j.id)) {
+          j.originalPuntos = j.puntos
+          j.puntos = 0
+          j.sanctionReason = sanctionResult.zeroedPlayers.get(j.id)
+        }
+      })
+
+      const puntos_totales = jugadores.reduce((sum, p) => sum + Math.round((p.puntos || 0) * 10) / 10, 0)
       const valor_total = jugadores.reduce((sum, p) => sum + (p.valor || 0), 0)
 
       // Emparejar cambios por posición: asignar replacedPlayer a cada jugador que entró
@@ -1076,10 +1111,26 @@ export default function JornadaPage() {
                                   </div>
                                 </div>
                                 <div className="text-right shrink-0">
-                                  <span className={`text-lg font-bold ${player.hasPlayed ? 'text-slate-500' : 'text-emerald-600'}`}>
-                                    {Math.round((player.puntos ?? 0) * 10) / 10}
-                                  </span>
-                                  <p className="text-xs text-slate-500">puntos</p>
+                                  {player.sanctionReason ? (
+                                    <>
+                                      <span className="text-xs font-bold text-red-500 line-through mr-1 block">
+                                        {Math.round((player.originalPuntos ?? 0) * 10) / 10} pts
+                                      </span>
+                                      <span className="text-lg font-extrabold text-red-600 block">
+                                        0 pts
+                                      </span>
+                                      <span className="text-[10px] text-red-600 font-semibold block max-w-[150px] leading-tight text-right italic">
+                                        {player.sanctionReason}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className={`text-lg font-bold ${player.hasPlayed ? 'text-slate-500' : 'text-emerald-600'}`}>
+                                        {Math.round((player.puntos ?? 0) * 10) / 10}
+                                      </span>
+                                      <p className="text-xs text-slate-500">puntos</p>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             )})}

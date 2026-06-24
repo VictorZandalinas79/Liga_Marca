@@ -4,7 +4,9 @@ import { useEffect, useState, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, TrendingUp, TrendingDown, Minus, Medal, ArrowUpDown, Target, CheckCircle, Users } from 'lucide-react'
+import { Trophy, TrendingUp, TrendingDown, Minus, Medal, ArrowUpDown, Target, CheckCircle, Users, AlertTriangle } from 'lucide-react'
+import { applySanctionsToTeam } from '@/lib/infractions'
+import { useLeagueConfig } from '@/lib/league-config'
 
 interface UserStanding {
   user_id: string
@@ -26,6 +28,7 @@ interface UserStanding {
   bottom_finishes: number
   best_matchday_points: number
   best_matchday: number
+  sanctioned_matchdays: number
 }
 
 interface MatchdayStatus {
@@ -33,13 +36,15 @@ interface MatchdayStatus {
   is_open: boolean
 }
 
-type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_avg' | 'best_change_score' | 'change_impact_points' | 'podium_finishes' | 'bottom_finishes'
+type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_avg' | 'best_change_score' | 'change_impact_points' | 'podium_finishes' | 'bottom_finishes' | 'sanctioned_matchdays'
 type SortOrder = 'asc' | 'desc'
 
 export default function ClasificacionPage() {
+  const config = useLeagueConfig()
   const [standings, setStandings] = useState<UserStanding[]>([])
   const [loading, setLoading] = useState(true)
   const [currentMatchday, setCurrentMatchday] = useState<number>(1)
+  const [lastPlayedMatchday, setLastPlayedMatchday] = useState<number>(1)
   const [sortField, setSortField] = useState<SortField>('total_points')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [tick, setTick] = useState(0)
@@ -83,6 +88,21 @@ export default function ClasificacionPage() {
         userTeamsMap.get(ut.user_id)!.push({ teamId: ut.id, teamName: ut.name })
       }
 
+      const userIds = Array.from(userTeamsMap.keys())
+      const { data: usersData } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds)
+
+      const usersMap = new Map(usersData?.map(u => [u.id, u]) || [])
+
+      const teamIdToUserName = new Map<string, string>()
+      for (const ut of userTeamsData) {
+        const user = usersMap.get(ut.user_id)
+        const name = user?.full_name || user?.email?.split('@')[0] || 'Usuario'
+        teamIdToUserName.set(ut.id, name)
+      }
+
       const teamPlayers: { team_id: string; player_id: string; is_starter: boolean; is_captain: boolean; matchday: number }[] = []
       {
         const pageSize = 1000
@@ -111,6 +131,26 @@ export default function ClasificacionPage() {
 
       const playerIds = [...new Set(teamPlayers.map(tp => tp.player_id))]
       const playerIdSet = new Set(playerIds)
+
+      // Cargar info de jugadores reales y sus equipos para aplicar las sanciones
+      const { data: playersData } = await supabase
+        .from('players')
+        .select('id, position, team_id, precio, short_name, first_name')
+        .in('id', playerIds)
+      const playersInfoMap = new Map(playersData?.map(p => [p.id, p]) || [])
+
+      const { data: realTeams } = await supabase
+        .from('real_teams')
+        .select('id, name')
+      const realTeamNames = new Map(realTeams?.map(rt => [rt.id, rt.name]) || [])
+
+      // Obtener config de la liga desde Supabase
+      const { data: configData } = await supabase.from('league_config').select('*').eq('id', 1).maybeSingle()
+      const leagueConfig = {
+        budget_limit: configData?.budget_limit ?? 275,
+        max_players_per_team: configData?.max_players_per_team ?? 4,
+        formations: configData?.formations ?? ['3-5-2', '3-4-3', '4-4-2', '4-3-3', '4-5-1', '5-4-1', '5-3-2']
+      }
 
       const { data: fixturesData } = await supabase
         .from('fixtures')
@@ -195,6 +235,9 @@ export default function ClasificacionPage() {
       }
       const sortedPlayedMatchdays = Array.from(playedMatchdays).sort((a, b) => a - b)
 
+      const maxPlayed = sortedPlayedMatchdays.length > 0 ? sortedPlayedMatchdays[sortedPlayedMatchdays.length - 1] : 1
+      setLastPlayedMatchday(maxPlayed)
+
       // Auto-duplicar alineaciones para jornadas jugadas donde un equipo no tiene entradas.
       // Así los usuarios que no hicieron cambios tendrán sus 11 jugadores persistidos.
       for (const [teamId, matchdays] of teamPlayersByMatchday.entries()) {
@@ -237,77 +280,196 @@ export default function ClasificacionPage() {
       }
 
       const userPointsByMatchday = new Map<string, Map<number, number>>()
-      const userChangesByMatchday = new Map<string, Map<number, { total: number; successful: number }>>()
-      // Jornadas jugadas donde el usuario tiene alineación (directa o heredada)
+      const userChangesCount = new Map<string, number>()
+      const userChangesPointsDiff = new Map<string, number>()
+      const userSanctionedMatchdays = new Map<string, Set<number>>()
       const userMatchdaysFromTeamPlayers = new Map<string, Set<number>>()
 
-      for (const [userId, teams] of userTeamsMap.entries()) {
-        if (!userPointsByMatchday.has(userId)) {
-          userPointsByMatchday.set(userId, new Map())
-        }
-        if (!userChangesByMatchday.has(userId)) {
-          userChangesByMatchday.set(userId, new Map())
-        }
-        if (!userMatchdaysFromTeamPlayers.has(userId)) {
-          userMatchdaysFromTeamPlayers.set(userId, new Set())
-        }
+      // Inicializar prevStartersByTeam para cada equipo
+      let prevStartersByTeam = new Map<string, string[]>()
 
-        for (const team of teams) {
-          const teamMatchdays = teamPlayersByMatchday.get(team.teamId)
-          if (teamMatchdays) {
-            // Recorrer SOLO las jornadas JUGADAS y heredar la alineación más reciente
-            for (const md of sortedPlayedMatchdays) {
-              // Buscar la alineación guardada más reciente <= esta jornada
-              let activeMd = -1
-              for (const savedMd of teamMatchdays.keys()) {
-                if (savedMd <= md && savedMd > activeMd) {
-                  activeMd = savedMd
-                }
-              }
+      const posLabel = (pos: string) => {
+        const l = (pos || '').toLowerCase()
+        if (l.includes('goalkeeper') || l === 'gk') return 'POR'
+        if (l.includes('defender') || l === 'def') return 'DEF'
+        if (l.includes('midfielder') || l === 'mid') return 'MED'
+        return 'DEL'
+      }
 
-              if (activeMd === -1) continue // No hay alineación guardada aún
-
-              const players = teamMatchdays.get(activeMd) || []
-
-              userMatchdaysFromTeamPlayers.get(userId)!.add(md)
-
-              if (!userPointsByMatchday.get(userId)!.has(md)) {
-                userPointsByMatchday.get(userId)!.set(md, 0)
-              }
-              if (!userChangesByMatchday.get(userId)!.has(md)) {
-                userChangesByMatchday.get(userId)!.set(md, { total: 0, successful: 0 })
-              }
-
-              for (const tp of players) {
-                const points = playerPointsByMatchday.get(tp.player_id)?.get(md) ?? 0
-                const current = userPointsByMatchday.get(userId)!.get(md)!
-                userPointsByMatchday.get(userId)!.set(md, current + points)
-
-                if (!tp.is_starter) {
-                  const changes = userChangesByMatchday.get(userId)!.get(md)!
-                  changes.total += 1
-                  if (points > 0) {
-                    changes.successful += 1
-                  }
-                  userChangesByMatchday.get(userId)!.set(md, changes)
-                }
-              }
+      for (const md of sortedPlayedMatchdays) {
+        // Construir heldByOthersPrev para esta jornada `md`
+        const heldByOthersPrev = new Map<string, string[]>()
+        for (const [otherTeamId, pids] of prevStartersByTeam.entries()) {
+          const otherName = teamIdToUserName.get(otherTeamId) || 'otro usuario'
+          for (const pid of pids) {
+            if (!heldByOthersPrev.has(pid)) {
+              heldByOthersPrev.set(pid, [])
             }
+            heldByOthersPrev.get(pid)!.push(otherName)
           }
         }
+
+        const currentStartersByTeam = new Map<string, string[]>()
+
+        for (const [userId, teams] of userTeamsMap.entries()) {
+          if (!userPointsByMatchday.has(userId)) {
+            userPointsByMatchday.set(userId, new Map())
+          }
+          if (!userMatchdaysFromTeamPlayers.has(userId)) {
+            userMatchdaysFromTeamPlayers.set(userId, new Set())
+          }
+          if (!userSanctionedMatchdays.has(userId)) {
+            userSanctionedMatchdays.set(userId, new Set())
+          }
+
+          for (const team of teams) {
+            const teamMatchdays = teamPlayersByMatchday.get(team.teamId)
+            if (!teamMatchdays) continue
+
+            // Obtener alineación de esta jornada (directa o heredada localmente)
+            const players = teamMatchdays.get(md) || []
+            if (players.length === 0) continue
+
+            userMatchdaysFromTeamPlayers.get(userId)!.add(md)
+
+            if (!userPointsByMatchday.get(userId)!.has(md)) {
+              userPointsByMatchday.get(userId)!.set(md, 0)
+            }
+
+            const startersList: any[] = []
+            const subsList: any[] = []
+
+            for (const tp of players) {
+              const points = playerPointsByMatchday.get(tp.player_id)?.get(md) ?? 0
+              const pInfo = playersInfoMap.get(tp.player_id)
+              const teamNameStr = pInfo?.team_id ? realTeamNames.get(pInfo.team_id) : 'equipo'
+
+              const playerObj = {
+                id: tp.player_id,
+                puntos: points,
+                position: pInfo?.position || '',
+                team_id: pInfo?.team_id,
+                valor: pInfo?.precio ?? 0,
+                team: { name: teamNameStr },
+                is_starter: tp.is_starter,
+              }
+
+              if (tp.is_starter) {
+                startersList.push(playerObj)
+              } else {
+                subsList.push(playerObj)
+              }
+            }
+
+            // Guardar titulares en currentStartersByTeam para la próxima jornada
+            currentStartersByTeam.set(team.teamId, startersList.map(s => s.id))
+
+            // Aplicar sanciones
+            const prevMine = new Set<string>(prevStartersByTeam.get(team.teamId) || [])
+
+            // Excluir a este equipo de la lista de otros poseedores en el mapa de exclusividad
+            const teamHeldByOthersPrev = new Map<string, string[]>()
+            for (const [pid, owners] of heldByOthersPrev.entries()) {
+              const otherOwners = owners.filter(name => name !== teamIdToUserName.get(team.teamId))
+              if (otherOwners.length > 0) {
+                teamHeldByOthersPrev.set(pid, otherOwners)
+              }
+            }
+
+            const sanctionResult = applySanctionsToTeam(startersList, prevMine, teamHeldByOthersPrev, leagueConfig)
+
+            // Poner a 0 los puntos de los sancionados
+            startersList.forEach(s => {
+              if (sanctionResult.zeroedPlayers.has(s.id)) {
+                s.puntos = 0
+              }
+            })
+
+            // Registrar si hubo sanción en esta jornada
+            if (sanctionResult.zeroedPlayers.size > 0) {
+              userSanctionedMatchdays.get(userId)!.add(md)
+            }
+
+            // Calcular diferencia de puntos por cambios
+            const prevIds = prevStartersByTeam.get(team.teamId) || []
+            const currentStarterIds = startersList.map(s => s.id)
+
+            if (prevIds.length > 0) {
+              const inIds = currentStarterIds.filter(id => !prevIds.includes(id))
+              const outIds = prevIds.filter(id => !currentStarterIds.includes(id))
+
+              const outByPos: Record<string, string[]> = {}
+              outIds.forEach(id => {
+                const pInfo = playersInfoMap.get(id)
+                const pos = posLabel(pInfo?.position || '')
+                ;(outByPos[pos] ??= []).push(id)
+              })
+
+              const usedOutIds = new Set<string>()
+              inIds.forEach(inId => {
+                const pInfoIn = playersInfoMap.get(inId)
+                const pos = posLabel(pInfoIn?.position || '')
+                const availableOutId = (outByPos[pos] || []).find(outId => !usedOutIds.has(outId))
+                if (availableOutId) {
+                  usedOutIds.add(availableOutId)
+
+                  const starterObj = startersList.find(s => s.id === inId)
+                  const newPoints = starterObj ? starterObj.puntos : 0
+                  const oldPoints = playerPointsByMatchday.get(availableOutId)?.get(md) ?? 0
+                  const diff = newPoints - oldPoints
+
+                  userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + diff)
+                  userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + 1)
+                }
+              })
+            }
+
+            // Sumar puntos
+            const mdPoints = startersList.reduce((sum, s) => sum + s.puntos, 0)
+            const current = userPointsByMatchday.get(userId)!.get(md)!
+            userPointsByMatchday.get(userId)!.set(md, current + mdPoints)
+          }
+        }
+
+        prevStartersByTeam = currentStartersByTeam
       }
 
       // Restar las SANCIONES (tabla penalties) para mostrar puntos NETOS por jornada.
       const { data: penaltiesData } = await supabase
         .from('penalties')
-        .select('user_id, matchday, points')
+        .select('user_id, matchday, points, description')
+
+      const isLineupSanction = (desc: string): boolean => {
+        const d = (desc || '').toLowerCase()
+        return (
+          d.startsWith('jugador de') ||
+          d.startsWith('exclusividad') ||
+          d.startsWith('más de') ||
+          d.startsWith('exceso jugadores') ||
+          d.startsWith('presupuesto') ||
+          d.startsWith('táctica') ||
+          d.startsWith('tactica')
+        )
+      }
+
       for (const pen of penaltiesData || []) {
         const uid = pen.user_id as string | null
-        const md = pen.matchday as number
+        const md = typeof pen.matchday === 'string' ? parseInt(pen.matchday, 10) : (pen.matchday as number)
+        const pts = typeof pen.points === 'string' ? parseFloat(pen.points) : (pen.points as number)
         if (!uid || !md || md <= 0) continue
+
+        // Registrar la jornada sancionada en la base de datos para este usuario
+        if (!userSanctionedMatchdays.has(uid)) {
+          userSanctionedMatchdays.set(uid, new Set())
+        }
+        userSanctionedMatchdays.get(uid)!.add(md)
+
+        // Si es una sanción de alineación, la ignoramos porque ya la hemos calculado y restado en JS
+        if (isLineupSanction(pen.description || '')) continue
+
         const userMap = userPointsByMatchday.get(uid)
         if (!userMap || !userMap.has(md)) continue
-        userMap.set(md, (userMap.get(md) || 0) - (pen.points || 0))
+        userMap.set(md, (userMap.get(md) || 0) - (pts || 0))
       }
 
       const podiumCount = new Map<string, number>()
@@ -339,18 +501,11 @@ export default function ClasificacionPage() {
         }
       }
 
-      const userIds = Array.from(userTeamsMap.keys())
-      const { data: usersData } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .in('id', userIds)
 
-      const usersMap = new Map(usersData?.map(u => [u.id, u]) || [])
 
       const standingsData: UserStanding[] = userIds.map((userId) => {
         const user = usersMap.get(userId)
         const pointsMap = userPointsByMatchday.get(userId) || new Map()
-        const changesMap = userChangesByMatchday.get(userId) || new Map()
         // Jornadas reales que aparecen en team_players para este usuario
         const teamPlayerMatchdays = userMatchdaysFromTeamPlayers.get(userId) || new Set<number>()
 
@@ -391,23 +546,9 @@ export default function ClasificacionPage() {
           else if (slope < -2) last5Trend = 'down'
         }
 
-        let bestChangeScore = 0
-        let totalChanges = 0
-        let successfulChanges = 0
-        let changeImpactPoints = 0
-
-        for (const changes of changesMap.values()) {
-          const changeScore = changes.total > 0 ? Math.round((changes.successful / changes.total) * 100) : 0
-          if (changeScore > bestChangeScore) {
-            bestChangeScore = changeScore
-          }
-          totalChanges += changes.total
-          successfulChanges += changes.successful
-        }
-
-        if (successfulChanges > 0) {
-          changeImpactPoints = Math.round((successfulChanges / totalChanges) * 100)
-        }
+        const totalChanges = userChangesCount.get(userId) || 0
+        const changeImpactPoints = userChangesPointsDiff.get(userId) || 0
+        const sanctionedMatchdays = userSanctionedMatchdays.get(userId)?.size ?? 0
 
         // Calcular la mejor puntuación en una jornada
         let bestMatchdayPoints = 0
@@ -427,9 +568,9 @@ export default function ClasificacionPage() {
           matches_played: matchesPlayed,
           last_3_jornadas_avg: last3Avg,
           last_5_trend: last5Trend,
-          best_change_score: bestChangeScore,
+          best_change_score: 0,
           total_changes: totalChanges,
-          successful_changes: successfulChanges,
+          successful_changes: 0,
           change_impact_points: changeImpactPoints,
           podium_finishes: podiumCount.get(userId) || 0,
           bottom_finishes: bottomCount.get(userId) || 0,
@@ -439,6 +580,7 @@ export default function ClasificacionPage() {
           teams_count: userTeamsMap.get(userId)?.length || 0,
           best_matchday_points: bestMatchdayPoints,
           best_matchday: bestMatchday,
+          sanctioned_matchdays: sanctionedMatchdays,
         }
       })
 
@@ -494,8 +636,20 @@ export default function ClasificacionPage() {
 
     setExpandedUser(userId)
 
-    // Obtener la última jornada jugada o la actual
-    const targetMatchday = currentMatchday
+    // Determinar la jornada a mostrar: en marcha o última jugada
+    let targetMatchday = lastPlayedMatchday
+
+    // Verificar si hay partidos en marcha
+    const { data: fixturesInProgress } = await supabase
+      .from('fixtures')
+      .select('matchday')
+      .eq('status', 'in_progress')
+      .limit(1)
+      .maybeSingle()
+
+    if (fixturesInProgress?.matchday) {
+      targetMatchday = fixturesInProgress.matchday
+    }
 
     // Obtener los equipos del usuario
     const { data: userTeamsData } = await supabase
@@ -527,6 +681,7 @@ export default function ClasificacionPage() {
     }
 
     const playerIds = teamPlayersData.map(tp => tp.player_id)
+    const actualMatchday = teamPlayersData[0].matchday
 
     const { data: playersData } = await supabase
       .from('players')
@@ -540,27 +695,88 @@ export default function ClasificacionPage() {
       .in('id', realTeamIds)
     const teamsMap = new Map(teamsData?.map(t => [t.id, t]) || [])
 
-    // Obtener puntos de la jornada
-    let scoresData: { player_id: string; total_points: number }[] | null = null
-    const { data: scores } = await supabase
+    // Obtener los fixtures de la jornada para obtener puntos
+    const { data: fixturesForMatchday } = await supabase
+      .from('fixtures')
+      .select('id')
+      .eq('matchday', actualMatchday)
+
+    const fixtureIds = fixturesForMatchday?.map(f => f.id) || []
+
+    // Obtener puntos de la jornada específica (NO acumulativos)
+    // Primero por matchday, si no hay resultados, por fixture_id
+    let scores = null
+    const { data: scoresByMatchday } = await supabase
       .from('player_scores')
       .select('player_id, total_points')
-      .eq('matchday', targetMatchday)
+      .eq('matchday', actualMatchday)
       .in('player_id', playerIds)
-    scoresData = scores as { player_id: string; total_points: number }[] | null
 
-    if (!scoresData || scoresData.length === 0) {
-      const { data: fixtureScores } = await supabase
+    if (scoresByMatchday && scoresByMatchday.length > 0) {
+      scores = scoresByMatchday
+    } else if (fixtureIds.length > 0) {
+      const { data: scoresByFixture } = await supabase
         .from('player_scores')
         .select('player_id, total_points')
+        .in('fixture_id', fixtureIds)
         .in('player_id', playerIds)
-      scoresData = fixtureScores as { player_id: string; total_points: number }[] | null
+      scores = scoresByFixture
     }
 
     const playerPointsMap = new Map<string, number>()
-    scoresData?.forEach(s => {
+    scores?.forEach(s => {
       playerPointsMap.set(s.player_id, (playerPointsMap.get(s.player_id) || 0) + (s.total_points || 0))
     })
+
+    // Cargar team_players de la jornada anterior de todos los equipos
+    const prevMatchday = actualMatchday - 1
+    const prevStartersByTeam = new Map<string, string[]>()
+    const heldByOthersPrev = new Map<string, string[]>()
+
+    if (prevMatchday >= 1) {
+      // Obtener perfiles de usuario para los nombres
+      const { data: allProfiles } = await supabase.from('profiles').select('id, full_name, email')
+      const profileMap = new Map(allProfiles?.map(p => [p.id, p]) || [])
+
+      const { data: allTeams } = await supabase.from('user_teams').select('id, user_id')
+      const teamMap = new Map(allTeams?.map(t => [t.id, t]) || [])
+
+      const { data: prevStarters } = await supabase
+        .from('team_players')
+        .select('team_id, player_id, matchday')
+        .eq('is_starter', true)
+        .lte('matchday', prevMatchday)
+        .order('matchday', { ascending: false })
+
+      // Agrupar por team_id y quedarnos con el max matchday <= prevMatchday para cada equipo
+      const maxMdByTeam = new Map<string, number>()
+      prevStarters?.forEach(p => {
+        const curMax = maxMdByTeam.get(p.team_id)
+        if (curMax === undefined || p.matchday > curMax) {
+          maxMdByTeam.set(p.team_id, p.matchday)
+        }
+      })
+
+      prevStarters?.forEach(p => {
+        if (p.matchday === maxMdByTeam.get(p.team_id)) {
+          if (!prevStartersByTeam.has(p.team_id)) prevStartersByTeam.set(p.team_id, [])
+          prevStartersByTeam.get(p.team_id)!.push(p.player_id)
+        }
+      })
+
+      // Ahora calcular heldByOthersPrev para teamId
+      for (const [otherTeamId, pids] of prevStartersByTeam.entries()) {
+        if (otherTeamId !== teamId) {
+          const otherTeam = teamMap.get(otherTeamId)
+          const otherProfile = otherTeam ? profileMap.get(otherTeam.user_id) : null
+          const otherName = otherProfile?.full_name || otherProfile?.email?.split('@')[0] || 'otro usuario'
+          pids.forEach(pid => {
+            if (!heldByOthersPrev.has(pid)) heldByOthersPrev.set(pid, [])
+            heldByOthersPrev.get(pid)!.push(otherName)
+          })
+        }
+      }
+    }
 
     const jugadores = teamPlayersData.map(tp => {
       const p = playersData?.find(pl => pl.id === tp.player_id)
@@ -576,17 +792,56 @@ export default function ClasificacionPage() {
         valor: p?.precio ?? 0,
         is_starter: tp.is_starter || false,
         is_captain: tp.is_captain || false,
+        originalPuntos: playerPointsMap.get(tp.player_id) ?? 0,
+        sanctionReason: undefined as string | undefined,
       }
     })
 
+    const prevMine = new Set<string>(prevStartersByTeam.get(teamId) || [])
     const starters = jugadores.filter(j => j.is_starter)
-    const subs = jugadores.filter(j => !j.is_starter)
+    const sanctionResult = applySanctionsToTeam(starters, prevMine, heldByOthersPrev, config)
 
-    const totalPoints = jugadores.reduce((sum, j) => sum + j.puntos, 0)
+    jugadores.forEach(j => {
+      if (j.is_starter && sanctionResult.zeroedPlayers.has(j.id)) {
+        j.originalPuntos = j.puntos
+        j.puntos = 0
+        j.sanctionReason = sanctionResult.zeroedPlayers.get(j.id)
+      }
+    })
+
+    // Obtener multas (penalties) de la tabla penalties para esta jornada y usuario
+    const { data: penaltiesData } = await supabase
+      .from('penalties')
+      .select('points, description')
+      .eq('user_id', userId)
+      .eq('matchday', actualMatchday)
+
+    let totalPenalties = 0
+    penaltiesData?.forEach(p => {
+      const pts = typeof p.points === 'string' ? parseFloat(p.points) : (p.points as number)
+      totalPenalties += (pts || 0)
+    })
+
+    const startersAfterSanctions = jugadores.filter(j => j.is_starter)
+    const positionOrder: Record<string, number> = { POR: 0, DEF: 1, MED: 2, DEL: 3 }
+    const sortPlayersByPosition = (list: any[]) => {
+      list.sort((a, b) => {
+        const orderA = positionOrder[getPositionLabel(a.position)] ?? 99
+        const orderB = positionOrder[getPositionLabel(b.position)] ?? 99
+        if (orderA !== orderB) return orderA - orderB
+        return (b.puntos || 0) - (a.puntos || 0)
+      })
+    }
+    sortPlayersByPosition(startersAfterSanctions)
+
+    const subs = jugadores.filter(j => !j.is_starter)
+    sortPlayersByPosition(subs)
+
+    const totalPoints = jugadores.reduce((sum, j) => sum + Math.round((j.puntos || 0) * 10) / 10, 0) - totalPenalties
 
     setUserTeamData(prev => ({
       ...prev,
-      [userId]: { teamName, jugadores: starters, suplentes: subs, totalPoints }
+      [userId]: { teamName, jugadores: startersAfterSanctions, suplentes: subs, totalPoints, matchday: actualMatchday, penalties: totalPenalties }
     }))
 
     setTimeout(() => {
@@ -643,7 +898,7 @@ export default function ClasificacionPage() {
   const topChanges = [...standings].sort((a, b) => b.best_change_score - a.best_change_score)[0]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       {/* Cabecera */}
       <div className="flex items-center justify-between">
         <div>
@@ -668,10 +923,10 @@ export default function ClasificacionPage() {
             <table className="min-w-max w-full">
               <thead>
                 <tr className="border-b border-slate-700">
-                  <th className="text-left text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap">Pos</th>
-                  <th className="text-left text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap">Jugador</th>
+                  <th className="text-left text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap">Pos</th>
+                  <th className="text-left text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap">Jugador</th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('total_points')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -680,7 +935,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('average_points')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -689,7 +944,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('last_3_jornadas_avg')}
                     title="Promedio de las últimas 3 jornadas"
                   >
@@ -698,11 +953,21 @@ export default function ClasificacionPage() {
                       <SortIcon field="last_3_jornadas_avg" />
                     </div>
                   </th>
-                  <th className="text-center text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap" title="Tendencia en las últimas 5 jornadas">Tendencia</th>
+                  <th className="text-center text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap" title="Tendencia en las últimas 5 jornadas">Tendencia</th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    onClick={() => handleSort('sanctioned_matchdays')}
+                    title="Jornadas con alguna sanción"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      Sanciones
+                      <SortIcon field="sanctioned_matchdays" />
+                    </div>
+                  </th>
+                  <th
+                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('change_impact_points')}
-                    title="Impacto de cambios: % de cambios que mejoraron el promedio"
+                    title="Puntos netos ganados o perdidos por cambios"
                   >
                     <div className="flex items-center justify-end gap-1">
                       Cambios
@@ -710,7 +975,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-center text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('podium_finishes')}
                     title="Veces entre los 3 primeros de una jornada"
                   >
@@ -721,7 +986,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-center text-xs font-semibold text-slate-300 px-2 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('bottom_finishes')}
                     title="Veces entre los 3 últimos de una jornada"
                   >
@@ -747,10 +1012,10 @@ export default function ClasificacionPage() {
                     } cursor-pointer`}
                     onClick={() => handleUserClick(standing.user_id)}
                   >
-                    <td className="px-2 py-3">
+                    <td className="px-1 py-1.5">
                       {getPositionMedal(standing.current_position, isLast)}
                     </td>
-                    <td className="px-2 py-3">
+                    <td className="px-1 py-1.5">
                       <div className="min-w-0">
                         <p className="font-semibold text-white text-xs whitespace-nowrap uppercase">{standing.user_name}</p>
                         {standing.best_matchday_points > 0 && (
@@ -760,45 +1025,49 @@ export default function ClasificacionPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-2 py-3 text-right whitespace-nowrap">
+                    <td className="px-1 py-1.5 text-right whitespace-nowrap">
                       <span className="text-base font-bold text-emerald-400">
                         {Math.round(standing.total_points * 10) / 10}
                       </span>
                       <span className="text-xs text-slate-400 ml-1">pts</span>
                     </td>
-                    <td className="px-2 py-3 text-right whitespace-nowrap">
+                    <td className="px-1 py-1.5 text-right whitespace-nowrap">
                       <span className="text-sm font-semibold text-slate-200">
                         {standing.average_points}
                       </span>
                       <span className="text-xs text-slate-400 ml-1">pts/j</span>
                     </td>
-                    <td className="px-2 py-3 text-right whitespace-nowrap">
+                    <td className="px-1 py-1.5 text-right whitespace-nowrap">
                       <span className="text-sm font-semibold text-blue-400">
                         {Math.round(standing.last_3_jornadas_avg * 10) / 10}
                       </span>
                     </td>
-                    <td className="px-2 py-3">
+                    <td className="px-1 py-1.5">
                       <div className="flex justify-center">
                         {getTrendIcon(standing.last_5_trend)}
                       </div>
                     </td>
-                    <td className="px-2 py-3 text-right whitespace-nowrap">
+                    <td className="px-1 py-1.5 text-center whitespace-nowrap">
+                      <span className={`text-sm font-bold ${
+                        standing.sanctioned_matchdays > 0 ? 'text-red-400' : 'text-slate-400'
+                      }`}>
+                        {standing.sanctioned_matchdays}
+                      </span>
+                    </td>
+                    <td className="px-1 py-1.5 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
                         <span className={`text-sm font-bold ${
-                          standing.change_impact_points >= 70 ? 'text-emerald-400' :
-                          standing.change_impact_points >= 40 ? 'text-amber-400' : 'text-slate-400'
+                          standing.change_impact_points > 0 ? 'text-emerald-400' :
+                          standing.change_impact_points < 0 ? 'text-red-400' : 'text-slate-400'
                         }`}>
-                          {standing.change_impact_points}%
+                          {standing.change_impact_points > 0 ? `+${Math.round(standing.change_impact_points * 10) / 10}` : Math.round(standing.change_impact_points * 10) / 10} pts
                         </span>
-                        {standing.change_impact_points >= 70 && (
-                          <CheckCircle className="w-3 h-3 text-emerald-400" />
-                        )}
                       </div>
                       <p className="text-xs text-slate-400 whitespace-nowrap">
-                        {standing.successful_changes}/{standing.total_changes}
+                        {standing.total_changes} cambios
                       </p>
                     </td>
-                    <td className="px-2 py-3 text-center whitespace-nowrap">
+                    <td className="px-1 py-1.5 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1">
                         <Trophy className="w-3 h-3 text-yellow-500 shrink-0" />
                         <span className="text-sm font-bold text-yellow-400">
@@ -806,7 +1075,7 @@ export default function ClasificacionPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-2 py-3 text-center whitespace-nowrap">
+                    <td className="px-1 py-1.5 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1">
                         <TrendingDown className="w-3 h-3 text-red-500 shrink-0" />
                         <span className="text-sm font-bold text-red-400">
@@ -822,21 +1091,28 @@ export default function ClasificacionPage() {
                         <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 p-4">
                           <Card className="!bg-slate-800 border-slate-600">
                             <CardContent className="p-4">
-                              <div className="flex items-center gap-2 mb-4">
+                              <div className="flex items-center gap-2 mb-4 flex-wrap">
                                 <Users className="w-5 h-5 text-emerald-400" />
                                 <h3 className="text-lg font-bold text-white">
                                   {userTeamData[standing.user_id]?.teamName}
                                 </h3>
                                 <Badge className="bg-emerald-600 text-white">
-                                  {userTeamData[standing.user_id]?.totalPoints || 0} pts (J{currentMatchday})
+                                  {Math.round((userTeamData[standing.user_id]?.totalPoints || 0) * 10) / 10} pts (J{userTeamData[standing.user_id]?.matchday})
                                 </Badge>
+                                {userTeamData[standing.user_id]?.penalties > 0 && (
+                                  <Badge className="bg-red-600 text-white">
+                                    Multa: -{Math.round((userTeamData[standing.user_id]?.penalties || 0) * 10) / 10} pts
+                                  </Badge>
+                                )}
                               </div>
                               <div className="grid gap-3">
                                 <div>
                                   <p className="text-xs font-semibold text-slate-400 uppercase mb-2">Titulares</p>
                                   <div className="grid gap-2">
-                                    {userTeamData[standing.user_id]?.jugadores.map((player: any, idx: number) => (
-                                      <div key={player.id} className="flex items-center justify-between p-2 bg-slate-700 rounded-lg">
+                                    {userTeamData[standing.user_id]?.jugadores.map((player: any) => (
+                                      <div key={player.id} className={`flex items-center justify-between p-2 rounded-lg ${
+                                        player.sanctionReason ? 'bg-red-950/45 border border-red-500 text-red-100 shadow-sm' : 'bg-slate-700'
+                                      }`}>
                                         <div className="flex items-center gap-3">
                                           {player.photo ? (
                                             <img src={player.photo} alt={player.short_name} className="w-8 h-8 rounded-full object-cover border-2 border-slate-500" />
@@ -846,24 +1122,42 @@ export default function ClasificacionPage() {
                                             </div>
                                           )}
                                           <div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                               <span className="text-sm font-semibold text-white">{player.short_name}</span>
+                                              {player.sanctionReason && (
+                                                <AlertTriangle className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                                              )}
                                               <Badge className={`text-xs ${getPositionColor(player.position)}`}>
                                                 {getPositionLabel(player.position)}
                                               </Badge>
                                               {player.is_captain && <Badge className="text-xs bg-yellow-500 text-white">C</Badge>}
+                                              
+                                              {/* Puntos y sanciones al lado del nombre */}
+                                              <Badge className={`text-xs font-bold ${
+                                                player.sanctionReason ? 'bg-red-600 text-white line-through' :
+                                                player.puntos > 0 ? 'bg-emerald-600 text-white' : 'bg-slate-500 text-white'
+                                              }`}>
+                                                {Math.round((player.sanctionReason ? player.originalPuntos : player.puntos) * 10) / 10} pts
+                                              </Badge>
+                                              {player.sanctionReason && (
+                                                <Badge className="text-xs bg-red-800 text-white font-bold">
+                                                  Multa: 0 pts
+                                                </Badge>
+                                              )}
                                             </div>
-                                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                                            <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
                                               {player.team?.logo_url && (
                                                 <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain" />
                                               )}
                                               <span>{player.team?.name}</span>
+                                              {player.sanctionReason && (
+                                                <span className="text-[10px] text-red-400 font-medium italic ml-2">
+                                                  ({player.sanctionReason})
+                                                </span>
+                                              )}
                                             </div>
                                           </div>
                                         </div>
-                                        <span className={`text-lg font-bold ${player.puntos > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
-                                          {player.puntos}
-                                        </span>
                                       </div>
                                     ))}
                                   </div>
@@ -872,7 +1166,7 @@ export default function ClasificacionPage() {
                                   <div>
                                     <p className="text-xs font-semibold text-slate-400 uppercase mb-2">Suplentes</p>
                                     <div className="grid gap-2">
-                                      {userTeamData[standing.user_id]?.suplentes.map((player: any, idx: number) => (
+                                      {userTeamData[standing.user_id]?.suplentes.map((player: any) => (
                                         <div key={player.id} className="flex items-center justify-between p-2 bg-slate-700/50 rounded-lg">
                                           <div className="flex items-center gap-3">
                                             {player.photo ? (
@@ -883,23 +1177,27 @@ export default function ClasificacionPage() {
                                               </div>
                                             )}
                                             <div>
-                                              <div className="flex items-center gap-2">
+                                              <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="text-sm font-semibold text-slate-300">{player.short_name}</span>
                                                 <Badge className={`text-xs ${getPositionColor(player.position)}`}>
                                                   {getPositionLabel(player.position)}
                                                 </Badge>
+                                                
+                                                {/* Puntos del suplente al lado del nombre */}
+                                                <Badge className={`text-xs font-semibold ${
+                                                  player.puntos > 0 ? 'bg-emerald-700/60 text-slate-200' : 'bg-slate-600 text-slate-400'
+                                                }`}>
+                                                  {Math.round((player.puntos || 0) * 10) / 10} pts
+                                                </Badge>
                                               </div>
-                                              <div className="flex items-center gap-2 text-xs text-slate-500">
+                                              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                                                 {player.team?.logo_url && (
-                                                  <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain" />
+                                                  <img src={player.team.logo_url} alt={player.team.name} className="w-3.5 h-3.5 object-contain" />
                                                 )}
                                                 <span>{player.team?.name}</span>
                                               </div>
                                             </div>
                                           </div>
-                                          <span className={`text-lg font-bold ${player.puntos > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                                            {player.puntos}
-                                          </span>
                                         </div>
                                       ))}
                                     </div>

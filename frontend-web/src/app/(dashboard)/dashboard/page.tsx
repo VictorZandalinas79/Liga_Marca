@@ -36,6 +36,67 @@ const FORMATIONS: Formation[] = [
   { defenders: 5, midfielders: 3, forwards: 2 },
 ]
 
+function PitchPlayerCard({
+  player,
+  points,
+  getPositionColor,
+  getPositionLabel,
+}: {
+  player: Player
+  points?: number
+  getPositionColor: (pos: string) => string
+  getPositionLabel: (pos: string) => string
+}) {
+  const pts = points !== undefined ? Math.round(points * 10) / 10 : null
+
+  return (
+    <div className="flex flex-col items-center p-1.5 rounded-xl bg-slate-900/70 backdrop-blur-xs border border-white/10 hover:bg-slate-900/80 transition-all w-[85px] sm:w-[105px] md:w-[115px] text-center shadow-lg relative shrink-0">
+      {pts !== null && (
+        <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-slate-950 font-extrabold text-[9px] sm:text-xs rounded-full min-w-5 h-5 flex items-center justify-center px-1 border border-slate-950 shadow-md z-10">
+          {pts >= 0 ? `+${pts}` : pts}
+        </span>
+      )}
+      <div className="relative mb-1">
+        {player.photo ? (
+          <img
+            src={player.photo}
+            alt={player.short_name || ''}
+            className="w-10 h-10 sm:w-14 sm:h-14 rounded-full object-cover border border-white/20 shadow-md"
+          />
+        ) : (
+          <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] sm:text-xs font-bold border border-white/20 shadow-md">
+            {player.shirt_number || '?'}
+          </div>
+        )}
+        {player.team?.logo_url && (
+          <img
+            src={player.team.logo_url}
+            alt={player.team?.name || ''}
+            className="absolute -bottom-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white border border-white/20 shadow-md"
+          />
+        )}
+      </div>
+
+      <p className="font-bold text-white text-[9px] sm:text-xs leading-tight w-full truncate mb-0.5">
+        {player.short_name || player.first_name}
+      </p>
+
+      <p className="text-[7px] sm:text-[9px] text-slate-300 truncate w-full mb-1">
+        {player.team?.name || '-'}
+      </p>
+
+      <div className="flex items-center justify-between w-full mt-auto pt-1 border-t border-white/5 gap-1">
+        <span className={`text-[7px] sm:text-[8px] px-1 py-0.5 rounded font-bold shrink-0 ${getPositionColor(player.position)}`}>
+          {getPositionLabel(player.position)}
+        </span>
+        <span className="text-[8px] sm:text-[10px] font-extrabold text-emerald-400 truncate">
+          {player.precio ? `${player.precio}M` : '-'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -975,90 +1036,94 @@ export default function DashboardPage() {
       )}
 
       {/* Estadísticas del equipo */}
-      <Card className="!bg-emerald-50 border-emerald-200">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Trophy className="w-4 h-4 text-emerald-600" />
-            <h3 className="text-sm font-bold text-emerald-900">Estadísticas de tu Equipo</h3>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-white rounded-lg p-3 border border-emerald-100">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Users className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-xs text-slate-500 font-medium">Sistema</span>
-              </div>
-              <p className="text-lg font-bold text-slate-900">{teamStats.formacion}</p>
+      {isUnlockWindowOpen && (
+        <Card className="!bg-emerald-50 border-emerald-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Trophy className="w-4 h-4 text-emerald-600" />
+              <h3 className="text-sm font-bold text-emerald-900">Estadísticas de tu Equipo</h3>
             </div>
-            <div className="bg-white rounded-lg p-3 border border-emerald-100">
-              <div className="flex items-center gap-1.5 mb-1">
-                <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-xs text-slate-500 font-medium">Valor Equipo</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Users className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs text-slate-500 font-medium">Sistema</span>
+                </div>
+                <p className="text-lg font-bold text-slate-900">{teamStats.formacion}</p>
               </div>
-              <p className="text-lg font-bold text-slate-900">{teamStats.precioTotal > 0 ? `${teamStats.precioTotal}M` : '-'}</p>
-            </div>
-            <div className="bg-white rounded-lg p-3 border border-emerald-100">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Trophy className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-xs text-slate-500 font-medium">Puntos Totales</span>
+              <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs text-slate-500 font-medium">Valor Equipo</span>
+                </div>
+                <p className="text-lg font-bold text-slate-900">{teamStats.precioTotal > 0 ? `${teamStats.precioTotal}M` : '-'}</p>
               </div>
-              <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.puntosTotales * 10) / 10}</p>
-            </div>
-            <div className="bg-white rounded-lg p-3 border border-emerald-100">
-              <div className="flex items-center gap-1.5 mb-1">
-                <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-xs text-slate-500 font-medium">Media por Jugador</span>
+              <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Trophy className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs text-slate-500 font-medium">Puntos Totales</span>
+                </div>
+                <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.puntosTotales * 10) / 10}</p>
               </div>
-              <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.mediaPuntos * 10) / 10}</p>
+              <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs text-slate-500 font-medium">Media por Jugador</span>
+                </div>
+                <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.mediaPuntos * 10) / 10}</p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Tus Sanciones (Jornada Activa) - Siempre Visible */}
-      <Card className="!bg-red-50 border-red-200 mt-2 shadow-sm">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2 pb-1.5 border-b border-red-100">
-            <AlertTriangle className="w-4 h-4 text-red-600" />
-            <h3 className="text-sm font-bold text-red-900">Tus Sanciones (Jornada Activa J{activeMatchday})</h3>
-          </div>
-          {allPenalties.filter(p => p.user_id === user?.id && p.matchday === activeMatchday).length === 0 &&
-           liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday)).length === 0 ? (
-            <p className="text-xs text-emerald-800 font-medium bg-emerald-50 border border-emerald-100 p-2 rounded">
-              ¡Estás libre de sanciones en esta jornada!
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {/* Sanciones consolidadas en BD */}
-              {allPenalties
-                .filter(p => p.user_id === user?.id && p.matchday === activeMatchday)
-                .map((p) => (
-                  <div key={p.id} className="flex justify-between items-start text-xs bg-red-100 rounded p-2 border border-red-200">
-                    <div>
-                      <span className="font-bold text-red-900 mr-2">J{p.matchday}:</span>
-                      <span className="text-red-955 font-semibold">{p.description}</span>
-                    </div>
-                    <span className={`font-bold shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : 'text-amber-600 text-[10px] uppercase'}`}>
-                      {p.points > 0 ? `-${p.points} pts` : 'Pendiente'}
-                    </span>
-                  </div>
-                ))}
-
-              {/* Advertencias dinámicas activas (infracciones actuales del usuario) */}
-              {liveInfractions
-                .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday))
-                .map((inf) => (
-                  <div key={inf.id} className="flex justify-between items-start text-xs bg-amber-100 rounded p-2 border border-amber-200">
-                    <div>
-                      <span className="font-bold text-amber-900 mr-2">J{activeMatchday}:</span>
-                      <span className="text-amber-955 font-semibold">{inf.description}</span>
-                    </div>
-                    <span className="font-bold text-amber-600 shrink-0 ml-2 text-[10px] uppercase">Pendiente</span>
-                  </div>
-                ))}
+      {/* Tus Sanciones (Jornada Activa) - Solo visible en jornada activa */}
+      {isUnlockWindowOpen && (
+        <Card className="!bg-red-50 border-red-200 mt-2 shadow-sm">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2 pb-1.5 border-b border-red-100">
+              <AlertTriangle className="w-4 h-4 text-red-600" />
+              <h3 className="text-sm font-bold text-red-900">Tus Sanciones (Jornada Activa J{activeMatchday})</h3>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            {allPenalties.filter(p => p.user_id === user?.id && p.matchday === activeMatchday).length === 0 &&
+             liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday)).length === 0 ? (
+              <p className="text-xs text-emerald-800 font-medium bg-emerald-50 border border-emerald-100 p-2 rounded">
+                ¡Estás libre de sanciones en esta jornada!
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {/* Sanciones consolidadas en BD */}
+                {allPenalties
+                  .filter(p => p.user_id === user?.id && p.matchday === activeMatchday)
+                  .map((p) => (
+                    <div key={p.id} className="flex justify-between items-start text-xs bg-red-100 rounded p-2 border border-red-200">
+                      <div>
+                        <span className="font-bold text-red-900 mr-2">J{p.matchday}:</span>
+                        <span className="text-red-955 font-semibold">{p.description}</span>
+                      </div>
+                      <span className={`font-bold shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : 'text-amber-600 text-[10px] uppercase'}`}>
+                        {p.points > 0 ? `-${p.points} pts` : 'Pendiente'}
+                      </span>
+                    </div>
+                  ))}
+
+                {/* Advertencias dinámicas activas (infracciones actuales del usuario) */}
+                {liveInfractions
+                  .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday))
+                  .map((inf) => (
+                    <div key={inf.id} className="flex justify-between items-start text-xs bg-amber-100 rounded p-2 border border-amber-200">
+                      <div>
+                        <span className="font-bold text-amber-900 mr-2">J{activeMatchday}:</span>
+                        <span className="text-amber-955 font-semibold">{inf.description}</span>
+                      </div>
+                      <span className="font-bold text-amber-600 shrink-0 ml-2 text-[10px] uppercase">Pendiente</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Once inicial - Grid responsive ordenado por posiciones */}
       <Card className="border-2 border-emerald-200">
@@ -1068,97 +1133,157 @@ export default function DashboardPage() {
             <span className="text-xs text-slate-500">{selectedPlayersData.length}/11</span>
           </div>
 
-          {/* Grid: más columnas para que todos los jugadores quepan en pantalla */}
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-            {selectedPlayersData.map((player, idx) => {
-              const isSessionChange = changeHistory.some(ch => ch.inId === player.id)
-              const isCrossSessionChange = !isSessionChange && basePlayers.length > 0 && !basePlayers.includes(player.id)
-              const isChanged = isSessionChange || isCrossSessionChange
-              const isLockedPlayer = isTeamLocked(player.team_id)
-              return (
-                <div
-                  key={player.id}
-                  onClick={() => openPlayerSelector(player.id)}
-                  className={`relative p-3 rounded-xl transition-all border-2 ${
-                    isUnlockWindowOpen
-                      ? 'bg-slate-800 border-transparent opacity-50 cursor-not-allowed'
-                      : isLockedPlayer
-                        ? 'bg-slate-800 border-red-500 opacity-60 cursor-not-allowed'
-                        : isChanged
-                          ? 'bg-emerald-900 border-emerald-500 hover:bg-slate-700 cursor-pointer'
-                          : 'bg-slate-800 border-transparent hover:bg-slate-700 cursor-pointer'
-                  }`}
-                >
-                  {isLockedPlayer && (
-                    <div className="absolute -top-1 -left-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md z-10" title="Jugador bloqueado: partido fuera de jornada">
-                      <Lock className="w-3.5 h-3.5 text-white" />
-                    </div>
+          {isUnlockWindowOpen ? (
+            <div className="relative w-full bg-emerald-850 border border-emerald-700 rounded-xl overflow-hidden p-3 select-none min-h-[460px] sm:min-h-[520px] md:min-h-[580px] flex flex-col justify-between shadow-inner" style={{
+              backgroundImage: 'radial-gradient(circle, #065f46 0%, #064e3b 100%)',
+            }}>
+              {/* Soccer field markings */}
+              <div className="absolute inset-0 border border-white/10 m-3 pointer-events-none rounded-lg">
+                {/* Center Line */}
+                <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-white/10 -translate-y-1/2"></div>
+                {/* Center Circle */}
+                <div className="absolute top-1/2 left-1/2 w-20 h-20 sm:w-24 sm:h-24 border border-white/10 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                {/* Top Penalty Area */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-36 h-12 sm:w-44 sm:h-16 border-b border-x border-white/10"></div>
+                {/* Bottom Penalty Area */}
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-36 h-12 sm:w-44 sm:h-16 border-t border-x border-white/10"></div>
+              </div>
+
+              {/* Player rows (top-down: Delanteros -> Mediocampistas -> Defensas -> Porteros) */}
+              <div className="relative z-10 flex flex-col justify-between h-full min-h-[440px] sm:min-h-[500px] md:min-h-[560px] py-1">
+                {/* Delanteros */}
+                <div className="flex justify-around items-center gap-1">
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map(player => (
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                  ))}
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
+                    <div className="text-[10px] text-white/30 italic">Sin Delanteros</div>
                   )}
-                  {isSessionChange && (
-                    <button
-                      onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
-                      className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-md z-10 transition-colors"
-                      title="Cancelar cambio"
-                    >
-                      <X className="w-3.5 h-3.5 text-white" />
-                    </button>
-                  )}
-                  {isCrossSessionChange && (
-                    <button
-                      onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
-                      className="absolute -top-1 -right-1 w-6 h-6 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center shadow-md z-10 transition-colors"
-                      title="Cancelar cambio"
-                    >
-                      <X className="w-3.5 h-3.5 text-white" />
-                    </button>
-                  )}
-                  <div className="flex flex-col items-center gap-2">
-                    <span className="text-sm font-bold text-slate-300">{idx + 1}</span>
-                    <div className="relative">
-                      {player.photo ? (
-                        <img
-                          src={player.photo}
-                          alt={player.short_name || ''}
-                          className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-black shadow-md"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-slate-200 flex items-center justify-center text-lg md:text-xl font-bold border-2 border-black shadow-md">
-                          {player.shirt_number || '?'}
-                        </div>
-                      )}
-                      {player.team?.logo_url && (
-                        <img
-                          src={player.team.logo_url}
-                          alt={player.team?.name || ''}
-                          className="absolute -bottom-1 -right-1 w-7 h-7 md:w-8 md:h-8 rounded-full bg-white border-2 border-black shadow-md"
-                        />
-                      )}
-                    </div>
-                    <div className={`text-sm px-3 py-1 w-full text-center font-semibold text-white rounded-md ${getPositionColor(player.position)}`}>
-                      {getPositionLabel(player.position)}
-                    </div>
-                    <p className={`font-bold text-white w-full text-center break-words leading-tight ${
-                      (player.short_name || player.first_name || '').length > 14
-                        ? 'text-[10px] md:text-sm'
-                        : (player.short_name || player.first_name || '').length > 10
-                        ? 'text-[11px] md:text-sm'
-                        : (player.short_name || player.first_name || '').length > 7
-                        ? 'text-xs md:text-base'
-                        : 'text-sm md:text-base'
-                    }`}>
-                      {player.short_name || player.first_name}
-                    </p>
-                    <p className="text-xs text-slate-300 truncate w-full text-center">
-                      {player.team?.name || '-'}
-                    </p>
-                    <p className="text-base md:text-lg font-bold text-emerald-400">
-                      {player.precio ? `${player.precio}M` : '-'}
-                    </p>
-                  </div>
                 </div>
-              )
-            })}
-          </div>
+
+                {/* Mediocampistas */}
+                <div className="flex justify-around items-center gap-1">
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map(player => (
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                  ))}
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
+                    <div className="text-[10px] text-white/30 italic">Sin Centrocampistas</div>
+                  )}
+                </div>
+
+                {/* Defensas */}
+                <div className="flex justify-around items-center gap-1">
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map(player => (
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                  ))}
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
+                    <div className="text-[10px] text-white/30 italic">Sin Defensas</div>
+                  )}
+                </div>
+
+                {/* Portero */}
+                <div className="flex justify-around items-center gap-1">
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                  ))}
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
+                    <div className="text-[10px] text-white/30 italic">Sin Portero</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+              {selectedPlayersData.map((player, idx) => {
+                const isSessionChange = changeHistory.some(ch => ch.inId === player.id)
+                const isCrossSessionChange = !isSessionChange && basePlayers.length > 0 && !basePlayers.includes(player.id)
+                const isChanged = isSessionChange || isCrossSessionChange
+                const isLockedPlayer = isTeamLocked(player.team_id)
+                return (
+                  <div
+                    key={player.id}
+                    onClick={() => openPlayerSelector(player.id)}
+                    className={`relative p-3 rounded-xl transition-all border-2 ${
+                      isUnlockWindowOpen
+                        ? 'bg-slate-800 border-transparent opacity-50 cursor-not-allowed'
+                        : isLockedPlayer
+                          ? 'bg-slate-800 border-red-500 opacity-60 cursor-not-allowed'
+                          : isChanged
+                            ? 'bg-emerald-900 border-emerald-500 hover:bg-slate-700 cursor-pointer'
+                            : 'bg-slate-800 border-transparent hover:bg-slate-700 cursor-pointer'
+                    }`}
+                  >
+                    {isLockedPlayer && (
+                      <div className="absolute -top-1 -left-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md z-10" title="Jugador bloqueado: partido fuera de jornada">
+                        <Lock className="w-3.5 h-3.5 text-white" />
+                      </div>
+                    )}
+                    {isSessionChange && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
+                        className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-md z-10 transition-colors"
+                        title="Cancelar cambio"
+                      >
+                        <X className="w-3.5 h-3.5 text-white" />
+                      </button>
+                    )}
+                    {isCrossSessionChange && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
+                        className="absolute -top-1 -right-1 w-6 h-6 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center shadow-md z-10 transition-colors"
+                        title="Cancelar cambio"
+                      >
+                        <X className="w-3.5 h-3.5 text-white" />
+                      </button>
+                    )}
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-sm font-bold text-slate-300">{idx + 1}</span>
+                      <div className="relative">
+                        {player.photo ? (
+                          <img
+                            src={player.photo}
+                            alt={player.short_name || ''}
+                            className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-black shadow-md"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-slate-200 flex items-center justify-center text-lg md:text-xl font-bold border-2 border-black shadow-md">
+                            {player.shirt_number || '?'}
+                          </div>
+                        )}
+                        {player.team?.logo_url && (
+                          <img
+                            src={player.team.logo_url}
+                            alt={player.team?.name || ''}
+                            className="absolute -bottom-1 -right-1 w-7 h-7 md:w-8 md:h-8 rounded-full bg-white border-2 border-black shadow-md"
+                          />
+                        )}
+                      </div>
+                      <div className={`text-sm px-3 py-1 w-full text-center font-semibold text-white rounded-md ${getPositionColor(player.position)}`}>
+                        {getPositionLabel(player.position)}
+                      </div>
+                      <p className={`font-bold text-white w-full text-center break-words leading-tight ${
+                        (player.short_name || player.first_name || '').length > 14
+                          ? 'text-[10px] md:text-sm'
+                          : (player.short_name || player.first_name || '').length > 10
+                          ? 'text-[11px] md:text-sm'
+                          : (player.short_name || player.first_name || '').length > 7
+                          ? 'text-xs md:text-base'
+                          : 'text-sm md:text-base'
+                      }`}>
+                        {player.short_name || player.first_name}
+                      </p>
+                      <p className="text-xs text-slate-300 truncate w-full text-center">
+                        {player.team?.name || '-'}
+                      </p>
+                      <p className="text-base md:text-lg font-bold text-emerald-400">
+                        {player.precio ? `${player.precio}M` : '-'}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -62,7 +62,7 @@ def start_sync(fixture_id: str, match_id: str):
     try:
         # Ejecutar en segundo plano
         process = subprocess.Popen(
-            ['python', 'sync_live_matches.py', fixture_id, match_id],
+            [sys.executable, 'sync_live_matches.py', fixture_id, match_id],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             start_new_session=True
@@ -140,7 +140,7 @@ def check_and_run_sanctions():
                 env["SANCTION_MATCHDAY"] = str(matchday)
                 
                 # Ejecutar script
-                res = subprocess.run(["python3", script_path], env=env, capture_output=True, text=True)
+                res = subprocess.run([sys.executable, script_path], env=env, capture_output=True, text=True)
                 log(res.stdout)
                 if res.returncode == 0:
                     state[md_key]["initial_run"] = True
@@ -163,7 +163,7 @@ def check_and_run_sanctions():
                         env = os.environ.copy()
                         env["SANCTION_MATCHDAY"] = str(matchday)
                         
-                        res = subprocess.run(["python3", script_path], env=env, capture_output=True, text=True)
+                        res = subprocess.run([sys.executable, script_path], env=env, capture_output=True, text=True)
                         log(res.stdout)
                         if res.returncode == 0:
                             state[md_key]["final_run"] = True
