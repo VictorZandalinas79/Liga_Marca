@@ -737,6 +737,7 @@ export default function ClasificacionPage() {
     const prevMatchday = actualMatchday - 1
     const prevStartersByTeam = new Map<string, string[]>()
     const prevSquadByTeam = new Map<string, string[]>()
+    const heldByOthersPrev = new Map<string, string[]>()
 
     if (prevMatchday >= 1) {
       // Obtener perfiles de usuario para los nombres
@@ -760,8 +761,6 @@ export default function ClasificacionPage() {
           maxMdByTeam.set(p.team_id, p.matchday)
         }
       })
-
-      const heldByOthersPrev = new Map<string, string[]>()
 
       prevStarters?.forEach(p => {
         if (p.matchday === maxMdByTeam.get(p.team_id)) {
