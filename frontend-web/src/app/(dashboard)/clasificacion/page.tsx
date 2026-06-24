@@ -1108,44 +1108,44 @@ export default function ClasificacionPage() {
                               <div className="grid gap-3">
                                 <div>
                                   <p className="text-xs font-semibold text-slate-400 uppercase mb-2">Titulares</p>
-                                  <div className="grid gap-2">
+                                  <div className="grid gap-1">
                                     {userTeamData[standing.user_id]?.jugadores.map((player: any) => (
-                                      <div key={player.id} className={`flex items-center justify-between p-2 rounded-lg ${
+                                      <div key={player.id} className={`flex items-center justify-between py-1 px-2 rounded-lg ${
                                         player.sanctionReason ? 'bg-red-950/45 border border-red-500 text-red-100 shadow-sm' : 'bg-slate-700'
                                       }`}>
                                         <div className="flex items-center gap-3">
                                           {player.photo ? (
-                                            <img src={player.photo} alt={player.short_name} className="w-8 h-8 rounded-full object-cover border-2 border-slate-500" />
+                                            <img src={player.photo} alt={player.short_name} className="w-7 h-7 rounded-full object-cover border-2 border-slate-500" />
                                           ) : (
-                                            <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-300">
+                                            <div className="w-7 h-7 rounded-full bg-slate-600 flex items-center justify-center text-[10px] font-bold text-slate-300">
                                               {player.shirt_number || '?'}
                                             </div>
                                           )}
                                           <div>
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                              <span className="text-sm font-semibold text-white">{player.short_name}</span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className="text-xs font-semibold text-white">{player.short_name}</span>
                                               {player.sanctionReason && (
-                                                <AlertTriangle className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                                                <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
                                               )}
-                                              <Badge className={`text-xs ${getPositionColor(player.position)}`}>
+                                              <Badge className={`text-[10px] px-1 py-0 ${getPositionColor(player.position)}`}>
                                                 {getPositionLabel(player.position)}
                                               </Badge>
-                                              {player.is_captain && <Badge className="text-xs bg-yellow-500 text-white">C</Badge>}
+                                              {player.is_captain && <Badge className="text-[10px] px-1 py-0 bg-yellow-500 text-white">C</Badge>}
                                               
                                               {/* Puntos y sanciones al lado del nombre */}
-                                              <Badge className={`text-xs font-bold ${
+                                              <Badge className={`text-[10px] px-1 py-0 font-bold ${
                                                 player.sanctionReason ? 'bg-red-600 text-white line-through' :
                                                 player.puntos > 0 ? 'bg-emerald-600 text-white' : 'bg-slate-500 text-white'
                                               }`}>
                                                 {Math.round((player.sanctionReason ? player.originalPuntos : player.puntos) * 10) / 10} pts
                                               </Badge>
                                               {player.sanctionReason && (
-                                                <Badge className="text-xs bg-red-800 text-white font-bold">
+                                                <Badge className="text-[10px] px-1 py-0 bg-red-800 text-white font-bold">
                                                   Multa: 0 pts
                                                 </Badge>
                                               )}
                                             </div>
-                                            <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                                            <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0">
                                               {player.team?.logo_url && (
                                                 <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain" />
                                               )}
@@ -1165,32 +1165,32 @@ export default function ClasificacionPage() {
                                 {userTeamData[standing.user_id]?.suplentes.length > 0 && (
                                   <div>
                                     <p className="text-xs font-semibold text-slate-400 uppercase mb-2">Suplentes</p>
-                                    <div className="grid gap-2">
+                                    <div className="grid gap-1">
                                       {userTeamData[standing.user_id]?.suplentes.map((player: any) => (
-                                        <div key={player.id} className="flex items-center justify-between p-2 bg-slate-700/50 rounded-lg">
+                                        <div key={player.id} className="flex items-center justify-between py-1 px-2 bg-slate-700/50 rounded-lg">
                                           <div className="flex items-center gap-3">
                                             {player.photo ? (
-                                              <img src={player.photo} alt={player.short_name} className="w-8 h-8 rounded-full object-cover border-2 border-slate-600" />
+                                              <img src={player.photo} alt={player.short_name} className="w-7 h-7 rounded-full object-cover border-2 border-slate-600" />
                                             ) : (
-                                              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-400">
+                                              <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400">
                                                 {player.shirt_number || '?'}
                                               </div>
                                             )}
                                             <div>
-                                              <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-sm font-semibold text-slate-300">{player.short_name}</span>
-                                                <Badge className={`text-xs ${getPositionColor(player.position)}`}>
+                                              <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="text-xs font-semibold text-slate-300">{player.short_name}</span>
+                                                <Badge className={`text-[10px] px-1 py-0 ${getPositionColor(player.position)}`}>
                                                   {getPositionLabel(player.position)}
                                                 </Badge>
                                                 
                                                 {/* Puntos del suplente al lado del nombre */}
-                                                <Badge className={`text-xs font-semibold ${
+                                                <Badge className={`text-[10px] px-1 py-0 font-semibold ${
                                                   player.puntos > 0 ? 'bg-emerald-700/60 text-slate-200' : 'bg-slate-600 text-slate-400'
                                                 }`}>
                                                   {Math.round((player.puntos || 0) * 10) / 10} pts
                                                 </Badge>
                                               </div>
-                                              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                              <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0">
                                                 {player.team?.logo_url && (
                                                   <img src={player.team.logo_url} alt={player.team.name} className="w-3.5 h-3.5 object-contain" />
                                                 )}

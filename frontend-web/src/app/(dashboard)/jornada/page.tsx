@@ -853,29 +853,23 @@ export default function JornadaPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700">
-                    <th className="text-left py-3 px-2 text-xs sm:text-sm font-semibold text-slate-300">Pos</th>
-                    <th className="text-left py-3 px-2 text-xs sm:text-sm font-semibold text-slate-300">Equipo</th>
-                    <th
-                      onClick={() => setSortBy('sistema')}
-                      className={`text-center py-3 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'sistema' ? 'text-emerald-400' : 'text-slate-300'}`}
-                    >
-                      Sys
-                    </th>
+                    <th className="text-left py-1.5 px-2 text-xs sm:text-sm font-semibold text-slate-300">Pos</th>
+                    <th className="text-left py-1.5 px-2 text-xs sm:text-sm font-semibold text-slate-300">Equipo</th>
                     <th
                       onClick={() => setSortBy('valor')}
-                      className={`text-right py-3 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'valor' ? 'text-emerald-400' : 'text-slate-300'}`}
+                      className={`text-right py-1.5 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'valor' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Valor
                     </th>
                     <th
                       onClick={() => setSortBy('puntos')}
-                      className={`text-right py-3 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'puntos' ? 'text-emerald-400' : 'text-slate-300'}`}
+                      className={`text-right py-1.5 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'puntos' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Pts
                     </th>
                     <th
                       onClick={() => setSortBy('promedio')}
-                      className={`text-right py-3 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}
+                      className={`text-right py-1.5 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Prom
                     </th>
@@ -899,30 +893,25 @@ export default function JornadaPage() {
                         teamRefs.current[team.team_id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                       }}
                     >
-                      <td className="py-3 px-2">
+                      <td className="py-1.5 px-2">
                         {getPositionMedal(pos, isLast)}
                       </td>
-                      <td className="py-3 px-2 max-w-[120px] sm:max-w-none">
+                      <td className="py-1.5 px-2 max-w-[120px] sm:max-w-none">
                         <span className="font-semibold text-white text-xs uppercase">{team.team_name}</span>
                         <span className="block text-xs text-slate-400">
                           {jugaron} / {total} jugaron
                         </span>
                       </td>
-                      <td className="py-3 px-2 text-center">
-                        <span className="text-xs font-mono font-semibold text-slate-200 bg-slate-600 px-1 sm:px-2 py-0.5 rounded">
-                          {getFormacion(team.jugadores)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 text-right">
+                      <td className="py-1.5 px-2 text-right">
                         <span className="text-xs sm:text-sm font-semibold text-slate-200">{fmtValor(team.valor_total)}</span>
                       </td>
-                      <td className="py-3 px-2 text-right whitespace-nowrap">
+                      <td className="py-1.5 px-2 text-right whitespace-nowrap">
                         <span className="text-base font-bold text-emerald-400">
                           {Math.round(team.puntos_totales * 10) / 10}
                         </span>
                         <span className="text-xs text-slate-400 ml-1">pts</span>
                       </td>
-                      <td className="py-3 px-2 text-right whitespace-nowrap">
+                      <td className="py-1.5 px-2 text-right whitespace-nowrap">
                         <span className="text-sm font-semibold text-slate-200">
                           {jugaron > 0 ? Math.round(promedio * 10) / 10 : '—'}
                         </span>
@@ -940,7 +929,7 @@ export default function JornadaPage() {
 
       {/* Equipos de usuarios - Mini tablas por usuario (desplegable) */}
       {showEquipos && (userTeams.length > 0 ? (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sortedTeams.map((team, index) => {
             const displayPos = index + 1
             const isCurrentUser = currentUserId === team.user_id
@@ -997,7 +986,7 @@ export default function JornadaPage() {
                       return (
                         <div key={grupo}>
                           <p className="text-xs font-semibold text-slate-500 uppercase mb-2">{grupo}</p>
-                          <div className="grid gap-2">
+                          <div className="grid gap-1">
                             {jugadoresGrupo.map((player, idx) => {
                               const matchKey = `${team.team_id}-${player.id}`
                               const isMatch = matchSet.has(matchKey)
@@ -1029,7 +1018,7 @@ export default function JornadaPage() {
                                 key={player.id}
                                 ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
                                 onClick={() => openPlayerStats(player.id)}
-                                className={`flex items-center justify-between p-3 rounded-lg transition-colors gap-2 cursor-pointer ${
+                                className={`flex items-center justify-between py-1 px-2 rounded-lg transition-colors gap-2 cursor-pointer ${
                                   isPenalized
                                     ? 'bg-red-50 border-2 border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-md ring-2 ring-red-300'
                                     : isActive
@@ -1042,12 +1031,12 @@ export default function JornadaPage() {
                                 }`}
                               >
                                 <div className="flex items-center gap-3 min-w-0">
-                                  <span className="text-sm font-bold text-slate-400 w-5 shrink-0">{idx + 1}</span>
+                                  <span className="text-xs font-bold text-slate-400 w-4 shrink-0">{idx + 1}</span>
                                   {player.photo ? (
                                     <img
                                       src={player.photo}
                                       alt={player.short_name || ''}
-                                      className={`w-10 h-10 rounded-full object-cover border-2 shrink-0 ${
+                                      className={`w-7 h-7 rounded-full object-cover border-2 shrink-0 ${
                                         isPenalized
                                           ? 'border-red-500 ring-2 ring-red-200'
                                           : player.hasPlayed
@@ -1056,7 +1045,7 @@ export default function JornadaPage() {
                                       }`}
                                     />
                                   ) : (
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 shrink-0 ${
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 shrink-0 ${
                                       isPenalized
                                         ? 'bg-red-100 text-red-700 border-red-500 ring-2 ring-red-200'
                                         : player.hasPlayed
@@ -1067,43 +1056,43 @@ export default function JornadaPage() {
                                     </div>
                                   )}
                                   <div className="min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
                                       <span className={`font-semibold break-words leading-tight ${
                                         (player.short_name || player.first_name || '').length > 15
-                                          ? 'text-[10px]'
+                                          ? 'text-[9px]'
                                           : (player.short_name || player.first_name || '').length > 11
-                                          ? 'text-xs'
-                                          : 'text-sm'
+                                          ? 'text-[11px]'
+                                          : 'text-xs'
                                       } ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
                                         {player.short_name || player.first_name}
                                       </span>
                                       {isPenalized && (
-                                        <AlertTriangle className="w-4 h-4 text-red-600 animate-pulse shrink-0" />
+                                        <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-pulse shrink-0" />
                                       )}
-                                      <Badge className={`text-xs ${getPositionColor(player.position)}`}>
+                                      <Badge className={`text-[10px] px-1 py-0 ${getPositionColor(player.position)}`}>
                                         {getPositionLabel(player.position)}
                                       </Badge>
                                       {player.is_captain && (
-                                        <Badge className="text-xs bg-yellow-500 text-white">C</Badge>
+                                        <Badge className="text-[10px] px-1 py-0 bg-yellow-500 text-white">C</Badge>
                                       )}
                                       {player.hasPlayed && (
-                                        <span className="text-xs text-slate-400 font-medium">✓ jugó</span>
+                                        <span className="text-[10px] text-slate-400 font-medium">✓ jugó</span>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                                    <div className="flex items-center gap-2 mt-0 text-[10px] text-slate-500">
                                       {player.team?.logo_url && (
-                                        <img src={player.team.logo_url} alt={player.team.name} className="w-4 h-4 object-contain" />
+                                        <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain" />
                                       )}
                                       {player.team && <span className="truncate">{player.team.name}</span>}
                                       <span className="text-slate-400">· {fmtValor(player.valor || 0)}</span>
                                     </div>
                                     {player.replacedPlayer && (
-                                      <div className="flex items-center gap-1 mt-1">
-                                        <span className="text-[10px] text-slate-400">por</span>
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <span className="text-[9px] text-slate-400">por</span>
                                         {player.replacedPlayer.photo && (
-                                          <img src={player.replacedPlayer.photo} className="w-4 h-4 rounded-full object-cover border border-slate-300" alt="" />
+                                          <img src={player.replacedPlayer.photo} className="w-3.5 h-3.5 rounded-full object-cover border border-slate-300" alt="" />
                                         )}
-                                        <span className="text-[10px] text-red-500 font-medium truncate">
+                                        <span className="text-[9px] text-red-500 font-medium truncate">
                                           {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
                                         </span>
                                       </div>
@@ -1113,23 +1102,23 @@ export default function JornadaPage() {
                                 <div className="text-right shrink-0">
                                   {player.sanctionReason ? (
                                     <>
-                                      <span className="text-xs font-bold text-red-500 line-through mr-1 block">
+                                      <span className="text-[10px] font-bold text-red-500 line-through mr-1 block">
                                         {Math.round((player.originalPuntos ?? 0) * 10) / 10} pts
                                       </span>
-                                      <span className="text-lg font-extrabold text-red-600 block">
+                                      <span className="text-sm font-extrabold text-red-600 block">
                                         0 pts
                                       </span>
-                                      <span className="text-[10px] text-red-600 font-semibold block max-w-[150px] leading-tight text-right italic">
+                                      <span className="text-[9px] text-red-600 font-semibold block max-w-[120px] leading-tight text-right italic">
                                         {player.sanctionReason}
                                       </span>
                                     </>
                                   ) : (
-                                    <>
-                                      <span className={`text-lg font-bold ${player.hasPlayed ? 'text-slate-500' : 'text-emerald-600'}`}>
+                                    <div className="flex items-baseline justify-end">
+                                      <span className={`text-sm font-bold ${player.hasPlayed ? 'text-slate-500' : 'text-emerald-600'}`}>
                                         {Math.round((player.puntos ?? 0) * 10) / 10}
                                       </span>
-                                      <p className="text-xs text-slate-500">puntos</p>
-                                    </>
+                                      <span className="text-[10px] text-slate-500 ml-0.5">pts</span>
+                                    </div>
                                   )}
                                 </div>
                               </div>

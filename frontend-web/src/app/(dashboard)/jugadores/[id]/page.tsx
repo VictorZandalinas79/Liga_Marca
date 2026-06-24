@@ -147,6 +147,8 @@ interface PlayerScore {
     away_team?: { name: string }
     home_score?: number
     away_score?: number
+    home_team_id?: string
+    away_team_id?: string
   }
 }
 
@@ -172,6 +174,13 @@ export default function JugadorDetallePage() {
   const [player, setPlayer] = useState<Player | null>(null)
   const [scores, setScores] = useState<PlayerScore[]>([])
   const [selectedMatch, setSelectedMatch] = useState<PlayerScore | null>(null)
+  const [hideZeros, setHideZeros] = useState(true)
+  const [selectedMetric, setSelectedMetric] = useState('puntos')
+  const [activeBar, setActiveBar] = useState<number | null>(null)
+  const [allPlayers, setAllPlayers] = useState<Player[]>([])
+  const [compareTarget, setCompareTarget] = useState<string>('media-pos')
+  const [compareScores, setCompareScores] = useState<PlayerScore[]>([])
+  const [comparePlayer, setComparePlayer] = useState<Player | null>(null)
   // Tarifas de puntuación desde scoring_config (editables en Admin)
   const scoringRules = useScoringRules()
   const supabase = createClient()
@@ -257,7 +266,9 @@ export default function JugadorDetallePage() {
             home_team: { name: teamsMap.get(s.fixtures.home_team_id) || 'Local' },
             away_team: { name: teamsMap.get(s.fixtures.away_team_id) || 'Visitante' },
             home_score: s.fixtures.home_score,
-            away_score: s.fixtures.away_score
+            away_score: s.fixtures.away_score,
+            home_team_id: s.fixtures.home_team_id,
+            away_team_id: s.fixtures.away_team_id
           } : undefined
         }))
 
@@ -271,6 +282,15 @@ export default function JugadorDetallePage() {
           return tb - ta
         })
 
+        // Obtener todos los jugadores para la comparativa
+        const { data: playersList } = await supabase
+          .from('players')
+          .select('id, short_name, first_name, last_name, position, team_id')
+          .order('short_name', { ascending: true })
+        if (playersList) {
+          setAllPlayers(playersList)
+        }
+
         setScores(mapped)
       }
 
@@ -279,6 +299,28 @@ export default function JugadorDetallePage() {
 
     fetchJugador()
   }, [params.id])
+
+  useEffect(() => {
+    if (compareTarget !== 'media-pos' && compareTarget !== 'media-gen' && compareTarget) {
+      const loadCompareData = async () => {
+        const p = allPlayers.find(pl => pl.id === compareTarget)
+        if (p) {
+          setComparePlayer(p)
+          const { data } = await supabase
+            .from('player_scores')
+            .select('*')
+            .eq('player_id', p.id)
+          if (data) {
+            setCompareScores(data)
+          }
+        }
+      }
+      loadCompareData()
+    } else {
+      setComparePlayer(null)
+      setCompareScores([])
+    }
+  }, [compareTarget, allPlayers])
 
   const getPositionLabel = (position: string) => {
     const posLower = position.toLowerCase()
@@ -301,32 +343,177 @@ export default function JugadorDetallePage() {
   }
 
   // Calcular stats acumuladas
-  const totalStats = scores.reduce((acc, s) => ({
-    total_points: acc.total_points + (s.total_points || 0),
-    minutes_played: acc.minutes_played + (s.minutes_played || 0),
-    goals: acc.goals + (s.goals || 0),
-    assists: acc.assists + (s.assists || 0),
-    yellow_cards: acc.yellow_cards + (s.yellow_cards || 0),
-    red_cards: acc.red_cards + (s.red_cards || 0),
-    clean_sheets: acc.clean_sheets + (s.clean_sheet ? 1 : 0),
-    saves: acc.saves + (s.saves || 0),
-    tackles_won: acc.tackles_won + (s.tackles_won || 0),
-    interceptions: acc.interceptions + (s.interceptions || 0),
-    passes_completed: acc.passes_completed + (s.passes_completed || 0),
-    aerials_won: acc.aerials_won + (s.aerials_won || 0),
-  }), {
+  const totalStats = scores.reduce((acc, s) => {
+    const n = (v: any) => Number(v) || 0
+    return {
+      total_points: acc.total_points + n(s.total_points),
+      minutes_played: acc.minutes_played + n(s.minutes_played),
+      goals: acc.goals + n(s.goals),
+      goal_header_bonus: acc.goal_header_bonus + n(s.goal_header_bonus),
+      goal_freekick_bonus: acc.goal_freekick_bonus + n(s.goal_freekick_bonus),
+      own_goals: acc.own_goals + n(s.own_goals),
+      goals_conceded: acc.goals_conceded + n(s.goals_conceded),
+      clean_sheets: acc.clean_sheets + (s.clean_sheet ? 1 : 0),
+      assists: acc.assists + n(s.assists),
+      key_passes: acc.key_passes + n(s.key_passes),
+      second_assists: acc.second_assists + n(s.second_assists),
+      intent_assists: acc.intent_assists + n(s.intent_assists),
+      shots_on_target: acc.shots_on_target + n(s.shots_on_target),
+      shots_off_target: acc.shots_off_target + n(s.shots_off_target),
+      shots_hit_woodwork: acc.shots_hit_woodwork + n(s.shots_hit_woodwork),
+      big_chances_created: acc.big_chances_created + n(s.big_chances_created),
+      big_chances_missed: acc.big_chances_missed + n(s.big_chances_missed),
+      penalties_scored: acc.penalties_scored + n(s.penalties_scored),
+      penalties_missed: acc.penalties_missed + n(s.penalties_missed),
+      penalties_won: acc.penalties_won + n(s.penalties_won),
+      penalties_conceded: acc.penalties_conceded + n(s.penalties_conceded),
+      saves: acc.saves + n(s.saves),
+      penalty_saves: acc.penalty_saves + n(s.penalty_saves),
+      claims_ok: acc.claims_ok + n(s.claims_ok),
+      claims_fail: acc.claims_fail + n(s.claims_fail),
+      fumbles: acc.fumbles + n(s.fumbles),
+      crosses_not_claimed: acc.crosses_not_claimed + n(s.crosses_not_claimed),
+      punches_ok: acc.punches_ok + n(s.punches_ok),
+      punches_fail: acc.punches_fail + n(s.punches_fail),
+      smothers: acc.smothers + n(s.smothers),
+      sweepers_ok: acc.sweepers_ok + n(s.sweepers_ok),
+      sweepers_fail: acc.sweepers_fail + n(s.sweepers_fail),
+      parries_safe: acc.parries_safe + n(s.parries_safe),
+      parries_danger: acc.parries_danger + n(s.parries_danger),
+      clearances: acc.clearances + n(s.clearances),
+      clearances_last_line: acc.clearances_last_line + n(s.clearances_last_line),
+      blocked_crosses: acc.blocked_crosses + n(s.blocked_crosses),
+      interceptions: acc.interceptions + n(s.interceptions),
+      interceptions_high: acc.interceptions_high + n(s.interceptions_high),
+      interceptions_med: acc.interceptions_med + n(s.interceptions_med),
+      interceptions_low: acc.interceptions_low + n(s.interceptions_low),
+      tackles_won: acc.tackles_won + n(s.tackles_won),
+      tackles_lost: acc.tackles_lost + n(s.tackles_lost),
+      blocked_shots: acc.blocked_shots + n(s.blocked_shots),
+      blocked_passes: acc.blocked_passes + n(s.blocked_passes),
+      ball_recoveries: acc.ball_recoveries + n(s.ball_recoveries),
+      recoveries_high: acc.recoveries_high + n(s.recoveries_high),
+      recoveries_med: acc.recoveries_med + n(s.recoveries_med),
+      recoveries_low: acc.recoveries_low + n(s.recoveries_low),
+      offsides_provoked: acc.offsides_provoked + n(s.offsides_provoked),
+      challenges_lost: acc.challenges_lost + n(s.challenges_lost),
+      errors_leading_to_shot: acc.errors_leading_to_shot + n(s.errors_leading_to_shot),
+      errors_leading_to_goal: acc.errors_leading_to_goal + n(s.errors_leading_to_goal),
+      passes_completed: acc.passes_completed + n(s.passes_completed),
+      passes_attempted: acc.passes_attempted + n(s.passes_attempted),
+      progressive_passes: acc.progressive_passes + n(s.progressive_passes),
+      passes_into_final_third: acc.passes_into_final_third + n(s.passes_into_final_third),
+      passes_into_box: acc.passes_into_box + n(s.passes_into_box),
+      through_balls: acc.through_balls + n(s.through_balls),
+      crosses_completed: acc.crosses_completed + n(s.crosses_completed),
+      crosses_attempted: acc.crosses_attempted + n(s.crosses_attempted),
+      switch_plays: acc.switch_plays + n(s.switch_plays),
+      pull_backs: acc.pull_backs + n(s.pull_backs),
+      long_balls_completed: acc.long_balls_completed + n(s.long_balls_completed),
+      lay_offs: acc.lay_offs + n(s.lay_offs),
+      forward_passes: acc.forward_passes + n(s.forward_passes),
+      set_pieces_taken: acc.set_pieces_taken + n(s.set_pieces_taken),
+      successful_crosses: acc.successful_crosses + n(s.successful_crosses),
+      box_entries: acc.box_entries + n(s.box_entries),
+      takeons_won: acc.takeons_won + n(s.takeons_won),
+      takeons_lost: acc.takeons_lost + n(s.takeons_lost),
+      takeons_overrun: acc.takeons_overrun + n(s.takeons_overrun),
+      good_skills: acc.good_skills + n(s.good_skills),
+      dispossessed: acc.dispossessed + n(s.dispossessed),
+      bad_touches: acc.bad_touches + n(s.bad_touches),
+      aerials_won: acc.aerials_won + n(s.aerials_won),
+      aerials_lost: acc.aerials_lost + n(s.aerials_lost),
+      fouls_committed: acc.fouls_committed + n(s.fouls_committed),
+      fouls_won: acc.fouls_won + n(s.fouls_won),
+      yellow_cards: acc.yellow_cards + n(s.yellow_cards),
+      second_yellow_cards: acc.second_yellow_cards + n(s.second_yellow_cards),
+      red_cards: acc.red_cards + n(s.red_cards),
+      relevo_points: acc.relevo_points + n(s.relevo_points),
+    }
+  }, {
     total_points: 0,
     minutes_played: 0,
     goals: 0,
-    assists: 0,
-    yellow_cards: 0,
-    red_cards: 0,
+    goal_header_bonus: 0,
+    goal_freekick_bonus: 0,
+    own_goals: 0,
+    goals_conceded: 0,
     clean_sheets: 0,
+    assists: 0,
+    key_passes: 0,
+    second_assists: 0,
+    intent_assists: 0,
+    shots_on_target: 0,
+    shots_off_target: 0,
+    shots_hit_woodwork: 0,
+    big_chances_created: 0,
+    big_chances_missed: 0,
+    penalties_scored: 0,
+    penalties_missed: 0,
+    penalties_won: 0,
+    penalties_conceded: 0,
     saves: 0,
-    tackles_won: 0,
+    penalty_saves: 0,
+    claims_ok: 0,
+    claims_fail: 0,
+    fumbles: 0,
+    crosses_not_claimed: 0,
+    punches_ok: 0,
+    punches_fail: 0,
+    smothers: 0,
+    sweepers_ok: 0,
+    sweepers_fail: 0,
+    parries_safe: 0,
+    parries_danger: 0,
+    clearances: 0,
+    clearances_last_line: 0,
+    blocked_crosses: 0,
     interceptions: 0,
+    interceptions_high: 0,
+    interceptions_med: 0,
+    interceptions_low: 0,
+    tackles_won: 0,
+    tackles_lost: 0,
+    blocked_shots: 0,
+    blocked_passes: 0,
+    ball_recoveries: 0,
+    recoveries_high: 0,
+    recoveries_med: 0,
+    recoveries_low: 0,
+    offsides_provoked: 0,
+    challenges_lost: 0,
+    errors_leading_to_shot: 0,
+    errors_leading_to_goal: 0,
     passes_completed: 0,
+    passes_attempted: 0,
+    progressive_passes: 0,
+    passes_into_final_third: 0,
+    passes_into_box: 0,
+    through_balls: 0,
+    crosses_completed: 0,
+    crosses_attempted: 0,
+    switch_plays: 0,
+    pull_backs: 0,
+    long_balls_completed: 0,
+    lay_offs: 0,
+    forward_passes: 0,
+    set_pieces_taken: 0,
+    successful_crosses: 0,
+    box_entries: 0,
+    takeons_won: 0,
+    takeons_lost: 0,
+    takeons_overrun: 0,
+    good_skills: 0,
+    dispossessed: 0,
+    bad_touches: 0,
     aerials_won: 0,
+    aerials_lost: 0,
+    fouls_committed: 0,
+    fouls_won: 0,
+    yellow_cards: 0,
+    second_yellow_cards: 0,
+    red_cards: 0,
+    relevo_points: 0,
   })
 
   const matchesPlayed = scores.length
@@ -523,6 +710,403 @@ export default function JugadorDetallePage() {
     )
   }
 
+  // ==========================================
+  // ==========================================
+  // LÓGICA DE RADAR Y COMPARATIVAS
+  // ==========================================
+  const calculateRadarStats = (scoresList: PlayerScore[], posCode: string) => {
+    const n = (v: any) => Number(v) || 0
+    const matches = scoresList.length
+    if (matches === 0) {
+      return { ataque: 0, defensa: 0, disciplina: 0, importancia: 0 }
+    }
+
+    let goals = 0
+    let goal_header_bonus = 0
+    let goal_freekick_bonus = 0
+    let assists = 0
+    let key_passes = 0
+    let second_assists = 0
+    let intent_assists = 0
+    let shots_on_target = 0
+    let passes_completed = 0
+    let passes_attempted = 0
+    let takeons_won = 0
+
+    let clean_sheets = 0
+    let tackles_won = 0
+    let interceptions = 0
+    let ball_recoveries = 0
+    let clearances = 0
+
+    let saves = 0
+    let penalty_saves = 0
+    let claims_ok = 0
+    let sweepers_ok = 0
+
+    let yellow_cards = 0
+    let second_yellow_cards = 0
+    let red_cards = 0
+    let fouls_committed = 0
+    let penalties_conceded = 0
+    let penalties_missed = 0
+    let dispossessed = 0
+    let bad_touches = 0
+    let errors_leading_to_shot = 0
+    let errors_leading_to_goal = 0
+
+    let minutes_played = 0
+    let starter_count = 0
+
+    scoresList.forEach(s => {
+      goals += n(s.goals)
+      goal_header_bonus += n(s.goal_header_bonus)
+      goal_freekick_bonus += n(s.goal_freekick_bonus)
+      assists += n(s.assists)
+      key_passes += n(s.key_passes)
+      second_assists += n(s.second_assists)
+      intent_assists += n(s.intent_assists)
+      shots_on_target += n(s.shots_on_target)
+      passes_completed += n(s.passes_completed)
+      passes_attempted += n(s.passes_attempted)
+      takeons_won += n(s.takeons_won)
+
+      clean_sheets += s.clean_sheet ? 1 : 0
+      tackles_won += n(s.tackles_won)
+      interceptions += n(s.interceptions_high) + n(s.interceptions_med) + n(s.interceptions_low) || n(s.interceptions)
+      ball_recoveries += n(s.recoveries_high) + n(s.recoveries_med) + n(s.recoveries_low) || n(s.ball_recoveries)
+      clearances += n(s.clearances)
+
+      saves += n(s.saves)
+      penalty_saves += n(s.penalty_saves)
+      claims_ok += n(s.claims_ok)
+      sweepers_ok += n(s.sweepers_ok)
+
+      yellow_cards += n(s.yellow_cards)
+      second_yellow_cards += n(s.second_yellow_cards)
+      red_cards += n(s.red_cards)
+      fouls_committed += n(s.fouls_committed)
+      penalties_conceded += n(s.penalties_conceded)
+      penalties_missed += n(s.penalties_missed)
+      dispossessed += n(s.dispossessed)
+      bad_touches += n(s.bad_touches)
+      errors_leading_to_shot += n(s.errors_leading_to_shot)
+      errors_leading_to_goal += n(s.errors_leading_to_goal)
+
+      minutes_played += n(s.minutes_played)
+      starter_count += s.is_starter ? 1 : 0
+    })
+
+    const avgAtaque = (goals * 25 + assists * 20 + key_passes * 8 + shots_on_target * 6 + takeons_won * 5 + passes_completed * 0.1) / matches
+    
+    const isPOR = posCode.toUpperCase().includes('POR') || posCode.toUpperCase() === 'GK' || posCode.toUpperCase() === 'GOALKEEPER'
+    let avgDefensa = 0
+    if (isPOR) {
+      avgDefensa = (clean_sheets * 15 + tackles_won * 5 + interceptions * 5 + ball_recoveries * 2 + saves * 12 + penalty_saves * 40 + claims_ok * 6 + sweepers_ok * 6) / matches
+    } else {
+      avgDefensa = (clean_sheets * 15 + tackles_won * 8 + interceptions * 8 + ball_recoveries * 3 + clearances * 3) / matches
+    }
+
+    const avgPenalties = (yellow_cards * 15 + second_yellow_cards * 20 + red_cards * 35 + fouls_committed * 3 + penalties_conceded * 25 + penalties_missed * 15 + (dispossessed + bad_touches) * 0.8 + errors_leading_to_shot * 10 + errors_leading_to_goal * 20) / matches
+    const scoreDisciplina = Math.max(0, 100 - avgPenalties * 5)
+
+    const avgImportancia = (minutes_played / matches / 90) * 80 + (starter_count / matches) * 20
+
+    return {
+      ataque: Math.round(Math.min(100, Math.max(0, avgAtaque * 12))),
+      defensa: Math.round(Math.min(100, Math.max(0, isPOR ? avgDefensa * 12 : avgDefensa * 15))),
+      disciplina: Math.round(scoreDisciplina),
+      importancia: Math.round(Math.min(100, Math.max(0, avgImportancia)))
+    }
+  }
+
+  const playerRadar = calculateRadarStats(scores, player.position)
+
+  let compareRadar = { ataque: 0, defensa: 0, disciplina: 0, importancia: 0 }
+  let compareLabel = ''
+
+  if (compareTarget === 'media-pos') {
+    const pos = normPos(player.position)
+    compareLabel = `Media Liga (${pos})`
+    if (pos === 'POR') {
+      compareRadar = { ataque: 12, defensa: 62, disciplina: 85, importancia: 75 }
+    } else if (pos === 'DEF') {
+      compareRadar = { ataque: 15, defensa: 62, disciplina: 80, importancia: 70 }
+    } else if (pos === 'MED') {
+      compareRadar = { ataque: 48, defensa: 46, disciplina: 82, importancia: 70 }
+    } else {
+      compareRadar = { ataque: 68, defensa: 18, disciplina: 78, importancia: 68 }
+    }
+  } else if (compareTarget === 'media-gen') {
+    compareLabel = 'Media Liga'
+    compareRadar = { ataque: 35, defensa: 35, disciplina: 80, importancia: 70 }
+  } else if (comparePlayer) {
+    compareLabel = comparePlayer.short_name || `${comparePlayer.first_name} ${comparePlayer.last_name}`
+    compareRadar = calculateRadarStats(compareScores, comparePlayer.position)
+  }
+
+  const getPointsStr = (radar: typeof playerRadar) => {
+    const cx = 160
+    const cy = 135
+    const r = 90
+    const axes = [
+      radar.ataque,
+      radar.defensa,
+      radar.disciplina,
+      radar.importancia
+    ]
+    const angles = [-Math.PI/2, 0, Math.PI/2, Math.PI]
+    return axes.map((val, idx) => {
+      const d = (val / 100) * r
+      const x = cx + d * Math.cos(angles[idx])
+      const y = cy + d * Math.sin(angles[idx])
+      return `${x},${y}`
+    }).join(' ')
+  }
+
+  const p1Points = getPointsStr(playerRadar)
+  const p2Points = getPointsStr(compareRadar)
+
+  const radarAngles = [-Math.PI/2, 0, Math.PI/2, Math.PI]
+  const p1Values = [playerRadar.ataque, playerRadar.defensa, playerRadar.disciplina, playerRadar.importancia]
+  const p2Values = [compareRadar.ataque, compareRadar.defensa, compareRadar.disciplina, compareRadar.importancia]
+  const radarDefLabel = normPos(player.position) === 'POR' ? 'Defensa y Portería' : 'Defensa'
+
+  // Preparar grupos de estadísticas para mostrar todas las métricas puntuables
+  interface StatItem {
+    label: string
+    value: number | string
+    valNum: number
+    color?: string
+  }
+
+  interface StatGroup {
+    title: string
+    icon: string
+    colorClass: string
+    items: StatItem[]
+  }
+
+  const statGroups: StatGroup[] = [
+    {
+      title: 'Ataque y Distribución',
+      icon: '⚽',
+      colorClass: 'text-red-600 border-red-100 bg-red-50/30',
+      items: [
+        { label: 'Goles', value: totalStats.goals, valNum: totalStats.goals },
+        { label: 'Goles de cabeza', value: totalStats.goal_header_bonus, valNum: totalStats.goal_header_bonus },
+        { label: 'Goles de falta directa', value: totalStats.goal_freekick_bonus, valNum: totalStats.goal_freekick_bonus },
+        { label: 'Asistencias de gol', value: totalStats.assists, valNum: totalStats.assists },
+        { label: 'Pases clave', value: totalStats.key_passes, valNum: totalStats.key_passes },
+        { label: 'Segundas asistencias', value: totalStats.second_assists, valNum: totalStats.second_assists },
+        { label: 'Asistencias sin gol (ocasiones creadas)', value: totalStats.intent_assists, valNum: totalStats.intent_assists },
+        { label: 'Tiros a puerta', value: totalStats.shots_on_target, valNum: totalStats.shots_on_target },
+        { label: 'Tiros fuera', value: totalStats.shots_off_target, valNum: totalStats.shots_off_target },
+        { label: 'Tiros al palo', value: totalStats.shots_hit_woodwork, valNum: totalStats.shots_hit_woodwork },
+        { label: 'Grandes ocasiones creadas', value: totalStats.big_chances_created, valNum: totalStats.big_chances_created },
+        { label: 'Grandes ocasiones falladas', value: totalStats.big_chances_missed, valNum: totalStats.big_chances_missed },
+        { label: 'Regates ganados', value: totalStats.takeons_won, valNum: totalStats.takeons_won },
+        { label: 'Regates fallados', value: totalStats.takeons_lost, valNum: totalStats.takeons_lost },
+        { label: 'Regates desbordados', value: totalStats.takeons_overrun, valNum: totalStats.takeons_overrun },
+        { label: 'Habilidades destacadas', value: totalStats.good_skills, valNum: totalStats.good_skills },
+        { 
+          label: 'Pases completados', 
+          value: totalStats.passes_attempted > 0 ? `${totalStats.passes_completed} / ${totalStats.passes_attempted} (${Math.round((totalStats.passes_completed / totalStats.passes_attempted) * 100)}%)` : '0 / 0', 
+          valNum: totalStats.passes_attempted 
+        },
+        { label: 'Pases hacia adelante', value: totalStats.forward_passes, valNum: totalStats.forward_passes },
+        { label: 'Pases progresivos', value: totalStats.progressive_passes, valNum: totalStats.progressive_passes },
+        { label: 'Pases al último tercio', value: totalStats.passes_into_final_third, valNum: totalStats.passes_into_final_third },
+        { label: 'Pases al área', value: totalStats.passes_into_box, valNum: totalStats.passes_into_box },
+        { label: 'Pases al hueco (Through balls)', value: totalStats.through_balls, valNum: totalStats.through_balls },
+        { 
+          label: 'Centros completados', 
+          value: totalStats.crosses_attempted > 0 ? `${totalStats.crosses_completed} / ${totalStats.crosses_attempted} (${Math.round((totalStats.crosses_completed / totalStats.crosses_attempted) * 100)}%)` : '0 / 0', 
+          valNum: totalStats.crosses_attempted 
+        },
+        { label: 'Centros exitosos', value: totalStats.successful_crosses, valNum: totalStats.successful_crosses },
+        { label: 'Balones colgados al área (entries)', value: totalStats.box_entries, valNum: totalStats.box_entries },
+        { label: 'Pases largos completados', value: totalStats.long_balls_completed, valNum: totalStats.long_balls_completed },
+        { label: 'Lanzamientos a balón parado', value: totalStats.set_pieces_taken, valNum: totalStats.set_pieces_taken },
+        { label: 'Pases en corto (lay offs)', value: totalStats.lay_offs, valNum: totalStats.lay_offs },
+      ]
+    },
+    {
+      title: 'Defensa',
+      icon: '🛡️',
+      colorClass: 'text-indigo-600 border-indigo-100 bg-indigo-50/30',
+      items: [
+        { label: 'Porterías a cero', value: totalStats.clean_sheets, valNum: totalStats.clean_sheets, color: 'text-emerald-600' },
+        { label: 'Goles encajados', value: totalStats.goals_conceded, valNum: totalStats.goals_conceded, color: totalStats.goals_conceded > 0 ? 'text-red-600' : '' },
+        { label: 'Entradas ganadas', value: totalStats.tackles_won, valNum: totalStats.tackles_won },
+        { label: 'Entradas fallidas', value: totalStats.tackles_lost, valNum: totalStats.tackles_lost },
+        { label: 'Interceptaciones', value: totalStats.interceptions, valNum: totalStats.interceptions },
+        { label: 'Interceptaciones (Zona alta)', value: totalStats.interceptions_high, valNum: totalStats.interceptions_high },
+        { label: 'Interceptaciones (Zona media)', value: totalStats.interceptions_med, valNum: totalStats.interceptions_med },
+        { label: 'Interceptaciones (Zona baja)', value: totalStats.interceptions_low, valNum: totalStats.interceptions_low },
+        { label: 'Recuperaciones de balón', value: totalStats.ball_recoveries, valNum: totalStats.ball_recoveries },
+        { label: 'Recuperaciones (Zona alta)', value: totalStats.recoveries_high, valNum: totalStats.recoveries_high },
+        { label: 'Recuperaciones (Zona media)', value: totalStats.recoveries_med, valNum: totalStats.recoveries_med },
+        { label: 'Recuperaciones (Zona baja)', value: totalStats.recoveries_low, valNum: totalStats.recoveries_low },
+        { label: 'Despejes', value: totalStats.clearances, valNum: totalStats.clearances },
+        { label: 'Despejes en última línea', value: totalStats.clearances_last_line, valNum: totalStats.clearances_last_line },
+        { label: 'Tiros bloqueados', value: totalStats.blocked_shots, valNum: totalStats.blocked_shots },
+        { label: 'Centros bloqueados', value: totalStats.blocked_crosses, valNum: totalStats.blocked_crosses },
+        { label: 'Fueras de juego provocados', value: totalStats.offsides_provoked, valNum: totalStats.offsides_provoked },
+        { label: 'Duelos aéreos ganados', value: totalStats.aerials_won, valNum: totalStats.aerials_won },
+        { label: 'Duelos aéreos perdidos', value: totalStats.aerials_lost, valNum: totalStats.aerials_lost },
+        { label: 'Duelos terrestres perdidos (Challenges)', value: totalStats.challenges_lost, valNum: totalStats.challenges_lost },
+      ]
+    },
+    {
+      title: 'Portería',
+      icon: '🧤',
+      colorClass: 'text-cyan-600 border-cyan-100 bg-cyan-50/30',
+      items: [
+        { label: 'Paradas', value: totalStats.saves, valNum: totalStats.saves },
+        { label: 'Penaltis parados', value: totalStats.penalty_saves, valNum: totalStats.penalty_saves },
+        { label: 'Blocajes correctos (Claims)', value: totalStats.claims_ok, valNum: totalStats.claims_ok },
+        { label: 'Blocajes fallidos', value: totalStats.claims_fail, valNum: totalStats.claims_fail },
+        { label: 'Despejes de puños correctos', value: totalStats.punches_ok, valNum: totalStats.punches_ok },
+        { label: 'Despejes de puños fallidos', value: totalStats.punches_fail, valNum: totalStats.punches_fail },
+        { label: 'Salidas de área correctas', value: totalStats.sweepers_ok, valNum: totalStats.sweepers_ok },
+        { label: 'Salidas de área fallidas', value: totalStats.sweepers_fail, valNum: totalStats.sweepers_fail },
+        { label: 'Anticipaciones por bajo (Smothers)', value: totalStats.smothers, valNum: totalStats.smothers },
+        { label: 'Paradas seguras (Parries safe)', value: totalStats.parries_safe, valNum: totalStats.parries_safe },
+        { label: 'Paradas con peligro (Parries danger)', value: totalStats.parries_danger, valNum: totalStats.parries_danger },
+        { label: 'Fumbles (Pérdidas de control)', value: totalStats.fumbles, valNum: totalStats.fumbles },
+        { label: 'Centros no cortados', value: totalStats.crosses_not_claimed, valNum: totalStats.crosses_not_claimed },
+      ]
+    },
+    {
+      title: 'Penaltis, Disciplina y Penalizaciones',
+      icon: '🟨',
+      colorClass: 'text-amber-600 border-amber-100 bg-amber-50/30',
+      items: [
+        { label: 'Penaltis provocados', value: totalStats.penalties_won, valNum: totalStats.penalties_won },
+        { label: 'Penaltis cometidos', value: totalStats.penalties_conceded, valNum: totalStats.penalties_conceded, color: totalStats.penalties_conceded > 0 ? 'text-red-600' : '' },
+        { label: 'Penaltis fallados', value: totalStats.penalties_missed, valNum: totalStats.penalties_missed, color: totalStats.penalties_missed > 0 ? 'text-red-600' : '' },
+        { label: 'Faltas cometidas', value: totalStats.fouls_committed, valNum: totalStats.fouls_committed },
+        { label: 'Faltas recibidas', value: totalStats.fouls_won, valNum: totalStats.fouls_won },
+        { label: 'Tarjetas amarillas', value: totalStats.yellow_cards, valNum: totalStats.yellow_cards, color: 'text-amber-600' },
+        { label: 'Dobles amarillas', value: totalStats.second_yellow_cards, valNum: totalStats.second_yellow_cards, color: 'text-amber-600' },
+        { label: 'Tarjetas rojas', value: totalStats.red_cards, valNum: totalStats.red_cards, color: 'text-red-600' },
+        { label: 'Balones perdidos (Desposeído)', value: totalStats.dispossessed, valNum: totalStats.dispossessed },
+        { label: 'Malos controles de balón', value: totalStats.bad_touches, valNum: totalStats.bad_touches },
+        { label: 'Balones perdidos (Total)', value: totalStats.dispossessed + totalStats.bad_touches, valNum: totalStats.dispossessed + totalStats.bad_touches },
+        { label: 'Errores que llevan a tiro', value: totalStats.errors_leading_to_shot, valNum: totalStats.errors_leading_to_shot, color: totalStats.errors_leading_to_shot > 0 ? 'text-red-600' : '' },
+        { label: 'Errores que llevan a gol', value: totalStats.errors_leading_to_goal, valNum: totalStats.errors_leading_to_goal, color: totalStats.errors_leading_to_goal > 0 ? 'text-red-600' : '' },
+        { label: 'Puntos RELEVO acumulados', value: totalStats.relevo_points, valNum: totalStats.relevo_points, color: 'text-violet-600' },
+      ]
+    }
+  ]
+
+  // Configuración de la gráfica de evolución
+  const chartMetrics = [
+    { key: 'puntos', label: 'Puntos', icon: '⭐' },
+    { key: 'minutos', label: 'Minutos', icon: '⏱️' },
+    { key: 'goles', label: 'Goles', icon: '⚽' },
+    { key: 'asistencias', label: 'Asistencias', icon: '🅰️' },
+    { key: 'tiros', label: 'Tiros a puerta', icon: '🎯' },
+    { key: 'pases', label: 'Pases comp.', icon: '📈' },
+    { key: 'regates', label: 'Regates gan.', icon: '👟' },
+    { key: 'despejes', label: 'Despejes', icon: '🛡️' },
+    { key: 'recuperaciones', label: 'Recup.', icon: '🔄' },
+    { key: 'interceptaciones', label: 'Interc.', icon: '🛑' },
+    { key: 'paradas', label: 'Paradas', icon: '🧤' },
+    { key: 'perdidas', label: 'Pérdidas', icon: '📉' },
+  ]
+
+  const getMetricValue = (score: PlayerScore, key: string): number => {
+    const n = (val: any) => Number(val) || 0
+    switch (key) {
+      case 'puntos':
+        return Math.round((score.total_points || 0) * 10) / 10
+      case 'minutos':
+        return n(score.minutes_played)
+      case 'goles':
+        return n(score.goals)
+      case 'asistencias':
+        return n(score.assists)
+      case 'tiros':
+        return n(score.shots_on_target)
+      case 'pases':
+        return n(score.passes_completed)
+      case 'regates':
+        return n(score.takeons_won)
+      case 'despejes':
+        return n(score.clearances)
+      case 'recuperaciones':
+        return n(score.recoveries_high) + n(score.recoveries_med) + n(score.recoveries_low) || n(score.ball_recoveries)
+      case 'interceptaciones':
+        return n(score.interceptions_high) + n(score.interceptions_med) + n(score.interceptions_low) || n(score.interceptions)
+      case 'paradas':
+        return n(score.saves)
+      case 'perdidas':
+        return n(score.dispossessed) + n(score.bad_touches)
+      default:
+        return 0
+    }
+  }
+
+  const chronologicalScores = [...scores].reverse()
+
+  const chartData = chronologicalScores.map(score => ({
+    matchday: score.fixture?.matchday ?? 0,
+    opponent: score.fixture?.home_team_id === player.team_id 
+      ? score.fixture?.away_team?.name || 'Visitante'
+      : score.fixture?.home_team?.name || 'Local',
+    isHome: score.fixture?.home_team_id === player.team_id,
+    homeScore: score.fixture?.home_score,
+    awayScore: score.fixture?.away_score,
+    value: getMetricValue(score, selectedMetric),
+    score: score
+  }))
+
+  const selectedMetricConfig = chartMetrics.find(m => m.key === selectedMetric) || chartMetrics[0]
+
+  // Configuración SVG de la gráfica
+  const chartValues = chartData.map(d => d.value)
+  let maxVal = Math.max(...chartValues, 0)
+  let minVal = Math.min(...chartValues, 0)
+
+  if (maxVal === 0 && minVal === 0) {
+    maxVal = 10
+    minVal = 0
+  }
+
+  const paddingVal = (maxVal - minVal) * 0.1 || 1
+  const scaleMax = maxVal + paddingVal
+  const scaleMin = minVal - paddingVal
+  const range = scaleMax - scaleMin
+
+  const svgW = 800
+  const svgH = 240
+  const marginT = 20
+  const marginB = 40
+  const marginL = 50
+  const marginR = 20
+  const graphW = svgW - marginL - marginR
+  const graphH = svgH - marginT - marginB
+
+  const getSvgY = (val: number) => {
+    const pct = (val - scaleMin) / range
+    return marginT + (1 - pct) * graphH
+  }
+
+  const baselineY = getSvgY(0)
+
+  const tickCount = 4
+  const ticks = []
+  for (let i = 0; i < tickCount; i++) {
+    ticks.push(scaleMin + (i * range) / (tickCount - 1))
+  }
+
+  const barCount = chartData.length
+  const barAreaW = graphW / Math.max(1, barCount)
+  const barGap = Math.max(4, barAreaW * 0.15)
+  const barW = Math.max(8, barAreaW - barGap)
+
   return (
     <div className="space-y-6">
       {/* Botón volver */}
@@ -633,84 +1217,484 @@ export default function JugadorDetallePage() {
         </Card>
       </div>
 
-      {/* Stats detalladas */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Goles y Portería */}
-        <Card>
-          <CardContent className="p-4">
-            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              ⚽ Goles y Portería
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex justify-between">
-                <span className="text-slate-600">Goles</span>
-                <span className="font-bold">{totalStats.goals}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Porterías a cero</span>
-                <span className="font-bold text-emerald-600">{totalStats.clean_sheets}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Selector y Contenedor de Stats Detalladas */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            📊 Estadísticas Detalladas Acumuladas
+          </h2>
+          <button
+            onClick={() => setHideZeros(!hideZeros)}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 transition-colors shadow-sm cursor-pointer"
+          >
+            {hideZeros ? '✨ Mostrar métricas en cero' : '🙈 Ocultar métricas en cero'}
+          </button>
+        </div>
 
-        {/* Defensa */}
-        <Card>
-          <CardContent className="p-4">
-            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              🛡️ Defensa
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex justify-between">
-                <span className="text-slate-600">Entradas ganadas</span>
-                <span className="font-bold">{totalStats.tackles_won}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Intercepciones</span>
-                <span className="font-bold">{totalStats.interceptions}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid md:grid-cols-2 gap-6">
+          {statGroups.map((group, gIdx) => {
+            const visibleItems = hideZeros 
+              ? group.items.filter(item => item.valNum > 0)
+              : group.items
 
-        {/* Portero */}
-        <Card>
-          <CardContent className="p-4">
-            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              🧤 Portero
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex justify-between">
-                <span className="text-slate-600">Paradas</span>
-                <span className="font-bold">{totalStats.saves}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Duelos aéreos ganados</span>
-                <span className="font-bold">{totalStats.aerials_won}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            if (visibleItems.length === 0) return null
 
-        {/* Disciplinario */}
-        <Card>
-          <CardContent className="p-4">
-            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              🟨 Disciplinario
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex justify-between">
-                <span className="text-slate-600">Amarillas</span>
-                <span className="font-bold text-amber-600">{totalStats.yellow_cards}</span>
+            return (
+              <Card key={gIdx} className="overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow duration-300">
+                <div className={`px-4 py-3 border-b flex items-center gap-2.5 ${group.colorClass}`}>
+                  <span className="text-xl leading-none">{group.icon}</span>
+                  <h3 className="font-bold text-slate-800 text-base">{group.title}</h3>
+                </div>
+                <CardContent className="p-4 divide-y divide-slate-100">
+                  {visibleItems.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center py-2.5 text-sm hover:bg-slate-50/50 px-2 -mx-2 rounded transition-colors duration-150">
+                      <span className="text-slate-600 font-medium">{item.label}</span>
+                      <span className={`font-bold tabular-nums ${item.color || 'text-slate-800'}`}>
+                        {item.value}
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )
+          })}
+
+          {/* Tarjeta de Gráfico de Radar de Comparativa */}
+          <Card className="overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="px-4 py-3 border-b flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <span className="text-xl leading-none">🕸️</span>
+                <h3 className="font-bold text-slate-800 text-base">Comparativa de Rendimiento</h3>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Rojas</span>
-                <span className="font-bold text-red-600">{totalStats.red_cards}</span>
-              </div>
+              <select
+                value={compareTarget}
+                onChange={(e) => setCompareTarget(e.target.value)}
+                className="px-2.5 py-1 text-xs font-semibold bg-white border border-slate-200 rounded-lg text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-slate-500 max-w-[150px] truncate"
+              >
+                <option value="media-pos">Media Posición</option>
+                <option value="media-gen">Media Liga</option>
+                {allPlayers.length > 0 && (
+                  <optgroup label="Comparar con jugador">
+                    {allPlayers
+                      .filter(p => p.id !== player.id)
+                      .map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.short_name || `${p.first_name} ${p.last_name}`} ({getPositionLabel(p.position)})
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+              </select>
             </div>
-          </CardContent>
-        </Card>
+            <CardContent className="p-4 flex flex-col items-center">
+              <div className="w-full flex justify-center py-2">
+                <svg width="320" height="280" viewBox="0 0 320 280" className="overflow-visible">
+                  {/* Concentric grids at 25, 50, 75, 100 */}
+                  {[25, 50, 75, 100].map((pct) => {
+                    const d = (pct / 100) * 90
+                    const points = [
+                      `160,${135 - d}`,
+                      `${160 + d},135`,
+                      `160,${135 + d}`,
+                      `${160 - d},135`
+                    ].join(' ')
+                    return (
+                      <polygon
+                        key={pct}
+                        points={points}
+                        fill="none"
+                        stroke="#e2e8f0"
+                        strokeWidth="1"
+                        strokeDasharray={pct === 100 ? "0" : "2 2"}
+                      />
+                    )
+                  })}
+
+                  {/* Axis lines */}
+                  {[-Math.PI/2, 0, Math.PI/2, Math.PI].map((angle, idx) => {
+                    const x2 = 160 + 90 * Math.cos(angle)
+                    const y2 = 135 + 90 * Math.sin(angle)
+                    return (
+                      <line
+                        key={idx}
+                        x1={160}
+                        y1={135}
+                        x2={x2}
+                        y2={y2}
+                        stroke="#e2e8f0"
+                        strokeWidth="1"
+                      />
+                    )
+                  })}
+
+                  {/* Axis Labels */}
+                  <text x={160} y={135 - 90 - 8} textAnchor="middle" className="text-[10px] font-bold fill-slate-500">Ataque y Distribución</text>
+                  <text x={160 + 90 + 6} y={135 + 4} textAnchor="start" className="text-[10px] font-bold fill-slate-500">{radarDefLabel}</text>
+                  <text x={160} y={135 + 90 + 14} textAnchor="middle" className="text-[10px] font-bold fill-slate-500">Disciplina</text>
+                  <text x={160 - 90 - 6} y={135 + 4} textAnchor="end" className="text-[10px] font-bold fill-slate-500">Importancia</text>
+
+                  {/* Target polygon (P2) */}
+                  <polygon
+                    points={p2Points}
+                    fill="rgba(249, 115, 22, 0.15)"
+                    stroke="rgba(249, 115, 22, 0.75)"
+                    strokeWidth="2"
+                    className="transition-all duration-300"
+                  />
+
+                  {/* Player polygon (P1) */}
+                  <polygon
+                    points={p1Points}
+                    fill="rgba(16, 185, 129, 0.25)"
+                    stroke="rgba(16, 185, 129, 0.85)"
+                    strokeWidth="2.5"
+                    className="transition-all duration-300"
+                  />
+
+                  {/* Vertex circles for P2 */}
+                  {p2Values.map((val, idx) => {
+                    const angle = radarAngles[idx]
+                    const d = (val / 100) * 90
+                    const x = 160 + d * Math.cos(angle)
+                    const y = 135 + d * Math.sin(angle)
+                    return (
+                      <circle
+                        key={idx}
+                        cx={x}
+                        cy={y}
+                        r="3"
+                        className="fill-orange-500 stroke-white stroke-[1.5]"
+                      />
+                    )
+                  })}
+
+                  {/* Vertex circles for P1 */}
+                  {p1Values.map((val, idx) => {
+                    const angle = radarAngles[idx]
+                    const d = (val / 100) * 90
+                    const x = 160 + d * Math.cos(angle)
+                    const y = 135 + d * Math.sin(angle)
+                    return (
+                      <circle
+                        key={idx}
+                        cx={x}
+                        cy={y}
+                        r="3.5"
+                        className="fill-emerald-500 stroke-white stroke-[1.5]"
+                      />
+                    )
+                  })}
+                </svg>
+              </div>
+
+              {/* Leyenda comparativa con números */}
+              <div className="w-full grid grid-cols-2 gap-4 border-t border-slate-100 pt-3 mt-1 text-xs">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-600">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="truncate max-w-[120px]">{player.short_name || player.first_name}</span>
+                  </div>
+                  <div className="pl-3.5 text-slate-500 space-y-0.5 font-medium font-medium">
+                    <div className="flex justify-between"><span>Ataque:</span> <span className="font-bold text-slate-700 tabular-nums">{playerRadar.ataque}</span></div>
+                    <div className="flex justify-between"><span>{radarDefLabel}:</span> <span className="font-bold text-slate-700 tabular-nums">{playerRadar.defensa}</span></div>
+                    <div className="flex justify-between"><span>Disciplina:</span> <span className="font-bold text-slate-700 tabular-nums">{playerRadar.disciplina}</span></div>
+                    <div className="flex justify-between"><span>Importancia:</span> <span className="font-bold text-slate-700 tabular-nums">{playerRadar.importancia}</span></div>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-orange-600">
+                    <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
+                    <span className="truncate max-w-[120px]">{compareLabel}</span>
+                  </div>
+                  <div className="pl-3.5 text-slate-500 space-y-0.5 font-medium">
+                    <div className="flex justify-between"><span>Ataque:</span> <span className="font-bold text-slate-700 tabular-nums">{compareRadar.ataque}</span></div>
+                    <div className="flex justify-between"><span>{radarDefLabel}:</span> <span className="font-bold text-slate-700 tabular-nums">{compareRadar.defensa}</span></div>
+                    <div className="flex justify-between"><span>Disciplina:</span> <span className="font-bold text-slate-700 tabular-nums">{compareRadar.disciplina}</span></div>
+                    <div className="flex justify-between"><span>Importancia:</span> <span className="font-bold text-slate-700 tabular-nums">{compareRadar.importancia}</span></div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      {/* Gráfica de Evolución por Jornadas */}
+      <Card className="overflow-hidden border border-slate-200 bg-white shadow-md">
+        <CardContent className="p-6 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">📈 Evolución del Rendimiento</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Elige una métrica para visualizar su evolución jornada a jornada</p>
+            </div>
+            {/* Selector de Métrica */}
+            <div className="relative shrink-0 w-full sm:w-56">
+              <select
+                value={selectedMetric}
+                onChange={(e) => {
+                  setSelectedMetric(e.target.value)
+                  setActiveBar(null)
+                }}
+                className="w-full pl-4 pr-10 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-800 transition-all duration-200 cursor-pointer shadow-sm appearance-none"
+              >
+                {chartMetrics.map(m => (
+                  <option key={m.key} value={m.key}>
+                    {m.icon} {m.label}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {chartData.length === 0 ? (
+            <div className="text-slate-500 text-center py-12">
+              No hay datos de evolución para este jugador.
+            </div>
+          ) : (
+            <div className="relative w-full">
+              {/* Tooltip flotante HTML */}
+              {activeBar !== null && chartData[activeBar] && (
+                <div
+                  className="absolute z-10 bg-slate-900/95 text-white p-3 rounded-xl shadow-xl border border-slate-700 text-xs flex flex-col gap-1 pointer-events-none transition-all duration-150"
+                  style={{
+                    left: `${(activeBar * barAreaW + marginL + barAreaW / 2) / svgW * 100}%`,
+                    bottom: '85%',
+                    transform: 'translateX(-50%)',
+                  }}
+                >
+                  <div className="font-bold text-emerald-400">Jornada {chartData[activeBar].matchday}</div>
+                  <div className="font-semibold text-slate-200">
+                    {chartData[activeBar].isHome ? 'Casa' : 'Fuera'} vs {chartData[activeBar].opponent}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Resultado: {chartData[activeBar].homeScore !== undefined && chartData[activeBar].awayScore !== undefined 
+                      ? `${chartData[activeBar].homeScore} - ${chartData[activeBar].awayScore}` 
+                      : 'N/D'}
+                  </div>
+                  <div className="flex justify-between gap-4 mt-1 border-t border-slate-800 pt-1">
+                    <span className="capitalize">{selectedMetricConfig.label}:</span>
+                    <span className="font-bold text-emerald-300">{chartData[activeBar].value}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 italic">
+                    {chartData[activeBar].score.minutes_played}' min · {chartData[activeBar].score.is_starter ? 'Titular' : 'Suplente'}
+                  </div>
+                </div>
+              )}
+
+              {/* Área SVG responsiva */}
+              <div className="w-full overflow-hidden">
+                <svg width="100%" height="100%" viewBox={`0 0 ${svgW} ${svgH}`} className="overflow-visible">
+                  <defs>
+                    <linearGradient id="grad-puntos" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#34d399" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#059669" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-puntos-neg" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f43f5e" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#be123c" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-minutos" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#60a5fa" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-goles" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f87171" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#dc2626" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-asistencias" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#fbbf24" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#d97706" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-tiros" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#c084fc" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#7c3aed" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-pases" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22d3ee" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#0891b2" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-regates" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f472b6" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#db2777" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-despejes" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#94a3b8" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#475569" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-recuperaciones" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#4ade80" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#16a34a" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-interceptaciones" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#2dd4bf" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#0d9488" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-paradas" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22d3ee" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#0f766e" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-perdidas" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#fb7185" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#e11d48" stopOpacity="1" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Rejilla de fondo y Ticks del eje Y */}
+                  {ticks.map((tick, idx) => {
+                    const yVal = getSvgY(tick)
+                    return (
+                      <g key={idx} className="opacity-20">
+                        <line
+                          x1={marginL}
+                          y1={yVal}
+                          x2={svgW - marginR}
+                          y2={yVal}
+                          stroke="#94a3b8"
+                          strokeWidth="1"
+                          strokeDasharray="4 4"
+                        />
+                        <text
+                          x={marginL - 10}
+                          y={yVal + 4}
+                          textAnchor="end"
+                          className="text-[10px] font-bold fill-slate-500 tabular-nums"
+                        >
+                          {Math.round(tick * 10) / 10}
+                        </text>
+                      </g>
+                    )
+                  })}
+
+                  {/* Eje Base Horizontal (Y=0) */}
+                  {scaleMin < 0 && scaleMax > 0 && (
+                    <line
+                      x1={marginL}
+                      y1={baselineY}
+                      x2={svgW - marginR}
+                      y2={baselineY}
+                      stroke="#475569"
+                      strokeWidth="1.5"
+                      className="opacity-40"
+                    />
+                  )}
+
+                  {/* Barras verticales */}
+                  {chartData.map((d, i) => {
+                    const xPos = marginL + i * barAreaW + (barAreaW - barW) / 2
+                    const val = d.value
+                    const yPos = val >= 0 ? getSvgY(val) : baselineY
+                    let height = val >= 0 ? baselineY - yPos : getSvgY(val) - baselineY
+
+                    if (val !== 0 && height < 2) height = 2 // Altura mínima para visibilidad
+
+                    // Esquinas redondeadas personalizadas según signo de la métrica
+                    const rSize = Math.min(6, height, barW / 2)
+                    let pathD = ''
+                    if (val >= 0) {
+                      pathD = `M ${xPos} ${baselineY} 
+                               L ${xPos} ${yPos + rSize} 
+                               Q ${xPos} ${yPos} ${xPos + rSize} ${yPos} 
+                               L ${xPos + barW - rSize} ${yPos} 
+                               Q ${xPos + barW} ${yPos} ${xPos + barW} ${yPos + rSize} 
+                               L ${xPos + barW} ${baselineY} 
+                               Z`
+                    } else {
+                      pathD = `M ${xPos} ${baselineY} 
+                               L ${xPos + barW} ${baselineY} 
+                               L ${xPos + barW} ${yPos + height - rSize} 
+                               Q ${xPos + barW} ${yPos + height} ${xPos + barW - rSize} ${yPos + height} 
+                               L ${xPos + rSize} ${yPos + height} 
+                               Q ${xPos} ${yPos + height} ${xPos} ${yPos + height - rSize} 
+                               L ${xPos} ${baselineY} 
+                               Z`
+                    }
+
+                    const fillUrl = (selectedMetric === 'puntos' && val < 0)
+                      ? 'url(#grad-puntos-neg)'
+                      : `url(#grad-${selectedMetric})`
+
+                    return (
+                      <g key={i}>
+                        {/* Barra interactiva */}
+                        {val !== 0 ? (
+                          <path
+                            d={pathD}
+                            fill={fillUrl}
+                            className="transition-all duration-300 cursor-pointer"
+                            style={{
+                              filter: activeBar === i ? 'drop-shadow(0px 2px 8px rgba(0, 0, 0, 0.15))' : 'none',
+                              opacity: activeBar !== null && activeBar !== i ? 0.35 : 1
+                            }}
+                            onMouseEnter={() => setActiveBar(i)}
+                            onMouseLeave={() => setActiveBar(null)}
+                          />
+                        ) : (
+                          // Indicador de valor cero (pequeño punto en la base)
+                          <circle
+                            cx={xPos + barW / 2}
+                            cy={baselineY}
+                            r="3"
+                            className="fill-slate-300 hover:fill-slate-500 cursor-pointer transition-colors duration-150"
+                            style={{
+                              opacity: activeBar !== null && activeBar !== i ? 0.35 : 1
+                            }}
+                            onMouseEnter={() => setActiveBar(i)}
+                            onMouseLeave={() => setActiveBar(null)}
+                          />
+                        )}
+                        {/* Línea invisible más ancha para facilitar el hover en móviles */}
+                        <rect
+                          x={marginL + i * barAreaW}
+                          y={marginT}
+                          width={barAreaW}
+                          height={graphH}
+                          fill="transparent"
+                          className="cursor-pointer"
+                          onMouseEnter={() => setActiveBar(i)}
+                          onMouseLeave={() => setActiveBar(null)}
+                        />
+                      </g>
+                    )
+                  })}
+
+                  {/* Eje X (Línea base inferior) */}
+                  <line
+                    x1={marginL}
+                    y1={svgH - marginB}
+                    x2={svgW - marginR}
+                    y2={svgH - marginB}
+                    stroke="#cbd5e1"
+                    strokeWidth="1.5"
+                  />
+
+                  {/* Etiquetas del eje X (Jornadas) */}
+                  {chartData.map((d, i) => {
+                    const xPos = marginL + i * barAreaW + barAreaW / 2
+                    const showLabel = barCount < 20 || i % 2 === 0
+                    if (!showLabel) return null
+                    return (
+                      <text
+                        key={i}
+                        x={xPos}
+                        y={svgH - 18}
+                        textAnchor="middle"
+                        className="text-[10px] font-bold fill-slate-400"
+                      >
+                        J.{d.matchday}
+                      </text>
+                    )
+                  })}
+                </svg>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Rendimiento por partido */}
       <Card>
