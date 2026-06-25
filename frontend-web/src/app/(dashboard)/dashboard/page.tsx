@@ -413,7 +413,7 @@ export default function DashboardPage() {
   // Cargar puntos de los jugadores cuando la jornada está en curso
   useEffect(() => {
     const fetchPlayerPoints = async () => {
-      if (!isUnlockWindowOpen || !userTeamId || selectedPlayers.length === 0) {
+      if (!userTeamId || selectedPlayers.length === 0) {
         setPlayerPoints(new Map())
         return
       }
