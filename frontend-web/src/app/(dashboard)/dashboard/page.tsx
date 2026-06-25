@@ -1137,12 +1137,18 @@ export default function DashboardPage() {
                 <div className="absolute top-1/2 left-1/2 w-24 h-24 sm:w-32 sm:h-32 border-2 border-white/40 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
                 {/* Center dot */}
                 <div className="absolute top-1/2 left-1/2 w-2 h-2 bg-white/60 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                
                 {/* Top Penalty Area */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-44 h-16 sm:w-56 sm:h-20 border-b-2 border-x-2 border-white/40"></div>
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-44 h-16 sm:w-56 sm:h-20 border-b-2 border-x-2 border-white/40 z-10"></div>
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-6 sm:w-24 sm:h-8 border-b-2 border-x-2 border-white/40"></div>
+                {/* Top Penalty Arc */}
+                <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 w-16 h-8 sm:w-20 sm:h-10 border-b-2 border-x-2 border-white/40 rounded-b-full"></div>
+                
                 {/* Bottom Penalty Area */}
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-44 h-16 sm:w-56 sm:h-20 border-t-2 border-x-2 border-white/40"></div>
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-44 h-16 sm:w-56 sm:h-20 border-t-2 border-x-2 border-white/40 z-10"></div>
                 <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-6 sm:w-24 sm:h-8 border-t-2 border-x-2 border-white/40"></div>
+                {/* Bottom Penalty Arc */}
+                <div className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 w-16 h-8 sm:w-20 sm:h-10 border-t-2 border-x-2 border-white/40 rounded-t-full"></div>
               </div>
 
               {/* Player rows (top-down: Delanteros -> Mediocampistas -> Defensas -> Porteros) */}
