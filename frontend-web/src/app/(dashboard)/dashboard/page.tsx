@@ -42,14 +42,16 @@ function PitchPlayerCard({
   replacedPlayer,
   getPositionColor,
   getPositionLabel,
+  hasMatchStarted,
 }: {
   player: Player
   points?: number
   replacedPlayer?: Player
   getPositionColor: (pos: string) => string
   getPositionLabel: (pos: string) => string
+  hasMatchStarted?: boolean
 }) {
-  const pts = points !== undefined ? Math.round(points * 10) / 10 : null
+  const pts = points !== undefined ? Math.round(points * 10) / 10 : (hasMatchStarted ? 0 : null)
 
   return (
     <div className="flex flex-col items-center w-[58px] sm:w-[80px] text-center relative shrink-0 group">
@@ -78,13 +80,13 @@ function PitchPlayerCard({
 
         {/* Puntos (medio derecha) */}
         {pts !== null && (
-          <div className="absolute top-1/2 -right-3 -translate-y-1/2 bg-white/90 backdrop-blur-sm text-emerald-700 font-extrabold text-[10px] sm:text-xs rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shadow-md border border-white">
+          <div className="absolute top-1/2 -right-5 -translate-y-1/2 bg-white/95 backdrop-blur-sm text-blue-700 font-extrabold text-[10px] sm:text-xs rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shadow-md border border-blue-200">
             {pts}
           </div>
         )}
 
         {/* Precio (abajo derecha, en lugar de LIVE, desplazado) */}
-        <div className="absolute -bottom-1.5 -right-4 bg-white text-emerald-600 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-full shadow-md border border-emerald-100 min-w-[28px]">
+        <div className="absolute -bottom-2 -right-6 bg-white/95 text-emerald-600 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-full shadow-md border border-emerald-200 min-w-[28px]">
           {player.precio ? `${player.precio}M` : '-'}
         </div>
       </div>
@@ -125,6 +127,7 @@ export default function DashboardPage() {
   const [priceMinFilter, setPriceMinFilter] = useState<number | ''>('')
   const [priceMaxFilter, setPriceMaxFilter] = useState<number | ''>('')
   const [playerPoints, setPlayerPoints] = useState<Map<string, number>>(new Map())
+  const [teamMatchStatus, setTeamMatchStatus] = useState<Map<string, boolean>>(new Map())
   const [usersOnline, setUsersOnline] = useState<Array<{ id: string; full_name: string }>>([])
   const [onlineCount, setOnlineCount] = useState(0)
   const [showOnlineList, setShowOnlineList] = useState(false)
@@ -420,10 +423,17 @@ export default function DashboardPage() {
       // Obtener puntos de player_scores para esta jornada
       const { data: fixtures } = await supabase
         .from('fixtures')
-        .select('id')
+        .select('id, home_team_id, away_team_id, status')
         .eq('matchday', matchdayToLoad)
 
       const fixtureIds = fixtures?.map(f => f.id) || []
+      const teamStatusMap = new Map<string, boolean>()
+      fixtures?.forEach(f => {
+        const hasStarted = f.status !== 'scheduled' && f.status !== 'postponed'
+        teamStatusMap.set(f.home_team_id, hasStarted)
+        teamStatusMap.set(f.away_team_id, hasStarted)
+      })
+      setTeamMatchStatus(teamStatusMap)
 
       if (fixtureIds.length === 0) {
         setPlayerPoints(new Map())
@@ -1140,7 +1150,7 @@ export default function DashboardPage() {
                 {/* Delanteros */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Delanteros</div>
@@ -1150,7 +1160,7 @@ export default function DashboardPage() {
                 {/* Mediocampistas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Centrocampistas</div>
@@ -1160,7 +1170,7 @@ export default function DashboardPage() {
                 {/* Defensas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Defensas</div>
@@ -1170,7 +1180,7 @@ export default function DashboardPage() {
                 {/* Portero */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Portero</div>
