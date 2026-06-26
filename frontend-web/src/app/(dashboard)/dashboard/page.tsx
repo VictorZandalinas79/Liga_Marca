@@ -429,9 +429,10 @@ export default function DashboardPage() {
       const fixtureIds = fixtures?.map(f => f.id) || []
       const teamStatusMap = new Map<string, boolean>()
       fixtures?.forEach(f => {
-        const hasStarted = f.status !== 'scheduled' && f.status !== 'postponed'
-        teamStatusMap.set(f.home_team_id, hasStarted)
-        teamStatusMap.set(f.away_team_id, hasStarted)
+        const statusLower = (f.status || '').toLowerCase()
+        const hasStarted = statusLower !== 'scheduled' && statusLower !== 'postponed' && statusLower !== 'fixture'
+        teamStatusMap.set(String(f.home_team_id), hasStarted)
+        teamStatusMap.set(String(f.away_team_id), hasStarted)
       })
       setTeamMatchStatus(teamStatusMap)
 
@@ -1156,7 +1157,7 @@ export default function DashboardPage() {
                 {/* Delanteros */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Delanteros</div>
@@ -1166,7 +1167,7 @@ export default function DashboardPage() {
                 {/* Mediocampistas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Centrocampistas</div>
@@ -1176,7 +1177,7 @@ export default function DashboardPage() {
                 {/* Defensas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Defensas</div>
@@ -1186,7 +1187,7 @@ export default function DashboardPage() {
                 {/* Portero */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Portero</div>
