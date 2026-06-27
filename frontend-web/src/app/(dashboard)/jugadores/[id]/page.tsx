@@ -177,6 +177,7 @@ export default function JugadorDetallePage() {
   const [hideZeros, setHideZeros] = useState(true)
   const [selectedMetric, setSelectedMetric] = useState('puntos')
   const [activeBar, setActiveBar] = useState<number | null>(null)
+  const [activeRadarAxis, setActiveRadarAxis] = useState<number | null>(null)
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [compareTarget, setCompareTarget] = useState<string>('media-pos')
   const [compareScores, setCompareScores] = useState<PlayerScore[]>([])
@@ -242,10 +243,56 @@ export default function JugadorDetallePage() {
         `)
         .eq('player_id', playerId)
 
-      if (scoresData) {
+      let allScores = scoresData || []
+
+      if (playerData.team_id) {
+        const playedFixtureIds = new Set(allScores.map(s => s.fixture_id))
+        const { data: teamFixtures } = await supabase
+          .from('fixtures')
+          .select('id, start_time, matchday, home_team_id, away_team_id, home_score, away_score, status')
+          .lt('start_time', new Date().toISOString())
+          .or(`home_team_id.eq.${playerData.team_id},away_team_id.eq.${playerData.team_id}`)
+
+        if (teamFixtures) {
+          const unplayedFixtures = teamFixtures.filter(f => !playedFixtureIds.has(f.id))
+          const unplayedScores = unplayedFixtures.map(f => ({
+            id: `unplayed-${f.id}`,
+            fixture_id: f.id,
+            match_id: f.id,
+            total_points: 0,
+            minutes_played: 0,
+            is_starter: false,
+            position: playerData.position,
+            relevo_points: 0,
+            goals: 0, goal_header_bonus: 0, goal_freekick_bonus: 0, own_goals: 0, goals_conceded: 0, clean_sheet: false,
+            assists: 0, key_passes: 0, second_assists: 0, intent_assists: 0,
+            shots_on_target: 0, shots_off_target: 0, shots_hit_woodwork: 0, big_chances_created: 0, big_chances_missed: 0,
+            penalties_scored: 0, penalties_missed: 0, penalties_won: 0, penalties_conceded: 0,
+            saves: 0, penalty_saves: 0, claims_ok: 0, claims_fail: 0, fumbles: 0, crosses_not_claimed: 0, punches_ok: 0, punches_fail: 0, smothers: 0, sweepers_ok: 0, sweepers_fail: 0, parries_safe: 0, parries_danger: 0,
+            clearances: 0, clearances_last_line: 0, blocked_crosses: 0, interceptions: 0, interceptions_high: 0, interceptions_med: 0, interceptions_low: 0, tackles_won: 0, tackles_lost: 0, blocked_shots: 0, blocked_passes: 0, ball_recoveries: 0, recoveries_high: 0, recoveries_med: 0, recoveries_low: 0, offsides_provoked: 0, challenges_lost: 0,
+            errors_leading_to_shot: 0, errors_leading_to_goal: 0,
+            passes_completed: 0, passes_attempted: 0, progressive_passes: 0, passes_into_final_third: 0, passes_into_box: 0, through_balls: 0, crosses_completed: 0, crosses_attempted: 0, switch_plays: 0, pull_backs: 0, long_balls_completed: 0, lay_offs: 0, forward_passes: 0, set_pieces_taken: 0, successful_crosses: 0, box_entries: 0,
+            takeons_won: 0, takeons_lost: 0, takeons_overrun: 0, good_skills: 0, dispossessed: 0, bad_touches: 0,
+            aerials_won: 0, aerials_lost: 0,
+            fouls_committed: 0, fouls_won: 0,
+            yellow_cards: 0, second_yellow_cards: 0, red_cards: 0,
+            fixtures: {
+              start_time: f.start_time,
+              matchday: f.matchday,
+              home_team_id: f.home_team_id,
+              away_team_id: f.away_team_id,
+              home_score: f.home_score,
+              away_score: f.away_score
+            }
+          } as any))
+          allScores = [...allScores, ...unplayedScores]
+        }
+      }
+
+      if (allScores.length > 0) {
         // Recopilar los ids de equipo de todos los fixtures
         const teamIds = [...new Set(
-          scoresData.flatMap(s => [s.fixtures?.home_team_id, s.fixtures?.away_team_id])
+          allScores.flatMap(s => [s.fixtures?.home_team_id, s.fixtures?.away_team_id])
             .filter(Boolean)
         )] as string[]
 
@@ -258,7 +305,7 @@ export default function JugadorDetallePage() {
           teamsData?.forEach(t => teamsMap.set(t.id, t.name))
         }
 
-        const mapped = scoresData.map(s => ({
+        const mapped = allScores.map(s => ({
           ...s,
           fixture: s.fixtures ? {
             start_time: s.fixtures.start_time,
@@ -714,150 +761,280 @@ export default function JugadorDetallePage() {
   // ==========================================
   // LÓGICA DE RADAR Y COMPARATIVAS
   // ==========================================
-  const calculateRadarStats = (scoresList: PlayerScore[], posCode: string) => {
+
+  type RadarAxis = {
+    label: string
+    value: number
+    metrics: { label: string; value: number | string }[]
+  }
+
+  const calculateRadarStats = (scoresList: PlayerScore[], posCode: string): RadarAxis[] => {
     const n = (v: any) => Number(v) || 0
     const matches = scoresList.length
-    if (matches === 0) {
-      return { ataque: 0, defensa: 0, disciplina: 0, importancia: 0 }
+    const isPOR = posCode.toUpperCase().includes('POR') || posCode.toUpperCase() === 'GK' || posCode.toUpperCase() === 'GOALKEEPER'
+
+    const emptyRadar = (isPor: boolean): RadarAxis[] => {
+      if (isPor) {
+        return [
+          { label: 'Portería', value: 0, metrics: [] },
+          { label: 'Defensa (Área)', value: 0, metrics: [] },
+          { label: 'Distribución', value: 0, metrics: [] },
+          { label: 'Importancia', value: 0, metrics: [] },
+          { label: 'Concentración', value: 0, metrics: [] }
+        ]
+      }
+      return [
+        { label: 'Defensa', value: 0, metrics: [] },
+        { label: 'Ataque', value: 0, metrics: [] },
+        { label: 'Finalización', value: 0, metrics: [] },
+        { label: 'Importancia', value: 0, metrics: [] },
+        { label: 'Balón parado', value: 0, metrics: [] }
+      ]
     }
 
-    let goals = 0
-    let goal_header_bonus = 0
-    let goal_freekick_bonus = 0
-    let assists = 0
-    let key_passes = 0
-    let second_assists = 0
-    let intent_assists = 0
-    let shots_on_target = 0
-    let passes_completed = 0
-    let passes_attempted = 0
-    let takeons_won = 0
+    if (matches === 0) return emptyRadar(isPOR)
 
-    let clean_sheets = 0
-    let tackles_won = 0
-    let interceptions = 0
-    let ball_recoveries = 0
-    let clearances = 0
-
-    let saves = 0
-    let penalty_saves = 0
-    let claims_ok = 0
-    let sweepers_ok = 0
-
-    let yellow_cards = 0
-    let second_yellow_cards = 0
-    let red_cards = 0
-    let fouls_committed = 0
-    let penalties_conceded = 0
-    let penalties_missed = 0
-    let dispossessed = 0
-    let bad_touches = 0
-    let errors_leading_to_shot = 0
-    let errors_leading_to_goal = 0
-
-    let minutes_played = 0
-    let starter_count = 0
+    let goals = 0, assists = 0, shots_on_target = 0, passes_completed = 0
+    let takeons_won = 0, clean_sheets = 0, interceptions = 0, ball_recoveries = 0
+    let clearances = 0, saves = 0, penalty_saves = 0, claims_ok = 0, sweepers_ok = 0
+    let minutes_played = 0, starter_count = 0, forward_passes = 0, progressive_passes = 0
+    let long_balls_completed = 0, box_entries = 0, set_pieces_taken = 0
+    let penalties_scored = 0, smothers = 0, aerials_won = 0
 
     scoresList.forEach(s => {
       goals += n(s.goals)
-      goal_header_bonus += n(s.goal_header_bonus)
-      goal_freekick_bonus += n(s.goal_freekick_bonus)
       assists += n(s.assists)
-      key_passes += n(s.key_passes)
-      second_assists += n(s.second_assists)
-      intent_assists += n(s.intent_assists)
       shots_on_target += n(s.shots_on_target)
       passes_completed += n(s.passes_completed)
-      passes_attempted += n(s.passes_attempted)
       takeons_won += n(s.takeons_won)
-
       clean_sheets += s.clean_sheet ? 1 : 0
-      tackles_won += n(s.tackles_won)
       interceptions += n(s.interceptions_high) + n(s.interceptions_med) + n(s.interceptions_low) || n(s.interceptions)
       ball_recoveries += n(s.recoveries_high) + n(s.recoveries_med) + n(s.recoveries_low) || n(s.ball_recoveries)
       clearances += n(s.clearances)
-
       saves += n(s.saves)
       penalty_saves += n(s.penalty_saves)
       claims_ok += n(s.claims_ok)
       sweepers_ok += n(s.sweepers_ok)
-
-      yellow_cards += n(s.yellow_cards)
-      second_yellow_cards += n(s.second_yellow_cards)
-      red_cards += n(s.red_cards)
-      fouls_committed += n(s.fouls_committed)
-      penalties_conceded += n(s.penalties_conceded)
-      penalties_missed += n(s.penalties_missed)
-      dispossessed += n(s.dispossessed)
-      bad_touches += n(s.bad_touches)
-      errors_leading_to_shot += n(s.errors_leading_to_shot)
-      errors_leading_to_goal += n(s.errors_leading_to_goal)
-
       minutes_played += n(s.minutes_played)
       starter_count += s.is_starter ? 1 : 0
+      forward_passes += n(s.forward_passes)
+      progressive_passes += n(s.progressive_passes)
+      long_balls_completed += n(s.long_balls_completed)
+      box_entries += n(s.box_entries)
+      set_pieces_taken += n(s.set_pieces_taken)
+      penalties_scored += n(s.penalties_scored)
+      smothers += n(s.smothers)
+      aerials_won += n(s.aerials_won)
     })
 
-    const avgAtaque = (goals * 25 + assists * 20 + key_passes * 8 + shots_on_target * 6 + takeons_won * 5 + passes_completed * 0.1) / matches
-    
-    const isPOR = posCode.toUpperCase().includes('POR') || posCode.toUpperCase() === 'GK' || posCode.toUpperCase() === 'GOALKEEPER'
-    let avgDefensa = 0
-    if (isPOR) {
-      avgDefensa = (clean_sheets * 15 + tackles_won * 5 + interceptions * 5 + ball_recoveries * 2 + saves * 12 + penalty_saves * 40 + claims_ok * 6 + sweepers_ok * 6) / matches
+    const r2 = (v: number) => Math.round(v * 100) / 100
+    const norm = (val: number, maxExpected: number) => Math.round(Math.min(100, Math.max(0, (val / maxExpected) * 100)))
+
+    const p_interceptions = interceptions / matches
+    const p_recoveries = ball_recoveries / matches
+    const p_aerials = aerials_won / matches
+    const p_clearances = clearances / matches
+    const p_takeons = takeons_won / matches
+    const p_forward = (forward_passes + progressive_passes) / matches
+    const p_assists = assists / matches
+    const p_passes = passes_completed / matches
+    const p_long_balls = long_balls_completed / matches
+    const p_box_entries = box_entries / matches
+    const p_shots = shots_on_target / matches
+    const p_goals = goals / matches
+    const p_minutes = minutes_played / (matches * 90)
+    const p_starter = starter_count / matches
+    const p_set_pieces = set_pieces_taken / matches
+    const p_pen_scored = penalties_scored / matches
+    const p_saves = saves / matches
+    const p_clean_sheets = clean_sheets / matches
+    const p_sweepers_claims = (sweepers_ok + claims_ok) / matches
+    const p_pen_saves = penalty_saves / matches
+    const p_smothers = smothers / matches
+
+    if (!isPOR) {
+      const defScore = p_interceptions * 10 + p_recoveries * 5 + p_aerials * 5 + p_clearances * 5
+      const atkScore = p_takeons * 8 + p_forward * 1.5 + p_assists * 30 + p_passes * 0.5 + p_long_balls * 2
+      const finScore = p_box_entries * 4 + p_shots * 15 + p_goals * 40
+      const impScore = p_minutes * 70 + p_starter * 30
+      const bpScore = p_set_pieces * 25 + p_pen_scored * 50
+
+      return [
+        {
+          label: 'Defensa',
+          value: norm(defScore, 120),
+          metrics: [
+            { label: 'Intercepciones p.p.', value: r2(p_interceptions) },
+            { label: 'Recuperaciones p.p.', value: r2(p_recoveries) },
+            { label: 'Duelos aéreos gan. p.p.', value: r2(p_aerials) },
+            { label: 'Despejes p.p.', value: r2(p_clearances) }
+          ]
+        },
+        {
+          label: 'Ataque',
+          value: norm(atkScore, 116.5),
+          metrics: [
+            { label: 'Regates p.p.', value: r2(p_takeons) },
+            { label: 'Pases adelante p.p.', value: r2(p_forward) },
+            { label: 'Asistencias p.p.', value: r2(p_assists) },
+            { label: 'Pases completados p.p.', value: r2(p_passes) },
+            { label: 'Pases largos p.p.', value: r2(p_long_balls) }
+          ]
+        },
+        {
+          label: 'Finalización',
+          value: norm(finScore, 66),
+          metrics: [
+            { label: 'Centros/Área p.p.', value: r2(p_box_entries) },
+            { label: 'Tiros a puerta p.p.', value: r2(p_shots) },
+            { label: 'Goles p.p.', value: r2(p_goals) }
+          ]
+        },
+        {
+          label: 'Importancia',
+          value: norm(impScore, 100),
+          metrics: [
+            { label: 'Minutos p.p.', value: r2(minutes_played / matches) },
+            { label: '% Titular', value: r2(p_starter * 100) + '%' }
+          ]
+        },
+        {
+          label: 'Balón parado',
+          value: norm(bpScore, 100),
+          metrics: [
+            { label: 'Lanzamientos p.p.', value: r2(p_set_pieces) },
+            { label: 'Penaltis marcados p.p.', value: r2(p_pen_scored) }
+          ]
+        }
+      ]
     } else {
-      avgDefensa = (clean_sheets * 15 + tackles_won * 8 + interceptions * 8 + ball_recoveries * 3 + clearances * 3) / matches
-    }
+      const portScore = p_saves * 15 + p_clean_sheets * 50
+      const defScore = p_sweepers_claims * 10 + p_clearances * 5
+      const distScore = p_long_balls * 4 + p_passes * 2
+      const impScore = p_minutes * 70 + p_starter * 30
+      const concScore = p_pen_saves * 300 + p_smothers * 20
 
-    const avgPenalties = (yellow_cards * 15 + second_yellow_cards * 20 + red_cards * 35 + fouls_committed * 3 + penalties_conceded * 25 + penalties_missed * 15 + (dispossessed + bad_touches) * 0.8 + errors_leading_to_shot * 10 + errors_leading_to_goal * 20) / matches
-    const scoreDisciplina = Math.max(0, 100 - avgPenalties * 5)
-
-    const avgImportancia = (minutes_played / matches / 90) * 80 + (starter_count / matches) * 20
-
-    return {
-      ataque: Math.round(Math.min(100, Math.max(0, avgAtaque * 12))),
-      defensa: Math.round(Math.min(100, Math.max(0, isPOR ? avgDefensa * 12 : avgDefensa * 15))),
-      disciplina: Math.round(scoreDisciplina),
-      importancia: Math.round(Math.min(100, Math.max(0, avgImportancia)))
+      return [
+        {
+          label: 'Portería',
+          value: norm(portScore, 80),
+          metrics: [
+            { label: 'Paradas p.p.', value: r2(p_saves) },
+            { label: 'Porterías a cero p.p.', value: r2(p_clean_sheets) }
+          ]
+        },
+        {
+          label: 'Defensa (Área)',
+          value: norm(defScore, 50),
+          metrics: [
+            { label: 'Salidas/Blocajes p.p.', value: r2(p_sweepers_claims) },
+            { label: 'Despejes p.p.', value: r2(p_clearances) }
+          ]
+        },
+        {
+          label: 'Distribución',
+          value: norm(distScore, 80),
+          metrics: [
+            { label: 'Pases completados p.p.', value: r2(p_passes) },
+            { label: 'Pases largos p.p.', value: r2(p_long_balls) }
+          ]
+        },
+        {
+          label: 'Importancia',
+          value: norm(impScore, 100),
+          metrics: [
+            { label: 'Minutos p.p.', value: r2(minutes_played / matches) },
+            { label: '% Titular', value: r2(p_starter * 100) + '%' }
+          ]
+        },
+        {
+          label: 'Concentración',
+          value: norm(concScore, 50),
+          metrics: [
+            { label: 'Penaltis parados p.p.', value: r2(p_pen_saves) },
+            { label: 'Anticipaciones p.p.', value: r2(p_smothers) }
+          ]
+        }
+      ]
     }
   }
 
   const playerRadar = calculateRadarStats(scores, player.position)
 
-  let compareRadar = { ataque: 0, defensa: 0, disciplina: 0, importancia: 0 }
+  let compareRadar: RadarAxis[] = []
   let compareLabel = ''
 
   if (compareTarget === 'media-pos') {
     const pos = normPos(player.position)
     compareLabel = `Media Liga (${pos})`
-    if (pos === 'POR') {
-      compareRadar = { ataque: 12, defensa: 62, disciplina: 85, importancia: 75 }
+    const isPOR = pos === 'POR'
+    if (isPOR) {
+      compareRadar = [
+        { label: 'Portería', value: 70, metrics: [] },
+        { label: 'Defensa (Área)', value: 60, metrics: [] },
+        { label: 'Distribución', value: 65, metrics: [] },
+        { label: 'Importancia', value: 80, metrics: [] },
+        { label: 'Concentración', value: 50, metrics: [] }
+      ]
     } else if (pos === 'DEF') {
-      compareRadar = { ataque: 15, defensa: 62, disciplina: 80, importancia: 70 }
+      compareRadar = [
+        { label: 'Defensa', value: 75, metrics: [] },
+        { label: 'Ataque', value: 40, metrics: [] },
+        { label: 'Finalización', value: 20, metrics: [] },
+        { label: 'Importancia', value: 75, metrics: [] },
+        { label: 'Balón parado', value: 30, metrics: [] }
+      ]
     } else if (pos === 'MED') {
-      compareRadar = { ataque: 48, defensa: 46, disciplina: 82, importancia: 70 }
+      compareRadar = [
+        { label: 'Defensa', value: 60, metrics: [] },
+        { label: 'Ataque', value: 70, metrics: [] },
+        { label: 'Finalización', value: 50, metrics: [] },
+        { label: 'Importancia', value: 75, metrics: [] },
+        { label: 'Balón parado', value: 50, metrics: [] }
+      ]
     } else {
-      compareRadar = { ataque: 68, defensa: 18, disciplina: 78, importancia: 68 }
+      compareRadar = [
+        { label: 'Defensa', value: 30, metrics: [] },
+        { label: 'Ataque', value: 75, metrics: [] },
+        { label: 'Finalización', value: 80, metrics: [] },
+        { label: 'Importancia', value: 75, metrics: [] },
+        { label: 'Balón parado', value: 40, metrics: [] }
+      ]
     }
   } else if (compareTarget === 'media-gen') {
     compareLabel = 'Media Liga'
-    compareRadar = { ataque: 35, defensa: 35, disciplina: 80, importancia: 70 }
+    const isPOR = normPos(player.position) === 'POR'
+    if (isPOR) {
+      compareRadar = [
+        { label: 'Portería', value: 65, metrics: [] },
+        { label: 'Defensa (Área)', value: 60, metrics: [] },
+        { label: 'Distribución', value: 60, metrics: [] },
+        { label: 'Importancia', value: 75, metrics: [] },
+        { label: 'Concentración', value: 45, metrics: [] }
+      ]
+    } else {
+      compareRadar = [
+        { label: 'Defensa', value: 50, metrics: [] },
+        { label: 'Ataque', value: 50, metrics: [] },
+        { label: 'Finalización', value: 50, metrics: [] },
+        { label: 'Importancia', value: 70, metrics: [] },
+        { label: 'Balón parado', value: 40, metrics: [] }
+      ]
+    }
   } else if (comparePlayer) {
     compareLabel = comparePlayer.short_name || `${comparePlayer.first_name} ${comparePlayer.last_name}`
     compareRadar = calculateRadarStats(compareScores, comparePlayer.position)
+  } else {
+    compareRadar = playerRadar.map(a => ({ ...a, value: 0 }))
   }
 
-  const getPointsStr = (radar: typeof playerRadar) => {
+  const getPointsStr = (radar: RadarAxis[]) => {
     const cx = 160
     const cy = 135
     const r = 90
-    const axes = [
-      radar.ataque,
-      radar.defensa,
-      radar.disciplina,
-      radar.importancia
-    ]
-    const angles = [-Math.PI/2, 0, Math.PI/2, Math.PI]
-    return axes.map((val, idx) => {
-      const d = (val / 100) * r
+    const angles = [-Math.PI/2, -Math.PI/10, Math.PI/3.33, Math.PI * 0.7, Math.PI * 1.1]
+    return radar.map((axis, idx) => {
+      const d = (axis.value / 100) * r
       const x = cx + d * Math.cos(angles[idx])
       const y = cy + d * Math.sin(angles[idx])
       return `${x},${y}`
@@ -867,10 +1044,9 @@ export default function JugadorDetallePage() {
   const p1Points = getPointsStr(playerRadar)
   const p2Points = getPointsStr(compareRadar)
 
-  const radarAngles = [-Math.PI/2, 0, Math.PI/2, Math.PI]
-  const p1Values = [playerRadar.ataque, playerRadar.defensa, playerRadar.disciplina, playerRadar.importancia]
-  const p2Values = [compareRadar.ataque, compareRadar.defensa, compareRadar.disciplina, compareRadar.importancia]
-  const radarDefLabel = normPos(player.position) === 'POR' ? 'Defensa y Portería' : 'Defensa'
+  const radarAngles = [-Math.PI/2, -Math.PI/10, Math.PI/3.33, Math.PI * 0.7, Math.PI * 1.1]
+  const p1Values = playerRadar.map(a => a.value)
+  const p2Values = compareRadar.map(a => a.value)
 
   // Preparar grupos de estadísticas para mostrar todas las métricas puntuables
   interface StatItem {
@@ -1286,18 +1462,39 @@ export default function JugadorDetallePage() {
                 )}
               </select>
             </div>
-            <CardContent className="p-4 flex flex-col items-center">
+            <CardContent className="p-4 flex flex-col items-center relative">
+              {activeRadarAxis !== null && (
+                <div 
+                  className="absolute z-10 bg-slate-900/95 text-white p-3 rounded-xl shadow-xl border border-slate-700 text-xs flex flex-col gap-1 pointer-events-none transition-all duration-150 min-w-[160px]"
+                  style={{
+                    top: '20px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                  }}
+                >
+                  <div className="font-bold text-emerald-400 border-b border-slate-700 pb-1 mb-1 text-sm text-center">
+                    {playerRadar[activeRadarAxis]?.label}
+                  </div>
+                  {playerRadar[activeRadarAxis]?.metrics.map((m, i) => (
+                    <div key={i} className="flex justify-between gap-4">
+                      <span className="text-slate-400">{m.label}</span>
+                      <span className="font-bold text-slate-100">{m.value}</span>
+                    </div>
+                  ))}
+                  <div className="text-[10px] text-slate-500 italic mt-1 text-center border-t border-slate-800 pt-1">
+                    Valor eje: {playerRadar[activeRadarAxis]?.value}/100
+                  </div>
+                </div>
+              )}
+
               <div className="w-full flex justify-center py-2">
                 <svg width="320" height="280" viewBox="0 0 320 280" className="overflow-visible">
                   {/* Concentric grids at 25, 50, 75, 100 */}
                   {[25, 50, 75, 100].map((pct) => {
                     const d = (pct / 100) * 90
-                    const points = [
-                      `160,${135 - d}`,
-                      `${160 + d},135`,
-                      `160,${135 + d}`,
-                      `${160 - d},135`
-                    ].join(' ')
+                    const points = radarAngles.map(angle => {
+                      return `${160 + d * Math.cos(angle)},${135 + d * Math.sin(angle)}`
+                    }).join(' ')
                     return (
                       <polygon
                         key={pct}
@@ -1311,7 +1508,7 @@ export default function JugadorDetallePage() {
                   })}
 
                   {/* Axis lines */}
-                  {[-Math.PI/2, 0, Math.PI/2, Math.PI].map((angle, idx) => {
+                  {radarAngles.map((angle, idx) => {
                     const x2 = 160 + 90 * Math.cos(angle)
                     const y2 = 135 + 90 * Math.sin(angle)
                     return (
@@ -1328,10 +1525,30 @@ export default function JugadorDetallePage() {
                   })}
 
                   {/* Axis Labels */}
-                  <text x={160} y={135 - 90 - 8} textAnchor="middle" className="text-[10px] font-bold fill-slate-500">Ataque y Distribución</text>
-                  <text x={160 + 90 + 6} y={135 + 4} textAnchor="start" className="text-[10px] font-bold fill-slate-500">{radarDefLabel}</text>
-                  <text x={160} y={135 + 90 + 14} textAnchor="middle" className="text-[10px] font-bold fill-slate-500">Disciplina</text>
-                  <text x={160 - 90 - 6} y={135 + 4} textAnchor="end" className="text-[10px] font-bold fill-slate-500">Importancia</text>
+                  {radarAngles.map((angle, idx) => {
+                    const d = 110
+                    let x = 160 + d * Math.cos(angle)
+                    let y = 135 + d * Math.sin(angle)
+                    let textAnchor = "middle"
+                    if (Math.abs(Math.cos(angle)) > 0.1) {
+                      textAnchor = Math.cos(angle) > 0 ? "start" : "end"
+                    }
+                    if (Math.sin(angle) > 0) y += 5
+                    
+                    return (
+                      <text 
+                        key={idx} 
+                        x={x} 
+                        y={y} 
+                        textAnchor={textAnchor} 
+                        className="text-[10px] font-bold fill-slate-500 cursor-pointer hover:fill-emerald-600 transition-colors"
+                        onMouseEnter={() => setActiveRadarAxis(idx)}
+                        onMouseLeave={() => setActiveRadarAxis(null)}
+                      >
+                        {playerRadar[idx]?.label}
+                      </text>
+                    )
+                  })}
 
                   {/* Target polygon (P2) */}
                   <polygon
@@ -1348,7 +1565,7 @@ export default function JugadorDetallePage() {
                     fill="rgba(16, 185, 129, 0.25)"
                     stroke="rgba(16, 185, 129, 0.85)"
                     strokeWidth="2.5"
-                    className="transition-all duration-300"
+                    className="transition-all duration-300 pointer-events-none"
                   />
 
                   {/* Vertex circles for P2 */}
@@ -1359,7 +1576,7 @@ export default function JugadorDetallePage() {
                     const y = 135 + d * Math.sin(angle)
                     return (
                       <circle
-                        key={idx}
+                        key={`p2-${idx}`}
                         cx={x}
                         cy={y}
                         r="3"
@@ -1368,7 +1585,7 @@ export default function JugadorDetallePage() {
                     )
                   })}
 
-                  {/* Vertex circles for P1 */}
+                  {/* Vertex circles for P1 (Interactive) */}
                   {p1Values.map((val, idx) => {
                     const angle = radarAngles[idx]
                     const d = (val / 100) * 90
@@ -1376,11 +1593,13 @@ export default function JugadorDetallePage() {
                     const y = 135 + d * Math.sin(angle)
                     return (
                       <circle
-                        key={idx}
+                        key={`p1-${idx}`}
                         cx={x}
                         cy={y}
-                        r="3.5"
-                        className="fill-emerald-500 stroke-white stroke-[1.5]"
+                        r="5"
+                        className="fill-emerald-500 stroke-white stroke-[2] cursor-pointer transition-all hover:r-6"
+                        onMouseEnter={() => setActiveRadarAxis(idx)}
+                        onMouseLeave={() => setActiveRadarAxis(null)}
                       />
                     )
                   })}
@@ -1394,11 +1613,13 @@ export default function JugadorDetallePage() {
                     <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                     <span className="truncate max-w-[120px]">{player.short_name || player.first_name}</span>
                   </div>
-                  <div className="pl-3.5 text-slate-500 space-y-0.5 font-medium font-medium">
-                    <div className="flex justify-between"><span>Ataque:</span> <span className="font-bold text-slate-700 tabular-nums">{playerRadar.ataque}</span></div>
-                    <div className="flex justify-between"><span>{radarDefLabel}:</span> <span className="font-bold text-slate-700 tabular-nums">{playerRadar.defensa}</span></div>
-                    <div className="flex justify-between"><span>Disciplina:</span> <span className="font-bold text-slate-700 tabular-nums">{playerRadar.disciplina}</span></div>
-                    <div className="flex justify-between"><span>Importancia:</span> <span className="font-bold text-slate-700 tabular-nums">{playerRadar.importancia}</span></div>
+                  <div className="pl-3.5 text-slate-500 space-y-0.5 font-medium">
+                    {playerRadar.map((axis, i) => (
+                      <div key={i} className="flex justify-between gap-1">
+                        <span className="truncate">{axis.label}:</span> 
+                        <span className="font-bold text-slate-700 tabular-nums shrink-0">{axis.value}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -1407,10 +1628,12 @@ export default function JugadorDetallePage() {
                     <span className="truncate max-w-[120px]">{compareLabel}</span>
                   </div>
                   <div className="pl-3.5 text-slate-500 space-y-0.5 font-medium">
-                    <div className="flex justify-between"><span>Ataque:</span> <span className="font-bold text-slate-700 tabular-nums">{compareRadar.ataque}</span></div>
-                    <div className="flex justify-between"><span>{radarDefLabel}:</span> <span className="font-bold text-slate-700 tabular-nums">{compareRadar.defensa}</span></div>
-                    <div className="flex justify-between"><span>Disciplina:</span> <span className="font-bold text-slate-700 tabular-nums">{compareRadar.disciplina}</span></div>
-                    <div className="flex justify-between"><span>Importancia:</span> <span className="font-bold text-slate-700 tabular-nums">{compareRadar.importancia}</span></div>
+                    {compareRadar.map((axis, i) => (
+                      <div key={i} className="flex justify-between gap-1">
+                        <span className="truncate">{axis.label}:</span> 
+                        <span className="font-bold text-slate-700 tabular-nums shrink-0">{axis.value}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1481,7 +1704,9 @@ export default function JugadorDetallePage() {
                     <span className="font-bold text-emerald-300">{chartData[activeBar].value}</span>
                   </div>
                   <div className="text-[10px] text-slate-400 italic">
-                    {chartData[activeBar].score.minutes_played}' min · {chartData[activeBar].score.is_starter ? 'Titular' : 'Suplente'}
+                    {chartData[activeBar].score.minutes_played > 0 
+                      ? `${chartData[activeBar].score.minutes_played}' min · ${chartData[activeBar].score.is_starter ? 'Titular' : 'Suplente'}` 
+                      : <span className="text-red-500 font-bold">Sin minutos</span>}
                   </div>
                 </div>
               )}
@@ -1736,7 +1961,9 @@ export default function JugadorDetallePage() {
                 </div>
                 <div className="text-right">
                   <p className="text-xl font-bold text-emerald-600">{Math.round((score.total_points || 0) * 10) / 10}</p>
-                  <p className="text-xs text-slate-500">{score.minutes_played}' {score.is_starter ? '(T)' : '(S)'}</p>
+                  <p className="text-xs text-slate-500">
+                    {score.minutes_played > 0 ? `${score.minutes_played}' ${score.is_starter ? '(T)' : '(S)'}` : <span className="text-red-500 font-semibold">Sin minutos</span>}
+                  </p>
                 </div>
               </div>
             ))}

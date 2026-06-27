@@ -1226,7 +1226,7 @@ class MatchEventDownloader:
                 t_min = event.get('timeMin', 0)
                 if t_min > current_minute: current_minute = t_min
                 self.process_event(event, current_minute)
-                if event.get('typeId') == 30 and self.has_qualifier(event, 209):
+                if event.get('typeId') == 37:
                     match_ended = True
             
             for pid in list(self.on_pitch):

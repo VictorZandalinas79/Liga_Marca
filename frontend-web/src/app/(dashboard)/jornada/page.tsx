@@ -94,7 +94,7 @@ export default function JornadaPage() {
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const playerRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
-  const openPlayerStats = async (playerId: string) => {
+  const openPlayerStats = async (playerId: string, providedSanctionReason?: string) => {
     setModalLoading(true)
     setModalPlayer({})
 
@@ -112,13 +112,7 @@ export default function JornadaPage() {
       scoresData = data
     }
 
-    let sanctionReason: string | undefined
-    userTeams.forEach(team => {
-      const p = team.jugadores.find(j => j.id === playerId)
-      if (p?.sanctionReason) sanctionReason = p.sanctionReason
-    })
-
-    setModalPlayer({ ...(playerData || {}), ...(scoresData || {}), sanctionReason })
+    setModalPlayer({ ...(playerData || {}), ...(scoresData || {}), sanctionReason: providedSanctionReason })
     setModalLoading(false)
   }
 
@@ -329,6 +323,17 @@ export default function JornadaPage() {
       })
     }
 
+    // Obtener sanciones de la jornada anterior
+    const prevMatchday = matchday - 1
+    let prevPenalties: any[] = []
+    if (prevMatchday >= 1) {
+      const { data } = await supabase
+        .from('penalties')
+        .select('team_id, description, points')
+        .eq('matchday', prevMatchday)
+      prevPenalties = data || []
+    }
+
     // Datos de jugadores (incluye precio para el valor del equipo)
     const { data: playersData } = await supabase
       .from('players')
@@ -470,7 +475,37 @@ export default function JornadaPage() {
       const isLiveMatchday = info ? info.live || (info.started && Date.now() < new Date(info.end_time).getTime() + MATCH_DURATION_MS) : false;
       const starters = jugadores.filter(j => j.is_starter)
       const prevMine = new Set<string>(prevSquadByTeam.get(ut.id) || [])
-      const sanctionResult = applySanctionsToTeam(starters, prevMine, heldByOthersPrev, config, isLiveMatchday)
+      
+      const prevTeamPenalties = prevPenalties.filter((p: any) => p.team_id === ut.id)
+      const lineupPrevSet = new Set<string>(prevSquadByTeam.get(ut.id) || [])
+      const zeroedPrevSet = new Set<string>()
+      prevTeamPenalties.forEach((p: any) => {
+        const desc = p.description || ''
+        if (desc.startsWith("Jugador de ")) {
+          const parts = desc.split(":")
+          if (parts.length >= 2) {
+            const playerName = parts[parts.length - 1].trim().toLowerCase()
+            lineupPrevSet.forEach(pid => {
+              const player = allPlayersById.get(pid)
+              const name = player ? (player.short_name || player.first_name || '') : ''
+              if (name.toLowerCase() === playerName) {
+                zeroedPrevSet.add(pid)
+              }
+            })
+          }
+        }
+      })
+
+      const sanctionResult = applySanctionsToTeam(
+        starters, 
+        prevMine, 
+        heldByOthersPrev, 
+        config, 
+        isLiveMatchday,
+        prevTeamPenalties,
+        lineupPrevSet,
+        zeroedPrevSet
+      )
 
       // 4. Update points and set sanctionReason
       jugadores.forEach(j => {
@@ -1060,32 +1095,39 @@ export default function JornadaPage() {
                               const isMatch = matchSet.has(matchKey)
                               const isActive = matchKey === activeMatchKey
 
-                              const isPenalized = !!player.sanctionReason || matchdayInfractions.some((inf: any) => {
-                                const matchesUser = inf.user_id === team.user_id || inf.team_id === team.team_id
-                                if (!matchesUser) return false
+                              let finalSanctionReason = player.sanctionReason;
+                              if (!finalSanctionReason) {
+                                const matchedInf = matchdayInfractions.find((inf: any) => {
+                                  const matchesUser = inf.user_id === team.user_id || inf.team_id === team.team_id
+                                  if (!matchesUser) return false
 
-                                const descLower = (inf.description || '').toLowerCase()
-                                
-                                // 1. Mencion de nombre de jugador
-                                const shortName = (player.short_name || '').toLowerCase().trim()
-                                const firstName = (player.first_name || '').toLowerCase().trim()
-                                if (shortName && descLower.includes(shortName)) return true
-                                if (firstName && descLower.includes(firstName)) return true
+                                  const descLower = (inf.description || '').toLowerCase()
+                                  
+                                  // 1. Mencion de nombre de jugador
+                                  const shortName = (player.short_name || '').toLowerCase().trim()
+                                  const firstName = (player.first_name || '').toLowerCase().trim()
+                                  if (shortName && descLower.includes(shortName)) return true
+                                  if (firstName && descLower.includes(firstName)) return true
 
-                                // 2. Mencion de equipo real en sancion de max por equipo
-                                const realTeamName = (player.team?.name || '').toLowerCase().trim()
-                                if (realTeamName && descLower.includes(realTeamName) && descLower.includes('jugadores de')) {
-                                  return true
+                                  // 2. Mencion de equipo real en sancion de max por equipo
+                                  const realTeamName = (player.team?.name || '').toLowerCase().trim()
+                                  if (realTeamName && descLower.includes(realTeamName) && descLower.includes('jugadores de')) {
+                                    return true
+                                  }
+
+                                  return false
+                                })
+                                if (matchedInf) {
+                                  finalSanctionReason = matchedInf.description;
                                 }
-
-                                return false
-                              })
+                              }
+                              const isPenalized = !!finalSanctionReason;
 
                               return (
                               <div
                                 key={player.id}
                                 ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
-                                onClick={() => openPlayerStats(player.id)}
+                                onClick={() => openPlayerStats(player.id, finalSanctionReason)}
                                 className={`flex items-center justify-between py-1 px-2 rounded-lg transition-colors gap-2 cursor-pointer ${
                                   isPenalized
                                     ? 'bg-red-50 border-2 border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-md ring-2 ring-red-300'

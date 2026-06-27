@@ -6,10 +6,11 @@ import { useAuth } from '@/hooks/use-auth'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 import { useLockedTeams } from '@/lib/locked-teams'
 import { useLeagueConfig } from '@/lib/league-config'
+import { applySanctionsToTeam } from '@/lib/infractions'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown } from 'lucide-react'
-
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 interface Player {
   id: string
   first_name: string
@@ -43,6 +44,8 @@ function PitchPlayerCard({
   getPositionColor,
   getPositionLabel,
   hasMatchStarted,
+  isPenalized,
+  sanctionReason,
 }: {
   player: Player
   points?: number
@@ -50,6 +53,8 @@ function PitchPlayerCard({
   getPositionColor: (pos: string) => string
   getPositionLabel: (pos: string) => string
   hasMatchStarted?: boolean
+  isPenalized?: boolean
+  sanctionReason?: string
 }) {
   const pts = points !== undefined ? Math.round(points * 10) / 10 : (hasMatchStarted ? 0 : null)
 
@@ -61,10 +66,10 @@ function PitchPlayerCard({
           <img
             src={player.photo}
             alt={player.short_name || ''}
-            className="w-10 h-10 sm:w-14 sm:h-14 rounded-full object-cover border-2 sm:border-[3px] border-white shadow-lg bg-slate-200"
+            className={`w-10 h-10 sm:w-14 sm:h-14 rounded-full object-cover border-2 sm:border-[3px] shadow-lg bg-slate-200 ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}
           />
         ) : (
-          <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs sm:text-sm font-bold border-2 sm:border-[3px] border-white shadow-lg">
+          <div className={`w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs sm:text-sm font-bold border-2 sm:border-[3px] shadow-lg ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}>
             {player.shirt_number || '?'}
           </div>
         )}
@@ -81,7 +86,7 @@ function PitchPlayerCard({
         {/* Puntos (medio derecha) */}
         {pts !== null && (
           <div className="absolute top-1/2 -right-5 -translate-y-1/2 bg-white/95 backdrop-blur-sm text-blue-700 font-extrabold text-[10px] sm:text-xs rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shadow-md border border-blue-200">
-            {pts}
+            {isPenalized ? 0 : pts}
           </div>
         )}
 
@@ -95,11 +100,15 @@ function PitchPlayerCard({
       <p className="font-extrabold text-white text-[10px] sm:text-[11px] leading-tight w-[120%] truncate drop-shadow-md mt-1">
         {player.short_name || player.first_name}
       </p>
-      {replacedPlayer && (
+      {isPenalized && sanctionReason ? (
+        <p className="text-[7px] sm:text-[8px] text-red-300 font-bold leading-tight w-[130%] drop-shadow-md mt-0.5 truncate bg-red-950/80 rounded px-1 py-0.5" title={sanctionReason}>
+          {sanctionReason}
+        </p>
+      ) : replacedPlayer ? (
         <p className="text-[8px] sm:text-[9px] text-red-300 font-bold truncate w-[130%] drop-shadow-md mt-0.5">
           por {replacedPlayer.short_name || replacedPlayer.first_name}
         </p>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -158,6 +167,136 @@ export default function DashboardPage() {
     is_pending: boolean
   }
   const [liveInfractions, setLiveInfractions] = useState<LiveInfraction[]>([])
+  const [historicalPoints, setHistoricalPoints] = useState<{ matchday: number, name: string, points: number, avgPoints: number, hasPenalty: boolean }[]>([])
+  
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!userTeamId || typeof activeMatchday !== 'number') return;
+      
+      const { data: allTpData } = await supabase
+        .from('team_players')
+        .select('team_id, player_id, matchday, is_starter')
+        .eq('is_starter', true)
+        .order('matchday', { ascending: true });
+
+      if (!allTpData || allTpData.length === 0) return;
+
+      const { data: fixturesData } = await supabase.from('fixtures').select('id, matchday');
+      const fixtureToMatchday = new Map<string, number>();
+      fixturesData?.forEach(f => {
+        if (f.matchday) fixtureToMatchday.set(f.id, f.matchday);
+      });
+
+      const { data: allTeamsData } = await supabase.from('teams').select('id, user_id');
+      const teamToUserId = new Map<string, string>();
+      allTeamsData?.forEach(t => teamToUserId.set(t.id, t.user_id));
+
+      const maxMd = Math.max(...allTpData.map(t => t.matchday || 1));
+      const targetMaxMd = typeof activeMatchday === 'number' ? activeMatchday - 1 : maxMd;
+      
+      const tpByTeamAndMatchday = new Map<string, Map<number, typeof allTpData>>();
+      allTpData.forEach(t => {
+        const md = t.matchday || 1;
+        if (!tpByTeamAndMatchday.has(t.team_id)) tpByTeamAndMatchday.set(t.team_id, new Map());
+        if (!tpByTeamAndMatchday.get(t.team_id)!.has(md)) tpByTeamAndMatchday.get(t.team_id)!.set(md, []);
+        tpByTeamAndMatchday.get(t.team_id)!.get(md)!.push(t);
+      });
+
+      const computedLineupsByTeam = new Map<string, Map<number, typeof allTpData>>();
+      const allUsedPlayerIds = new Set<string>();
+
+      for (const [teamId, mdMap] of tpByTeamAndMatchday.entries()) {
+        const computedMap = new Map<number, typeof allTpData>();
+        let lastValidLineup: typeof allTpData = [];
+        
+        for (let md = 1; md <= targetMaxMd; md++) {
+          if (mdMap.has(md) && mdMap.get(md)!.length > 0) {
+            lastValidLineup = mdMap.get(md)!;
+          }
+          if (lastValidLineup.length > 0) {
+            computedMap.set(md, lastValidLineup);
+            lastValidLineup.forEach(t => allUsedPlayerIds.add(t.player_id));
+          }
+        }
+        computedLineupsByTeam.set(teamId, computedMap);
+      }
+
+      if (allUsedPlayerIds.size === 0) return;
+
+      const { data: scoresData } = await supabase
+        .from('player_scores')
+        .select('player_id, matchday, fixture_id, total_points')
+        .in('player_id', Array.from(allUsedPlayerIds));
+
+      const teamPointsByMatchday = new Map<string, Map<number, number>>();
+      
+      for (const [teamId, mdMap] of computedLineupsByTeam.entries()) {
+        const uid = teamToUserId.get(teamId);
+        const userPenalties = uid ? allPenalties.filter(p => p.user_id === uid) : [];
+        const ptsMap = new Map<number, number>();
+
+        for (const [md, starters] of mdMap.entries()) {
+          let rawPoints = 0;
+          starters.forEach(s => {
+             const score = scoresData?.find(ps => {
+               let psMd = ps.matchday;
+               if (!psMd && ps.fixture_id) psMd = fixtureToMatchday.get(ps.fixture_id);
+               return ps.player_id === s.player_id && psMd === md;
+             });
+             rawPoints += (score?.total_points || 0);
+          });
+
+          const mdPenalties = userPenalties.filter(p => p.matchday === md);
+          let totalDeduction = 0;
+          mdPenalties.forEach(p => {
+             totalDeduction += (typeof p.points === 'string' ? parseFloat(p.points) : p.points);
+          });
+
+          const netPoints = Math.max(0, rawPoints - totalDeduction);
+          ptsMap.set(md, netPoints);
+        }
+        teamPointsByMatchday.set(teamId, ptsMap);
+      }
+
+      const history = [];
+      for (let md = 1; md <= targetMaxMd; md++) {
+        const myMap = computedLineupsByTeam.get(userTeamId);
+        let myPoints = 0;
+        let myHasPenalty = false;
+        if (myMap && myMap.has(md)) {
+          myPoints = teamPointsByMatchday.get(userTeamId)?.get(md) || 0;
+          const userPenalties = allPenalties.filter(p => p.user_id === user?.id && p.matchday === md);
+          myHasPenalty = userPenalties.length > 0;
+        }
+
+        let sum = 0;
+        let count = 0;
+        for (const [teamId, ptsMap] of teamPointsByMatchday.entries()) {
+          if (ptsMap.has(md)) {
+            sum += ptsMap.get(md)!;
+            count++;
+          }
+        }
+        const avg = count > 0 ? (sum / count) : 0;
+
+        history.push({
+           matchday: md,
+           name: `J${md}`,
+           points: Math.round(myPoints * 10) / 10,
+           avgPoints: Math.round(avg * 10) / 10,
+           hasPenalty: myHasPenalty
+        });
+      }
+
+      setHistoricalPoints(history);
+    }
+    
+    // Solo disparar cuando allPenalties esté cargado
+    if (allPenalties.length >= 0) {
+      fetchHistory();
+    }
+  }, [userTeamId, activeMatchday, allPenalties, user?.id, supabase]);
+
   const [showAllHistory, setShowAllHistory] = useState(false)
   const lockedTeamIds = new Set(lockedTeams.map(l => l.teamId))
   const isTeamLocked = (teamId?: string | null) => !!teamId && lockedTeamIds.has(teamId)
@@ -420,16 +559,27 @@ export default function DashboardPage() {
 
       const matchdayToLoad = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
 
-      // Obtener puntos de player_scores para esta jornada
-      const { data: fixtures } = await supabase
+      // Buscar fixtures: primero por matchday (jornadas numéricas). Si no hay resultados
+      // y es una jornada de tipo "momento" (matchday=null en BD), buscar por momento.
+      const { data: fixturesByMatchday } = await supabase
         .from('fixtures')
         .select('id, home_team_id, away_team_id, status')
         .eq('matchday', matchdayToLoad)
+
+      let fixtures = fixturesByMatchday
+      if ((!fixtures || fixtures.length === 0) && currentMomento) {
+        const { data: fixturesByMomento } = await supabase
+          .from('fixtures')
+          .select('id, home_team_id, away_team_id, status')
+          .eq('momento', currentMomento)
+        fixtures = fixturesByMomento
+      }
 
       const fixtureIds = fixtures?.map(f => f.id) || []
       const teamStatusMap = new Map<string, boolean>()
       fixtures?.forEach(f => {
         const statusLower = (f.status || '').toLowerCase()
+        // El script de sincronización pone 'finished' al recibir typeId 37 (Match ended).
         const hasStarted = statusLower !== 'scheduled' && statusLower !== 'postponed' && statusLower !== 'fixture'
         teamStatusMap.set(String(f.home_team_id), hasStarted)
         teamStatusMap.set(String(f.away_team_id), hasStarted)
@@ -441,11 +591,24 @@ export default function DashboardPage() {
         return
       }
 
-      const { data: scores } = await supabase
-        .from('player_scores')
-        .select('player_id, total_points')
-        .in('player_id', selectedPlayers)
-        .in('fixture_id', fixtureIds)
+      // Para jornadas numéricas: filtrar por matchday directamente (más preciso, evita acumulados).
+      // Para jornadas "momento" (matchday=null en BD): filtrar por fixture_id.
+      let scores: { player_id: string; total_points: number }[] | null = null
+      if (currentMomento) {
+        const { data } = await supabase
+          .from('player_scores')
+          .select('player_id, total_points')
+          .in('player_id', selectedPlayers)
+          .in('fixture_id', fixtureIds)
+        scores = data
+      } else {
+        const { data } = await supabase
+          .from('player_scores')
+          .select('player_id, total_points')
+          .in('player_id', selectedPlayers)
+          .eq('matchday', matchdayToLoad)
+        scores = data
+      }
 
       const pointsMap = new Map<string, number>()
       scores?.forEach(s => {
@@ -465,7 +628,7 @@ export default function DashboardPage() {
     }, 45000)
 
     return () => clearInterval(interval)
-  }, [isUnlockWindowOpen, userTeamId, selectedPlayers, activeMatchday])
+  }, [isUnlockWindowOpen, userTeamId, selectedPlayers, activeMatchday, currentMomento])
 
   // Carga los jugadores vetados por exclusividad: los tenía otro usuario en la
   // jornada previa comprometida y yo no (si yo lo tenía, lo retengo). En J1 no aplica.
@@ -858,6 +1021,58 @@ export default function DashboardPage() {
     return undefined
   }
 
+  // Calcular sanciones dinámicas para la visualización del campo
+  const startersForSanctions = selectedPlayersData.map(p => ({
+    id: p.id,
+    puntos: playerPoints.get(p.id) || 0,
+    position: p.position,
+    team_id: p.team_id,
+    valor: p.precio,
+    short_name: p.short_name,
+    first_name: p.first_name,
+  }))
+
+  const prevMine = new Set(basePlayers)
+  
+  const heldByOthersPrevMap = new Map<string, string[]>()
+  for (const pid of offLimitPlayerIds) {
+    heldByOthersPrevMap.set(pid, ['otro usuario'])
+  }
+
+  const lineupPrevSet = new Set(basePlayers)
+  const zeroedPrevSet = new Set<string>()
+  
+  const prevMatchdayForSanctions = typeof activeMatchday === 'number' ? activeMatchday - 1 : 1
+  const prevPenaltiesForSanctions = allPenalties.filter(p => p.user_id === user?.id && p.matchday === prevMatchdayForSanctions)
+
+  prevPenaltiesForSanctions.forEach(p => {
+    const desc = p.description
+    if (desc.startsWith("Jugador de ")) {
+      const parts = desc.split(":")
+      if (parts.length >= 2) {
+        const playerName = parts[parts.length - 1].trim().toLowerCase()
+        basePlayers.forEach(pid => {
+          const bp = players.find(x => x.id === pid)
+          const name = bp ? (bp.short_name || bp.first_name || '') : ''
+          if (name.toLowerCase() === playerName) {
+            zeroedPrevSet.add(pid)
+          }
+        })
+      }
+    }
+  })
+
+  const sanctionResult = applySanctionsToTeam(
+    startersForSanctions,
+    prevMine,
+    heldByOthersPrevMap,
+    config,
+    isUnlockWindowOpen,
+    prevPenaltiesForSanctions,
+    lineupPrevSet,
+    zeroedPrevSet
+  )
+
   // Calcular estadísticas del equipo (solo visibles durante el tramo de jornada)
   const teamStats = {
     precioTotal: selectedPlayersData.reduce((sum, p) => sum + (p.precio || 0), 0),
@@ -870,9 +1085,9 @@ export default function DashboardPage() {
       if (gk + def + mid + fwd === 0) return '-'
       return `${gk}-${def}-${mid}-${fwd}`
     })(),
-    puntosTotales: selectedPlayersData.reduce((sum, p) => sum + (playerPoints.get(p.id) || 0), 0),
+    puntosTotales: sanctionResult.netPoints,
     mediaPuntos: (() => {
-      const total = selectedPlayersData.reduce((sum, p) => sum + (playerPoints.get(p.id) || 0), 0)
+      const total = sanctionResult.netPoints
       const startersCount = selectedPlayersData.length
       return startersCount > 0 ? total / startersCount : 0
     })(),
@@ -934,6 +1149,78 @@ export default function DashboardPage() {
   const midCount = selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length
   const fwdCount = selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length
   const formationStr = `${defCount}-${midCount}-${fwdCount}`
+
+  // Verificar sanciones pendientes de la jornada anterior y límite de cambios
+  const prevMatchday = activeMatchday - 1
+  const prevPenalties = allPenalties.filter(p => p.user_id === user?.id && p.matchday === prevMatchday)
+
+  // Encontrar qué jugadores de basePlayers fueron penalizados
+  const penalizedPrevNames = new Set<string>()
+  prevPenalties.forEach(p => {
+    const desc = p.description
+    if (desc.startsWith("Jugador de ")) {
+      const parts = desc.split(":")
+      if (parts.length >= 2) {
+        penalizedPrevNames.add(parts[parts.length - 1].trim().toLowerCase())
+      }
+    }
+  })
+
+  // Contar cuántos jugadores penalizados por Dolly han sido reemplazados
+  let replacedPenalizedCount = 0
+  basePlayers.forEach(bpId => {
+    const bp = players.find(p => p.id === bpId)
+    const bpName = bp ? (bp.short_name || bp.first_name || '').toLowerCase() : ''
+    if (penalizedPrevNames.has(bpName)) {
+      if (!selectedPlayers.includes(bpId)) {
+        replacedPenalizedCount++
+      }
+    }
+  })
+
+  // Límite de cambios permitidos
+  const allowedChanges = 3 + replacedPenalizedCount
+  const numChanges = selectedPlayers.filter(pid => !basePlayers.includes(pid)).length
+
+  if (activeMatchday > 1 && numChanges > allowedChanges) {
+    ruleWarnings.push(`Exceso de cambios: Has realizado ${numChanges} cambios de los ${allowedChanges} permitidos (3 base + ${replacedPenalizedCount} por multa previa reemplazada).`)
+  }
+
+  // Avisos específicos para penalizaciones anteriores no resueltas
+  if (prevPenalties.length > 0) {
+    prevPenalties.forEach(p => {
+      const desc = p.description
+      if (desc.startsWith("Jugador de ")) {
+        const parts = desc.split(":")
+        if (parts.length >= 2) {
+          const playerName = parts[parts.length - 1].trim().toLowerCase()
+          const isStillHere = selectedPlayersData.some(sp => (sp.short_name || sp.first_name || '').toLowerCase() === playerName)
+          if (isStillHere) {
+            ruleWarnings.push(`${parts[parts.length - 1].trim()} fue sancionado en la J${prevMatchday} y DEBE ser cambiado, o no sumará puntos y se repetirá la multa.`)
+          }
+        }
+      } else if (desc.includes("Presupuesto superado")) {
+        if (teamStats.precioTotal > config.budget_limit) {
+          ruleWarnings.push(`La multa por presupuesto superado de la J${prevMatchday} sigue activa. Debes ajustar el presupuesto.`)
+        }
+      } else if (desc.includes("Más de") && desc.includes("jugadores de un mismo equipo")) {
+        let hasExcess = false
+        for (const [tid, count] of teamCounts) {
+          if (count > config.max_players_per_team) {
+            hasExcess = true
+            break
+          }
+        }
+        if (hasExcess) {
+          ruleWarnings.push(`La multa por exceso de jugadores de la J${prevMatchday} sigue activa. Debes reducir los jugadores del mismo equipo real.`)
+        }
+      } else if (desc.includes("Táctica incorrecta")) {
+        if (selectedPlayersData.length === 11 && !(gkCount === 1 && config.formations.includes(formationStr))) {
+          ruleWarnings.push(`La multa por táctica incorrecta de la J${prevMatchday} sigue activa. Debes corregir la formación.`)
+        }
+      }
+    })
+  }
 
   if (selectedPlayersData.length !== 11) {
     ruleWarnings.push(`Tienes ${selectedPlayersData.length}/11 jugadores.`)
@@ -1157,7 +1444,7 @@ export default function DashboardPage() {
                 {/* Delanteros */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Delanteros</div>
@@ -1167,7 +1454,7 @@ export default function DashboardPage() {
                 {/* Mediocampistas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Centrocampistas</div>
@@ -1177,7 +1464,7 @@ export default function DashboardPage() {
                 {/* Defensas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Defensas</div>
@@ -1187,7 +1474,7 @@ export default function DashboardPage() {
                 {/* Portero */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} />
+                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} replacedPlayer={getReplacedPlayer(player.id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Portero</div>
@@ -1567,6 +1854,91 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Gráfica de evolución */}
+      {(historicalPoints.length > 0 || typeof activeMatchday === 'number') && (
+        <Card className="mt-6 border-slate-200">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+              Evolución de Puntos
+            </h3>
+            <div className="w-full h-[250px] sm:h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={[
+                    ...historicalPoints,
+                    // Incluir la jornada actual si ya ha empezado (tiene puntos o datos en el store)
+                    (typeof activeMatchday === 'number' && teamStats?.puntosTotales !== undefined) 
+                      ? { matchday: activeMatchday, name: `J${activeMatchday}`, points: teamStats.puntosTotales, hasPenalty: sanctionResult?.zeroedPlayers?.size > 0 || liveInfractions.some(i => i.user_id === user?.id) }
+                      : null
+                  ].filter(Boolean)}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fontSize: 12, fill: '#64748b' }} 
+                    axisLine={false} 
+                    tickLine={false} 
+                    dy={10}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 12, fill: '#64748b' }} 
+                    axisLine={false} 
+                    tickLine={false} 
+                  />
+                  <RechartsTooltip 
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value: any, name: any) => {
+                      if (name === 'avgPoints') return [`${value} pts`, 'Media Liga']
+                      return [`${value} pts`, 'Mis Puntos']
+                    }}
+                    labelStyle={{ color: '#64748b', fontWeight: 'bold', marginBottom: '4px' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="avgPoints" 
+                    stroke="#94a3b8" 
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    dot={false}
+                    activeDot={{ r: 4, stroke: '#94a3b8', strokeWidth: 2, fill: 'white' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="points" 
+                    stroke="#10b981" 
+                    strokeWidth={3}
+                    dot={(props: any) => {
+                      const { cx, cy, payload } = props;
+                      if (!cx || !cy) return null;
+                      if (payload.hasPenalty) {
+                        return <circle key={`dot-${payload.name}`} cx={cx} cy={cy} r={6} stroke="#ef4444" strokeWidth={2} fill="#ef4444" className="animate-pulse" />;
+                      }
+                      return <circle key={`dot-${payload.name}`} cx={cx} cy={cy} r={4} stroke="#10b981" strokeWidth={2} fill="white" />;
+                    }}
+                    activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2, fill: 'white' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex justify-center items-center gap-4 mt-4 text-xs text-slate-500">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full border-2 border-emerald-500 bg-white"></div>
+                <span>Mis puntos</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-0.5 border-t-2 border-dashed border-slate-400"></div>
+                <span>Media liga</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-500"></div>
+                <span>Multa en jornada</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Modal de confirmación de cambio de jugador */}

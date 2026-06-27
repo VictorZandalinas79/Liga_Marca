@@ -22,6 +22,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from difflib import SequenceMatcher
 from deep_translator import GoogleTranslator
+from email_sender import send_email
 
 load_dotenv()
 
@@ -49,11 +50,17 @@ SUPABASE_URL = _clean_env(os.environ.get("SUPABASE_URL"))
 SUPABASE_KEY = _clean_env(os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY"))
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+accumulated_notifications = []
+
 
 def save_notifications(notifications: list):
     """Inserta notificaciones de cambios en sync_notifications."""
     if not notifications:
         return
+    
+    global accumulated_notifications
+    accumulated_notifications.extend(notifications)
+
     try:
         supabase.table("sync_notifications").insert(notifications).execute()
         print(f"🔔 {len(notifications)} notificación(es) guardada(s)")
@@ -69,6 +76,92 @@ def save_notifications(notifications: list):
             except Exception as e2:
                 print(f"   ⚠️ No se pudo guardar notificación {n.get('type')}: {e2}")
         print(f"🔔 {ok}/{len(notifications)} notificación(es) guardada(s)")
+
+
+def send_sync_summary_emails():
+    """Consolida las notificaciones acumuladas durante la sincronización y envía un email resumen."""
+    global accumulated_notifications
+    if not accumulated_notifications:
+        print("ℹ️ No hay notificaciones acumuladas para enviar por correo.")
+        return
+
+    # Separar por tipo para presentarlo ordenado y claro
+    fixture_changes = []
+    new_players = []
+    other_notifs = []
+
+    for n in accumulated_notifications:
+        ntype = n.get("type")
+        body = n.get("body", "")
+        if ntype in ("fixture_changed", "players_locked"):
+            fixture_changes.append(body)
+        elif ntype == "new_player":
+            new_players.append(body)
+        else:
+            other_notifs.append(body)
+
+    if not fixture_changes and not new_players and not other_notifs:
+        return
+
+    # Construir cuerpo HTML del correo
+    html_content = "<h2>Novedades de la Liga Marca 📢</h2>"
+    html_content += "<p>Se ha realizado la sincronización semanal del sistema y se han detectado los siguientes cambios:</p>"
+
+    if fixture_changes:
+        html_content += """
+        <div class="card">
+            <h3 style="color: #1e3a8a; margin-top: 0; margin-bottom: 10px;">📅 Horarios y Bloqueos de Partidos</h3>
+            <ul>
+        """
+        for item in fixture_changes:
+            html_content += f"<li>{item}</li>"
+        html_content += "</ul></div>"
+
+    if new_players:
+        html_content += """
+        <div class="card" style="margin-top: 20px;">
+            <h3 style="color: #1e3a8a; margin-top: 0; margin-bottom: 10px;">⚽ Nuevos Jugadores en el Mercado</h3>
+            <ul>
+        """
+        for item in new_players:
+            html_content += f"<li>{item}</li>"
+        html_content += "</ul></div>"
+
+    if other_notifs:
+        html_content += """
+        <div class="card" style="margin-top: 20px;">
+            <h3 style="color: #1e3a8a; margin-top: 0; margin-bottom: 10px;">🔔 Otras Actualizaciones</h3>
+            <ul>
+        """
+        for item in other_notifs:
+            html_content += f"<li>{item}</li>"
+        html_content += "</ul></div>"
+
+    html_content += "<p style='margin-top: 20px;'>Para más detalles o para ajustar tu plantilla, accede a la web de la Liga Marca.</p>"
+
+    # Obtener perfiles de usuarios registrados
+    try:
+        profiles_resp = supabase.table("profiles").select("email, full_name").execute()
+        profiles = profiles_resp.data or []
+    except Exception as e:
+        print(f"⚠️ No se pudieron obtener los perfiles de la base de datos para enviar correos: {e}")
+        return
+
+    sent_count = 0
+    for p in profiles:
+        email = p.get("email")
+        if not email:
+            continue
+        name = p.get("full_name") or email.split("@")[0]
+        
+        # Personalizar el saludo en el cuerpo
+        personalized_body = f"<p>Hola <strong>{name}</strong>,</p>" + html_content
+        subject = "Novedades de la Liga Marca 🏆"
+        
+        if send_email(email, subject, personalized_body):
+            sent_count += 1
+            
+    print(f"📧 Se enviaron {sent_count} correos de resumen de sincronización.")
 
 
 def _parse_ts(s):
@@ -904,6 +997,9 @@ def main():
     # TERCERO: Subimos los jugadores cruzados con el CSV
     if squads_ok:
         sync_players_with_csv(squads_data)
+
+    # ENVIAR CORREOS DE RESUMEN DE SINCRONIZACIÓN
+    send_sync_summary_emails()
 
     print("\n" + "=" * 60)
     print("📊 RESUMEN FINAL")

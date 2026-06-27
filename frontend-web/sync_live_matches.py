@@ -655,6 +655,18 @@ class LiveMatchSync:
     def get_player_position(self, player_id):
         return self.player_positions_map.get(player_id, 'MED')
 
+    def update_fixture_status(self, match_ended: bool, current_minute: int = 0):
+        """Actualiza el status del fixture: 'live' mientras juega, 'finished' al recibir typeId 37."""
+        new_status = 'finished' if match_ended else 'live'
+        try:
+            self.supabase.table('fixtures').update({
+                'status': new_status,
+                'current_minute': current_minute,
+            }).eq('id', self.fixture_id).execute()
+            print(f"   ✅ Fixture status → '{new_status}' (min {current_minute})")
+        except Exception as e:
+            print(f"   ❌ Error actualizando fixture status: {e}")
+
     def upload_to_supabase(self):
         """Sube los player_scores a Supabase"""
         print("\n📤 Subiendo datos a Supabase...")
@@ -876,8 +888,8 @@ class LiveMatchSync:
                             if self.process_event(event, current_minute):
                                 updated = True
 
-                            # Detección de fin de partido
-                            if event.get('typeId') == 30 and self.has_qualifier(event, 209):
+                            # Detección de fin de partido (typeId 37 = Match ended)
+                            if event.get('typeId') == 37:
                                 match_ended = True
 
                         # Actualizar cada minuto de juego o si hay cambios
@@ -885,6 +897,7 @@ class LiveMatchSync:
                         if (updated and now - last_update_time >= 30) or match_ended:
                             self.compute_clean_sheets()
                             self.upload_to_supabase()
+                            self.update_fixture_status(match_ended, current_minute)
                             last_update_time = now
                             print(f"\n📊 Minuto {current_minute}' - Datos actualizados")
 

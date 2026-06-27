@@ -958,8 +958,8 @@ def main():
                         if engine.process_event(event, current_minute):
                             updated = True
 
-                        # Detección de fin de partido (typeId 30 con qualifier 209 Game end)
-                        if event.get('typeId') == 30 and engine.has_qualifier(event, 209):
+                        # Detección de fin de partido (typeId 37 = Match ended)
+                        if event.get('typeId') == 37:
                             match_ended = True
 
                     if updated:

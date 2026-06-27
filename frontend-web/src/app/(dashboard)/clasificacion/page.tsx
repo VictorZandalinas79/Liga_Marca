@@ -29,6 +29,7 @@ interface UserStanding {
   best_matchday_points: number
   best_matchday: number
   sanctioned_matchdays: number
+  kamikaze_score?: number
 }
 
 interface MatchdayStatus {
@@ -103,14 +104,14 @@ export default function ClasificacionPage() {
         teamIdToUserName.set(ut.id, name)
       }
 
-      const teamPlayers: { team_id: string; player_id: string; is_starter: boolean; is_captain: boolean; matchday: number }[] = []
+      const teamPlayers: { team_id: string; player_id: string; is_starter: boolean; is_captain: boolean; matchday: number; created_at?: string }[] = []
       {
         const pageSize = 1000
         let from = 0
         while (true) {
           const { data: page, error } = await supabase
             .from('team_players')
-            .select('team_id, player_id, is_starter, is_captain, matchday')
+            .select('team_id, player_id, is_starter, is_captain, matchday, created_at')
             .order('id', { ascending: true })
             .range(from, from + pageSize - 1)
           if (error) {
@@ -154,12 +155,20 @@ export default function ClasificacionPage() {
 
       const { data: fixturesData } = await supabase
         .from('fixtures')
-        .select('id, matchday, status')
+        .select('id, matchday, status, start_time')
 
       const fixtureToMatchday = new Map<string, number>()
+      const matchdayToDeadline = new Map<number, Date>()
+
       fixturesData?.forEach(f => {
         if (f.id && f.matchday && f.matchday > 0) {
           fixtureToMatchday.set(f.id, f.matchday)
+          if (f.start_time) {
+            const st = new Date(f.start_time)
+            if (!matchdayToDeadline.has(f.matchday) || st < matchdayToDeadline.get(f.matchday)!) {
+              matchdayToDeadline.set(f.matchday, st)
+            }
+          }
         }
       })
 
@@ -214,6 +223,8 @@ export default function ClasificacionPage() {
       }
 
       const teamPlayersByMatchday = new Map<string, Map<number, typeof teamPlayers>>()
+      const teamMatchdayLatestChange = new Map<string, Map<number, Date>>()
+
       for (const tp of teamPlayers) {
         const md = tp.matchday && tp.matchday > 0 ? tp.matchday : 0
 
@@ -224,6 +235,21 @@ export default function ClasificacionPage() {
           teamPlayersByMatchday.get(tp.team_id)!.set(md, [])
         }
         teamPlayersByMatchday.get(tp.team_id)!.get(md)!.push(tp)
+
+        // Kamikaze tracking
+        if (tp.created_at && md > 0) {
+          const created = new Date(tp.created_at)
+          const deadline = matchdayToDeadline.get(md)
+          if (deadline && created < deadline) {
+            if (!teamMatchdayLatestChange.has(tp.team_id)) {
+              teamMatchdayLatestChange.set(tp.team_id, new Map())
+            }
+            const currentLatest = teamMatchdayLatestChange.get(tp.team_id)!.get(md)
+            if (!currentLatest || created > currentLatest) {
+              teamMatchdayLatestChange.get(tp.team_id)!.set(md, created)
+            }
+          }
+        }
       }
 
       // Jornadas que REALMENTE se han jugado (tienen puntuaciones en player_scores)
@@ -508,6 +534,26 @@ export default function ClasificacionPage() {
 
 
 
+      // Calculate kamikaze stats per user
+      const userKamikazeMinutes = new Map<string, number[]>()
+      for (const [userId, teams] of userTeamsMap.entries()) {
+          const minutesBeforeArr: number[] = []
+          for (const team of teams) {
+              const latestChanges = teamMatchdayLatestChange.get(team.teamId)
+              if (latestChanges) {
+                  for (const [md, latestCreated] of latestChanges.entries()) {
+                      const deadline = matchdayToDeadline.get(md)
+                      if (deadline) {
+                          const diffMs = deadline.getTime() - latestCreated.getTime()
+                          const diffMins = Math.max(0, diffMs / (1000 * 60))
+                          minutesBeforeArr.push(diffMins)
+                      }
+                  }
+              }
+          }
+          userKamikazeMinutes.set(userId, minutesBeforeArr)
+      }
+
       const standingsData: UserStanding[] = userIds.map((userId) => {
         const user = usersMap.get(userId)
         const pointsMap = userPointsByMatchday.get(userId) || new Map()
@@ -565,6 +611,12 @@ export default function ClasificacionPage() {
           }
         }
 
+        let minMinutes = Infinity;
+        const userMins = userKamikazeMinutes.get(userId) || [];
+        for (const m of userMins) {
+            if (m < minMinutes) minMinutes = m;
+        }
+
         return {
           user_id: userId,
           user_name: user?.full_name || user?.email?.split('@')[0] || 'Usuario',
@@ -586,6 +638,7 @@ export default function ClasificacionPage() {
           best_matchday_points: bestMatchdayPoints,
           best_matchday: bestMatchday,
           sanctioned_matchdays: sanctionedMatchdays,
+          kamikaze_score: minMinutes === Infinity ? 999999 : minMinutes,
         }
       })
 
@@ -908,7 +961,12 @@ export default function ClasificacionPage() {
   }
 
   const topEvolution = [...standings].sort((a, b) => b.last_3_jornadas_avg - a.last_3_jornadas_avg)[0]
-  const topChanges = [...standings].sort((a, b) => b.best_change_score - a.best_change_score)[0]
+  const topChanges = [...standings].sort((a, b) => b.change_impact_points - a.change_impact_points)[0]
+  const topTotalChanges = [...standings].sort((a, b) => b.total_changes - a.total_changes)[0]
+  
+  const kamikazes = [...standings].filter(s => (s.kamikaze_score ?? 999999) < 999999)
+  kamikazes.sort((a, b) => (a.kamikaze_score || 0) - (b.kamikaze_score || 0))
+  const topKamikaze = kamikazes.length > 0 ? kamikazes[0] : null
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -1101,124 +1159,127 @@ export default function ClasificacionPage() {
                   {isExpanded && userTeamData[standing.user_id] && (
                     <tr>
                       <td colSpan={10} className="p-0">
-                        <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 p-4">
-                          <Card className="!bg-slate-800 border-slate-600">
-                            <CardContent className="p-4">
-                              <div className="flex items-center gap-2 mb-4 flex-wrap">
-                                <Users className="w-5 h-5 text-emerald-400" />
-                                <h3 className="text-lg font-bold text-white">
-                                  {userTeamData[standing.user_id]?.teamName}
-                                </h3>
-                                <Badge className="bg-emerald-600 text-white">
-                                  {Math.round((userTeamData[standing.user_id]?.totalPoints || 0) * 10) / 10} pts (J{userTeamData[standing.user_id]?.matchday})
-                                </Badge>
-                                {userTeamData[standing.user_id]?.penalties > 0 && (
-                                  <Badge className="bg-red-600 text-white">
-                                    Multa: -{Math.round((userTeamData[standing.user_id]?.penalties || 0) * 10) / 10} pts
-                                  </Badge>
+                        <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 px-3 py-2.5">
+                          {/* Cabecera equipo — ancho máximo para no estirarse con la tabla */}
+                          <div className="max-w-xs flex items-center gap-2 mb-2 flex-wrap">
+                            <Users className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span className="text-sm font-bold text-white truncate">
+                              {userTeamData[standing.user_id]?.teamName}
+                            </span>
+                            <Badge className="bg-emerald-600 text-white text-xs shrink-0">
+                              {Math.round((userTeamData[standing.user_id]?.totalPoints || 0) * 10) / 10} pts · J{userTeamData[standing.user_id]?.matchday}
+                            </Badge>
+                            {userTeamData[standing.user_id]?.penalties > 0 && (
+                              <Badge className="bg-red-600 text-white text-xs shrink-0">
+                                -{Math.round((userTeamData[standing.user_id]?.penalties || 0) * 10) / 10} pts multa
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Lista de jugadores: grid de 3 columnas con ancho máximo fijo
+                              col1=foto(24px) col2=nombre(crece) col3=puntos(56px fijos)
+                              max-w-xs garantiza que la columna de puntos siempre sea visible en móvil */}
+                          <div className="max-w-xs space-y-0.5">
+                            {userTeamData[standing.user_id]?.jugadores.map((player: any) => (
+                              <div
+                                key={player.id}
+                                className={`grid items-center gap-x-2 py-1 px-1.5 rounded ${
+                                  player.sanctionReason
+                                    ? 'bg-red-950/50 border border-red-800'
+                                    : 'bg-slate-700/60'
+                                }`}
+                                style={{ gridTemplateColumns: '1.5rem 1fr 3.5rem' }}
+                              >
+                                {/* col 1: foto */}
+                                {player.photo ? (
+                                  <img src={player.photo} alt={player.short_name} className="w-6 h-6 rounded-full object-cover border border-slate-500" />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center text-[9px] font-bold text-slate-300">
+                                    {player.shirt_number || '?'}
+                                  </div>
                                 )}
-                              </div>
-                              <div className="grid gap-3">
-                                <div>
-                                  <p className="text-xs font-semibold text-slate-400 uppercase mb-2">Titulares</p>
-                                  <div className="grid gap-1">
-                                    {userTeamData[standing.user_id]?.jugadores.map((player: any) => (
-                                      <div key={player.id} className={`flex items-center justify-between py-1 px-2 rounded-lg ${
-                                        player.sanctionReason ? 'bg-red-950/45 border border-red-500 text-red-100 shadow-sm' : 'bg-slate-700'
-                                      }`}>
-                                        <div className="flex items-center gap-3">
-                                          {player.photo ? (
-                                            <img src={player.photo} alt={player.short_name} className="w-7 h-7 rounded-full object-cover border-2 border-slate-500" />
-                                          ) : (
-                                            <div className="w-7 h-7 rounded-full bg-slate-600 flex items-center justify-center text-[10px] font-bold text-slate-300">
-                                              {player.shirt_number || '?'}
-                                            </div>
-                                          )}
-                                          <div>
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                              <span className="text-xs font-semibold text-white">{player.short_name}</span>
-                                              {player.sanctionReason && (
-                                                <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
-                                              )}
-                                              <Badge className={`text-[10px] px-1 py-0 ${getPositionColor(player.position)}`}>
-                                                {getPositionLabel(player.position)}
-                                              </Badge>
-                                              {player.is_captain && <Badge className="text-[10px] px-1 py-0 bg-yellow-500 text-white">C</Badge>}
-                                              
-                                              {/* Puntos y sanciones al lado del nombre */}
-                                              <Badge className={`text-[10px] px-1 py-0 font-bold ${
-                                                player.sanctionReason ? 'bg-red-600 text-white line-through' :
-                                                player.puntos > 0 ? 'bg-emerald-600 text-white' : 'bg-slate-500 text-white'
-                                              }`}>
-                                                {Math.round((player.sanctionReason ? player.originalPuntos : player.puntos) * 10) / 10} pts
-                                              </Badge>
-                                              {player.sanctionReason && (
-                                                <Badge className="text-[10px] px-1 py-0 bg-red-800 text-white font-bold">
-                                                  Multa: 0 pts
-                                                </Badge>
-                                              )}
-                                            </div>
-                                            <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0">
-                                              {player.team?.logo_url && (
-                                                <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain" />
-                                              )}
-                                              <span>{player.team?.name}</span>
-                                              {player.sanctionReason && (
-                                                <span className="text-[10px] text-red-400 font-medium italic ml-2">
-                                                  ({player.sanctionReason})
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
+
+                                {/* col 2: nombre + posición + equipo */}
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <span className={`text-xs font-semibold truncate ${player.sanctionReason ? 'text-red-200' : 'text-white'}`}>
+                                      {player.short_name}
+                                    </span>
+                                    <Badge className={`text-[9px] px-1 py-0 leading-tight shrink-0 ${getPositionColor(player.position)}`}>
+                                      {getPositionLabel(player.position)}
+                                    </Badge>
+                                    {player.is_captain && (
+                                      <Badge className="text-[9px] px-1 py-0 leading-tight shrink-0 bg-yellow-500 text-white">C</Badge>
+                                    )}
+                                    {player.sanctionReason && (
+                                      <AlertTriangle className="w-3 h-3 text-red-400 shrink-0" />
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    {player.team?.logo_url && (
+                                      <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain shrink-0" />
+                                    )}
+                                    <span className="text-[10px] text-slate-400 truncate">{player.team?.name}</span>
                                   </div>
                                 </div>
-                                {userTeamData[standing.user_id]?.suplentes.length > 0 && (
-                                  <div>
-                                    <p className="text-xs font-semibold text-slate-400 uppercase mb-2">Suplentes</p>
-                                    <div className="grid gap-1">
-                                      {userTeamData[standing.user_id]?.suplentes.map((player: any) => (
-                                        <div key={player.id} className="flex items-center justify-between py-1 px-2 bg-slate-700/50 rounded-lg">
-                                          <div className="flex items-center gap-3">
-                                            {player.photo ? (
-                                              <img src={player.photo} alt={player.short_name} className="w-7 h-7 rounded-full object-cover border-2 border-slate-600" />
-                                            ) : (
-                                              <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400">
-                                                {player.shirt_number || '?'}
-                                              </div>
-                                            )}
-                                            <div>
-                                              <div className="flex items-center gap-1.5 flex-wrap">
-                                                <span className="text-xs font-semibold text-slate-300">{player.short_name}</span>
-                                                <Badge className={`text-[10px] px-1 py-0 ${getPositionColor(player.position)}`}>
-                                                  {getPositionLabel(player.position)}
-                                                </Badge>
-                                                
-                                                {/* Puntos del suplente al lado del nombre */}
-                                                <Badge className={`text-[10px] px-1 py-0 font-semibold ${
-                                                  player.puntos > 0 ? 'bg-emerald-700/60 text-slate-200' : 'bg-slate-600 text-slate-400'
-                                                }`}>
-                                                  {Math.round((player.puntos || 0) * 10) / 10} pts
-                                                </Badge>
-                                              </div>
-                                              <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0">
-                                                {player.team?.logo_url && (
-                                                  <img src={player.team.logo_url} alt={player.team.name} className="w-3.5 h-3.5 object-contain" />
-                                                )}
-                                                <span>{player.team?.name}</span>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
+
+                                {/* col 3: puntos en amarillo — columna fija de 3.5rem */}
+                                <div className="text-right">
+                                  {player.sanctionReason ? (
+                                    <>
+                                      <span className="text-xs font-bold text-red-400 line-through block leading-none">
+                                        {Math.round((player.originalPuntos || 0) * 10) / 10}
+                                      </span>
+                                      <span className="text-xs font-bold text-red-400 block leading-none">0 pts</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-sm font-bold text-yellow-400 leading-none">
+                                        {Math.round((player.puntos || 0) * 10) / 10}
+                                      </span>
+                                      <span className="text-[10px] text-yellow-600 ml-0.5">pts</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Suplentes */}
+                          {userTeamData[standing.user_id]?.suplentes.length > 0 && (
+                            <div className="max-w-xs mt-2 pt-2 border-t border-slate-700">
+                              <p className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Suplentes</p>
+                              <div className="space-y-0.5">
+                                {userTeamData[standing.user_id]?.suplentes.map((player: any) => (
+                                  <div
+                                    key={player.id}
+                                    className="grid items-center gap-x-2 py-0.5 px-1.5 rounded bg-slate-800/40"
+                                    style={{ gridTemplateColumns: '1.5rem 1fr 3.5rem' }}
+                                  >
+                                    {player.photo ? (
+                                      <img src={player.photo} alt={player.short_name} className="w-5 h-5 rounded-full object-cover border border-slate-600 opacity-70" />
+                                    ) : (
+                                      <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-500">
+                                        {player.shirt_number || '?'}
+                                      </div>
+                                    )}
+                                    <div className="min-w-0 flex items-center gap-1">
+                                      <span className="text-[11px] font-medium text-slate-400 truncate">{player.short_name}</span>
+                                      <Badge className={`text-[9px] px-1 py-0 leading-tight shrink-0 opacity-70 ${getPositionColor(player.position)}`}>
+                                        {getPositionLabel(player.position)}
+                                      </Badge>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className="text-xs font-bold text-yellow-500/60">
+                                        {Math.round((player.puntos || 0) * 10) / 10}
+                                      </span>
+                                      <span className="text-[10px] text-slate-500 ml-0.5">pts</span>
                                     </div>
                                   </div>
-                                )}
+                                ))}
                               </div>
-                            </CardContent>
-                          </Card>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1233,36 +1294,70 @@ export default function ClasificacionPage() {
       </Card>
 
       {/* Estadísticas destacadas - MOVIDAS ABAJO DE LA TABLA */}
-      {(topEvolution || topChanges) && (
-        <div className="grid md:grid-cols-2 gap-4">
+      {(topEvolution || topChanges || topTotalChanges || topKamikaze) && (
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           {topEvolution && (
             <Card className="!bg-emerald-50 border-emerald-200">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
                     <TrendingUp className="w-5 h-5 text-white" />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-emerald-700 uppercase">Mayor promedio (últimas 3 jornadas)</p>
-                    <p className="text-lg font-bold text-emerald-900 uppercase">{topEvolution.user_name}</p>
-                    <p className="text-sm text-emerald-700">{topEvolution.last_3_jornadas_avg} pts/j</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-emerald-700 uppercase truncate">Mayor promedio (últimas 3)</p>
+                    <p className="text-lg font-bold text-emerald-900 uppercase truncate">{topEvolution.user_name}</p>
+                    <p className="text-sm text-emerald-700 truncate">{topEvolution.last_3_jornadas_avg} pts/j</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {topChanges && (
+          {topChanges && topChanges.change_impact_points !== 0 && (
             <Card className="!bg-blue-50 border-blue-200">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
                     <Target className="w-5 h-5 text-white" />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-blue-700 uppercase">Mejor porcentaje de cambios</p>
-                    <p className="text-lg font-bold text-blue-900 uppercase">{topChanges.user_name}</p>
-                    <p className="text-sm text-blue-700">{topChanges.best_change_score}% de acierto</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-blue-700 uppercase truncate">Mejor impacto de cambios</p>
+                    <p className="text-lg font-bold text-blue-900 uppercase truncate">{topChanges.user_name}</p>
+                    <p className="text-sm text-blue-700 truncate">{topChanges.change_impact_points > 0 ? `+${Math.round(topChanges.change_impact_points * 10)/10}` : Math.round(topChanges.change_impact_points * 10)/10} pts netos</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {topTotalChanges && topTotalChanges.total_changes > 0 && (
+            <Card className="!bg-purple-50 border-purple-200">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center shrink-0">
+                    <ArrowUpDown className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-purple-700 uppercase truncate">Más cambios en total</p>
+                    <p className="text-lg font-bold text-purple-900 uppercase truncate">{topTotalChanges.user_name}</p>
+                    <p className="text-sm text-purple-700 truncate">{topTotalChanges.total_changes} cambios realizados</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {topKamikaze && (
+            <Card className="!bg-rose-50 border-rose-200">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-rose-600 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-rose-700 uppercase truncate">Premio Kamikaze</p>
+                    <p className="text-lg font-bold text-rose-900 uppercase truncate">{topKamikaze.user_name}</p>
+                    <p className="text-sm text-rose-700 truncate">Cambios a {Math.round(topKamikaze.kamikaze_score || 0)} min del inicio</p>
                   </div>
                 </div>
               </CardContent>
