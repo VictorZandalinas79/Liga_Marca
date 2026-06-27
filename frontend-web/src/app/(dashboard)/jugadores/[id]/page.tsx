@@ -1529,7 +1529,7 @@ export default function JugadorDetallePage() {
                     const d = 110
                     let x = 160 + d * Math.cos(angle)
                     let y = 135 + d * Math.sin(angle)
-                    let textAnchor = "middle"
+                    let textAnchor: "start" | "end" | "middle" = "middle"
                     if (Math.abs(Math.cos(angle)) > 0.1) {
                       textAnchor = Math.cos(angle) > 0 ? "start" : "end"
                     }
