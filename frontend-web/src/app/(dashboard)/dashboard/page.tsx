@@ -1662,9 +1662,11 @@ export default function DashboardPage() {
                     {/* Columna Izquierda (Stats estilo FUT) */}
                     <div className="absolute top-2 left-2 flex flex-col items-center z-20 drop-shadow-md w-7 md:w-8">
                       {/* Índice (como si fuera la valoración general) */}
-                      <span className="text-lg md:text-xl font-black text-white leading-none drop-shadow-md">
-                        {idx + 1}
-                      </span>
+                      <div className="bg-black/60 rounded flex items-center justify-center px-1.5 py-0.5 mb-0.5">
+                        <span className="text-lg md:text-xl font-black text-white leading-none">
+                          {idx + 1}
+                        </span>
+                      </div>
                       {/* Posición (con color de fondo correspondiente) */}
                       <div className={`mt-0.5 text-[7px] md:text-[9px] px-1 py-0.5 w-[110%] text-center font-bold text-white rounded-sm drop-shadow-md ${getPositionColor(player.position)}`}>
                         {getPositionLabel(player.position)}
