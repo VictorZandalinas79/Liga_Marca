@@ -1171,8 +1171,16 @@ export default function JornadaPage() {
                                       {player.shirt_number || '?'}
                                     </div>
                                   )}
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                  <div className="min-w-0 relative flex-1">
+                                    {player.shirt_number && (
+                                      <span 
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 font-black text-white/95 text-3xl sm:text-4xl pointer-events-none select-none z-0 opacity-20"
+                                        style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
+                                      >
+                                        {player.shirt_number}
+                                      </span>
+                                    )}
+                                    <div className="flex items-center gap-1.5 flex-wrap relative z-10">
                                       <span className={`font-semibold break-words leading-tight ${
                                         (player.short_name || player.first_name || '').length > 15
                                           ? 'text-[9px]'

@@ -97,9 +97,19 @@ function PitchPlayerCard({
       </div>
 
       {/* Nombre del jugador */}
-      <p className="font-extrabold text-white text-[10px] sm:text-[11px] leading-tight w-[120%] truncate drop-shadow-md mt-1">
-        {player.short_name || player.first_name}
-      </p>
+      <div className="flex flex-col items-center w-[120%] mt-1">
+        <p className="font-extrabold text-white text-[10px] sm:text-[11px] leading-tight truncate drop-shadow-md relative z-10 w-full text-center">
+          {player.short_name || player.first_name}
+        </p>
+        {player.shirt_number && (
+          <p 
+            className="font-black text-white/95 text-[22px] sm:text-3xl leading-none -mt-1.5 sm:-mt-2 relative z-0"
+            style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
+          >
+            {player.shirt_number}
+          </p>
+        )}
+      </div>
       {isPenalized && sanctionReason ? (
         <p className="text-[7px] sm:text-[8px] text-red-300 font-bold leading-tight w-[130%] drop-shadow-md mt-0.5 truncate bg-red-950/80 rounded px-1 py-0.5" title={sanctionReason}>
           {sanctionReason}
@@ -1594,17 +1604,27 @@ export default function DashboardPage() {
                       <div className={`text-sm px-3 py-1 w-full text-center font-semibold text-white rounded-md ${getPositionColor(player.position)}`}>
                         {getPositionLabel(player.position)}
                       </div>
-                      <p className={`font-bold text-white w-full text-center break-words leading-tight ${
-                        (player.short_name || player.first_name || '').length > 14
-                          ? 'text-[10px] md:text-sm'
-                          : (player.short_name || player.first_name || '').length > 10
-                          ? 'text-[11px] md:text-sm'
-                          : (player.short_name || player.first_name || '').length > 7
-                          ? 'text-xs md:text-base'
-                          : 'text-sm md:text-base'
-                      }`}>
-                        {player.short_name || player.first_name}
-                      </p>
+                      <div className="flex flex-col items-center w-full">
+                        <p className={`font-bold text-white w-full text-center break-words leading-tight relative z-10 ${
+                          (player.short_name || player.first_name || '').length > 14
+                            ? 'text-[10px] md:text-sm'
+                            : (player.short_name || player.first_name || '').length > 10
+                            ? 'text-[11px] md:text-sm'
+                            : (player.short_name || player.first_name || '').length > 7
+                            ? 'text-xs md:text-base'
+                            : 'text-sm md:text-base'
+                        }`}>
+                          {player.short_name || player.first_name}
+                        </p>
+                        {player.shirt_number && (
+                          <p 
+                            className="font-black text-white/95 text-3xl md:text-4xl leading-none -mt-1.5 relative z-0"
+                            style={{ textShadow: '3px 3px 6px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
+                          >
+                            {player.shirt_number}
+                          </p>
+                        )}
+                      </div>
                       <p className="text-xs text-slate-300 truncate w-full text-center">
                         {player.team?.name || '-'}
                       </p>
