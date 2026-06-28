@@ -146,6 +146,15 @@ def check_and_run_sanctions():
                     state[md_key]["initial_run"] = True
                     state_changed = True
                     log(f"✅ Cálculo inicial de sanciones completado para Jornada {matchday}")
+                    
+                    # Disparar emails de inicio de jornada
+                    email_script_path = "../4. enviar_email_jornada.py"
+                    res_email = subprocess.run([sys.executable, email_script_path], env=env, capture_output=True, text=True)
+                    if res_email.returncode == 0:
+                        log(f"✅ Emails de inicio de jornada enviados.")
+                        log(res_email.stdout)
+                    else:
+                        log(f"❌ Error enviando emails de inicio de jornada: {res_email.stderr}")
                 else:
                     log(f"❌ Error en cálculo inicial para Jornada {matchday}: {res.stderr}")
             

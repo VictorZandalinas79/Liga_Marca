@@ -4,3 +4,8 @@ node_modules/
 # Python
 __pycache__/
 *.pyc
+
+# Variables de entorno y logs
+.env
+logs/
+.processed_matchdays.json

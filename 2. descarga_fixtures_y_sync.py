@@ -23,10 +23,7 @@ from dotenv import load_dotenv
 from difflib import SequenceMatcher
 from deep_translator import GoogleTranslator
 
-# email_sender no está disponible localmente, simulamos la función
-def send_email(to_email, subject, html_content):
-    print(f"✉️ [Simulado] Enviando correo a {to_email}: {subject}")
-    return True
+from mailer import send_email_real, render_template
 
 load_dotenv()
 
@@ -158,11 +155,16 @@ def send_sync_summary_emails():
             continue
         name = p.get("full_name") or email.split("@")[0]
         
-        # Personalizar el saludo en el cuerpo
-        personalized_body = f"<p>Hola <strong>{name}</strong>,</p>" + html_content
+        # Renderizar la plantilla base con el cuerpo personalizado
+        context = {
+            "name": name,
+            "body_html": html_content,
+            "app_url": "http://localhost:3000" # Ajustar a la URL de prod cuando se despliegue
+        }
+        final_html = render_template("", context)
         subject = "Novedades de la Liga Marca 🏆"
         
-        if send_email(email, subject, personalized_body):
+        if send_email_real(email, subject, final_html):
             sent_count += 1
             
     print(f"📧 Se enviaron {sent_count} correos de resumen de sincronización.")
