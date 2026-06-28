@@ -1588,135 +1588,138 @@ export default function DashboardPage() {
                   <div
                     key={player.id}
                     onClick={() => openPlayerSelector(player.id)}
-                    className={`relative p-3 rounded-xl transition-all border-2 ${
+                    className={`relative overflow-hidden w-full aspect-[5/7] rounded-t-xl rounded-b-3xl transition-all border ${
                       isUnlockWindowOpen
-                        ? 'bg-slate-800 border-transparent opacity-50 cursor-not-allowed'
+                        ? 'bg-slate-900 border-slate-800 opacity-50 cursor-not-allowed'
                         : isLockedPlayer
-                          ? 'bg-slate-800 border-red-500 opacity-60 cursor-not-allowed'
+                          ? 'bg-slate-900 border-red-900 opacity-60 cursor-not-allowed'
                           : isChanged
-                            ? 'bg-emerald-900 border-emerald-500 hover:bg-slate-700 cursor-pointer'
-                            : 'bg-slate-800 border-transparent hover:bg-slate-700 cursor-pointer'
+                            ? 'bg-gradient-to-br from-emerald-900/90 to-slate-900 border-emerald-500/50 hover:scale-105 hover:z-50 cursor-pointer shadow-lg shadow-emerald-900/50'
+                            : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-amber-500/50 hover:scale-105 hover:z-50 cursor-pointer shadow-xl'
                     }`}
                   >
-                    {isLockedPlayer && (
-                      <div className={`absolute ${replacedPlayer ? 'top-6 -left-2' : '-top-1 -left-1'} w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md z-30`} title="Jugador bloqueado: partido fuera de jornada">
-                        <Lock className="w-3.5 h-3.5 text-white" />
-                      </div>
+                    {/* Fondo de escudo del equipo (Watermark) */}
+                    {player.team?.logo_url && (
+                      <img 
+                        src={player.team.logo_url} 
+                        alt="Fondo" 
+                        className="absolute inset-0 m-auto w-[140%] h-[140%] object-contain opacity-10 pointer-events-none filter blur-[2px]"
+                      />
                     )}
-                    {/* Jugador reemplazado (mini tarjeta arriba a la izquierda) */}
-                    {replacedPlayer && (
-                      <div className="absolute -top-3 -left-3 flex flex-col items-center z-20 pointer-events-none drop-shadow-lg opacity-95">
-                        <div className="relative">
-                          {replacedPlayer.photo ? (
-                            <img
-                              src={replacedPlayer.photo}
-                              alt={replacedPlayer.short_name || ''}
-                              className="w-7 h-7 md:w-9 md:h-9 rounded-full object-cover border-[1.5px] border-red-400 shadow-md bg-slate-200 grayscale-[30%]"
-                            />
-                          ) : (
-                            <div className="w-7 h-7 md:w-9 md:h-9 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[9px] md:text-[11px] font-bold border-[1.5px] border-red-400 shadow-md">
-                              {replacedPlayer.shirt_number || '?'}
-                            </div>
-                          )}
-                          
-                          {/* Escudo mini */}
-                          {replacedPlayer.team?.logo_url && (
-                            <img
-                              src={replacedPlayer.team.logo_url}
-                              alt={replacedPlayer.team?.name || ''}
-                              className="absolute -bottom-1 -left-1 w-3.5 h-3.5 md:w-4 md:h-4 object-contain bg-white/90 rounded-full p-[1px] shadow-sm grayscale-[20%]"
-                            />
-                          )}
-                          
-                          {/* Precio mini */}
-                          <div className="absolute -bottom-1 -right-3 bg-red-100/95 text-red-800 font-extrabold text-[6px] md:text-[7px] px-1 rounded-full shadow-sm border border-red-200">
-                            {replacedPlayer.precio ? `${replacedPlayer.precio}M` : '-'}
-                          </div>
-                        </div>
-                        
-                        {/* Nombre y dorsal mini */}
-                        <div className="mt-0.5 bg-black/75 rounded px-1 py-0.5 flex flex-col items-center min-w-[35px] max-w-[45px] md:max-w-[55px] shadow-sm">
-                          <p className="font-bold text-red-100 text-[6px] md:text-[7px] leading-tight truncate text-center w-full">
-                            {replacedPlayer.short_name || replacedPlayer.first_name}
-                          </p>
-                          {replacedPlayer.shirt_number && (
-                            <p className="font-black text-white text-[7px] md:text-[8px] leading-none mt-[1px]">
-                              {replacedPlayer.shirt_number}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {isSessionChange && (
-                      <button
-                        onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
-                        className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-md z-10 transition-colors"
-                        title="Cancelar cambio"
-                      >
-                        <X className="w-3.5 h-3.5 text-white" />
-                      </button>
-                    )}
-                    {isCrossSessionChange && (
-                      <button
-                        onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
-                        className="absolute -top-1 -right-1 w-6 h-6 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center shadow-md z-10 transition-colors"
-                        title="Cancelar cambio"
-                      >
-                        <X className="w-3.5 h-3.5 text-white" />
-                      </button>
-                    )}
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="text-sm font-bold text-slate-300">{idx + 1}</span>
-                      <div className="relative">
-                        {player.photo ? (
-                          <img
-                            src={player.photo}
-                            alt={player.short_name || ''}
-                            className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-black shadow-md"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-slate-200 flex items-center justify-center text-lg md:text-xl font-bold border-2 border-black shadow-md">
-                            {player.shirt_number || '?'}
+
+                    {/* Gradiente inferior para legibilidad del texto */}
+                    <div className="absolute inset-x-0 bottom-0 h-[60%] bg-gradient-to-t from-black via-black/80 to-transparent z-10 pointer-events-none" />
+
+                    {/* Controles superiores derecha (Lock, Cancel Change) */}
+                    <div className="absolute top-2 right-2 z-40 flex flex-col items-end gap-1">
+                      <div className="flex gap-1">
+                        {isLockedPlayer && (
+                          <div className="w-5 h-5 md:w-6 md:h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md" title="Jugador bloqueado: partido fuera de jornada">
+                            <Lock className="w-3 h-3 text-white" />
                           </div>
                         )}
-                        {player.team?.logo_url && (
-                          <img
-                            src={player.team.logo_url}
-                            alt={player.team?.name || ''}
-                            className="absolute -bottom-1 -right-1 w-7 h-7 md:w-8 md:h-8 rounded-full bg-white border-2 border-black shadow-md"
-                          />
-                        )}
-                      </div>
-                      <div className={`text-sm px-3 py-1 w-full text-center font-semibold text-white rounded-md ${getPositionColor(player.position)}`}>
-                        {getPositionLabel(player.position)}
-                      </div>
-                      <div className="flex flex-col items-center w-full">
-                        <p className={`font-bold text-white w-full text-center break-words leading-tight relative z-10 ${
-                          (player.short_name || player.first_name || '').length > 14
-                            ? 'text-[10px] md:text-sm'
-                            : (player.short_name || player.first_name || '').length > 10
-                            ? 'text-[11px] md:text-sm'
-                            : (player.short_name || player.first_name || '').length > 7
-                            ? 'text-xs md:text-base'
-                            : 'text-sm md:text-base'
-                        }`}>
-                          {player.short_name || player.first_name}
-                        </p>
-                        {player.shirt_number && (
-                          <p 
-                            className="font-black text-white/95 text-3xl md:text-4xl leading-none -mt-1.5 relative z-0"
-                            style={{ textShadow: '3px 3px 6px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
+                        {isChanged && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
+                            className="w-5 h-5 md:w-6 md:h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-md transition-colors"
+                            title="Cancelar cambio"
                           >
-                            {player.shirt_number}
-                          </p>
+                            <X className="w-3 h-3 text-white" />
+                          </button>
                         )}
                       </div>
-                      <p className="text-xs text-slate-300 truncate w-full text-center">
-                        {player.team?.name || '-'}
+
+                      {/* Jugador reemplazado (mini tarjeta) */}
+                      {replacedPlayer && (
+                        <div className="flex flex-col items-center pointer-events-none drop-shadow-lg opacity-90 mt-1">
+                          <div className="relative">
+                            {replacedPlayer.photo ? (
+                              <img
+                                src={replacedPlayer.photo}
+                                className="w-6 h-6 md:w-8 md:h-8 rounded-full object-cover border border-red-400 shadow-md bg-slate-200 grayscale-[30%]"
+                              />
+                            ) : (
+                              <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[9px] font-bold border border-red-400 shadow-md">
+                                {replacedPlayer.shirt_number || '?'}
+                              </div>
+                            )}
+                            {replacedPlayer.team?.logo_url && (
+                              <img
+                                src={replacedPlayer.team.logo_url}
+                                className="absolute -bottom-1 -left-1 w-3 h-3 md:w-4 md:h-4 object-contain bg-white/90 rounded-full p-[1px] shadow-sm grayscale-[20%]"
+                              />
+                            )}
+                          </div>
+                          <div className="mt-1 bg-black/75 rounded px-1 py-0.5 flex flex-col items-center min-w-[30px] shadow-sm">
+                            <p className="font-bold text-red-100 text-[5px] md:text-[6px] leading-tight truncate text-center max-w-[40px]">
+                              {replacedPlayer.short_name || replacedPlayer.first_name}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Columna Izquierda (Stats estilo FUT) */}
+                    <div className="absolute top-2 left-2 flex flex-col items-center z-20 drop-shadow-md">
+                      {/* Precio (como si fuera la valoración general 99) */}
+                      <span className="text-xl md:text-2xl font-black text-amber-400 leading-none">
+                        {player.precio ? player.precio : '-'}
+                      </span>
+                      {/* Posición */}
+                      <span className="text-[10px] md:text-xs font-bold text-white uppercase mt-0.5 drop-shadow-md">
+                        {getPositionLabel(player.position)}
+                      </span>
+                      {/* Escudo del equipo */}
+                      {player.team?.logo_url && (
+                        <img
+                          src={player.team.logo_url}
+                          alt={player.team?.name || ''}
+                          className="w-6 h-6 md:w-8 md:h-8 object-contain mt-1.5 drop-shadow-lg"
+                        />
+                      )}
+                    </div>
+
+                    {/* Foto del jugador (Sin fondo blanco, grande, centrada-abajo) */}
+                    <div className="absolute inset-x-0 bottom-[20%] top-[5%] flex justify-center items-end z-10 pointer-events-none">
+                      {player.photo ? (
+                        <img
+                          src={player.photo}
+                          alt={player.short_name || ''}
+                          className="h-[100%] w-auto object-contain drop-shadow-2xl"
+                        />
+                      ) : (
+                        <div className="h-[50%] aspect-square rounded-full bg-slate-800/80 text-slate-300 flex items-center justify-center text-3xl font-bold shadow-2xl border-2 border-slate-600">
+                          {player.shirt_number || '?'}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Nombre y Dorsal (Zona inferior) */}
+                    <div className="absolute inset-x-0 bottom-2 flex flex-col items-center z-20 px-1">
+                      <p className={`font-black text-amber-50 uppercase text-center w-full truncate tracking-tight drop-shadow-lg ${
+                          (player.short_name || player.first_name || '').length > 12
+                            ? 'text-xs md:text-sm'
+                            : 'text-sm md:text-base'
+                        }`}
+                        style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
+                      >
+                        {player.short_name || player.first_name}
                       </p>
-                      <p className="text-base md:text-lg font-bold text-emerald-400">
-                        {player.precio ? `${player.precio}M` : '-'}
-                      </p>
+                      
+                      <div className="w-3/4 h-[1px] bg-amber-500/40 my-1" />
+
+                      <div className="flex items-center gap-1.5">
+                        {player.shirt_number ? (
+                           <>
+                             <span className="text-[8px] md:text-[9px] font-bold text-amber-500/80 uppercase">Dorsal</span>
+                             <span className="font-black text-white text-sm md:text-base leading-none drop-shadow-md">
+                               {player.shirt_number}
+                             </span>
+                           </>
+                        ) : (
+                           <span className="text-[8px] md:text-[9px] font-bold text-slate-500 uppercase">Sin Dorsal</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )
