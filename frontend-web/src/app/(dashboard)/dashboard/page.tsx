@@ -1710,7 +1710,7 @@ export default function DashboardPage() {
                         
                         {/* Dorsal (Centro) */}
                         <div className="flex-1 flex justify-center">
-                          <span className="font-black text-white text-xs md:text-sm leading-none drop-shadow-md">
+                          <span className="font-black text-white text-base md:text-lg leading-none drop-shadow-md">
                             {player.shirt_number || '-'}
                           </span>
                         </div>
