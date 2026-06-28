@@ -1647,32 +1647,32 @@ export default function DashboardPage() {
                       </div>
 
                       {/* Nombre, Valor, Dorsal, Escudo (Zona inferior) */}
-                      <div className="absolute inset-x-0 bottom-1 flex flex-col items-center z-20 px-1 w-full">
+                      <div className="@container absolute inset-x-0 bottom-1 flex flex-col items-center z-20 px-0.5 w-full">
                         <div className="w-full bg-black/95 rounded-lg py-1 px-1 flex flex-col items-center shadow-2xl">
                           <p className={`font-black text-amber-50 uppercase text-center w-full leading-tight line-clamp-2 tracking-tight drop-shadow-lg ${
                               (player.short_name || player.first_name || '').length > 14
-                                ? 'text-[8.5px] md:text-xs'
-                                : (player.short_name || player.first_name || '').length > 11
-                                ? 'text-[10px] md:text-xs'
-                                : 'text-xs md:text-sm'
+                                ? 'text-[8cqw] md:text-[11px]'
+                                : (player.short_name || player.first_name || '').length > 10
+                                ? 'text-[9.5cqw] md:text-xs'
+                                : 'text-[11cqw] md:text-sm'
                             }`}
                             style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
                           >
                             {player.short_name || player.first_name}
                           </p>
                           
-                          <div className="w-11/12 h-[1px] bg-amber-500/40 my-0.5 md:my-1" />
+                          <div className="w-11/12 h-[1px] bg-amber-500/40 my-0.5" />
 
                           <div className="w-full flex justify-between items-center px-1">
                             {/* Valor */}
                             <div className="flex-1 flex justify-start">
-                              <span className="font-black text-emerald-400 text-[10px] md:text-xs drop-shadow-md">
+                              <span className="font-black text-emerald-400 text-[9cqw] md:text-xs drop-shadow-md">
                                 {player.precio ? `${player.precio}M` : '-'}
                               </span>
                             </div>
                             {/* Dorsal */}
                             <div className="flex-1 flex justify-center">
-                              <span className="font-black text-white text-base md:text-lg leading-none drop-shadow-md">
+                              <span className="font-black text-white text-[13cqw] md:text-lg leading-none drop-shadow-md">
                                 {player.shirt_number || '-'}
                               </span>
                             </div>
@@ -1682,9 +1682,9 @@ export default function DashboardPage() {
                                 <img
                                   src={player.team.logo_url}
                                   alt={player.team?.name || ''}
-                                  className="w-4 h-4 md:w-5 md:h-5 object-contain drop-shadow-lg"
+                                  className="w-[12cqw] h-[12cqw] md:w-5 md:h-5 object-contain drop-shadow-lg"
                                 />
-                              ) : <div className="w-4 h-4 md:w-5 md:h-5" />}
+                              ) : <div className="w-[12cqw] h-[12cqw] md:w-5 md:h-5" />}
                             </div>
                           </div>
                         </div>
