@@ -1649,8 +1649,10 @@ export default function DashboardPage() {
                       {/* Nombre, Valor, Dorsal, Escudo (Zona inferior) */}
                       <div className="absolute inset-x-0 bottom-1 flex flex-col items-center z-20 px-1 w-full">
                         <div className="w-full bg-black/95 rounded-lg py-1 px-1 flex flex-col items-center shadow-2xl">
-                          <p className={`font-black text-amber-50 uppercase text-center w-full truncate tracking-tight drop-shadow-lg ${
-                              (player.short_name || player.first_name || '').length > 12
+                          <p className={`font-black text-amber-50 uppercase text-center w-full leading-tight line-clamp-2 tracking-tight drop-shadow-lg ${
+                              (player.short_name || player.first_name || '').length > 14
+                                ? 'text-[8.5px] md:text-xs'
+                                : (player.short_name || player.first_name || '').length > 11
                                 ? 'text-[10px] md:text-xs'
                                 : 'text-xs md:text-sm'
                             }`}
