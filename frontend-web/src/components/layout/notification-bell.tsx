@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Bell } from 'lucide-react'
+import { Bell, Copy, Check } from 'lucide-react'
 
 interface Notification {
   id: string
@@ -15,7 +15,24 @@ interface Notification {
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copiedAll, setCopiedAll] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  function handleCopy(e: React.MouseEvent, text: string, id: string) {
+    e.stopPropagation()
+    navigator.clipboard.writeText(text)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
+  function handleCopyAll() {
+    if (notifications.length === 0) return
+    const text = notifications.map(n => `📢 *${n.title}*\n${n.body}`).join('\n\n')
+    navigator.clipboard.writeText(text)
+    setCopiedAll(true)
+    setTimeout(() => setCopiedAll(false), 2000)
+  }
 
   const unreadCount = notifications.filter(n => !n.read_at).length
 
@@ -152,7 +169,19 @@ export function NotificationBell() {
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <div className="relative w-full max-w-2xl bg-white border border-slate-300 rounded-2xl shadow-2xl z-50">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-800">
-            <span className="font-bold text-white text-lg">📢 Notificaciones</span>
+            <div className="flex items-center gap-4">
+              <span className="font-bold text-white text-lg">📢 Notificaciones</span>
+              {notifications.length > 0 && (
+                <button
+                  onClick={handleCopyAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-md transition-colors"
+                  title="Copiar todas para WhatsApp"
+                >
+                  {copiedAll ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                  {copiedAll ? '¡Copiado!' : 'Copiar todo'}
+                </button>
+              )}
+            </div>
             <button
               onClick={() => setOpen(false)}
               className="text-slate-400 hover:text-slate-200 transition-colors text-2xl"
@@ -185,9 +214,9 @@ export function NotificationBell() {
                       }`}
                       title={!n.read_at ? 'Hacer clic para marcar como leído' : undefined}
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-3 relative">
                         <span className="text-2xl shrink-0">{typeIcon[n.type] ?? '🔔'}</span>
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 pr-8">
                           <div className="flex items-center gap-2 mb-1">
                             <p className={`font-bold truncate ${isWarning ? 'text-red-900' : 'text-slate-900'}`}>{n.title}</p>
                             {!n.read_at && (
@@ -197,6 +226,13 @@ export function NotificationBell() {
                           <p className={`text-sm mt-1 leading-snug ${isWarning ? 'text-red-800' : 'text-slate-700'}`}>{n.body}</p>
                           <p className="text-xs text-slate-500 mt-2">{formatDate(n.created_at)}</p>
                         </div>
+                        <button
+                          onClick={(e) => handleCopy(e, `📢 *${n.title}*\n${n.body}`, n.id)}
+                          className="absolute top-0 right-0 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 rounded-md transition-all z-10"
+                          title="Copiar para WhatsApp"
+                        >
+                          {copiedId === n.id ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
                   )
