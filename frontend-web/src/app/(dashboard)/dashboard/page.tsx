@@ -1607,8 +1607,9 @@ export default function DashboardPage() {
                       />
                     )}
 
-                    {/* Gradiente inferior para legibilidad del texto */}
-                    <div className="absolute inset-x-0 bottom-0 h-[60%] bg-gradient-to-t from-black via-black/80 to-transparent z-10 pointer-events-none" />
+                    {/* Gradiente y fondo sólido inferior para legibilidad del texto */}
+                    <div className="absolute inset-x-0 bottom-0 h-[30%] bg-black z-10 pointer-events-none" />
+                    <div className="absolute inset-x-0 bottom-[30%] h-[30%] bg-gradient-to-t from-black via-black/80 to-transparent z-10 pointer-events-none" />
 
                     {/* Controles superiores derecha (Lock, Cancel Change) */}
                     <div className="absolute top-2 right-2 z-40 flex flex-col items-end gap-1">
@@ -1689,43 +1690,45 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Nombre, Valor, Dorsal, Escudo (Zona inferior) */}
-                    <div className="absolute inset-x-0 bottom-1.5 flex flex-col items-center z-20 px-1 w-full">
-                      <p className={`font-black text-amber-50 uppercase text-center w-full truncate tracking-tight drop-shadow-lg ${
-                          (player.short_name || player.first_name || '').length > 12
-                            ? 'text-[10px] md:text-xs'
-                            : 'text-xs md:text-sm'
-                        }`}
-                        style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
-                      >
-                        {player.short_name || player.first_name}
-                      </p>
-                      
-                      <div className="w-11/12 h-[1px] bg-amber-500/40 my-0.5 md:my-1" />
+                    <div className="absolute inset-x-0 bottom-1 flex flex-col items-center z-20 px-1 w-full">
+                      <div className="w-full bg-black/95 rounded-lg py-1 px-1 flex flex-col items-center shadow-2xl">
+                        <p className={`font-black text-amber-50 uppercase text-center w-full truncate tracking-tight drop-shadow-lg ${
+                            (player.short_name || player.first_name || '').length > 12
+                              ? 'text-[10px] md:text-xs'
+                              : 'text-xs md:text-sm'
+                          }`}
+                          style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
+                        >
+                          {player.short_name || player.first_name}
+                        </p>
+                        
+                        <div className="w-11/12 h-[1px] bg-amber-500/40 my-0.5 md:my-1" />
 
-                      <div className="w-full flex justify-between items-center px-1.5 md:px-2">
-                        {/* Valor (Izquierda) */}
-                        <div className="flex-1 flex justify-start">
-                          <span className="font-black text-emerald-400 text-[10px] md:text-xs drop-shadow-md">
-                            {player.precio ? `${player.precio}M` : '-'}
-                          </span>
-                        </div>
-                        
-                        {/* Dorsal (Centro) */}
-                        <div className="flex-1 flex justify-center">
-                          <span className="font-black text-white text-base md:text-lg leading-none drop-shadow-md">
-                            {player.shirt_number || '-'}
-                          </span>
-                        </div>
-                        
-                        {/* Escudo (Derecha) */}
-                        <div className="flex-1 flex justify-end">
-                          {player.team?.logo_url ? (
-                            <img
-                              src={player.team.logo_url}
-                              alt={player.team?.name || ''}
-                              className="w-4 h-4 md:w-5 md:h-5 object-contain drop-shadow-lg"
-                            />
-                          ) : <div className="w-4 h-4 md:w-5 md:h-5" />}
+                        <div className="w-full flex justify-between items-center px-1">
+                          {/* Valor (Izquierda) */}
+                          <div className="flex-1 flex justify-start">
+                            <span className="font-black text-emerald-400 text-[10px] md:text-xs drop-shadow-md">
+                              {player.precio ? `${player.precio}M` : '-'}
+                            </span>
+                          </div>
+                          
+                          {/* Dorsal (Centro) */}
+                          <div className="flex-1 flex justify-center">
+                            <span className="font-black text-white text-base md:text-lg leading-none drop-shadow-md">
+                              {player.shirt_number || '-'}
+                            </span>
+                          </div>
+                          
+                          {/* Escudo (Derecha) */}
+                          <div className="flex-1 flex justify-end">
+                            {player.team?.logo_url ? (
+                              <img
+                                src={player.team.logo_url}
+                                alt={player.team?.name || ''}
+                                className="w-4 h-4 md:w-5 md:h-5 object-contain drop-shadow-lg"
+                              />
+                            ) : <div className="w-4 h-4 md:w-5 md:h-5" />}
+                          </div>
                         </div>
                       </div>
                     </div>
