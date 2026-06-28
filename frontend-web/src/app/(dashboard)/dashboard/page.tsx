@@ -61,7 +61,52 @@ function PitchPlayerCard({
   return (
     <div className="flex flex-col items-center w-[58px] sm:w-[80px] text-center relative shrink-0 group">
       <div className="relative mb-1">
-        {/* Foto del jugador */}
+        {/* Jugador reemplazado (mini tarjeta arriba a la izquierda) */}
+        {replacedPlayer && !isPenalized && (
+          <div className="absolute -top-3 -left-6 sm:-top-4 sm:-left-8 flex flex-col items-center z-20 pointer-events-none drop-shadow-lg opacity-95 transition-opacity group-hover:opacity-100 group-hover:z-30">
+            <div className="relative">
+              {replacedPlayer.photo ? (
+                <img
+                  src={replacedPlayer.photo}
+                  alt={replacedPlayer.short_name || ''}
+                  className="w-7 h-7 sm:w-9 sm:h-9 rounded-full object-cover border-[1.5px] border-red-400 shadow-md bg-slate-200 grayscale-[30%]"
+                />
+              ) : (
+                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[9px] sm:text-[11px] font-bold border-[1.5px] border-red-400 shadow-md">
+                  {replacedPlayer.shirt_number || '?'}
+                </div>
+              )}
+              
+              {/* Escudo mini */}
+              {replacedPlayer.team?.logo_url && (
+                <img
+                  src={replacedPlayer.team.logo_url}
+                  alt={replacedPlayer.team?.name || ''}
+                  className="absolute -bottom-1 -left-1 w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain bg-white/90 rounded-full p-[1px] shadow-sm grayscale-[20%]"
+                />
+              )}
+              
+              {/* Precio mini */}
+              <div className="absolute -bottom-1 -right-3 bg-red-100/95 text-red-800 font-extrabold text-[6px] sm:text-[7px] px-1 rounded-full shadow-sm border border-red-200">
+                {replacedPlayer.precio ? `${replacedPlayer.precio}M` : '-'}
+              </div>
+            </div>
+            
+            {/* Nombre y dorsal mini */}
+            <div className="mt-0.5 bg-black/75 rounded px-1 py-0.5 flex flex-col items-center min-w-[35px] max-w-[45px] sm:max-w-[55px] shadow-sm">
+              <p className="font-bold text-red-100 text-[6px] sm:text-[7px] leading-tight truncate text-center w-full">
+                {replacedPlayer.short_name || replacedPlayer.first_name}
+              </p>
+              {replacedPlayer.shirt_number && (
+                <p className="font-black text-white text-[7px] sm:text-[8px] leading-none mt-[1px]">
+                  {replacedPlayer.shirt_number}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Foto del jugador actual */}
         {player.photo ? (
           <img
             src={player.photo}
@@ -113,10 +158,6 @@ function PitchPlayerCard({
       {isPenalized && sanctionReason ? (
         <p className="text-[7px] sm:text-[8px] text-red-300 font-bold leading-tight w-[130%] drop-shadow-md mt-0.5 truncate bg-red-950/80 rounded px-1 py-0.5" title={sanctionReason}>
           {sanctionReason}
-        </p>
-      ) : replacedPlayer ? (
-        <p className="text-[8px] sm:text-[9px] text-red-300 font-bold truncate w-[130%] drop-shadow-md mt-0.5">
-          por {replacedPlayer.short_name || replacedPlayer.first_name}
         </p>
       ) : null}
     </div>
