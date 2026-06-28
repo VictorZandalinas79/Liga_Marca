@@ -1144,6 +1144,14 @@ export default function JornadaPage() {
                               >
                                 <div className="flex items-center gap-3 min-w-0">
                                   <span className="text-xs font-bold text-slate-400 w-4 shrink-0">{idx + 1}</span>
+                                  {player.shirt_number && (
+                                    <span 
+                                      className="font-black text-slate-900 text-base sm:text-lg w-5 text-center shrink-0"
+                                      style={{ textShadow: '1px 1px 2px rgba(255,255,255,0.8), -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff' }}
+                                    >
+                                      {player.shirt_number}
+                                    </span>
+                                  )}
                                   {player.photo ? (
                                     <img
                                       src={player.photo}
@@ -1172,14 +1180,6 @@ export default function JornadaPage() {
                                     </div>
                                   )}
                                   <div className="min-w-0 relative flex-1">
-                                    {player.shirt_number && (
-                                      <span 
-                                        className="absolute right-0 top-1/2 -translate-y-1/2 font-black text-white/95 text-3xl sm:text-4xl pointer-events-none select-none z-0 opacity-20"
-                                        style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
-                                      >
-                                        {player.shirt_number}
-                                      </span>
-                                    )}
                                     <div className="flex items-center gap-1.5 flex-wrap relative z-10">
                                       <span className={`font-semibold break-words leading-tight ${
                                         (player.short_name || player.first_name || '').length > 15
