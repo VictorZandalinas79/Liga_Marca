@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getLiveInfractions, getCurrentMatchday } from '@/lib/infractions'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const currentMatchday = await getCurrentMatchday(supabase)
+  const matchdayParam = request.nextUrl.searchParams.get('matchday')
+  const currentMatchday = matchdayParam ? parseInt(matchdayParam, 10) : await getCurrentMatchday(supabase)
 
   if (!currentMatchday) {
     return NextResponse.json({ infractions: [] })

@@ -2,10 +2,19 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-async function run() {
-  const { data: fixtures } = await supabase.from('fixtures').select('id, matchday, status, start_time').or(`home_team_id.eq.eh7yt2x2wck51oixw8012ux5j,away_team_id.eq.eh7yt2x2wck51oixw8012ux5j`).order('matchday');
-  console.log("Spain Fixtures:", fixtures);
+async function main() {
+  const { data: tps } = await supabase.from('team_players').select('player_id');
+  const { data: players } = await supabase.from('players').select('id');
+  
+  const playerIds = new Set(players.map(p => p.id));
+  const missing = [];
+  tps.forEach(tp => {
+    if (!playerIds.has(tp.player_id)) missing.push(tp.player_id);
+  });
+  console.log("Missing player IDs:", missing);
 }
-run();
+main();

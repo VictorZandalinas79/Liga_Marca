@@ -97,17 +97,34 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
     formations: configData?.formations ?? ["3-5-2", "3-4-3", "4-4-2", "4-3-3", "4-5-1", "5-4-1", "5-3-2"]
   }
 
-  // 3. Obtener todos los team_players registrados hasta la jornada actual
-  const { data: allTeamPlayers } = await supabase
-    .from('team_players')
-    .select('team_id, player_id, is_starter, is_captain, matchday')
-    .lte('matchday', matchday)
+  // Función helper para paginación
+  async function fetchAll<T>(table: string, select: string, matchdayFilter?: number): Promise<T[]> {
+    const allData: T[] = []
+    const pageSize = 1000
+    let from = 0
+    while (true) {
+      let query = supabase.from(table).select(select).range(from, from + pageSize - 1)
+      if (matchdayFilter !== undefined) {
+        query = query.lte('matchday', matchdayFilter)
+      }
+      const { data, error } = await query
+      if (error || !data) break
+      allData.push(...(data as any))
+      if (data.length < pageSize) break
+      from += pageSize
+    }
+    return allData
+  }
 
-  if (!allTeamPlayers) return []
+  // 3. Obtener todos los team_players registrados hasta la jornada actual
+  const allTeamPlayers = await fetchAll<any>('team_players', 'team_id, player_id, is_starter, is_captain, matchday', matchday)
+
+  if (!allTeamPlayers || allTeamPlayers.length === 0) return []
 
   // 4. Obtener todos los jugadores reales
-  const { data: players } = await supabase.from('players').select('id, position, team_id, precio, short_name, first_name')
-  if (!players) return []
+  const players = await fetchAll<any>('players', 'id, position, team_id, precio, short_name, first_name')
+  console.log(`[INFRACTIONS_TS_DEBUG] Total players fetched: ${players?.length}`)
+  if (!players || players.length === 0) return []
   const playerMap = new Map(players.map(p => [p.id, p]))
 
   // Helper para obtener alineación titular de un equipo en la jornada m
@@ -129,10 +146,7 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
   }
 
   // Puntos de los jugadores en cada jornada (para la ordenación de exceso de cambios)
-  const { data: allScores } = await supabase
-    .from('player_scores')
-    .select('player_id, total_points, matchday')
-    .lte('matchday', matchday)
+  const allScores = await fetchAll<any>('player_scores', 'player_id, total_points, matchday', matchday)
   
   const scoresByMd = new Map<number, Map<string, number>>()
   allScores?.forEach(s => {
@@ -252,6 +266,7 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
     })
   }
 
+  console.log(`[INFRACTIONS_TS] Computed ${infractions.length} live infractions. Sample:`, infractions.slice(0, 5))
   return infractions
 }
 

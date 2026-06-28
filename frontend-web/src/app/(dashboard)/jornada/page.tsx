@@ -640,9 +640,9 @@ export default function JornadaPage() {
 
         if (dbPenalties && dbPenalties.length > 0) {
           infractionsData = dbPenalties
-        } else if (info.live) {
-          // 2. Si no hay sanciones en base de datos y la jornada está en vivo, buscar las dinámicas en tiempo real
-          const res = await fetch('/api/penalties/live')
+        } else if (info.started) {
+          // 2. Si el mercado ya está cerrado (jornada iniciada) y no hay sanciones consolidadas, buscar las dinámicas
+          const res = await fetch(`/api/penalties/live?matchday=${selectedMatchday}`)
           if (res.ok) {
             const data = await res.json()
             infractionsData = data.infractions || []

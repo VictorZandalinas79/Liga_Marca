@@ -7,7 +7,7 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABAS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function main() {
-  const { data: tps } = await supabase.from('team_players').select('team_id, matchday, is_starter');
-  console.log("Total rows:", tps.length);
+  const { count } = await supabase.from('players').select('*', { count: 'exact', head: true });
+  console.log("Total players:", count);
 }
 main();
