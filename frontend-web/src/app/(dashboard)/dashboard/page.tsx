@@ -1588,150 +1588,157 @@ export default function DashboardPage() {
                   <div
                     key={player.id}
                     onClick={() => openPlayerSelector(player.id)}
-                    className={`relative overflow-hidden w-full aspect-[5/7] rounded-t-xl rounded-b-3xl transition-all border ${
-                      isUnlockWindowOpen
-                        ? 'bg-slate-900 border-slate-800 opacity-50 cursor-not-allowed'
-                        : isLockedPlayer
-                          ? 'bg-slate-900 border-red-900 opacity-60 cursor-not-allowed'
-                          : isChanged
-                            ? 'bg-gradient-to-br from-emerald-900/90 to-slate-900 border-emerald-500/50 hover:scale-105 hover:z-50 cursor-pointer shadow-lg shadow-emerald-900/50'
-                            : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-amber-500/50 hover:scale-105 hover:z-50 cursor-pointer shadow-xl'
+                    className={`relative w-full aspect-[5/7] transition-all group ${
+                      isUnlockWindowOpen || isLockedPlayer
+                        ? 'cursor-not-allowed opacity-60'
+                        : 'cursor-pointer hover:scale-[1.03] md:hover:scale-105 hover:z-50 drop-shadow-xl'
                     }`}
                   >
-                    {/* Fondo de escudo del equipo (Watermark) */}
-                    {player.team?.logo_url && (
-                      <img 
-                        src={player.team.logo_url} 
-                        alt="Fondo" 
-                        className="absolute inset-0 m-auto w-[140%] h-[140%] object-contain opacity-10 pointer-events-none filter blur-[2px]"
-                      />
-                    )}
+                    {/* === CONTENIDO INTERNO DE LA TARJETA (Recortado) === */}
+                    <div className={`absolute inset-0 overflow-hidden rounded-t-xl rounded-b-3xl border ${
+                      isUnlockWindowOpen
+                        ? 'bg-slate-900 border-slate-800'
+                        : isLockedPlayer
+                          ? 'bg-slate-900 border-red-900'
+                          : isChanged
+                            ? 'bg-gradient-to-br from-emerald-900/90 to-slate-900 border-emerald-500/50'
+                            : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 group-hover:border-amber-500/50'
+                    }`}>
+                      {/* Fondo de escudo del equipo (Watermark) */}
+                      {player.team?.logo_url && (
+                        <img 
+                          src={player.team.logo_url} 
+                          alt="Fondo" 
+                          className="absolute inset-0 m-auto w-[140%] h-[140%] object-contain opacity-10 pointer-events-none filter blur-[2px]"
+                        />
+                      )}
 
-                    {/* Gradiente y fondo sólido inferior para legibilidad del texto */}
-                    <div className="absolute inset-x-0 bottom-0 h-[30%] bg-black z-10 pointer-events-none" />
-                    <div className="absolute inset-x-0 bottom-[30%] h-[30%] bg-gradient-to-t from-black via-black/80 to-transparent z-10 pointer-events-none" />
+                      {/* Gradiente y fondo sólido inferior para legibilidad del texto */}
+                      <div className="absolute inset-x-0 bottom-0 h-[30%] bg-black z-10 pointer-events-none" />
+                      <div className="absolute inset-x-0 bottom-[30%] h-[30%] bg-gradient-to-t from-black via-black/80 to-transparent z-10 pointer-events-none" />
 
-                    {/* Controles superiores derecha (Lock, Cancel Change) */}
-                    <div className="absolute top-2 right-2 z-40 flex flex-col items-end gap-1">
+                      {/* Columna Izquierda (Stats estilo FUT) */}
+                      <div className="absolute top-2 left-2 flex flex-col items-center z-20 drop-shadow-md w-7 md:w-8">
+                        {/* Índice */}
+                        <div className="bg-black/60 rounded flex items-center justify-center px-1.5 py-0.5 mb-0.5">
+                          <span className="text-lg md:text-xl font-black text-white leading-none">
+                            {idx + 1}
+                          </span>
+                        </div>
+                        {/* Posición */}
+                        <div className={`mt-0.5 text-[7px] md:text-[9px] px-1 py-0.5 w-[110%] text-center font-bold text-white rounded-sm drop-shadow-md ${getPositionColor(player.position)}`}>
+                          {getPositionLabel(player.position)}
+                        </div>
+                      </div>
+
+                      {/* Foto del jugador */}
+                      <div className="absolute inset-x-0 bottom-[20%] top-[5%] flex justify-center items-end z-10 pointer-events-none">
+                        {player.photo ? (
+                          <img
+                            src={player.photo}
+                            alt={player.short_name || ''}
+                            className="h-[100%] w-auto object-contain drop-shadow-2xl"
+                          />
+                        ) : (
+                          <div className="h-[50%] aspect-square rounded-full bg-slate-800/80 text-slate-300 flex items-center justify-center text-3xl font-bold shadow-2xl border-2 border-slate-600">
+                            {player.shirt_number || '?'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Nombre, Valor, Dorsal, Escudo (Zona inferior) */}
+                      <div className="absolute inset-x-0 bottom-1 flex flex-col items-center z-20 px-1 w-full">
+                        <div className="w-full bg-black/95 rounded-lg py-1 px-1 flex flex-col items-center shadow-2xl">
+                          <p className={`font-black text-amber-50 uppercase text-center w-full truncate tracking-tight drop-shadow-lg ${
+                              (player.short_name || player.first_name || '').length > 12
+                                ? 'text-[10px] md:text-xs'
+                                : 'text-xs md:text-sm'
+                            }`}
+                            style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
+                          >
+                            {player.short_name || player.first_name}
+                          </p>
+                          
+                          <div className="w-11/12 h-[1px] bg-amber-500/40 my-0.5 md:my-1" />
+
+                          <div className="w-full flex justify-between items-center px-1">
+                            {/* Valor */}
+                            <div className="flex-1 flex justify-start">
+                              <span className="font-black text-emerald-400 text-[10px] md:text-xs drop-shadow-md">
+                                {player.precio ? `${player.precio}M` : '-'}
+                              </span>
+                            </div>
+                            {/* Dorsal */}
+                            <div className="flex-1 flex justify-center">
+                              <span className="font-black text-white text-base md:text-lg leading-none drop-shadow-md">
+                                {player.shirt_number || '-'}
+                              </span>
+                            </div>
+                            {/* Escudo */}
+                            <div className="flex-1 flex justify-end">
+                              {player.team?.logo_url ? (
+                                <img
+                                  src={player.team.logo_url}
+                                  alt={player.team?.name || ''}
+                                  className="w-4 h-4 md:w-5 md:h-5 object-contain drop-shadow-lg"
+                                />
+                              ) : <div className="w-4 h-4 md:w-5 md:h-5" />}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* === FIN CONTENIDO INTERNO === */}
+
+                    {/* === CONTROLES FLOTANTES EXTERNOS (Sobresalen de la tarjeta) === */}
+                    <div className="absolute -top-3 -right-3 md:-top-4 md:-right-4 z-40 flex flex-col items-end gap-1">
                       <div className="flex gap-1">
                         {isLockedPlayer && (
-                          <div className="w-5 h-5 md:w-6 md:h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md" title="Jugador bloqueado: partido fuera de jornada">
-                            <Lock className="w-3 h-3 text-white" />
+                          <div className="w-6 h-6 md:w-7 md:h-7 bg-red-500 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20" title="Jugador bloqueado: partido fuera de jornada">
+                            <Lock className="w-3.5 h-3.5 text-white" />
                           </div>
                         )}
                         {isChanged && (
                           <button
                             onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
-                            className="w-5 h-5 md:w-6 md:h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-md transition-colors"
+                            className="w-6 h-6 md:w-7 md:h-7 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20 transition-colors"
                             title="Cancelar cambio"
                           >
-                            <X className="w-3 h-3 text-white" />
+                            <X className="w-4 h-4 text-white" />
                           </button>
                         )}
                       </div>
 
                       {/* Jugador reemplazado (mini tarjeta) */}
                       {replacedPlayer && (
-                        <div className="flex flex-col items-center pointer-events-none drop-shadow-lg opacity-90 mt-1">
+                        <div className="flex flex-col items-center pointer-events-none drop-shadow-xl mt-0.5">
                           <div className="relative">
                             {replacedPlayer.photo ? (
                               <img
                                 src={replacedPlayer.photo}
-                                className="w-6 h-6 md:w-8 md:h-8 rounded-full object-cover border border-red-400 shadow-md bg-slate-200 grayscale-[30%]"
+                                className="w-7 h-7 md:w-10 md:h-10 rounded-full object-cover border-[1.5px] border-red-400 shadow-xl bg-slate-200 grayscale-[10%]"
                               />
                             ) : (
-                              <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[9px] font-bold border border-red-400 shadow-md">
+                              <div className="w-7 h-7 md:w-10 md:h-10 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] font-bold border-[1.5px] border-red-400 shadow-xl">
                                 {replacedPlayer.shirt_number || '?'}
                               </div>
                             )}
                             {replacedPlayer.team?.logo_url && (
                               <img
                                 src={replacedPlayer.team.logo_url}
-                                className="absolute -bottom-1 -left-1 w-3 h-3 md:w-4 md:h-4 object-contain bg-white/90 rounded-full p-[1px] shadow-sm grayscale-[20%]"
+                                className="absolute -bottom-1 -left-1 w-3.5 h-3.5 md:w-4 md:h-4 object-contain bg-white rounded-full p-[1px] shadow-sm"
                               />
                             )}
                           </div>
-                          <div className="mt-1 bg-black/75 rounded px-1 py-0.5 flex flex-col items-center min-w-[30px] shadow-sm">
-                            <p className="font-bold text-red-100 text-[5px] md:text-[6px] leading-tight truncate text-center max-w-[40px]">
+                          <div className="mt-1 bg-black/95 rounded px-1.5 py-0.5 flex flex-col items-center shadow-xl border border-red-500/30">
+                            <p className="font-bold text-red-100 text-[6px] md:text-[7px] leading-tight truncate text-center max-w-[45px]">
                               {replacedPlayer.short_name || replacedPlayer.first_name}
                             </p>
                           </div>
                         </div>
                       )}
                     </div>
-
-                    {/* Columna Izquierda (Stats estilo FUT) */}
-                    <div className="absolute top-2 left-2 flex flex-col items-center z-20 drop-shadow-md w-7 md:w-8">
-                      {/* Índice (como si fuera la valoración general) */}
-                      <div className="bg-black/60 rounded flex items-center justify-center px-1.5 py-0.5 mb-0.5">
-                        <span className="text-lg md:text-xl font-black text-white leading-none">
-                          {idx + 1}
-                        </span>
-                      </div>
-                      {/* Posición (con color de fondo correspondiente) */}
-                      <div className={`mt-0.5 text-[7px] md:text-[9px] px-1 py-0.5 w-[110%] text-center font-bold text-white rounded-sm drop-shadow-md ${getPositionColor(player.position)}`}>
-                        {getPositionLabel(player.position)}
-                      </div>
-                    </div>
-
-                    {/* Foto del jugador (Sin fondo blanco, grande, centrada-abajo) */}
-                    <div className="absolute inset-x-0 bottom-[20%] top-[5%] flex justify-center items-end z-10 pointer-events-none">
-                      {player.photo ? (
-                        <img
-                          src={player.photo}
-                          alt={player.short_name || ''}
-                          className="h-[100%] w-auto object-contain drop-shadow-2xl"
-                        />
-                      ) : (
-                        <div className="h-[50%] aspect-square rounded-full bg-slate-800/80 text-slate-300 flex items-center justify-center text-3xl font-bold shadow-2xl border-2 border-slate-600">
-                          {player.shirt_number || '?'}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Nombre, Valor, Dorsal, Escudo (Zona inferior) */}
-                    <div className="absolute inset-x-0 bottom-1 flex flex-col items-center z-20 px-1 w-full">
-                      <div className="w-full bg-black/95 rounded-lg py-1 px-1 flex flex-col items-center shadow-2xl">
-                        <p className={`font-black text-amber-50 uppercase text-center w-full truncate tracking-tight drop-shadow-lg ${
-                            (player.short_name || player.first_name || '').length > 12
-                              ? 'text-[10px] md:text-xs'
-                              : 'text-xs md:text-sm'
-                          }`}
-                          style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
-                        >
-                          {player.short_name || player.first_name}
-                        </p>
-                        
-                        <div className="w-11/12 h-[1px] bg-amber-500/40 my-0.5 md:my-1" />
-
-                        <div className="w-full flex justify-between items-center px-1">
-                          {/* Valor (Izquierda) */}
-                          <div className="flex-1 flex justify-start">
-                            <span className="font-black text-emerald-400 text-[10px] md:text-xs drop-shadow-md">
-                              {player.precio ? `${player.precio}M` : '-'}
-                            </span>
-                          </div>
-                          
-                          {/* Dorsal (Centro) */}
-                          <div className="flex-1 flex justify-center">
-                            <span className="font-black text-white text-base md:text-lg leading-none drop-shadow-md">
-                              {player.shirt_number || '-'}
-                            </span>
-                          </div>
-                          
-                          {/* Escudo (Derecha) */}
-                          <div className="flex-1 flex justify-end">
-                            {player.team?.logo_url ? (
-                              <img
-                                src={player.team.logo_url}
-                                alt={player.team?.name || ''}
-                                className="w-4 h-4 md:w-5 md:h-5 object-contain drop-shadow-lg"
-                              />
-                            ) : <div className="w-4 h-4 md:w-5 md:h-5" />}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    {/* === FIN CONTROLES EXTERNOS === */}
                   </div>
                 )
               })}
