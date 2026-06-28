@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
-import { Search, TrendingUp, Goal, Ticket } from 'lucide-react'
+import { Search, TrendingUp, Goal, Ticket, Download } from 'lucide-react'
 
 interface Player {
   id: string
@@ -55,6 +55,27 @@ export default function JugadoresPage() {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const supabase = createClient()
+
+  const exportToExcel = () => {
+    const headers = ['Nombre', 'Equipo', 'Precio (M)']
+    const data = players.map(player => {
+      const nombre = player.short_name || `${player.first_name} ${player.last_name}`
+      const equipo = player.team?.name || 'Sin equipo'
+      const precio = player.precio || 0
+      return `"${nombre.replace(/"/g, '""')}";"${equipo.replace(/"/g, '""')}";${precio}`
+    })
+    
+    const csvContent = [headers.join(';'), ...data].join('\n')
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'jugadores_liga_marca.csv'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   useEffect(() => {
     const fetchPlayers = async () => {
@@ -219,11 +240,18 @@ export default function JugadoresPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Jugadores</h1>
           <p className="text-slate-600 mt-1">Estadísticas y puntos de todos los jugadores</p>
         </div>
+        <button
+          onClick={exportToExcel}
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors shadow-sm w-fit"
+        >
+          <Download className="w-4 h-4" />
+          Exportar Excel
+        </button>
       </div>
 
       {/* Filtros */}
