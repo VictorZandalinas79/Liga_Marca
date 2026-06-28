@@ -1632,12 +1632,12 @@ export default function DashboardPage() {
                       </div>
 
                       {/* Foto del jugador */}
-                      <div className="absolute inset-x-0 bottom-[20%] top-[5%] flex justify-center items-end z-10 pointer-events-none">
+                      <div className="absolute inset-x-0 bottom-[20%] top-[10%] px-1 flex justify-center items-end z-10 pointer-events-none">
                         {player.photo ? (
                           <img
                             src={player.photo}
                             alt={player.short_name || ''}
-                            className="h-[100%] w-auto object-contain drop-shadow-2xl"
+                            className="w-full h-full object-contain object-bottom drop-shadow-2xl"
                           />
                         ) : (
                           <div className="h-[50%] aspect-square rounded-full bg-slate-800/80 text-slate-300 flex items-center justify-center text-3xl font-bold shadow-2xl border-2 border-slate-600">
