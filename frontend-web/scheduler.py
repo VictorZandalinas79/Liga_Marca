@@ -169,6 +169,15 @@ def check_and_run_sanctions():
                             state[md_key]["final_run"] = True
                             state_changed = True
                             log(f"✅ Liquidación final completada para Jornada {matchday}")
+                            
+                            # Disparar automáticamente la sincronización semanal de fixtures/squads al acabar la jornada
+                            log(f"🔄 Disparando sincronización semanal de fixtures y squads al terminar la jornada {matchday}...")
+                            sync_script_path = "../2. descarga_fixtures_y_sync.py"
+                            res_sync = subprocess.run([sys.executable, sync_script_path], env=env, capture_output=True, text=True)
+                            if res_sync.returncode == 0:
+                                log("✅ Sincronización semanal de fixtures y squads completada tras fin de jornada")
+                            else:
+                                log(f"❌ Error en sincronización semanal tras fin de jornada: {res_sync.stderr}")
                         else:
                             log(f"❌ Error en liquidación final para Jornada {matchday}: {res.stderr}")
                             

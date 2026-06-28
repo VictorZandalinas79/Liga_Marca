@@ -4,6 +4,8 @@ on:
   schedule:
     # Lunes a las 06:00 UTC (08:00 en horario de verano de Madrid).
     - cron: '0 6 * * 1'
+    # Cada 3 días a las 06:00 UTC.
+    - cron: '0 6 */3 * *'
   workflow_dispatch: {}
 
 jobs:

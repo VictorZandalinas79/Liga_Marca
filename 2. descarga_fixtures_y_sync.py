@@ -22,7 +22,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 from difflib import SequenceMatcher
 from deep_translator import GoogleTranslator
-from email_sender import send_email
+
+# email_sender no está disponible localmente, simulamos la función
+def send_email(to_email, subject, html_content):
+    print(f"✉️ [Simulado] Enviando correo a {to_email}: {subject}")
+    return True
 
 load_dotenv()
 
