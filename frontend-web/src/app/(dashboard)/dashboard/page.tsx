@@ -1583,6 +1583,7 @@ export default function DashboardPage() {
                 const isCrossSessionChange = !isSessionChange && basePlayers.length > 0 && !basePlayers.includes(player.id)
                 const isChanged = isSessionChange || isCrossSessionChange
                 const isLockedPlayer = isTeamLocked(player.team_id)
+                const replacedPlayer = isChanged ? getReplacedPlayer(player.id) : undefined
                 return (
                   <div
                     key={player.id}
@@ -1598,8 +1599,52 @@ export default function DashboardPage() {
                     }`}
                   >
                     {isLockedPlayer && (
-                      <div className="absolute -top-1 -left-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md z-10" title="Jugador bloqueado: partido fuera de jornada">
+                      <div className={`absolute ${replacedPlayer ? 'top-6 -left-2' : '-top-1 -left-1'} w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md z-30`} title="Jugador bloqueado: partido fuera de jornada">
                         <Lock className="w-3.5 h-3.5 text-white" />
+                      </div>
+                    )}
+                    {/* Jugador reemplazado (mini tarjeta arriba a la izquierda) */}
+                    {replacedPlayer && (
+                      <div className="absolute -top-3 -left-3 flex flex-col items-center z-20 pointer-events-none drop-shadow-lg opacity-95">
+                        <div className="relative">
+                          {replacedPlayer.photo ? (
+                            <img
+                              src={replacedPlayer.photo}
+                              alt={replacedPlayer.short_name || ''}
+                              className="w-7 h-7 md:w-9 md:h-9 rounded-full object-cover border-[1.5px] border-red-400 shadow-md bg-slate-200 grayscale-[30%]"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 md:w-9 md:h-9 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[9px] md:text-[11px] font-bold border-[1.5px] border-red-400 shadow-md">
+                              {replacedPlayer.shirt_number || '?'}
+                            </div>
+                          )}
+                          
+                          {/* Escudo mini */}
+                          {replacedPlayer.team?.logo_url && (
+                            <img
+                              src={replacedPlayer.team.logo_url}
+                              alt={replacedPlayer.team?.name || ''}
+                              className="absolute -bottom-1 -left-1 w-3.5 h-3.5 md:w-4 md:h-4 object-contain bg-white/90 rounded-full p-[1px] shadow-sm grayscale-[20%]"
+                            />
+                          )}
+                          
+                          {/* Precio mini */}
+                          <div className="absolute -bottom-1 -right-3 bg-red-100/95 text-red-800 font-extrabold text-[6px] md:text-[7px] px-1 rounded-full shadow-sm border border-red-200">
+                            {replacedPlayer.precio ? `${replacedPlayer.precio}M` : '-'}
+                          </div>
+                        </div>
+                        
+                        {/* Nombre y dorsal mini */}
+                        <div className="mt-0.5 bg-black/75 rounded px-1 py-0.5 flex flex-col items-center min-w-[35px] max-w-[45px] md:max-w-[55px] shadow-sm">
+                          <p className="font-bold text-red-100 text-[6px] md:text-[7px] leading-tight truncate text-center w-full">
+                            {replacedPlayer.short_name || replacedPlayer.first_name}
+                          </p>
+                          {replacedPlayer.shirt_number && (
+                            <p className="font-black text-white text-[7px] md:text-[8px] leading-none mt-[1px]">
+                              {replacedPlayer.shirt_number}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     )}
                     {isSessionChange && (
