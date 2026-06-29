@@ -652,7 +652,7 @@ export default function JornadaPage() {
       }
       fetchInfractions()
     }
-  }, [selectedMatchday, availableMatchdays])
+  }, [selectedMatchday, availableMatchdays, config])
 
   // Polling en tiempo real cuando la jornada seleccionada está en directo
   useEffect(() => {
