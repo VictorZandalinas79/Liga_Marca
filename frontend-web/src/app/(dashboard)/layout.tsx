@@ -134,7 +134,7 @@ export default function DashboardLayout({
       {/* Aviso de tramo de jornada */}
       {isUnlockWindowOpen && (
         <div className="bg-amber-400 border-b border-amber-500 py-2 px-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-2">
             <Lock className="h-4 w-4 text-amber-900 animate-pulse" />
             <span className="text-amber-900 font-bold text-sm animate-pulse">
               TRAMO DE JORNADA ABIERTO - NO SE PUEDEN REALIZAR CAMBIOS
@@ -149,7 +149,7 @@ export default function DashboardLayout({
       )}
 
       <header className="bg-slate-900 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/dashboard" className="flex items-center space-x-2">
               <div className="relative w-10 h-10">
@@ -214,7 +214,7 @@ export default function DashboardLayout({
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
     </div>

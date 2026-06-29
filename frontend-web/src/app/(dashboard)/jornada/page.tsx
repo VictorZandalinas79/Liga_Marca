@@ -1032,7 +1032,7 @@ export default function JornadaPage() {
 
       {/* Equipos de usuarios - Mini tablas por usuario (desplegable) */}
       {showEquipos && (userTeams.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {sortedTeams.map((team, index) => {
             const displayPos = index + 1
             const isCurrentUser = currentUserId === team.user_id
