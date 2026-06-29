@@ -54,7 +54,7 @@ function PitchPlayerCard({
   isPenalized?: boolean
   sanctionReason?: string
 }) {
-  const pts = points !== undefined ? Math.round(points * 10) / 10 : (hasMatchStarted ? 0 : null)
+  const pts = points !== undefined ? (Math.round(points * 10) / 10).toFixed(1) : (hasMatchStarted ? "0.0" : null)
 
   return (
     <div className="flex flex-col items-center w-[58px] sm:w-[80px] text-center relative shrink-0 group">
@@ -77,31 +77,31 @@ function PitchPlayerCard({
           <img
             src={player.team.logo_url}
             alt={player.team?.name || ''}
-            className="absolute -bottom-1 -left-3 sm:-left-4 w-5 h-5 sm:w-6 sm:h-6 object-contain drop-shadow-md bg-white rounded-full p-0.5"
+            className="absolute -bottom-1 -left-3 sm:-left-4 w-5 h-5 sm:w-6 sm:h-6 object-contain drop-shadow-md"
           />
         )}
 
-        {/* Puntos (medio derecha) */}
+        {/* Puntos (arriba de la foto) */}
         {pts !== null && (
-          <div className="absolute top-1/2 -right-5 -translate-y-1/2 bg-white/95 backdrop-blur-sm text-blue-700 font-extrabold text-[10px] sm:text-xs rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shadow-md border border-blue-200">
-            {isPenalized ? 0 : pts}
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white font-extrabold text-[10px] sm:text-xs rounded-full w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center shadow-md border border-amber-400">
+            {isPenalized ? '0.0' : pts}
           </div>
         )}
 
-        {/* Precio (abajo derecha, en lugar de LIVE, desplazado) */}
-        <div className="absolute bottom-0 -right-6 bg-white/95 text-emerald-600 font-extrabold text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded-full shadow-md border border-emerald-200 min-w-[28px]">
+        {/* Precio (a la derecha) */}
+        <div className="absolute top-1/2 -right-4 sm:-right-5 -translate-y-1/2 bg-white/95 text-emerald-700 font-extrabold text-[8px] sm:text-[9px] flex items-center justify-center rounded-full w-[22px] h-[22px] sm:w-[26px] sm:h-[26px] shadow-md border border-emerald-200">
           {player.precio ? `${player.precio}M` : '-'}
         </div>
       </div>
 
       {/* Nombre del jugador */}
-      <div className="flex flex-col items-center w-[120%] -mt-0.5">
+      <div className="flex flex-col items-center w-[120%] -mt-1">
         <p className="font-extrabold text-white text-[10px] sm:text-[11px] leading-tight truncate drop-shadow-md relative z-10 w-full text-center">
           {player.short_name || player.first_name}
         </p>
         {player.shirt_number && (
           <p 
-            className="font-black text-white/95 text-[18px] sm:text-2xl leading-none mt-0 relative z-0"
+            className="font-black text-white/95 text-[18px] sm:text-2xl leading-none -mt-0.5 relative z-0"
             style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
           >
             {player.shirt_number}
@@ -1447,8 +1447,10 @@ export default function DashboardPage() {
               <div className="relative z-10 flex flex-col justify-between h-full min-h-[440px] sm:min-h-[500px] md:min-h-[560px] pt-12 sm:pt-16 pb-1">
                 {/* Delanteros */}
                 <div className="flex justify-around items-center gap-1">
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map((player, idx, arr) => (
+                    <div key={player.id} className={`transition-transform ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8' : ''}`}>
+                      <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
+                    </div>
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Delanteros</div>
@@ -1457,8 +1459,10 @@ export default function DashboardPage() {
 
                 {/* Mediocampistas */}
                 <div className="flex justify-around items-center gap-1">
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map((player, idx, arr) => (
+                    <div key={player.id} className={`transition-transform ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8' : ''}`}>
+                      <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
+                    </div>
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Centrocampistas</div>
@@ -1467,8 +1471,10 @@ export default function DashboardPage() {
 
                 {/* Defensas */}
                 <div className="flex justify-around items-center gap-1">
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
+                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map((player, idx, arr) => (
+                    <div key={player.id} className={`transition-transform ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8' : ''}`}>
+                      <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
+                    </div>
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Defensas</div>

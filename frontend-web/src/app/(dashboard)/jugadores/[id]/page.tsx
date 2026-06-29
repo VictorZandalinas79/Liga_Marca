@@ -1324,7 +1324,12 @@ export default function JugadorDetallePage() {
                 )}
                 <span className="font-medium">{player.team?.name || 'Sin equipo'}</span>
                 {player.shirt_number && (
-                  <span className="text-slate-400">#{player.shirt_number}</span>
+                  <span 
+                    className="font-black text-white/95 text-3xl sm:text-4xl leading-none ml-2"
+                    style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
+                  >
+                    {player.shirt_number}
+                  </span>
                 )}
               </div>
               <div className="flex flex-wrap justify-center sm:justify-start gap-4 mt-4 text-sm text-slate-400">

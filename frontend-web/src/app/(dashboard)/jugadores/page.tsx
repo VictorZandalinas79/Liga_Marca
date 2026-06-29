@@ -348,6 +348,14 @@ export default function JugadoresPage() {
                         <img src={player.team.logo_url} alt={player.team.name || ''} className="w-4 h-4 object-contain shrink-0" />
                       )}
                       <p className="text-sm text-slate-400 truncate">{player.team?.name || 'Sin equipo'}</p>
+                      {player.shirt_number && (
+                        <span 
+                          className="font-black text-white/95 text-xl sm:text-2xl leading-none ml-2"
+                          style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
+                        >
+                          {player.shirt_number}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
