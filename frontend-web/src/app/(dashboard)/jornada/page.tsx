@@ -1142,7 +1142,7 @@ export default function JornadaPage() {
                                     : 'bg-slate-50 hover:bg-slate-100'
                                 }`}
                               >
-                                <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                                   <span className="text-xs font-bold text-slate-400 w-4 shrink-0">{idx + 1}</span>
                                   {player.shirt_number && (
                                     <span 
@@ -1181,7 +1181,7 @@ export default function JornadaPage() {
                                   )}
                                   <div className="min-w-0 relative flex-1">
                                     <div className="flex items-center gap-1.5 flex-wrap relative z-10">
-                                      <span className={`font-semibold break-words leading-tight ${
+                                      <span className={`font-semibold truncate leading-tight ${
                                         (player.short_name || player.first_name || '').length > 15
                                           ? 'text-[9px]'
                                           : (player.short_name || player.first_name || '').length > 11
@@ -1193,31 +1193,31 @@ export default function JornadaPage() {
                                       {isPenalized && (
                                         <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-pulse shrink-0" />
                                       )}
-                                      <Badge className={`text-[10px] px-1 py-0 ${getPositionColor(player.position)}`}>
+                                      <Badge className={`text-[10px] px-1 py-0 shrink-0 ${getPositionColor(player.position)}`}>
                                         {getPositionLabel(player.position)}
                                       </Badge>
                                       {player.is_captain && (
-                                        <Badge className="text-[10px] px-1 py-0 bg-yellow-500 text-white">C</Badge>
+                                        <Badge className="text-[10px] px-1 py-0 bg-yellow-500 text-white shrink-0">C</Badge>
                                       )}
                                       {player.hasPlayed && (
-                                        <span className="text-[10px] text-slate-400 font-medium">✓ jugó</span>
+                                        <span className="text-[10px] text-slate-400 font-medium shrink-0">✓ jugó</span>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-1.5 mt-0 text-[10px] text-slate-500 min-w-0">
+                                    <div className="flex items-center gap-1 mt-0 text-[10px] text-slate-500 min-w-0">
                                       {player.team?.logo_url && (
                                         <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain shrink-0" />
                                       )}
-                                      <span className="truncate max-w-[60px]">{player.team?.name}</span>
+                                      <span className="truncate max-w-[50px] shrink">{player.team?.name}</span>
                                       <span className="text-slate-400 shrink-0">· {fmtValor(player.valor || 0)}</span>
                                       
                                       {player.replacedPlayer && (
-                                        <div className="flex items-center gap-1 shrink-0 ml-1">
-                                          <span className="text-slate-300">|</span>
-                                          <span className="text-[9px] text-slate-400">por</span>
+                                        <div className="flex items-center gap-1 min-w-0 shrink ml-1">
+                                          <span className="text-slate-300 shrink-0">|</span>
+                                          <span className="text-[9px] text-slate-400 shrink-0">por</span>
                                           {player.replacedPlayer.photo && (
-                                            <img src={player.replacedPlayer.photo} className="w-3 h-3 rounded-full object-cover border border-slate-300" alt="" />
+                                            <img src={player.replacedPlayer.photo} className="w-3 h-3 rounded-full object-cover border border-slate-300 shrink-0" alt="" />
                                           )}
-                                          <span className="text-[9px] text-red-500 font-medium truncate max-w-[50px]">
+                                          <span className="text-[9px] text-red-500 font-medium truncate shrink">
                                             {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
                                           </span>
                                         </div>
