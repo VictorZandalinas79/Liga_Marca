@@ -83,7 +83,7 @@ function PitchPlayerCard({
 
         {/* Puntos (arriba de la foto) */}
         {pts !== null && (
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white font-extrabold text-[10px] sm:text-xs rounded-full w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center shadow-md border border-amber-400">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white font-extrabold text-[10px] sm:text-xs rounded px-1.5 py-0.5 flex items-center justify-center shadow-md border border-amber-400 min-w-[20px] sm:min-w-[24px]">
             {isPenalized ? '0.0' : pts}
           </div>
         )}
@@ -1536,7 +1536,7 @@ export default function DashboardPage() {
             </div>
           </div>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-11 gap-2">
               {selectedPlayersData.map((player, idx) => {
                 const isSessionChange = changeHistory.some(ch => ch.inId === player.id)
                 const isCrossSessionChange = !isSessionChange && basePlayers.length > 0 && !basePlayers.includes(player.id)
