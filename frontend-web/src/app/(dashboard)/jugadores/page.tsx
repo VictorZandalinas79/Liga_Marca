@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
-import { Search, TrendingUp, Goal, Ticket, Download } from 'lucide-react'
+import { Search, TrendingUp, Goal, Ticket, Download, Swords, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface Player {
   id: string
@@ -53,6 +53,9 @@ export default function JugadoresPage() {
   const [teams, setTeams] = useState<Array<{ id: string; name: string; logo_url?: string }>>([])
   const [sortBy, setSortBy] = useState<'price' | 'points' | 'goals' | 'name'>('price')
   const [loading, setLoading] = useState(true)
+  const [isComparatorOpen, setIsComparatorOpen] = useState(false)
+  const [playerAId, setPlayerAId] = useState<string>('')
+  const [playerBId, setPlayerBId] = useState<string>('')
   const router = useRouter()
   const supabase = createClient()
 
@@ -308,6 +311,154 @@ export default function JugadoresPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* COMPARADOR DE JUGADORES */}
+      <div className="flex flex-col gap-2 my-6">
+        <button
+          onClick={() => setIsComparatorOpen(!isComparatorOpen)}
+          className="flex items-center justify-between px-5 py-4 bg-slate-900 text-white rounded-xl shadow-md hover:bg-slate-800 transition-colors border border-slate-700"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+              <Swords className="w-4 h-4 text-emerald-400" />
+            </div>
+            <span className="font-bold text-lg">Comparador de Jugadores</span>
+          </div>
+          {isComparatorOpen ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+        </button>
+
+        {isComparatorOpen && (
+          <Card className="!bg-slate-900 border-slate-700 shadow-2xl mt-2 overflow-visible">
+            <CardContent className="p-4 sm:p-6 lg:p-8">
+              {/* Selectores */}
+              <div className="flex flex-col md:flex-row gap-4 mb-8 items-center bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                <div className="flex-1 w-full">
+                  <label className="text-xs text-emerald-400 font-bold mb-2 block uppercase tracking-wider">Jugador 1</label>
+                  <select
+                    value={playerAId}
+                    onChange={(e) => setPlayerAId(e.target.value)}
+                    className="w-full bg-slate-950 text-white border border-slate-700 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 font-medium"
+                  >
+                    <option value="">Selecciona un jugador...</option>
+                    {players.map(p => <option key={p.id} value={p.id}>{p.short_name || `${p.first_name} ${p.last_name}`} ({getPositionLabel(p.position)})</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center justify-center shrink-0 py-2 md:py-0 mt-6 md:mt-4">
+                  <div className="w-10 h-10 rounded-full bg-slate-950 border-2 border-slate-700 flex items-center justify-center text-xs font-black text-slate-500 shadow-inner">
+                    VS
+                  </div>
+                </div>
+                <div className="flex-1 w-full">
+                  <label className="text-xs text-emerald-400 font-bold mb-2 block uppercase tracking-wider">Jugador 2</label>
+                  <select
+                    value={playerBId}
+                    onChange={(e) => setPlayerBId(e.target.value)}
+                    className="w-full bg-slate-950 text-white border border-slate-700 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 font-medium"
+                  >
+                    <option value="">Selecciona un jugador...</option>
+                    {players.map(p => <option key={p.id} value={p.id}>{p.short_name || `${p.first_name} ${p.last_name}`} ({getPositionLabel(p.position)})</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Área de Comparación */}
+              {playerAId && playerBId && playerAId !== playerBId ? (() => {
+                const playerA = players.find(p => p.id === playerAId)!
+                const playerB = players.find(p => p.id === playerBId)!
+                
+                const renderMetricBar = (label: string, valA: number, valB: number, reverseColors = false) => {
+                  const total = Math.max(valA, 0) + Math.max(valB, 0) || 1
+                  const percentA = (Math.max(valA, 0) / total) * 100
+                  const percentB = (Math.max(valB, 0) / total) * 100
+                  const isAWinner = reverseColors ? valA < valB : valA > valB
+                  const isBWinner = reverseColors ? valB < valA : valB > valA
+                  const isTie = valA === valB
+                  
+                  return (
+                    <div className="flex flex-col mb-5" key={label}>
+                      <div className="flex justify-between items-end mb-1.5 px-1">
+                        <span className={`text-base font-black ${isAWinner ? 'text-emerald-400' : isTie ? 'text-slate-300' : 'text-slate-500'}`}>{typeof valA === 'number' && valA % 1 !== 0 ? valA.toFixed(1) : valA}</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest">{label}</span>
+                        <span className={`text-base font-black ${isBWinner ? 'text-emerald-400' : isTie ? 'text-slate-300' : 'text-slate-500'}`}>{typeof valB === 'number' && valB % 1 !== 0 ? valB.toFixed(1) : valB}</span>
+                      </div>
+                      <div className="flex h-3 w-full bg-slate-950 rounded-full overflow-hidden shadow-inner border border-slate-800">
+                        <div className={`h-full transition-all duration-700 ${isAWinner ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : isTie ? 'bg-slate-600' : 'bg-slate-700'}`} style={{ width: `${percentA}%` }} />
+                        <div className="w-1 shrink-0 bg-slate-900" />
+                        <div className={`h-full transition-all duration-700 ${isBWinner ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : isTie ? 'bg-slate-600' : 'bg-slate-700'}`} style={{ width: `${percentB}%` }} />
+                      </div>
+                    </div>
+                  )
+                }
+
+                const renderProfile = (p: Player, isLeft: boolean) => (
+                  <div className={`flex flex-col items-center ${isLeft ? 'md:items-start' : 'md:items-end'} w-full`}>
+                    <div className="relative mb-4 group">
+                      {p.photo ? (
+                        <div className="relative w-28 h-28 sm:w-36 sm:h-36">
+                          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-emerald-400 to-blue-500 blur-md opacity-40 group-hover:opacity-70 transition-opacity duration-500" />
+                          <img src={p.photo} className="relative w-full h-full rounded-full object-cover border-4 border-slate-900 shadow-2xl bg-white" alt={p.short_name || ''} />
+                        </div>
+                      ) : (
+                        <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-slate-800 flex items-center justify-center text-4xl font-bold text-slate-600 border-4 border-slate-900 shadow-2xl">
+                          {p.shirt_number || '?'}
+                        </div>
+                      )}
+                      {p.team?.logo_url && (
+                        <div className={`absolute -bottom-3 ${isLeft ? '-right-3' : '-left-3'} w-12 h-12 bg-white rounded-full p-1.5 border-2 border-slate-700 shadow-lg z-10`}>
+                          <img src={p.team.logo_url} className="w-full h-full object-contain drop-shadow-md" alt={p.team.name} />
+                        </div>
+                      )}
+                      {p.shirt_number && (
+                        <div className={`absolute -top-2 ${isLeft ? '-left-2' : '-right-2'} w-10 h-10 flex items-center justify-center text-xl font-black text-white bg-slate-950 rounded-lg border-2 border-slate-700 shadow-xl z-10`} style={{ textShadow: '2px 2px 0 #000' }}>
+                          {p.shirt_number}
+                        </div>
+                      )}
+                    </div>
+                    <h3 className={`text-xl sm:text-2xl font-black text-white text-center ${isLeft ? 'md:text-left' : 'md:text-right'} w-full truncate mb-2`}>{p.short_name || `${p.first_name} ${p.last_name}`}</h3>
+                    <div className={`flex items-center gap-2 ${isLeft ? 'justify-center md:justify-start' : 'justify-center md:justify-end'} w-full`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getPositionColor(p.position)}`}>
+                        {getPositionLabel(p.position)}
+                      </span>
+                      <span className="text-sm text-slate-400 font-medium truncate">{p.team?.name || 'Sin equipo'}</span>
+                    </div>
+                  </div>
+                )
+
+                return (
+                  <div className="flex flex-col md:flex-row gap-8 lg:gap-12 items-start mt-2">
+                    {/* Perfil A */}
+                    <div className="w-full md:w-1/4 flex justify-center md:justify-start order-1">
+                      {renderProfile(playerA, true)}
+                    </div>
+
+                    {/* Barras Centrales */}
+                    <div className="w-full md:w-2/4 bg-slate-950/50 rounded-2xl p-5 sm:p-8 border border-slate-800 flex flex-col justify-center shadow-inner order-3 md:order-2">
+                      {renderMetricBar('Precio (M)', playerA.precio || 0, playerB.precio || 0)}
+                      {renderMetricBar('Puntos Totales', playerA.stats?.total_points || 0, playerB.stats?.total_points || 0)}
+                      {renderMetricBar('Media Puntos', playerA.stats?.avg_points || 0, playerB.stats?.avg_points || 0)}
+                      {renderMetricBar('Goles', playerA.stats?.goals || 0, playerB.stats?.goals || 0)}
+                      {renderMetricBar('Asistencias', playerA.stats?.assists || 0, playerB.stats?.assists || 0)}
+                      {renderMetricBar('Minutos', playerA.stats?.minutes_played || 0, playerB.stats?.minutes_played || 0)}
+                      {renderMetricBar('T. Amarillas', playerA.stats?.yellow_cards || 0, playerB.stats?.yellow_cards || 0, true)}
+                      {renderMetricBar('T. Rojas', playerA.stats?.red_cards || 0, playerB.stats?.red_cards || 0, true)}
+                    </div>
+
+                    {/* Perfil B */}
+                    <div className="w-full md:w-1/4 flex justify-center md:justify-end order-2 md:order-3">
+                      {renderProfile(playerB, false)}
+                    </div>
+                  </div>
+                )
+              })() : (
+                <div className="text-center py-12 px-4 border-2 border-dashed border-slate-700 rounded-xl bg-slate-800/30">
+                  <Swords className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                  <p className="text-slate-400 text-lg font-medium">Selecciona dos jugadores diferentes arriba para iniciar la comparativa.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Lista de jugadores */}
       <div className="grid gap-3">
