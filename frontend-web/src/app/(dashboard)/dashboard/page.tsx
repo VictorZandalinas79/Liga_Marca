@@ -83,7 +83,7 @@ function PitchPlayerCard({
 
         {/* Puntos (arriba de la foto) */}
         {pts !== null && (
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white font-extrabold text-[10px] sm:text-xs rounded px-1.5 py-0.5 flex items-center justify-center shadow-md border border-amber-400 min-w-[20px] sm:min-w-[24px]">
+          <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white font-extrabold text-[10px] sm:text-[11px] leading-none rounded-sm px-1 py-[2px] flex items-center justify-center shadow-md border border-amber-400">
             {isPenalized ? '0.0' : pts}
           </div>
         )}
