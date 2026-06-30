@@ -1359,54 +1359,12 @@ export default function DashboardPage() {
         )
       )}
 
-      {/* Tus Sanciones (Jornada Activa) - Solo visible en jornada activa */}
-      {isUnlockWindowOpen && (
-        <Card className="!bg-red-50 border-red-200 mt-2 shadow-sm">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-2 pb-1.5 border-b border-red-100">
-              <AlertTriangle className="w-4 h-4 text-red-600" />
-              <h3 className="text-sm font-bold text-red-900">Tus Sanciones (Jornada Activa J{activeMatchday})</h3>
-            </div>
-            {allPenalties.filter(p => p.user_id === user?.id && p.matchday === activeMatchday).length === 0 &&
-             liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday)).length === 0 ? (
-              <p className="text-xs text-emerald-800 font-medium bg-emerald-50 border border-emerald-100 p-2 rounded">
-                ¡Estás libre de sanciones en esta jornada!
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {/* Sanciones consolidadas en BD */}
-                {allPenalties
-                  .filter(p => p.user_id === user?.id && p.matchday === activeMatchday)
-                  .map((p) => (
-                    <div key={p.id} className="flex justify-between items-start text-xs bg-red-100 rounded p-2 border border-red-200">
-                      <div>
-                        <span className="font-bold text-red-900 mr-2">J{p.matchday}:</span>
-                        <span className="text-red-955 font-semibold">{p.description}</span>
-                      </div>
-                      <span className={`font-bold shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : 'text-amber-600 text-[10px] uppercase'}`}>
-                        {p.points > 0 ? `-${p.points} pts` : 'Pendiente'}
-                      </span>
-                    </div>
-                  ))}
 
-                {/* Advertencias dinámicas activas (infracciones actuales del usuario) */}
-                {liveInfractions
-                  .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday))
-                  .map((inf) => (
-                    <div key={inf.id} className="flex justify-between items-start text-xs bg-amber-100 rounded p-2 border border-amber-200">
-                      <div>
-                        <span className="font-bold text-amber-900 mr-2">J{activeMatchday}:</span>
-                        <span className="text-amber-955 font-semibold">{inf.description}</span>
-                      </div>
-                      <span className="font-bold text-amber-600 shrink-0 ml-2 text-[10px] uppercase">Pendiente</span>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
+      {/* ================= CONTENEDOR DE COLUMNAS (PC) ================= */}
+      <div className="flex flex-col xl:flex-row gap-4 items-start w-full mt-2">
+        
+        {/* COLUMNA IZQUIERDA (Alineación) */}
+        <div className="flex-1 w-full min-w-0 space-y-4">
       {/* Once inicial - Grid responsive ordenado por posiciones */}
       <Card className="border-2 border-emerald-200">
         <CardContent className="p-2">
@@ -1708,6 +1666,81 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
+      {/* Indicador de cambios guardados automáticamente */}
+      {!isUnlockWindowOpen && (
+        <div className={`flex items-center gap-2 justify-between ${isUnlockWindowOpen ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div className="text-xs text-slate-500">
+            Los cambios se guardan automáticamente
+          </div>
+          {changedCount > 0 && (
+            <>
+              <button
+                onClick={undoLastChange}
+                className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+              >
+                <X className="w-4 h-4" />
+                <span className="hidden sm:inline">Deshacer ({changedCount})</span>
+              </button>
+              <span className="text-sm text-emerald-600 font-medium">
+                {changedCount} cambio{changedCount !== 1 ? 's' : ''}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
+        </div>
+
+        {/* COLUMNA DERECHA (Sanciones) */}
+        <div className="w-full xl:w-[450px] shrink-0 space-y-4">
+      {/* Tus Sanciones (Jornada Activa) - Solo visible en jornada activa */}
+      {isUnlockWindowOpen && (
+        <Card className="!bg-red-50 border-red-200 mt-2 shadow-sm">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2 pb-1.5 border-b border-red-100">
+              <AlertTriangle className="w-4 h-4 text-red-600" />
+              <h3 className="text-sm font-bold text-red-900">Tus Sanciones (Jornada Activa J{activeMatchday})</h3>
+            </div>
+            {allPenalties.filter(p => p.user_id === user?.id && p.matchday === activeMatchday).length === 0 &&
+             liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday)).length === 0 ? (
+              <p className="text-xs text-emerald-800 font-medium bg-emerald-50 border border-emerald-100 p-2 rounded">
+                ¡Estás libre de sanciones en esta jornada!
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {/* Sanciones consolidadas en BD */}
+                {allPenalties
+                  .filter(p => p.user_id === user?.id && p.matchday === activeMatchday)
+                  .map((p) => (
+                    <div key={p.id} className="flex justify-between items-start text-xs bg-red-100 rounded p-2 border border-red-200">
+                      <div>
+                        <span className="font-bold text-red-900 mr-2">J{p.matchday}:</span>
+                        <span className="text-red-955 font-semibold">{p.description}</span>
+                      </div>
+                      <span className={`font-bold shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : 'text-amber-600 text-[10px] uppercase'}`}>
+                        {p.points > 0 ? `-${p.points} pts` : 'Pendiente'}
+                      </span>
+                    </div>
+                  ))}
+
+                {/* Advertencias dinámicas activas (infracciones actuales del usuario) */}
+                {liveInfractions
+                  .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday))
+                  .map((inf) => (
+                    <div key={inf.id} className="flex justify-between items-start text-xs bg-amber-100 rounded p-2 border border-amber-200">
+                      <div>
+                        <span className="font-bold text-amber-900 mr-2">J{activeMatchday}:</span>
+                        <span className="text-amber-955 font-semibold">{inf.description}</span>
+                      </div>
+                      <span className="font-bold text-amber-600 shrink-0 ml-2 text-[10px] uppercase">Pendiente</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Historial de Sanciones (Liga) - Colapsable (Ahora debajo de los jugadores) */}
       <Card className="!bg-slate-50 border-slate-200 mt-2 shadow-sm">
         <CardContent className="p-4">
@@ -1767,28 +1800,10 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Indicador de cambios guardados automáticamente */}
-      {!isUnlockWindowOpen && (
-        <div className={`flex items-center gap-2 justify-between ${isUnlockWindowOpen ? 'opacity-50 pointer-events-none' : ''}`}>
-          <div className="text-xs text-slate-500">
-            Los cambios se guardan automáticamente
-          </div>
-          {changedCount > 0 && (
-            <>
-              <button
-                onClick={undoLastChange}
-                className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
-              >
-                <X className="w-4 h-4" />
-                <span className="hidden sm:inline">Deshacer ({changedCount})</span>
-              </button>
-              <span className="text-sm text-emerald-600 font-medium">
-                {changedCount} cambio{changedCount !== 1 ? 's' : ''}
-              </span>
-            </>
-          )}
         </div>
-      )}
+        
+      </div>
+      {/* ================= FIN CONTENEDOR DE COLUMNAS ================= */}
 
       {/* Modal de selector de jugador con filtros */}
       {playerToSwap && (
