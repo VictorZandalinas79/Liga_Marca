@@ -797,7 +797,7 @@ export default function JornadaPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 max-w-screen-2xl mx-auto w-full pb-4">
       {/* Cabecera con selector de jornada por flechas */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -1032,7 +1032,7 @@ export default function JornadaPage() {
 
       {/* Equipos de usuarios - Mini tablas por usuario (desplegable) */}
       {showEquipos && (userTeams.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
           {sortedTeams.map((team, index) => {
             const displayPos = index + 1
             const isCurrentUser = currentUserId === team.user_id
@@ -1040,7 +1040,7 @@ export default function JornadaPage() {
             <Card
               key={team.team_id}
               ref={(el) => { teamRefs.current[team.team_id] = el; }}
-              className={`!border-slate-300 shadow-md scroll-mt-20 ${
+              className={`!border-slate-300 shadow-md scroll-mt-20 overflow-hidden flex flex-col ${
                 isCurrentUser ? '!border-emerald-500 ring-2 ring-emerald-500/50' : ''
               }`}
             >

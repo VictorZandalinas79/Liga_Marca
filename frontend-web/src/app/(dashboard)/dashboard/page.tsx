@@ -1277,7 +1277,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-2 pb-4">
+    <div className="space-y-2 pb-4 max-w-screen-2xl mx-auto">
       {/* Encabezado con usuarios en línea */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-slate-900">Inicio</h1>
