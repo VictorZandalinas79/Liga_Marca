@@ -1207,7 +1207,9 @@ export default function JornadaPage() {
                                       {player.team?.logo_url && (
                                         <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain shrink-0" />
                                       )}
-                                      <span className="truncate max-w-[50px] shrink">{player.team?.name}</span>
+                                      {!player.replacedPlayer && (
+                                        <span className="truncate max-w-[50px] shrink">{player.team?.name}</span>
+                                      )}
                                       <span className="text-slate-400 shrink-0">· {fmtValor(player.valor || 0)}</span>
                                       
                                       {player.replacedPlayer && (
