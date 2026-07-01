@@ -1312,7 +1312,7 @@ export default function ClasificacionPage() {
 
       {/* Estadísticas destacadas - MOVIDAS ABAJO DE LA TABLA */}
       {(topEvolution.length > 0 || topChanges.length > 0 || topTotalChanges.length > 0 || topKamikaze.length > 0 || topOpens.length > 0) && (
-        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {topEvolution.length > 0 && (
             <Card className="!bg-emerald-50 border-emerald-200">
               <CardContent className="p-4">
@@ -1323,11 +1323,11 @@ export default function ClasificacionPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-emerald-700 uppercase mb-2">Mayor promedio (últ. 3)</p>
                     {topEvolution.map((u, i) => (
-                      <div key={u.user_id} className="flex justify-between items-center mb-1.5 border-b border-emerald-200/50 pb-1.5 last:border-0 last:pb-0">
-                        <p className="text-sm font-bold text-emerald-900 uppercase pr-2">
+                      <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-emerald-200/50 pb-2 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-emerald-900 uppercase pr-2 leading-tight">
                           {i + 1}. {u.user_name}
                         </p>
-                        <p className="text-xs text-emerald-700 font-medium whitespace-nowrap">{Math.round(u.last_3_jornadas_avg * 10)/10} pts</p>
+                        <p className="text-xs text-emerald-700 font-medium whitespace-nowrap pt-0.5">{Math.round(u.last_3_jornadas_avg * 10)/10} pts</p>
                       </div>
                     ))}
                   </div>
@@ -1346,11 +1346,11 @@ export default function ClasificacionPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-blue-700 uppercase mb-2">Mejor impacto cambios</p>
                     {topChanges.map((u, i) => (
-                      <div key={u.user_id} className="flex justify-between items-center mb-1.5 border-b border-blue-200/50 pb-1.5 last:border-0 last:pb-0">
-                        <p className="text-sm font-bold text-blue-900 uppercase pr-2">
+                      <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-blue-200/50 pb-2 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-blue-900 uppercase pr-2 leading-tight">
                           {i + 1}. {u.user_name}
                         </p>
-                        <p className="text-xs text-blue-700 font-medium whitespace-nowrap">{u.change_impact_points > 0 ? `+${Math.round(u.change_impact_points * 10)/10}` : Math.round(u.change_impact_points * 10)/10} pts</p>
+                        <p className="text-xs text-blue-700 font-medium whitespace-nowrap pt-0.5">{u.change_impact_points > 0 ? `+${Math.round(u.change_impact_points * 10)/10}` : Math.round(u.change_impact_points * 10)/10} pts</p>
                       </div>
                     ))}
                   </div>
@@ -1369,11 +1369,11 @@ export default function ClasificacionPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-purple-700 uppercase mb-2">Más cambios en total</p>
                     {topTotalChanges.map((u, i) => (
-                      <div key={u.user_id} className="flex justify-between items-center mb-1.5 border-b border-purple-200/50 pb-1.5 last:border-0 last:pb-0">
-                        <p className="text-sm font-bold text-purple-900 uppercase pr-2">
+                      <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-purple-200/50 pb-2 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-purple-900 uppercase pr-2 leading-tight">
                           {i + 1}. {u.user_name}
                         </p>
-                        <p className="text-xs text-purple-700 font-medium whitespace-nowrap">{u.total_changes}</p>
+                        <p className="text-xs text-purple-700 font-medium whitespace-nowrap pt-0.5">{u.total_changes}</p>
                       </div>
                     ))}
                   </div>
@@ -1392,11 +1392,11 @@ export default function ClasificacionPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-rose-700 uppercase mb-2">Premio Kamikaze</p>
                     {topKamikaze.map((u, i) => (
-                      <div key={u.user_id} className="flex justify-between items-center mb-1.5 border-b border-rose-200/50 pb-1.5 last:border-0 last:pb-0">
-                        <p className="text-sm font-bold text-rose-900 uppercase pr-2">
+                      <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-rose-200/50 pb-2 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-rose-900 uppercase pr-2 leading-tight">
                           {i + 1}. {u.user_name}
                         </p>
-                        <p className="text-xs text-rose-700 font-medium whitespace-nowrap">{Math.round(u.kamikaze_score || 0)} min</p>
+                        <p className="text-xs text-rose-700 font-medium whitespace-nowrap pt-0.5">{Math.round(u.kamikaze_score || 0)} min</p>
                       </div>
                     ))}
                   </div>
@@ -1415,11 +1415,11 @@ export default function ClasificacionPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-indigo-700 uppercase mb-2">Adictos a la app</p>
                     {topOpens.map((u, i) => (
-                      <div key={u.user_id} className="flex justify-between items-center mb-1.5 border-b border-indigo-200/50 pb-1.5 last:border-0 last:pb-0">
-                        <p className="text-sm font-bold text-indigo-900 uppercase pr-2">
+                      <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-indigo-200/50 pb-2 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-indigo-900 uppercase pr-2 leading-tight">
                           {i + 1}. {u.user_name}
                         </p>
-                        <p className="text-xs text-indigo-700 font-medium whitespace-nowrap">{u.app_opens} accesos</p>
+                        <p className="text-xs text-indigo-700 font-medium whitespace-nowrap pt-0.5">{u.app_opens} accesos</p>
                       </div>
                     ))}
                   </div>
