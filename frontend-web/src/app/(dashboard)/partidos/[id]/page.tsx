@@ -509,10 +509,15 @@ export default function PartidoDetallePage() {
                 {player.shirt_number || '?'}
               </div>
               <div>
-                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getPositionColor(player.position)}`}>
-                  {getPositionLabel(player.position)}
-                </span>
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="inline-flex items-center justify-center min-w-[20px] px-1 h-5 rounded bg-white/10 border border-white/20 text-white text-[11px] font-bold backdrop-blur-sm shadow-sm">
+                    {player.shirt_number || '-'}
+                  </span>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getPositionColor(player.position)}`}>
+                    {getPositionLabel(player.position)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
                   <span>{player.is_starter ? 'Titular' : 'Suplente'}</span>
                   <span>{player.minutes_played || 0}'</span>
                 </div>
