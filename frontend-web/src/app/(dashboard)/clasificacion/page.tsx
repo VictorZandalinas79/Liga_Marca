@@ -30,6 +30,7 @@ interface UserStanding {
   best_matchday: number
   sanctioned_matchdays: number
   kamikaze_score?: number
+  app_opens?: number
 }
 
 interface MatchdayStatus {
@@ -639,9 +640,25 @@ export default function ClasificacionPage() {
           best_matchday: bestMatchday,
           sanctioned_matchdays: sanctionedMatchdays,
           kamikaze_score: minMinutes === Infinity ? 999999 : minMinutes,
+          app_opens: 0, // se llenará luego
         }
       })
 
+      // Fetch user_sessions
+      const { data: sessionsData } = await supabase
+        .from('user_sessions')
+        .select('user_id')
+      
+      const sessionCounts = new Map<string, number>()
+      if (sessionsData) {
+        for (const s of sessionsData) {
+          sessionCounts.set(s.user_id, (sessionCounts.get(s.user_id) || 0) + 1)
+        }
+      }
+
+      standingsData.forEach(standing => {
+        standing.app_opens = sessionCounts.get(standing.user_id) || 0
+      })
 
       standingsData.sort((a, b) => {
         if (sortOrder === 'desc') {
@@ -960,13 +977,13 @@ export default function ClasificacionPage() {
     return <div className="text-center py-8 text-slate-500">Cargando clasificación...</div>
   }
 
-  const topEvolution = [...standings].sort((a, b) => b.last_3_jornadas_avg - a.last_3_jornadas_avg)[0]
-  const topChanges = [...standings].sort((a, b) => b.change_impact_points - a.change_impact_points)[0]
-  const topTotalChanges = [...standings].sort((a, b) => b.total_changes - a.total_changes)[0]
-  
+  const topEvolution = [...standings].filter(u => u.last_3_jornadas_avg > 0).sort((a, b) => b.last_3_jornadas_avg - a.last_3_jornadas_avg).slice(0, 3)
+  const topChanges = [...standings].filter(u => u.change_impact_points !== 0).sort((a, b) => b.change_impact_points - a.change_impact_points).slice(0, 3)
+  const topTotalChanges = [...standings].filter(u => u.total_changes > 0).sort((a, b) => b.total_changes - a.total_changes).slice(0, 3)
   const kamikazes = [...standings].filter(s => (s.kamikaze_score ?? 999999) < 999999)
   kamikazes.sort((a, b) => (a.kamikaze_score || 0) - (b.kamikaze_score || 0))
-  const topKamikaze = kamikazes.length > 0 ? kamikazes[0] : null
+  const topKamikaze = kamikazes.slice(0, 3)
+  const topOpens = [...standings].filter(u => (u.app_opens || 0) > 0).sort((a, b) => (b.app_opens || 0) - (a.app_opens || 0)).slice(0, 3)
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -1294,70 +1311,117 @@ export default function ClasificacionPage() {
       </Card>
 
       {/* Estadísticas destacadas - MOVIDAS ABAJO DE LA TABLA */}
-      {(topEvolution || topChanges || topTotalChanges || topKamikaze) && (
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {topEvolution && (
+      {(topEvolution.length > 0 || topChanges.length > 0 || topTotalChanges.length > 0 || topKamikaze.length > 0 || topOpens.length > 0) && (
+        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {topEvolution.length > 0 && (
             <Card className="!bg-emerald-50 border-emerald-200">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
-                    <TrendingUp className="w-5 h-5 text-white" />
+                  <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center shrink-0 mt-1">
+                    <TrendingUp className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-emerald-700 uppercase truncate">Mayor promedio (últimas 3)</p>
-                    <p className="text-lg font-bold text-emerald-900 uppercase truncate">{topEvolution.user_name}</p>
-                    <p className="text-sm text-emerald-700 truncate">{topEvolution.last_3_jornadas_avg} pts/j</p>
+                    <p className="text-xs font-semibold text-emerald-700 uppercase mb-2">Mayor promedio (últ. 3)</p>
+                    {topEvolution.map((u, i) => (
+                      <div key={u.user_id} className="flex justify-between items-center mb-1.5 border-b border-emerald-200/50 pb-1.5 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-emerald-900 uppercase pr-2">
+                          {i + 1}. {u.user_name}
+                        </p>
+                        <p className="text-xs text-emerald-700 font-medium whitespace-nowrap">{Math.round(u.last_3_jornadas_avg * 10)/10} pts</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {topChanges && topChanges.change_impact_points !== 0 && (
+          {topChanges.length > 0 && (
             <Card className="!bg-blue-50 border-blue-200">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
-                    <Target className="w-5 h-5 text-white" />
+                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-1">
+                    <Target className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-blue-700 uppercase truncate">Mejor impacto de cambios</p>
-                    <p className="text-lg font-bold text-blue-900 uppercase truncate">{topChanges.user_name}</p>
-                    <p className="text-sm text-blue-700 truncate">{topChanges.change_impact_points > 0 ? `+${Math.round(topChanges.change_impact_points * 10)/10}` : Math.round(topChanges.change_impact_points * 10)/10} pts netos</p>
+                    <p className="text-xs font-semibold text-blue-700 uppercase mb-2">Mejor impacto cambios</p>
+                    {topChanges.map((u, i) => (
+                      <div key={u.user_id} className="flex justify-between items-center mb-1.5 border-b border-blue-200/50 pb-1.5 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-blue-900 uppercase pr-2">
+                          {i + 1}. {u.user_name}
+                        </p>
+                        <p className="text-xs text-blue-700 font-medium whitespace-nowrap">{u.change_impact_points > 0 ? `+${Math.round(u.change_impact_points * 10)/10}` : Math.round(u.change_impact_points * 10)/10} pts</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {topTotalChanges && topTotalChanges.total_changes > 0 && (
+          {topTotalChanges.length > 0 && (
             <Card className="!bg-purple-50 border-purple-200">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center shrink-0">
-                    <ArrowUpDown className="w-5 h-5 text-white" />
+                  <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center shrink-0 mt-1">
+                    <ArrowUpDown className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-purple-700 uppercase truncate">Más cambios en total</p>
-                    <p className="text-lg font-bold text-purple-900 uppercase truncate">{topTotalChanges.user_name}</p>
-                    <p className="text-sm text-purple-700 truncate">{topTotalChanges.total_changes} cambios realizados</p>
+                    <p className="text-xs font-semibold text-purple-700 uppercase mb-2">Más cambios en total</p>
+                    {topTotalChanges.map((u, i) => (
+                      <div key={u.user_id} className="flex justify-between items-center mb-1.5 border-b border-purple-200/50 pb-1.5 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-purple-900 uppercase pr-2">
+                          {i + 1}. {u.user_name}
+                        </p>
+                        <p className="text-xs text-purple-700 font-medium whitespace-nowrap">{u.total_changes}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {topKamikaze && (
+          {topKamikaze.length > 0 && (
             <Card className="!bg-rose-50 border-rose-200">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-rose-600 flex items-center justify-center shrink-0">
-                    <AlertTriangle className="w-5 h-5 text-white" />
+                  <div className="w-8 h-8 rounded-full bg-rose-600 flex items-center justify-center shrink-0 mt-1">
+                    <AlertTriangle className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-rose-700 uppercase truncate">Premio Kamikaze</p>
-                    <p className="text-lg font-bold text-rose-900 uppercase truncate">{topKamikaze.user_name}</p>
-                    <p className="text-sm text-rose-700 truncate">Cambios a {Math.round(topKamikaze.kamikaze_score || 0)} min del inicio</p>
+                    <p className="text-xs font-semibold text-rose-700 uppercase mb-2">Premio Kamikaze</p>
+                    {topKamikaze.map((u, i) => (
+                      <div key={u.user_id} className="flex justify-between items-center mb-1.5 border-b border-rose-200/50 pb-1.5 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-rose-900 uppercase pr-2">
+                          {i + 1}. {u.user_name}
+                        </p>
+                        <p className="text-xs text-rose-700 font-medium whitespace-nowrap">{Math.round(u.kamikaze_score || 0)} min</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {topOpens.length > 0 && (
+            <Card className="!bg-indigo-50 border-indigo-200">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-1">
+                    <Users className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-indigo-700 uppercase mb-2">Adictos a la app</p>
+                    {topOpens.map((u, i) => (
+                      <div key={u.user_id} className="flex justify-between items-center mb-1.5 border-b border-indigo-200/50 pb-1.5 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-indigo-900 uppercase pr-2">
+                          {i + 1}. {u.user_name}
+                        </p>
+                        <p className="text-xs text-indigo-700 font-medium whitespace-nowrap">{u.app_opens} accesos</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </CardContent>
@@ -1365,27 +1429,6 @@ export default function ClasificacionPage() {
           )}
         </div>
       )}
-
-      {/* Leyenda */}
-      <Card>
-        <CardContent className="p-4">
-          <h3 className="text-sm font-semibold text-slate-600 mb-3">Leyenda</h3>
-          <div className="grid md:grid-cols-3 gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-emerald-600" />
-              <span className="text-slate-600">Tendencia positiva (+5 pts)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <TrendingDown className="w-4 h-4 text-red-600" />
-              <span className="text-slate-600">Tendencia negativa (-5 pts)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-400" />
-              <span className="text-slate-600">Maestro de cambios (&gt;70%)</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Sin datos */}
       {standings.length === 0 && (
