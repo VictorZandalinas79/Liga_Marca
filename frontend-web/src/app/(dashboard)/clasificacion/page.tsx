@@ -1312,7 +1312,7 @@ export default function ClasificacionPage() {
 
       {/* Estadísticas destacadas - MOVIDAS ABAJO DE LA TABLA */}
       {(topEvolution.length > 0 || topChanges.length > 0 || topTotalChanges.length > 0 || topKamikaze.length > 0 || topOpens.length > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {topEvolution.length > 0 && (
             <Card className="!bg-emerald-50 border-emerald-200">
               <CardContent className="p-4">
