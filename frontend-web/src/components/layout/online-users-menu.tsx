@@ -91,7 +91,7 @@ export function OnlineUsersMenu() {
               <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-500"></span>
             )}
           </span>
-          <span className="text-sm font-medium">{onlineCount}</span>
+          <span className="text-sm font-medium hidden sm:block">{onlineCount}</span>
           <Users className="h-4 w-4" />
         </div>
       </button>
