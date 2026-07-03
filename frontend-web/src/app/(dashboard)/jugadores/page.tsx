@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
-import { Search, TrendingUp, Goal, Ticket, Download, Swords, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, TrendingUp, Goal, Ticket, Download, Swords, ChevronDown, ChevronUp, X } from 'lucide-react'
 
 interface Player {
   id: string
@@ -37,12 +37,157 @@ interface PlayerStats {
   minutes_played: number
   matches_played: number
   avg_points: number
+  shots_on_target: number
+  passes_completed: number
+  passes_attempted: number
+  tackles_won: number
+  interceptions: number
+  saves: number
+  clearances: number
+  takeons_won: number
+  ball_recoveries: number
+  key_passes: number
+  big_chances_created: number
+  aerials_won: number
+  penalties_won: number
+  dispossessed: number
+  bad_touches: number
+  own_goals: number
 }
 
 interface Team {
   id: string
   name: string
   logo_url?: string
+}
+
+// Buscador de jugadores con dropdown
+function PlayerSearchPicker({
+  label,
+  color,
+  selectedId,
+  onSelect,
+  players,
+  getPositionLabel,
+  getPositionColor,
+  normalize,
+}: {
+  label: string
+  color: string
+  selectedId: string
+  onSelect: (id: string) => void
+  players: Player[]
+  getPositionLabel: (pos: string) => string
+  getPositionColor: (pos: string) => string
+  normalize: (text: string) => string
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const selected = players.find(p => p.id === selectedId)
+
+  const filtered = query.trim()
+    ? players
+        .filter(p =>
+          normalize(p.short_name || '').includes(normalize(query)) ||
+          normalize(p.first_name || '').includes(normalize(query)) ||
+          normalize(p.last_name || '').includes(normalize(query)) ||
+          normalize(p.team?.name || '').includes(normalize(query))
+        )
+        .slice(0, 40)
+    : players.slice(0, 30)
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  if (selected) {
+    return (
+      <div className="flex-1 w-full">
+        <label className={`text-xs font-bold mb-2 block uppercase tracking-wider ${color}`}>{label}</label>
+        <div className="flex items-center gap-3 bg-slate-950 border border-slate-600 rounded-xl px-3 py-2.5">
+          {selected.photo ? (
+            <img src={selected.photo} alt={selected.short_name || ''} className="w-10 h-10 rounded-full object-cover border-2 border-slate-700 shrink-0" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-sm font-bold text-slate-400 shrink-0">
+              {selected.shirt_number || '?'}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-white text-sm truncate">{selected.short_name || `${selected.first_name} ${selected.last_name}`}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${getPositionColor(selected.position)}`}>
+                {getPositionLabel(selected.position)}
+              </span>
+              {selected.team?.logo_url && (
+                <img src={selected.team.logo_url} alt={selected.team.name} className="w-3.5 h-3.5 object-contain" />
+              )}
+              <span className="text-slate-400 text-xs truncate">{selected.team?.name}</span>
+            </div>
+          </div>
+          <button
+            onClick={() => { onSelect(''); setQuery('') }}
+            className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 w-full relative" ref={ref}>
+      <label className={`text-xs font-bold mb-2 block uppercase tracking-wider ${color}`}>{label}</label>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+        <input
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          placeholder="Buscar jugador o equipo..."
+          className="w-full bg-slate-950 text-white border border-slate-700 rounded-xl pl-9 pr-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none placeholder:text-slate-600"
+        />
+      </div>
+      {open && (
+        <div className="absolute z-50 top-full mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-h-64 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="text-slate-500 text-sm px-4 py-3 text-center">Sin resultados</p>
+          ) : filtered.map(p => (
+            <button
+              key={p.id}
+              onMouseDown={() => { onSelect(p.id); setQuery(''); setOpen(false) }}
+              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-800 transition-colors text-left"
+            >
+              {p.photo ? (
+                <img src={p.photo} alt={p.short_name || ''} className="w-8 h-8 rounded-full object-cover border border-slate-700 shrink-0" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 shrink-0">
+                  {p.shirt_number || '?'}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-semibold truncate">{p.short_name || `${p.first_name} ${p.last_name}`}</p>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${getPositionColor(p.position)}`}>
+                    {getPositionLabel(p.position)}
+                  </span>
+                  {p.team?.logo_url && <img src={p.team.logo_url} alt="" className="w-3 h-3 object-contain" />}
+                  <span className="text-slate-400 text-xs truncate">{p.team?.name}</span>
+                </div>
+              </div>
+              {p.precio && <span className="text-emerald-400 text-xs font-bold shrink-0">{p.precio}M</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function JugadoresPage() {
@@ -56,6 +201,7 @@ export default function JugadoresPage() {
   const [isComparatorOpen, setIsComparatorOpen] = useState(false)
   const [playerAId, setPlayerAId] = useState<string>('')
   const [playerBId, setPlayerBId] = useState<string>('')
+  const [per90Mode, setPer90Mode] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -67,11 +213,9 @@ export default function JugadoresPage() {
       const precio = player.precio || 0
       return `"${nombre.replace(/"/g, '""')}";"${equipo.replace(/"/g, '""')}";${precio}`
     })
-    
     const csvContent = [headers.join(';'), ...data].join('\n')
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
-    
     const link = document.createElement('a')
     link.href = url
     link.download = 'jugadores_liga_marca.csv'
@@ -82,89 +226,91 @@ export default function JugadoresPage() {
 
   useEffect(() => {
     const fetchPlayers = async () => {
-      // 1. Obtener todos los jugadores (paginado: Supabase devuelve máx. 1000 por petición)
       const PAGE_SIZE = 1000
       const playersData: any[] = []
       let from = 0
       while (true) {
-        const { data: page, error: playersError } = await supabase
+        const { data: page, error } = await supabase
           .from('players')
           .select('*')
           .order('short_name', { ascending: true })
           .range(from, from + PAGE_SIZE - 1)
-
-        if (playersError) {
-          console.error("Error al cargar jugadores:", JSON.stringify(playersError, null, 2))
-          setLoading(false)
-          return
-        }
-
-        if (!page || page.length === 0) break
+        if (error || !page || page.length === 0) break
         playersData.push(...page)
         if (page.length < PAGE_SIZE) break
         from += PAGE_SIZE
       }
 
-      if (playersData.length === 0) {
-        console.error("No se recibieron datos de jugadores")
-        setLoading(false)
-        return
-      }
+      if (playersData.length === 0) { setLoading(false); return }
 
-      // 2. Obtener los equipos únicos con sus nombres y escudos
       const teamIds = [...new Set(playersData.map(p => p.team_id).filter(Boolean))]
       const { data: teamsData } = await supabase
         .from('real_teams')
         .select('id, name, logo_url')
         .in('id', teamIds)
-
       const teamsMap = new Map(teamsData?.map(t => [t.id, t]) || [])
 
-      // 3. Crear la lista de equipos para el filtro
-      const teamsList = teamIds.map(id => ({
-        id,
-        name: teamsMap.get(id)?.name || 'Sin nombre',
-        logo_url: teamsMap.get(id)?.logo_url || undefined
-      })).sort((a, b) => a.name.localeCompare(b.name))
+      setTeams(
+        teamIds.map(id => ({
+          id,
+          name: teamsMap.get(id)?.name || 'Sin nombre',
+          logo_url: teamsMap.get(id)?.logo_url,
+        })).sort((a, b) => a.name.localeCompare(b.name))
+      )
 
-      setTeams(teamsList)
-
-      console.log("Jugadores cargados:", playersData)
-      console.log("Primer jugador (para debug):", JSON.stringify(playersData[0], null, 2))
-
-      // 2. Obtener stats y combinarlas con los jugadores
       const playersWithStats = await Promise.all(
         playersData.map(async (player) => {
           const { data: scores } = await supabase
             .from('player_scores')
-            .select('total_points, goals, assists, yellow_cards, red_cards, minutes_played')
+            .select('total_points, goals, assists, yellow_cards, red_cards, minutes_played, shots_on_target, passes_completed, passes_attempted, tackles_won, interceptions, saves, clearances, takeons_won, ball_recoveries, key_passes, big_chances_created, aerials_won, penalties_won, dispossessed, bad_touches, own_goals')
             .eq('player_id', player.id)
 
-          const stats = scores?.reduce(
-            (acc, s) => ({
-              total_points: acc.total_points + (s.total_points || 0),
-              goals: acc.goals + (s.goals || 0),
-              assists: acc.assists + (s.assists || 0),
-              yellow_cards: acc.yellow_cards + (s.yellow_cards || 0),
-              red_cards: acc.red_cards + (s.red_cards || 0),
-              minutes_played: acc.minutes_played + (s.minutes_played || 0),
-              matches_played: scores?.length || 0,
-              avg_points: 0,
-            }),
-            { total_points: 0, goals: 0, assists: 0, yellow_cards: 0, red_cards: 0, minutes_played: 0, matches_played: 0, avg_points: 0 }
-          ) || { total_points: 0, goals: 0, assists: 0, yellow_cards: 0, red_cards: 0, minutes_played: 0, matches_played: 0, avg_points: 0 }
-
-          stats.avg_points = stats.matches_played > 0 ? Math.round((stats.total_points / stats.matches_played) * 10) / 10 : 0
-
-          // Retornamos el jugador con el equipo y logo_url
-          const team = player.team_id ? teamsMap.get(player.team_id) : null
-          return {
-            ...player,
-            stats,
-            team: team || null
+          const zero: PlayerStats = {
+            total_points: 0, goals: 0, assists: 0, yellow_cards: 0, red_cards: 0,
+            minutes_played: 0, matches_played: 0, avg_points: 0,
+            shots_on_target: 0, passes_completed: 0, passes_attempted: 0,
+            tackles_won: 0, interceptions: 0, saves: 0, clearances: 0,
+            takeons_won: 0, ball_recoveries: 0, key_passes: 0,
+            big_chances_created: 0, aerials_won: 0, penalties_won: 0,
+            dispossessed: 0, bad_touches: 0, own_goals: 0,
           }
+
+          const stats = scores?.reduce((acc, s) => ({
+            total_points: acc.total_points + (s.total_points || 0),
+            goals: acc.goals + (s.goals || 0),
+            assists: acc.assists + (s.assists || 0),
+            yellow_cards: acc.yellow_cards + (s.yellow_cards || 0),
+            red_cards: acc.red_cards + (s.red_cards || 0),
+            minutes_played: acc.minutes_played + (s.minutes_played || 0),
+            matches_played: scores.length,
+            avg_points: 0,
+            shots_on_target: acc.shots_on_target + (s.shots_on_target || 0),
+            passes_completed: acc.passes_completed + (s.passes_completed || 0),
+            passes_attempted: acc.passes_attempted + (s.passes_attempted || 0),
+            tackles_won: acc.tackles_won + (s.tackles_won || 0),
+            interceptions: acc.interceptions + (s.interceptions || 0),
+            saves: acc.saves + (s.saves || 0),
+            clearances: acc.clearances + (s.clearances || 0),
+            takeons_won: acc.takeons_won + (s.takeons_won || 0),
+            ball_recoveries: acc.ball_recoveries + (s.ball_recoveries || 0),
+            key_passes: acc.key_passes + (s.key_passes || 0),
+            big_chances_created: acc.big_chances_created + (s.big_chances_created || 0),
+            aerials_won: acc.aerials_won + (s.aerials_won || 0),
+            penalties_won: acc.penalties_won + (s.penalties_won || 0),
+            dispossessed: acc.dispossessed + (s.dispossessed || 0),
+            bad_touches: acc.bad_touches + (s.bad_touches || 0),
+            own_goals: acc.own_goals + (s.own_goals || 0),
+          }), zero) as PlayerStats || zero
+
+          stats.avg_points = stats.matches_played > 0
+            ? Math.round((stats.total_points / stats.matches_played) * 10) / 10
+            : 0
+
+          const team = player.team_id ? teamsMap.get(player.team_id) : null
+          return { ...player, stats, team: team || null }
         })
       )
+
       setPlayers(playersWithStats)
       setLoading(false)
     }
@@ -172,36 +318,28 @@ export default function JugadoresPage() {
     fetchPlayers()
   }, [])
 
-  // Convierte posición en inglés a abreviatura en español
   const getPositionCode = (position: string): string => {
     const posLower = position.toLowerCase()
     if (posLower.includes('goalkeeper') || posLower === 'gk') return 'GK'
     if (posLower.includes('defender') || posLower === 'def') return 'DEF'
     if (posLower.includes('midfielder') || posLower === 'mid') return 'MID'
     if (posLower.includes('forward') || posLower === 'fwd') return 'FWD'
-    return 'MID' // Por defecto
+    return 'MID'
   }
 
   const getPositionLabel = (position: string) => {
-    const code = getPositionCode(position)
-    const labels: Record<string, string> = {
-      GK: 'POR',
-      DEF: 'DEF',
-      MID: 'MED',
-      FWD: 'DEL',
-    }
-    return labels[code] || position
+    const labels: Record<string, string> = { GK: 'POR', DEF: 'DEF', MID: 'MED', FWD: 'DEL' }
+    return labels[getPositionCode(position)] || position
   }
 
   const getPositionColor = (position: string) => {
-    const code = getPositionCode(position)
     const colors: Record<string, string> = {
       GK: 'bg-amber-500 text-white',
       DEF: 'bg-blue-500 text-white',
       MID: 'bg-emerald-500 text-white',
       FWD: 'bg-red-500 text-white',
     }
-    return colors[code] || 'bg-slate-500 text-white'
+    return colors[getPositionCode(position)] || 'bg-slate-500 text-white'
   }
 
   const getPositionFilterColor = (position: string) => {
@@ -219,11 +357,11 @@ export default function JugadoresPage() {
     text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
   const filteredPlayers = players
-    .filter((p) => {
-      const normalizedFilter = normalize(filter)
-      const matchesFilter = normalize(p.short_name ?? '').includes(normalizedFilter) ||
-        normalize(p.first_name ?? '').includes(normalizedFilter) ||
-        normalize(p.last_name ?? '').includes(normalizedFilter)
+    .filter(p => {
+      const q = normalize(filter)
+      const matchesFilter = normalize(p.short_name ?? '').includes(q) ||
+        normalize(p.first_name ?? '').includes(q) ||
+        normalize(p.last_name ?? '').includes(q)
       const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
       const matchesTeam = teamFilter === 'ALL' || p.team_id === teamFilter
       return matchesFilter && matchesPosition && matchesTeam
@@ -293,9 +431,7 @@ export default function JugadoresPage() {
             >
               <option value="ALL">Todos los equipos</option>
               {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
+                <option key={team.id} value={team.id}>{team.name}</option>
               ))}
             </select>
             <select
@@ -330,129 +466,227 @@ export default function JugadoresPage() {
         {isComparatorOpen && (
           <Card className="!bg-slate-900 border-slate-700 shadow-2xl mt-2 overflow-visible">
             <CardContent className="p-4 sm:p-6 lg:p-8">
-              {/* Selectores */}
-              <div className="flex flex-col md:flex-row gap-4 mb-8 items-center bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
-                <div className="flex-1 w-full">
-                  <label className="text-xs text-emerald-400 font-bold mb-2 block uppercase tracking-wider">Jugador 1</label>
-                  <select
-                    value={playerAId}
-                    onChange={(e) => setPlayerAId(e.target.value)}
-                    className="w-full bg-slate-950 text-white border border-slate-700 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 font-medium"
-                  >
-                    <option value="">Selecciona un jugador...</option>
-                    {players.map(p => <option key={p.id} value={p.id}>{p.short_name || `${p.first_name} ${p.last_name}`} ({getPositionLabel(p.position)})</option>)}
-                  </select>
-                </div>
-                <div className="flex items-center justify-center shrink-0 py-2 md:py-0 mt-6 md:mt-4">
+              {/* Selectores con buscador */}
+              <div className="flex flex-col md:flex-row gap-4 mb-6 items-end bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                <PlayerSearchPicker
+                  label="Jugador 1"
+                  color="text-emerald-400"
+                  selectedId={playerAId}
+                  onSelect={setPlayerAId}
+                  players={players}
+                  getPositionLabel={getPositionLabel}
+                  getPositionColor={getPositionColor}
+                  normalize={normalize}
+                />
+                <div className="flex items-center justify-center shrink-0 pb-1">
                   <div className="w-10 h-10 rounded-full bg-slate-950 border-2 border-slate-700 flex items-center justify-center text-xs font-black text-slate-500 shadow-inner">
                     VS
                   </div>
                 </div>
-                <div className="flex-1 w-full">
-                  <label className="text-xs text-emerald-400 font-bold mb-2 block uppercase tracking-wider">Jugador 2</label>
-                  <select
-                    value={playerBId}
-                    onChange={(e) => setPlayerBId(e.target.value)}
-                    className="w-full bg-slate-950 text-white border border-slate-700 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 font-medium"
-                  >
-                    <option value="">Selecciona un jugador...</option>
-                    {players.map(p => <option key={p.id} value={p.id}>{p.short_name || `${p.first_name} ${p.last_name}`} ({getPositionLabel(p.position)})</option>)}
-                  </select>
-                </div>
+                <PlayerSearchPicker
+                  label="Jugador 2"
+                  color="text-orange-400"
+                  selectedId={playerBId}
+                  onSelect={setPlayerBId}
+                  players={players}
+                  getPositionLabel={getPositionLabel}
+                  getPositionColor={getPositionColor}
+                  normalize={normalize}
+                />
               </div>
+
+              {/* Toggle per/90 */}
+              {playerAId && playerBId && playerAId !== playerBId && (
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => setPer90Mode(v => !v)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold border transition-colors ${
+                      per90Mode
+                        ? 'bg-violet-600 border-violet-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span>⚡</span>
+                    {per90Mode ? 'Modo: Por 90 min' : 'Modo: Total'}
+                  </button>
+                </div>
+              )}
 
               {/* Área de Comparación */}
               {playerAId && playerBId && playerAId !== playerBId ? (() => {
                 const playerA = players.find(p => p.id === playerAId)!
                 const playerB = players.find(p => p.id === playerBId)!
-                
-                const renderMetricBar = (label: string, valA: number, valB: number, reverseColors = false) => {
+
+                const p90 = (val: number, minutes: number) => {
+                  if (!per90Mode || minutes < 1) return val
+                  return Math.round((val / minutes * 90) * 100) / 100
+                }
+                const fmt = (v: number) => typeof v === 'number' && v % 1 !== 0 ? v.toFixed(2) : v
+
+                const renderMetricBar = (
+                  label: string,
+                  rawA: number,
+                  rawB: number,
+                  reverseColors = false,
+                  skipPer90 = false
+                ) => {
+                  const minsA = playerA.stats?.minutes_played || 0
+                  const minsB = playerB.stats?.minutes_played || 0
+                  const valA = skipPer90 ? rawA : p90(rawA, minsA)
+                  const valB = skipPer90 ? rawB : p90(rawB, minsB)
                   const total = Math.max(valA, 0) + Math.max(valB, 0) || 1
                   const percentA = (Math.max(valA, 0) / total) * 100
                   const percentB = (Math.max(valB, 0) / total) * 100
                   const isAWinner = reverseColors ? valA < valB : valA > valB
                   const isBWinner = reverseColors ? valB < valA : valB > valA
                   const isTie = valA === valB
-                  
+
                   return (
-                    <div className="flex flex-col mb-5" key={label}>
+                    <div className="flex flex-col mb-4" key={label}>
                       <div className="flex justify-between items-end mb-1.5 px-1">
-                        <span className={`text-base font-black ${isAWinner ? 'text-emerald-400' : isTie ? 'text-slate-300' : 'text-slate-500'}`}>{typeof valA === 'number' && valA % 1 !== 0 ? valA.toFixed(1) : valA}</span>
-                        <span className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest">{label}</span>
-                        <span className={`text-base font-black ${isBWinner ? 'text-emerald-400' : isTie ? 'text-slate-300' : 'text-slate-500'}`}>{typeof valB === 'number' && valB % 1 !== 0 ? valB.toFixed(1) : valB}</span>
+                        <span className={`text-base font-black ${isAWinner ? 'text-emerald-400' : isTie ? 'text-slate-300' : 'text-slate-500'}`}>
+                          {fmt(valA)}
+                        </span>
+                        <span className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest text-center">{label}</span>
+                        <span className={`text-base font-black ${isBWinner ? 'text-orange-400' : isTie ? 'text-slate-300' : 'text-slate-500'}`}>
+                          {fmt(valB)}
+                        </span>
                       </div>
-                      <div className="flex h-3 w-full bg-slate-950 rounded-full overflow-hidden shadow-inner border border-slate-800">
-                        <div className={`h-full transition-all duration-700 ${isAWinner ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : isTie ? 'bg-slate-600' : 'bg-slate-700'}`} style={{ width: `${percentA}%` }} />
-                        <div className="w-1 shrink-0 bg-slate-900" />
-                        <div className={`h-full transition-all duration-700 ${isBWinner ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : isTie ? 'bg-slate-600' : 'bg-slate-700'}`} style={{ width: `${percentB}%` }} />
+                      <div className="flex h-2.5 w-full bg-slate-950 rounded-full overflow-hidden shadow-inner border border-slate-800">
+                        <div
+                          className={`h-full transition-all duration-700 ${isAWinner ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]' : isTie ? 'bg-slate-600' : 'bg-slate-700'}`}
+                          style={{ width: `${percentA}%` }}
+                        />
+                        <div className="w-0.5 shrink-0 bg-slate-900" />
+                        <div
+                          className={`h-full transition-all duration-700 ${isBWinner ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.7)]' : isTie ? 'bg-slate-600' : 'bg-slate-700'}`}
+                          style={{ width: `${percentB}%` }}
+                        />
                       </div>
                     </div>
                   )
                 }
 
-                const renderProfile = (p: Player, isLeft: boolean) => (
+                const renderSection = (title: string, emoji: string) => (
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-5 mb-2 flex items-center gap-1.5">
+                    <span>{emoji}</span> {title}
+                  </p>
+                )
+
+                const renderProfile = (p: Player, isLeft: boolean, accentColor: string) => (
                   <div className={`flex flex-col items-center ${isLeft ? 'md:items-start' : 'md:items-end'} w-full`}>
                     <div className="relative mb-4 group">
                       {p.photo ? (
-                        <div className="relative w-28 h-28 sm:w-36 sm:h-36">
-                          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-emerald-400 to-blue-500 blur-md opacity-40 group-hover:opacity-70 transition-opacity duration-500" />
+                        <div className="relative w-24 h-24 sm:w-32 sm:h-32">
+                          <div className={`absolute inset-0 rounded-full blur-md opacity-40 group-hover:opacity-70 transition-opacity duration-500 ${accentColor}`} />
                           <img src={p.photo} className="relative w-full h-full rounded-full object-cover border-4 border-slate-900 shadow-2xl bg-white" alt={p.short_name || ''} />
                         </div>
                       ) : (
-                        <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-slate-800 flex items-center justify-center text-4xl font-bold text-slate-600 border-4 border-slate-900 shadow-2xl">
+                        <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-slate-800 flex items-center justify-center text-4xl font-bold text-slate-600 border-4 border-slate-900 shadow-2xl">
                           {p.shirt_number || '?'}
                         </div>
                       )}
                       {p.team?.logo_url && (
-                        <div className={`absolute -bottom-3 ${isLeft ? '-right-3' : '-left-3'} w-12 h-12 bg-white rounded-full p-1.5 border-2 border-slate-700 shadow-lg z-10`}>
-                          <img src={p.team.logo_url} className="w-full h-full object-contain drop-shadow-md" alt={p.team.name} />
+                        <div className={`absolute -bottom-3 ${isLeft ? '-right-3' : '-left-3'} w-10 h-10 bg-white rounded-full p-1.5 border-2 border-slate-700 shadow-lg z-10`}>
+                          <img src={p.team.logo_url} className="w-full h-full object-contain" alt={p.team.name} />
                         </div>
                       )}
                       {p.shirt_number && (
-                        <div className={`absolute -top-2 ${isLeft ? '-left-2' : '-right-2'} w-10 h-10 flex items-center justify-center text-xl font-black text-white bg-slate-950 rounded-lg border-2 border-slate-700 shadow-xl z-10`} style={{ textShadow: '2px 2px 0 #000' }}>
+                        <div className={`absolute -top-2 ${isLeft ? '-left-2' : '-right-2'} w-9 h-9 flex items-center justify-center text-lg font-black text-white bg-slate-950 rounded-lg border-2 border-slate-700 shadow-xl z-10`}>
                           {p.shirt_number}
                         </div>
                       )}
                     </div>
-                    <h3 className={`text-xl sm:text-2xl font-black text-white text-center ${isLeft ? 'md:text-left' : 'md:text-right'} w-full truncate mb-2`}>{p.short_name || `${p.first_name} ${p.last_name}`}</h3>
+                    <h3 className={`text-xl sm:text-2xl font-black text-white text-center ${isLeft ? 'md:text-left' : 'md:text-right'} w-full truncate mb-2`}>
+                      {p.short_name || `${p.first_name} ${p.last_name}`}
+                    </h3>
                     <div className={`flex items-center gap-2 ${isLeft ? 'justify-center md:justify-start' : 'justify-center md:justify-end'} w-full`}>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getPositionColor(p.position)}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getPositionColor(p.position)}`}>
                         {getPositionLabel(p.position)}
                       </span>
                       <span className="text-sm text-slate-400 font-medium truncate">{p.team?.name || 'Sin equipo'}</span>
                     </div>
+                    <div className="mt-2 text-center">
+                      <span className="text-2xl font-black text-emerald-400">{p.precio ? `${p.precio}M` : '-'}</span>
+                    </div>
                   </div>
                 )
 
+                const sA = playerA.stats!
+                const sB = playerB.stats!
+
                 return (
-                  <div className="flex flex-col md:flex-row gap-8 lg:gap-12 items-start mt-2">
+                  <div className="flex flex-col md:flex-row gap-6 lg:gap-10 items-start mt-2">
                     {/* Perfil A */}
                     <div className="w-full md:w-1/4 flex justify-center md:justify-start order-1">
-                      {renderProfile(playerA, true)}
+                      {renderProfile(playerA, true, 'bg-gradient-to-tr from-emerald-400 to-blue-500')}
                     </div>
 
-                    {/* Barras Centrales */}
-                    <div className="w-full md:w-2/4 bg-slate-950/50 rounded-2xl p-5 sm:p-8 border border-slate-800 flex flex-col justify-center shadow-inner order-3 md:order-2">
-                      {renderMetricBar('Precio (M)', playerA.precio || 0, playerB.precio || 0)}
-                      {renderMetricBar('Puntos Totales', playerA.stats?.total_points || 0, playerB.stats?.total_points || 0)}
-                      {renderMetricBar('Media Puntos', playerA.stats?.avg_points || 0, playerB.stats?.avg_points || 0)}
-                      {renderMetricBar('Goles', playerA.stats?.goals || 0, playerB.stats?.goals || 0)}
-                      {renderMetricBar('Asistencias', playerA.stats?.assists || 0, playerB.stats?.assists || 0)}
-                      {renderMetricBar('Minutos', playerA.stats?.minutes_played || 0, playerB.stats?.minutes_played || 0)}
-                      {renderMetricBar('T. Amarillas', playerA.stats?.yellow_cards || 0, playerB.stats?.yellow_cards || 0, true)}
-                      {renderMetricBar('T. Rojas', playerA.stats?.red_cards || 0, playerB.stats?.red_cards || 0, true)}
+                    {/* Barras centrales */}
+                    <div className="w-full md:w-2/4 bg-slate-950/50 rounded-2xl p-5 sm:p-6 border border-slate-800 flex flex-col justify-center shadow-inner order-3 md:order-2">
+                      {/* Indicadores colores */}
+                      <div className="flex justify-between text-[10px] font-bold mb-4 px-1">
+                        <span className="text-emerald-400 truncate max-w-[45%]">
+                          {playerA.short_name || playerA.first_name}
+                        </span>
+                        <span className="text-orange-400 truncate max-w-[45%] text-right">
+                          {playerB.short_name || playerB.first_name}
+                        </span>
+                      </div>
+
+                      {per90Mode && (
+                        <p className="text-center text-[10px] text-violet-400 font-bold mb-3 bg-violet-950/40 rounded-lg py-1">
+                          ⚡ Estadísticas por 90 minutos
+                        </p>
+                      )}
+
+                      {renderSection('General', '📊')}
+                      {renderMetricBar('Precio (M)', sA.total_points !== undefined ? (playerA.precio || 0) : 0, playerB.precio || 0, false, true)}
+                      {renderMetricBar('Partidos', sA.matches_played, sB.matches_played, false, true)}
+                      {renderMetricBar('Minutos', sA.minutes_played, sB.minutes_played, false, true)}
+                      {renderMetricBar(per90Mode ? 'Puntos / 90' : 'Puntos Totales', sA.total_points, sB.total_points)}
+                      {renderMetricBar('Media Puntos', sA.avg_points, sB.avg_points, false, true)}
+
+                      {renderSection('Ataque', '⚽')}
+                      {renderMetricBar(per90Mode ? 'Goles / 90' : 'Goles', sA.goals, sB.goals)}
+                      {renderMetricBar(per90Mode ? 'Asistencias / 90' : 'Asistencias', sA.assists, sB.assists)}
+                      {renderMetricBar(per90Mode ? 'Tiros a puerta / 90' : 'Tiros a puerta', sA.shots_on_target, sB.shots_on_target)}
+                      {renderMetricBar(per90Mode ? 'Grandes oportunidades / 90' : 'Grandes oportunidades', sA.big_chances_created, sB.big_chances_created)}
+                      {renderMetricBar(per90Mode ? 'Pases clave / 90' : 'Pases clave', sA.key_passes, sB.key_passes)}
+                      {renderMetricBar(per90Mode ? 'Regates / 90' : 'Regates ganados', sA.takeons_won, sB.takeons_won)}
+                      {renderMetricBar(per90Mode ? 'Goles propia / 90' : 'Goles en propia', sA.own_goals, sB.own_goals, true)}
+
+                      {renderSection('Pases', '📈')}
+                      {renderMetricBar(per90Mode ? 'Pases completados / 90' : 'Pases completados', sA.passes_completed, sB.passes_completed)}
+                      {renderMetricBar(per90Mode ? 'Pases intentados / 90' : 'Pases intentados', sA.passes_attempted, sB.passes_attempted)}
+
+                      {renderSection('Defensa', '🛡️')}
+                      {renderMetricBar(per90Mode ? 'Entradas / 90' : 'Entradas ganadas', sA.tackles_won, sB.tackles_won)}
+                      {renderMetricBar(per90Mode ? 'Intercepciones / 90' : 'Intercepciones', sA.interceptions, sB.interceptions)}
+                      {renderMetricBar(per90Mode ? 'Despejes / 90' : 'Despejes', sA.clearances, sB.clearances)}
+                      {renderMetricBar(per90Mode ? 'Recuperaciones / 90' : 'Recuperaciones', sA.ball_recoveries, sB.ball_recoveries)}
+                      {renderMetricBar(per90Mode ? 'Duelos aéreos / 90' : 'Duelos aéreos ganados', sA.aerials_won, sB.aerials_won)}
+
+                      {renderSection('Portería', '🧤')}
+                      {renderMetricBar(per90Mode ? 'Paradas / 90' : 'Paradas', sA.saves, sB.saves)}
+
+                      {renderSection('Penaltis y Disciplina', '🟨')}
+                      {renderMetricBar(per90Mode ? 'Penaltis provocados / 90' : 'Penaltis provocados', sA.penalties_won, sB.penalties_won)}
+                      {renderMetricBar(per90Mode ? 'Balones perdidos / 90' : 'Balones perdidos', (sA.dispossessed + sA.bad_touches), (sB.dispossessed + sB.bad_touches), true)}
+                      {renderMetricBar('T. Amarillas', sA.yellow_cards, sB.yellow_cards, true, true)}
+                      {renderMetricBar('T. Rojas', sA.red_cards, sB.red_cards, true, true)}
                     </div>
 
                     {/* Perfil B */}
                     <div className="w-full md:w-1/4 flex justify-center md:justify-end order-2 md:order-3">
-                      {renderProfile(playerB, false)}
+                      {renderProfile(playerB, false, 'bg-gradient-to-tr from-orange-400 to-red-500')}
                     </div>
                   </div>
                 )
               })() : (
                 <div className="text-center py-12 px-4 border-2 border-dashed border-slate-700 rounded-xl bg-slate-800/30">
                   <Swords className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                  <p className="text-slate-400 text-lg font-medium">Selecciona dos jugadores diferentes arriba para iniciar la comparativa.</p>
+                  <p className="text-slate-400 text-lg font-medium">Busca y selecciona dos jugadores para iniciar la comparativa.</p>
                 </div>
               )}
             </CardContent>
@@ -463,103 +697,96 @@ export default function JugadoresPage() {
       {/* Lista de jugadores */}
       <div className="grid gap-3">
         {filteredPlayers.map((player) => (
-          <div
-            key={player.id}
-            onClick={() => router.push(`/jugadores/${player.id}`)}
-            className="cursor-pointer"
-          >
+          <div key={player.id} onClick={() => router.push(`/jugadores/${player.id}`)} className="cursor-pointer">
             <Card className="hover:shadow-lg transition-all !bg-slate-800 border-transparent hover:border-emerald-500">
               <CardContent className="p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center space-x-4 sm:space-x-5">
-                  {player.photo ? (
-                    <img
-                      src={player.photo}
-                      alt={player.short_name || ''}
-                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shadow-sm border-2 border-black shrink-0"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none'
-                      }}
-                    />
-                  ) : (
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 border-2 border-black shrink-0">
-                      {player.shirt_number || '?'}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="font-semibold text-white truncate">{player.short_name || `${player.first_name} ${player.last_name}`}</h3>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${getPositionColor(player.position)}`}>
-                        {getPositionLabel(player.position)}
-                      </span>
-                    </div>
-                    {/* Equipo y escudo */}
-                    <div className="flex items-center space-x-2 mt-1">
-                      {player.team?.logo_url && (
-                        <img src={player.team.logo_url} alt={player.team.name || ''} className="w-4 h-4 object-contain shrink-0" />
-                      )}
-                      <p className="text-sm text-slate-400 truncate">{player.team?.name || 'Sin equipo'}</p>
-                      {player.shirt_number && (
-                        <span 
-                          className="font-black text-white/95 text-xl sm:text-2xl leading-none ml-2"
-                          style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
-                        >
-                          {player.shirt_number}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center space-x-4 sm:space-x-5">
+                    {player.photo ? (
+                      <img
+                        src={player.photo}
+                        alt={player.short_name || ''}
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shadow-sm border-2 border-black shrink-0"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                      />
+                    ) : (
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 border-2 border-black shrink-0">
+                        {player.shirt_number || '?'}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="font-semibold text-white truncate">{player.short_name || `${player.first_name} ${player.last_name}`}</h3>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${getPositionColor(player.position)}`}>
+                          {getPositionLabel(player.position)}
                         </span>
-                      )}
+                      </div>
+                      <div className="flex items-center space-x-2 mt-1">
+                        {player.team?.logo_url && (
+                          <img src={player.team.logo_url} alt={player.team.name || ''} className="w-4 h-4 object-contain shrink-0" />
+                        )}
+                        <p className="text-sm text-slate-400 truncate">{player.team?.name || 'Sin equipo'}</p>
+                        {player.shirt_number && (
+                          <span
+                            className="font-black text-white/95 text-xl sm:text-2xl leading-none ml-2"
+                            style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
+                          >
+                            {player.shirt_number}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 flex-wrap border-t border-slate-700 sm:border-0 pt-3 sm:pt-0">
-                  <div className="text-center">
-                    <p className="text-xs text-slate-400 mb-1">Precio</p>
-                    <span className="text-2xl sm:text-3xl font-bold text-emerald-400">
-                      {player.precio ? `${player.precio}M` : '-'}
-                    </span>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center space-x-1 text-emerald-400">
-                      <TrendingUp className="h-4 w-4" />
-                      <span className="text-2xl font-bold">
-                        {player.stats ? Math.round(player.stats.total_points * 10) / 10 : 0}
+                  <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 flex-wrap border-t border-slate-700 sm:border-0 pt-3 sm:pt-0">
+                    <div className="text-center">
+                      <p className="text-xs text-slate-400 mb-1">Precio</p>
+                      <span className="text-2xl sm:text-3xl font-bold text-emerald-400">
+                        {player.precio ? `${player.precio}M` : '-'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Puntos</p>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center space-x-1 text-slate-300">
-                      <Goal className="h-4 w-4" />
-                      <span className="font-semibold">{player.stats?.goals || 0}</span>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center space-x-1 text-emerald-400">
+                        <TrendingUp className="h-4 w-4" />
+                        <span className="text-2xl font-bold">
+                          {player.stats ? Math.round(player.stats.total_points * 10) / 10 : 0}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">Puntos</p>
                     </div>
-                    <p className="text-xs text-slate-400">Goles</p>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center space-x-1 text-slate-300">
-                      <span className="text-sm">🅰️</span>
-                      <span className="font-semibold">{player.stats?.assists || 0}</span>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center space-x-1 text-slate-300">
+                        <Goal className="h-4 w-4" />
+                        <span className="font-semibold">{player.stats?.goals || 0}</span>
+                      </div>
+                      <p className="text-xs text-slate-400">Goles</p>
                     </div>
-                    <p className="text-xs text-slate-400">Asist.</p>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center space-x-1 text-amber-400">
-                      <Ticket className="h-4 w-4" />
-                      <span className="font-semibold">{player.stats?.yellow_cards || 0}</span>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center space-x-1 text-slate-300">
+                        <span className="text-sm">🅰️</span>
+                        <span className="font-semibold">{player.stats?.assists || 0}</span>
+                      </div>
+                      <p className="text-xs text-slate-400">Asist.</p>
                     </div>
-                    <p className="text-xs text-slate-400">Amarillas</p>
-                  </div>
-                  <div className="text-center min-w-[60px]">
-                    <div className="text-sm text-slate-400">
-                      {player.stats?.matches_played || 0} partidos
+                    <div className="text-center">
+                      <div className="flex items-center justify-center space-x-1 text-amber-400">
+                        <Ticket className="h-4 w-4" />
+                        <span className="font-semibold">{player.stats?.yellow_cards || 0}</span>
+                      </div>
+                      <p className="text-xs text-slate-400">Amarillas</p>
                     </div>
-                    <p className="text-xs text-slate-500">
-                      Media: {player.stats?.avg_points || 0} pts
-                    </p>
+                    <div className="text-center min-w-[60px]">
+                      <div className="text-sm text-slate-400">
+                        {player.stats?.matches_played || 0} partidos
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Media: {player.stats?.avg_points || 0} pts
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           </div>
         ))}
       </div>
@@ -571,7 +798,6 @@ export default function JugadoresPage() {
           </CardContent>
         </Card>
       )}
-
     </div>
   )
 }

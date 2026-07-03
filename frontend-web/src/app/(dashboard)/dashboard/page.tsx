@@ -546,10 +546,9 @@ export default function DashboardPage() {
       setLoading(false)
     }
 
-    // Esperar a que el hook calcule la jornada activa
-    if (activeMatchday !== undefined && activeMatchday !== null) {
-      const matchdayToLoad = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
-      fetchInitialData(matchdayToLoad)
+    // Esperar a que el hook calcule la jornada activa (0 = aún no resuelto)
+    if (typeof activeMatchday === 'number' && activeMatchday > 0) {
+      fetchInitialData(activeMatchday)
     }
   }, [user?.id, activeMatchday])
 
@@ -1487,6 +1486,57 @@ export default function DashboardPage() {
                         <span className="text-xs text-slate-500 font-medium">Media por Jugador</span>
                       </div>
                       <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.mediaPuntos * 10) / 10}</p>
+                    </div>
+
+                    {/* Jugadores por Equipo */}
+                    <div className="col-span-2 lg:col-span-1 bg-white rounded-lg p-3 border border-emerald-100">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Users className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-xs text-slate-500 font-medium">Jugadores por Equipo</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(() => {
+                          const byTeam = new Map<string, { name: string; logo_url?: string; count: number }>()
+                          selectedPlayersData.forEach(p => {
+                            if (!p.team_id) return
+                            const entry = byTeam.get(p.team_id)
+                            if (entry) {
+                              entry.count++
+                            } else {
+                              byTeam.set(p.team_id, {
+                                name: p.team?.name || '',
+                                logo_url: p.team?.logo_url,
+                                count: 1,
+                              })
+                            }
+                          })
+                          return Array.from(byTeam.entries())
+                            .sort((a, b) => b[1].count - a[1].count)
+                            .map(([teamId, info]) => {
+                              const overLimit = info.count > config.max_players_per_team
+                              return (
+                                <div
+                                  key={teamId}
+                                  title={info.name}
+                                  className={`flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-semibold transition-colors ${
+                                    overLimit
+                                      ? 'bg-red-50 border-red-300 text-red-700'
+                                      : 'bg-slate-50 border-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  {info.logo_url ? (
+                                    <img src={info.logo_url} alt={info.name} className="w-4 h-4 object-contain shrink-0" />
+                                  ) : (
+                                    <div className="w-4 h-4 rounded-full bg-slate-200 shrink-0" />
+                                  )}
+                                  <span className={`tabular-nums font-bold ${overLimit ? 'text-red-600' : 'text-slate-800'}`}>
+                                    {info.count}
+                                  </span>
+                                </div>
+                              )
+                            })
+                        })()}
+                      </div>
                     </div>
                   </div>
                 </CardContent>

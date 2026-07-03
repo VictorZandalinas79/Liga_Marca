@@ -20,7 +20,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
     lockTime: null,
     timeUntilUnlock: '',
     timeUntilLock: '',
-    currentMatchday: 1,
+    currentMatchday: 0,
     currentMomento: null,
   })
 

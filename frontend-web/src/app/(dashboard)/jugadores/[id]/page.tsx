@@ -1404,17 +1404,24 @@ export default function JugadorDetallePage() {
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             📊 Estadísticas Detalladas Acumuladas
           </h2>
-          <button
-            onClick={() => setHideZeros(!hideZeros)}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 transition-colors shadow-sm cursor-pointer"
-          >
-            {hideZeros ? '✨ Mostrar métricas en cero' : '🙈 Ocultar métricas en cero'}
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-violet-500 font-semibold bg-violet-50 px-2 py-1 rounded-full border border-violet-100">
+              ⚡ /90 min junto a cada valor
+            </span>
+            <button
+              onClick={() => setHideZeros(!hideZeros)}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 transition-colors shadow-sm cursor-pointer"
+            >
+              {hideZeros ? '✨ Mostrar métricas en cero' : '🙈 Ocultar métricas en cero'}
+            </button>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
           {statGroups.map((group, gIdx) => {
-            const visibleItems = hideZeros 
+            const minutesPer90 = totalStats.minutes_played > 0 ? totalStats.minutes_played / 90 : null
+
+            const visibleItems = hideZeros
               ? group.items.filter(item => item.valNum > 0)
               : group.items
 
@@ -1427,14 +1434,26 @@ export default function JugadorDetallePage() {
                   <h3 className="font-bold text-slate-800 text-base">{group.title}</h3>
                 </div>
                 <CardContent className="p-4 divide-y divide-slate-100">
-                  {visibleItems.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center py-2.5 text-sm hover:bg-slate-50/50 px-2 -mx-2 rounded transition-colors duration-150">
-                      <span className="text-slate-600 font-medium">{item.label}</span>
-                      <span className={`font-bold tabular-nums ${item.color || 'text-slate-800'}`}>
-                        {item.value}
-                      </span>
-                    </div>
-                  ))}
+                  {visibleItems.map((item, idx) => {
+                    const per90Val = minutesPer90 && typeof item.valNum === 'number'
+                      ? Math.round((item.valNum / minutesPer90) * 100) / 100
+                      : null
+                    return (
+                      <div key={idx} className="flex justify-between items-center py-2.5 text-sm hover:bg-slate-50/50 px-2 -mx-2 rounded transition-colors duration-150">
+                        <span className="text-slate-600 font-medium">{item.label}</span>
+                        <div className="flex items-center gap-3">
+                          {per90Val !== null && (
+                            <span className="text-[11px] text-violet-500 font-semibold tabular-nums bg-violet-50 px-1.5 py-0.5 rounded">
+                              {per90Val}/90
+                            </span>
+                          )}
+                          <span className={`font-bold tabular-nums ${item.color || 'text-slate-800'}`}>
+                            {item.value}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </CardContent>
               </Card>
             )
