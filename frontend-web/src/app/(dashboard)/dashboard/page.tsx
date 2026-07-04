@@ -57,17 +57,17 @@ function PitchPlayerCard({
   const pts = points !== undefined ? (Math.round(points * 10) / 10).toFixed(1) : (hasMatchStarted ? "0.0" : null)
 
   return (
-    <div className="flex flex-col items-center w-[58px] sm:w-[80px] text-center relative shrink-0 group">
-      <div className="relative mb-1">
+    <div className="flex flex-col items-center w-[58px] sm:w-[80px] md:w-[96px] lg:w-[120px] text-center relative shrink-0 group transition-all duration-300">
+      <div className="relative mb-1 md:mb-2 lg:mb-3">
         {/* Foto del jugador actual */}
         {player.photo ? (
           <img
             src={player.photo}
             alt={player.short_name || ''}
-            className={`w-10 h-10 sm:w-14 sm:h-14 rounded-full object-cover border-2 sm:border-[3px] shadow-lg bg-slate-200 ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}
+            className={`w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-full object-cover border-2 sm:border-[3px] shadow-lg bg-slate-200 transition-all duration-300 ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}
           />
         ) : (
-          <div className={`w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs sm:text-sm font-bold border-2 sm:border-[3px] shadow-lg ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}>
+          <div className={`w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs sm:text-sm md:text-base lg:text-lg font-bold border-2 sm:border-[3px] shadow-lg transition-all duration-300 ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}>
             {player.shirt_number || '?'}
           </div>
         )}
@@ -77,31 +77,31 @@ function PitchPlayerCard({
           <img
             src={player.team.logo_url}
             alt={player.team?.name || ''}
-            className="absolute -bottom-1 -left-3 sm:-left-4 w-5 h-5 sm:w-6 sm:h-6 object-contain drop-shadow-md"
+            className="absolute -bottom-1 -left-3 sm:-left-4 md:-bottom-2 md:-left-5 lg:-bottom-2 lg:-left-6 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-9 lg:h-9 object-contain drop-shadow-md transition-all duration-300"
           />
         )}
 
         {/* Puntos (arriba de la foto) */}
         {pts !== null && (
-          <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white font-extrabold text-[10px] sm:text-[11px] leading-none rounded-sm px-1 py-[2px] flex items-center justify-center shadow-md border border-amber-400">
+          <div className="absolute -top-4 md:-top-5 lg:-top-6 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white font-extrabold text-[10px] sm:text-[11px] md:text-[12px] lg:text-[14px] leading-none rounded-sm px-1 py-[2px] md:px-1.5 md:py-1 lg:px-2 lg:py-1 flex items-center justify-center shadow-md border border-amber-400 transition-all duration-300">
             {isPenalized ? '0.0' : pts}
           </div>
         )}
 
         {/* Precio (a la derecha) */}
-        <div className="absolute top-1/2 -right-4 sm:-right-5 -translate-y-1/2 bg-white/95 text-emerald-700 font-extrabold text-[8px] sm:text-[9px] flex items-center justify-center rounded-full w-[22px] h-[22px] sm:w-[26px] sm:h-[26px] shadow-md border border-emerald-200">
+        <div className="absolute top-1/2 -right-4 sm:-right-5 md:-right-6 lg:-right-7 -translate-y-1/2 bg-white/95 text-emerald-700 font-extrabold text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] flex items-center justify-center rounded-full w-[22px] h-[22px] sm:w-[26px] sm:h-[26px] md:w-[30px] md:h-[30px] lg:w-[36px] lg:h-[36px] shadow-md border border-emerald-200 transition-all duration-300">
           {player.precio ? `${player.precio}M` : '-'}
         </div>
       </div>
 
       {/* Nombre del jugador */}
-      <div className="flex flex-col items-center w-[120%] -mt-1">
-        <p className="font-extrabold text-white text-[10px] sm:text-[11px] leading-tight truncate drop-shadow-md relative z-10 w-full text-center">
+      <div className="flex flex-col items-center w-[120%] -mt-1 md:-mt-2">
+        <p className="font-extrabold text-white text-[10px] sm:text-[11px] md:text-[13px] lg:text-[15px] leading-tight truncate drop-shadow-md relative z-10 w-full text-center transition-all duration-300">
           {player.short_name || player.first_name}
         </p>
         {player.shirt_number && (
           <p 
-            className="font-black text-white/95 text-[18px] sm:text-2xl leading-none -mt-0.5 relative z-0"
+            className="font-black text-white/95 text-[18px] sm:text-2xl md:text-3xl lg:text-4xl leading-none -mt-0.5 md:-mt-1 lg:-mt-1.5 relative z-0 transition-all duration-300"
             style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
           >
             {player.shirt_number}
@@ -109,7 +109,7 @@ function PitchPlayerCard({
         )}
       </div>
       {isPenalized && sanctionReason ? (
-        <p className="text-[7px] sm:text-[8px] text-red-300 font-bold leading-tight w-[130%] drop-shadow-md mt-0.5 truncate bg-red-950/80 rounded px-1 py-0.5" title={sanctionReason}>
+        <p className="text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] text-red-300 font-bold leading-tight w-[130%] drop-shadow-md mt-0.5 lg:mt-1 truncate bg-red-950/80 rounded px-1 py-0.5 transition-all duration-300" title={sanctionReason}>
           {sanctionReason}
         </p>
       ) : null}
@@ -1278,92 +1278,48 @@ export default function DashboardPage() {
   return (
     <div className="space-y-2 pb-4 max-w-screen-2xl mx-auto">
       {/* Encabezado con usuarios en línea */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-slate-900">Inicio</h1>
-        {onlineCount > 0 && (
-          <div className="relative">
-            <button
-              onClick={() => setShowOnlineList(!showOnlineList)}
-              className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors relative"
-            >
-              <div className="flex items-center gap-1">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                </span>
-                <span className="text-slate-600 font-medium">{onlineCount} en línea</span>
-              </div>
-            </button>
-
-            {/* Dropdown con nombres de usuarios */}
-            {showOnlineList && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-2">
-                {usersOnline.length > 0 ? (
-                  <div>
-                    {usersOnline.map((u) => (
-                      <div key={u.id} className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 flex items-center gap-2">
-                        <span className="relative flex h-2 w-2 shrink-0">
-                          <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                        </span>
-                        {u.full_name || 'Usuario'}
-                      </div>
-                    ))}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 w-full">
+          <h1 className="text-3xl font-bold text-slate-900">Inicio</h1>
+          
+          {/* Mensaje de estado de cambios */}
+          <div className="flex-1">
+            {isUnlockWindowOpen ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 flex items-center gap-3 shadow-sm">
+                <Lock className="w-5 h-5 text-amber-600 animate-pulse shrink-0" />
+                <p className="text-sm font-semibold text-amber-900 hidden lg:block">
+                  Los cambios están bloqueados
+                </p>
+                {timeUntilLock && timeUntilLock !== 'Finalizada' && (
+                  <div className="bg-amber-100 px-3 py-1 rounded-lg ml-auto">
+                    <p className="text-sm font-bold text-amber-900">
+                      Cierra en: <span className="text-base">{timeUntilLock}</span>
+                    </p>
                   </div>
-                ) : (
-                  <div className="px-4 py-2 text-sm text-slate-500">Sin usuarios en línea</div>
                 )}
               </div>
+            ) : (
+              timeUntilUnlock && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2 flex items-center gap-3 shadow-sm">
+                  <Unlock className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <p className="text-sm font-semibold text-emerald-955 hidden lg:block">
+                    Se bloquean los cambios en...
+                  </p>
+                  <div className="bg-emerald-100 px-3 py-1 rounded-lg ml-auto">
+                    <p className="text-sm font-bold text-emerald-900">
+                      <span className="text-base font-mono">{timeUntilUnlock}</span>
+                    </p>
+                  </div>
+                </div>
+              )
             )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Mensaje de estado de cambios */}
-      {isUnlockWindowOpen ? (
-        <Card className="!bg-amber-50 border-amber-200">
-          <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 justify-between">
-            <div className="flex items-center gap-3">
-              <Lock className="w-5 h-5 text-amber-600 animate-pulse shrink-0" />
-              <p className="text-sm font-semibold text-amber-900">
-                Los cambios están bloqueados — Jornada en directo
-              </p>
-            </div>
-            {timeUntilLock && timeUntilLock !== 'Finalizada' && (
-              <div className="bg-amber-100 px-3 py-2 rounded-lg">
-                <p className="text-sm font-bold text-amber-900">
-                  Cierra en: <span className="text-lg">{timeUntilLock}</span>
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        timeUntilUnlock && (
-          <Card className="!bg-emerald-50 border-emerald-200">
-            <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 justify-between">
-              <div className="flex items-center gap-3">
-                <Unlock className="w-5 h-5 text-emerald-600 shrink-0" />
-                <p className="text-sm font-semibold text-emerald-955">
-                  Empieza la jornada y se bloquean los cambios en...
-                </p>
-              </div>
-              <div className="bg-emerald-100 px-3 py-2 rounded-lg">
-                <p className="text-sm font-bold text-emerald-900">
-                  <span className="text-lg font-mono">{timeUntilUnlock}</span>
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )
-      )}
 
-
-      {/* ================= CONTENEDOR DE COLUMNAS (PC) ================= */}
-      <div className="flex flex-col xl:flex-row gap-4 items-start w-full mt-2">
-        
-        {/* COLUMNA IZQUIERDA (Alineación) */}
-        <div className="flex-1 w-full min-w-0 space-y-4">
+      {/* ================= CONTENEDOR PRINCIPAL ================= */}
+      <div className="w-full space-y-4 mt-2">
       {/* Once inicial - Grid responsive ordenado por posiciones */}
       <Card className="border-2 border-emerald-200">
         <CardContent className="p-2">
@@ -1401,11 +1357,11 @@ export default function DashboardPage() {
               </div>
 
               {/* Player rows (top-down: Delanteros -> Mediocampistas -> Defensas -> Porteros) */}
-              <div className="relative z-10 flex flex-col justify-between h-full min-h-[440px] sm:min-h-[500px] md:min-h-[560px] pt-12 sm:pt-16 pb-1">
+              <div className="relative z-10 flex flex-col justify-between h-full min-h-[440px] sm:min-h-[500px] md:min-h-[600px] lg:min-h-[700px] pt-12 sm:pt-16 md:pt-20 lg:pt-24 pb-1 md:pb-2 lg:pb-4">
                 {/* Delanteros */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map((player, idx, arr) => (
-                    <div key={player.id} className={`transition-transform ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8' : ''}`}>
+                    <div key={player.id} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                     </div>
                   ))}
@@ -1417,7 +1373,7 @@ export default function DashboardPage() {
                 {/* Mediocampistas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map((player, idx, arr) => (
-                    <div key={player.id} className={`transition-transform ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8' : ''}`}>
+                    <div key={player.id} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                     </div>
                   ))}
@@ -1429,7 +1385,7 @@ export default function DashboardPage() {
                 {/* Defensas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map((player, idx, arr) => (
-                    <div key={player.id} className={`transition-transform ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8' : ''}`}>
+                    <div key={player.id} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                     </div>
                   ))}
@@ -1544,7 +1500,7 @@ export default function DashboardPage() {
             </div>
           </div>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-11 gap-2">
+            <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
               {selectedPlayersData.map((player, idx) => {
                 const isSessionChange = changeHistory.some(ch => ch.inId === player.id)
                 const isCrossSessionChange = !isSessionChange && basePlayers.length > 0 && !basePlayers.includes(player.id)
@@ -1555,7 +1511,7 @@ export default function DashboardPage() {
                   <div
                     key={player.id}
                     onClick={() => openPlayerSelector(player.id)}
-                    className={`relative w-full aspect-[5/7] transition-all group ${
+                    className={`@container relative w-full aspect-[5/7] transition-all group ${
                       isUnlockWindowOpen || isLockedPlayer
                         ? 'cursor-not-allowed opacity-60'
                         : 'cursor-pointer hover:scale-[1.03] md:hover:scale-105 hover:z-50 drop-shadow-xl'
@@ -1585,15 +1541,15 @@ export default function DashboardPage() {
                       <div className="absolute inset-x-0 bottom-[30%] h-[30%] bg-gradient-to-t from-black via-black/80 to-transparent z-10 pointer-events-none" />
 
                       {/* Columna Izquierda (Stats estilo FUT) */}
-                      <div className="absolute top-2 left-2 flex flex-col items-center z-20 drop-shadow-md w-7 md:w-8">
+                      <div className="absolute top-[3cqw] left-[3cqw] flex flex-col items-center z-20 drop-shadow-md w-[15cqw]">
                         {/* Índice */}
-                        <div className="bg-black/60 rounded flex items-center justify-center px-1.5 py-0.5 mb-0.5">
-                          <span className="text-lg md:text-xl font-black text-white leading-none">
+                        <div className="bg-black/60 rounded flex items-center justify-center px-[2cqw] py-[0.5cqw] mb-[0.5cqw]">
+                          <span className="text-[14cqw] font-black text-white leading-none">
                             {idx + 1}
                           </span>
                         </div>
                         {/* Posición */}
-                        <div className={`mt-0.5 text-[7px] md:text-[9px] px-1 py-0.5 w-[110%] text-center font-bold text-white rounded-sm drop-shadow-md ${getPositionColor(player.position)}`}>
+                        <div className={`mt-[1cqw] text-[8cqw] px-[2cqw] py-[1cqw] w-[130%] text-center font-bold text-white rounded-sm drop-shadow-md ${getPositionColor(player.position)}`}>
                           {getPositionLabel(player.position)}
                         </div>
                       </div>
@@ -1607,39 +1563,39 @@ export default function DashboardPage() {
                             className="w-full h-full object-contain object-bottom drop-shadow-2xl"
                           />
                         ) : (
-                          <div className="h-[50%] aspect-square rounded-full bg-slate-800/80 text-slate-300 flex items-center justify-center text-3xl font-bold shadow-2xl border-2 border-slate-600">
+                          <div className="h-[50%] aspect-square rounded-full bg-slate-800/80 text-slate-300 flex items-center justify-center text-[25cqw] font-bold shadow-2xl border-2 border-slate-600">
                             {player.shirt_number || '?'}
                           </div>
                         )}
                       </div>
 
                       {/* Nombre, Valor, Dorsal, Escudo (Zona inferior) */}
-                      <div className="@container absolute inset-x-0 bottom-1 flex flex-col items-center z-20 px-0.5 w-full">
-                        <div className="w-full bg-black/95 rounded-lg py-1 px-1 flex flex-col items-center shadow-2xl">
+                      <div className="absolute inset-x-0 bottom-[2cqw] flex flex-col items-center z-20 px-[2cqw] w-full">
+                        <div className="w-full bg-black/95 rounded-lg py-[2cqw] px-[2cqw] flex flex-col items-center shadow-2xl">
                           <p className={`font-black text-amber-50 uppercase text-center w-full leading-tight line-clamp-2 tracking-tight drop-shadow-lg ${
                               (player.short_name || player.first_name || '').length > 14
-                                ? 'text-[8cqw] md:text-[11px]'
+                                ? 'text-[7cqw]'
                                 : (player.short_name || player.first_name || '').length > 10
-                                ? 'text-[9.5cqw] md:text-xs'
-                                : 'text-[11cqw] md:text-sm'
+                                ? 'text-[8.5cqw]'
+                                : 'text-[10cqw]'
                             }`}
                             style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
                           >
                             {player.short_name || player.first_name}
                           </p>
                           
-                          <div className="w-11/12 h-[1px] bg-amber-500/40 my-0.5" />
+                          <div className="w-11/12 h-[1px] bg-amber-500/40 my-[1cqw]" />
 
-                          <div className="w-full flex justify-between items-center px-1">
+                          <div className="w-full flex justify-between items-center px-[1cqw]">
                             {/* Valor */}
                             <div className="flex-1 flex justify-start">
-                              <span className="font-black text-emerald-400 text-[9cqw] md:text-xs drop-shadow-md">
+                              <span className="font-black text-emerald-400 text-[9cqw] drop-shadow-md">
                                 {player.precio ? `${player.precio}M` : '-'}
                               </span>
                             </div>
                             {/* Dorsal */}
                             <div className="flex-1 flex justify-center">
-                              <span className="font-black text-white text-[13cqw] md:text-lg leading-none drop-shadow-md">
+                              <span className="font-black text-white text-[16cqw] leading-none drop-shadow-md">
                                 {player.shirt_number || '-'}
                               </span>
                             </div>
@@ -1649,9 +1605,9 @@ export default function DashboardPage() {
                                 <img
                                   src={player.team.logo_url}
                                   alt={player.team?.name || ''}
-                                  className="w-[12cqw] h-[12cqw] md:w-5 md:h-5 object-contain drop-shadow-lg"
+                                  className="w-[14cqw] h-[14cqw] object-contain drop-shadow-lg"
                                 />
-                              ) : <div className="w-[12cqw] h-[12cqw] md:w-5 md:h-5" />}
+                              ) : <div className="w-[14cqw] h-[14cqw]" />}
                             </div>
                           </div>
                         </div>
@@ -1660,20 +1616,20 @@ export default function DashboardPage() {
                     {/* === FIN CONTENIDO INTERNO === */}
 
                     {/* === CONTROLES FLOTANTES EXTERNOS (Sobresalen de la tarjeta) === */}
-                    <div className="absolute -top-3 -right-3 md:-top-4 md:-right-4 z-40 flex flex-col items-end gap-1">
-                      <div className="flex gap-1">
+                    <div className="absolute -top-[4cqw] -right-[4cqw] z-40 flex flex-col items-end gap-[1cqw]">
+                      <div className="flex gap-[1cqw]">
                         {isLockedPlayer && (
-                          <div className="w-6 h-6 md:w-7 md:h-7 bg-red-500 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20" title="Jugador bloqueado: partido fuera de jornada">
-                            <Lock className="w-3.5 h-3.5 text-white" />
+                          <div className="w-[12cqw] h-[12cqw] bg-red-500 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20" title="Jugador bloqueado: partido fuera de jornada">
+                            <Lock className="w-[6cqw] h-[6cqw] text-white" />
                           </div>
                         )}
                         {isChanged && (
                           <button
                             onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
-                            className="w-6 h-6 md:w-7 md:h-7 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20 transition-colors"
+                            className="w-[12cqw] h-[12cqw] bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20 transition-colors"
                             title="Cancelar cambio"
                           >
-                            <X className="w-4 h-4 text-white" />
+                            <X className="w-[6cqw] h-[6cqw] text-white" />
                           </button>
                         )}
                       </div>
@@ -1741,8 +1697,8 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* COLUMNA DERECHA (Sanciones) */}
-        <div className="w-full xl:w-[450px] shrink-0 space-y-4">
+        {/* ================= SANCIONES (ABAJO) ================= */}
+        <div className="w-full grid grid-cols-1 xl:grid-cols-2 gap-4 mt-8 mb-8">
       {/* Tus Sanciones (Jornada Activa) - Solo visible en jornada activa */}
       {isUnlockWindowOpen && (
         <Card className="!bg-red-50 border-red-200 mt-2 shadow-sm">
@@ -1851,9 +1807,7 @@ export default function DashboardPage() {
       </Card>
 
         </div>
-        
-      </div>
-      {/* ================= FIN CONTENEDOR DE COLUMNAS ================= */}
+      {/* ================= FIN SANCIONES ================= */}
 
       {/* Modal de selector de jugador con filtros */}
       {playerToSwap && (

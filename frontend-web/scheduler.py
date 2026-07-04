@@ -180,13 +180,39 @@ def check_and_run_sanctions():
                             log(f"✅ Liquidación final completada para Jornada {matchday}")
                             
                             # Disparar automáticamente la sincronización semanal de fixtures/squads al acabar la jornada
-                            log(f"🔄 Disparando sincronización semanal de fixtures y squads al terminar la jornada {matchday}...")
-                            sync_script_path = "../2. descarga_fixtures_y_sync.py"
-                            res_sync = subprocess.run([sys.executable, sync_script_path], env=env, capture_output=True, text=True)
-                            if res_sync.returncode == 0:
-                                log("✅ Sincronización semanal de fixtures y squads completada tras fin de jornada")
+                            log(f"🔄 Disparando sincronización semanal de fixtures y squads en GitHub Actions al terminar la jornada {matchday}...")
+                            
+                            github_token = os.environ.get("GITHUB_DISPATCH_TOKEN")
+                            if not github_token:
+                                log("⚠️ Falta GITHUB_DISPATCH_TOKEN en el entorno para disparar GitHub Actions. Ejecutando en local como fallback...")
+                                sync_script_path = "../2. descarga_fixtures_y_sync.py"
+                                res_sync = subprocess.run([sys.executable, sync_script_path], env=env, capture_output=True, text=True)
+                                if res_sync.returncode == 0:
+                                    log("✅ Sincronización semanal de fixtures y squads completada en local tras fin de jornada")
+                                else:
+                                    log(f"❌ Error en sincronización semanal en local tras fin de jornada: {res_sync.stderr}")
                             else:
-                                log(f"❌ Error en sincronización semanal tras fin de jornada: {res_sync.stderr}")
+                                import requests
+                                owner = os.environ.get("GITHUB_OWNER", "VictorZandalinas79")
+                                repo = os.environ.get("GITHUB_REPO", "Liga_Marca")
+                                ref = os.environ.get("GITHUB_REF", "main")
+                                workflow = "weekly-fixtures.yml"
+                                
+                                url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow}/dispatches"
+                                headers = {
+                                    "Authorization": f"Bearer {github_token}",
+                                    "Accept": "application/vnd.github+json",
+                                    "X-GitHub-Api-Version": "2022-11-28"
+                                }
+                                
+                                try:
+                                    res_github = requests.post(url, headers=headers, json={"ref": ref})
+                                    if res_github.status_code == 204:
+                                        log(f"✅ GitHub Action '{workflow}' disparada con éxito")
+                                    else:
+                                        log(f"❌ Error disparando GitHub Action: {res_github.status_code} - {res_github.text}")
+                                except Exception as e:
+                                    log(f"❌ Excepción al disparar GitHub Action: {e}")
                         else:
                             log(f"❌ Error en liquidación final para Jornada {matchday}: {res.stderr}")
                             
