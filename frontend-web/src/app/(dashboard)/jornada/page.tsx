@@ -1128,13 +1128,13 @@ export default function JornadaPage() {
                                 key={player.id}
                                 ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
                                 onClick={() => openPlayerStats(player.id, finalSanctionReason)}
-                                className={`flex items-center justify-between px-2 py-1 h-[54px] rounded-lg transition-colors gap-2 cursor-pointer ${
+                                className={`flex items-center justify-between px-1 py-1 h-[52px] rounded-lg transition-colors gap-1 cursor-pointer ${
                                   isPenalized
-                                    ? 'bg-red-50 border-2 border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-md ring-2 ring-red-300'
+                                    ? 'bg-red-50 border border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-sm'
                                     : (player.hasSubstitutionWarning || player.hasMaxTeamWarning)
                                     ? 'bg-red-100/50 border border-red-400 text-red-900 hover:bg-red-100'
                                     : isActive
-                                    ? 'bg-orange-200 ring-2 ring-orange-400 hover:bg-orange-300'
+                                    ? 'bg-orange-200 ring-1 ring-orange-400 hover:bg-orange-300'
                                     : isMatch
                                     ? 'bg-yellow-100 ring-1 ring-yellow-300 hover:bg-yellow-200'
                                     : player.hasPlayed
@@ -1142,91 +1142,81 @@ export default function JornadaPage() {
                                     : 'bg-slate-50 hover:bg-slate-100'
                                 }`}
                               >
-                                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                                  <span className="text-xs font-bold text-slate-400 w-4 shrink-0">{idx + 1}</span>
-                                  {player.shirt_number && (
-                                    <span 
-                                      className="font-black text-slate-900 text-base sm:text-lg w-5 text-center shrink-0"
-                                      style={{ textShadow: '1px 1px 2px rgba(255,255,255,0.8), -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff' }}
-                                    >
-                                      {player.shirt_number}
+                                {/* Left Side: Stacked Name + Info */}
+                                <div className="flex flex-col min-w-0 flex-1 justify-center gap-0.5">
+                                  {/* Row 1: Name and badges */}
+                                  <div className="flex items-center gap-1.5 min-w-0 w-full">
+                                    <span className={`font-semibold truncate block shrink ${
+                                      (player.short_name || player.first_name || '').length > 15
+                                        ? 'text-[10px]'
+                                        : 'text-xs'
+                                    } ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
+                                      {player.short_name || player.first_name}
                                     </span>
-                                  )}
-                                  {player.photo ? (
-                                    <img
-                                      src={player.photo}
-                                      alt={player.short_name || ''}
-                                      className={`w-7 h-7 rounded-full object-cover border-2 shrink-0 ${
-                                        isPenalized
-                                          ? 'border-red-500 ring-2 ring-red-200'
-                                          : (player.hasSubstitutionWarning || player.hasMaxTeamWarning)
-                                          ? 'border-red-500'
-                                          : player.hasPlayed
-                                          ? 'border-slate-400 opacity-70'
-                                          : 'border-slate-300'
-                                      }`}
-                                    />
-                                  ) : (
-                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 shrink-0 ${
-                                      isPenalized
-                                        ? 'bg-red-100 text-red-700 border-red-500 ring-2 ring-red-200'
-                                        : (player.hasSubstitutionWarning || player.hasMaxTeamWarning)
-                                        ? 'bg-red-100 text-red-700 border-red-500'
-                                        : player.hasPlayed
-                                        ? 'bg-slate-400 text-slate-700 border-slate-500'
-                                        : 'bg-slate-300 text-slate-600 border-slate-400'
-                                    }`}>
-                                      {player.shirt_number || '?'}
-                                    </div>
-                                  )}
-                                  <div className="min-w-0 relative flex-1">
-                                    <div className="flex items-center gap-1.5 min-w-0 relative z-10">
-                                      <span className={`font-semibold truncate block shrink ${
-                                        (player.short_name || player.first_name || '').length > 15
-                                          ? 'text-[9px]'
-                                          : (player.short_name || player.first_name || '').length > 11
-                                          ? 'text-[11px]'
-                                          : 'text-xs'
-                                      } ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
-                                        {player.short_name || player.first_name}
-                                      </span>
-                                      {isPenalized && (
-                                        <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-pulse shrink-0" />
-                                      )}
-                                      <Badge className={`text-[10px] px-1 py-0 shrink-0 ${getPositionColor(player.position)}`}>
-                                        {getPositionLabel(player.position)}
-                                      </Badge>
-                                      {player.is_captain && (
-                                        <Badge className="text-[10px] px-1 py-0 bg-yellow-500 text-white shrink-0">C</Badge>
-                                      )}
-                                      {player.hasPlayed && (
-                                        <span className="text-[10px] text-slate-400 font-medium shrink-0">✓ jugó</span>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-1 mt-0 text-[10px] text-slate-500 min-w-0">
-                                      {player.team?.logo_url && (
-                                        <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain shrink-0" />
-                                      )}
-                                      {!player.replacedPlayer && (
-                                        <span className="truncate max-w-[50px] shrink">{player.team?.name}</span>
-                                      )}
-                                      <span className="text-slate-400 shrink-0">· {fmtValor(player.valor || 0)}</span>
-                                      
-                                      {player.replacedPlayer && (
-                                        <div className="flex items-center gap-1 min-w-0 shrink ml-1">
-                                          <span className="text-slate-300 shrink-0">|</span>
-                                          <span className="text-[9px] text-slate-400 shrink-0">por</span>
-                                          {player.replacedPlayer.photo && (
-                                            <img src={player.replacedPlayer.photo} className="w-3 h-3 rounded-full object-cover border border-slate-300 shrink-0" alt="" />
-                                          )}
-                                          <span className="text-[9px] text-red-500 font-medium truncate shrink">
-                                            {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
+                                    {isPenalized && (
+                                      <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0" />
+                                    )}
+                                    <Badge className={`text-[9px] px-1 py-0 shrink-0 leading-none ${getPositionColor(player.position)}`}>
+                                      {getPositionLabel(player.position)}
+                                    </Badge>
+                                    {player.is_captain && (
+                                      <Badge className="text-[9px] px-1 py-0 bg-yellow-500 text-white shrink-0 leading-none">C</Badge>
+                                    )}
+                                    {player.hasPlayed && (
+                                      <span className="text-[9px] text-slate-400 font-medium shrink-0 leading-none">✓ jugó</span>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Row 2: Metadata (Order, Shirt, Photo, Team, Value, Replaced) */}
+                                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 min-w-0 w-full">
+                                    <span className="font-bold text-slate-400 shrink-0">{idx + 1}</span>
+                                    
+                                    {player.shirt_number && (
+                                      <span className="font-black text-slate-600 shrink-0">{player.shirt_number}</span>
+                                    )}
+                                    
+                                    {player.photo ? (
+                                      <img
+                                        src={player.photo}
+                                        alt=""
+                                        className={`w-4 h-4 rounded-full object-cover shrink-0 border ${
+                                          isPenalized ? 'border-red-500' : player.hasPlayed ? 'border-slate-400 opacity-70' : 'border-slate-300'
+                                        }`}
+                                      />
+                                    ) : (
+                                      <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0 border ${
+                                        isPenalized ? 'border-red-500 bg-red-100 text-red-700' : player.hasPlayed ? 'border-slate-400 bg-slate-400 text-slate-700' : 'border-slate-400 bg-slate-200 text-slate-600'
+                                      }`}>
+                                        {player.shirt_number || '?'}
+                                      </div>
+                                    )}
+                                    
+                                    {player.team?.logo_url && (
+                                      <img src={player.team.logo_url} alt="" className="w-3 h-3 object-contain shrink-0" />
+                                    )}
+                                    
+                                    {!player.replacedPlayer && (
+                                      <span className="truncate max-w-[50px] shrink">{player.team?.name}</span>
+                                    )}
+                                    
+                                    <span className="shrink-0">· {fmtValor(player.valor || 0)}</span>
+                                    
+                                    {player.replacedPlayer && (
+                                      <div className="flex items-center gap-1 min-w-0 shrink">
+                                        <span className="text-slate-300 shrink-0">|</span>
+                                        <span className="text-[9px] text-slate-400 shrink-0">por</span>
+                                        {player.replacedPlayer.photo && (
+                                          <img src={player.replacedPlayer.photo} className="w-3 h-3 rounded-full object-cover border border-slate-300 shrink-0" alt="" />
+                                        )}
+                                        <span className="text-[9px] text-red-500 font-medium truncate shrink">
+                                          {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
+
+                                {/* Right Side: Points */}
                                 <div className="text-right shrink-0">
                                   {player.sanctionReason ? (
                                     <div className="flex flex-col items-end justify-center leading-none">
