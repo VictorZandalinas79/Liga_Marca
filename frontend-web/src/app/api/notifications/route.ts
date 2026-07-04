@@ -26,7 +26,7 @@ export async function GET() {
     // A. Sanciones consolidadas en base de datos
     const { data: penalties } = await supabase
       .from('penalties')
-      .select('id, matchday, description, points, user_id, profiles(full_name)')
+      .select('id, matchday, description, points, user_id, created_at, profiles(full_name)')
       .eq('matchday', currentMatchday)
 
     if (penalties) {
@@ -38,7 +38,7 @@ export async function GET() {
           type: 'players_locked',
           title: `Sanción Aplicada J${p.matchday}: ${name}`,
           body: `${p.description} (Se restaron ${p.points} pts)`,
-          created_at: new Date().toISOString(),
+          created_at: p.created_at || new Date().toISOString(),
           read_at: null
         }
       })
