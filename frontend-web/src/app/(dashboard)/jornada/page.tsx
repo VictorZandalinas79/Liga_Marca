@@ -1128,7 +1128,7 @@ export default function JornadaPage() {
                                 key={player.id}
                                 ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
                                 onClick={() => openPlayerStats(player.id, finalSanctionReason)}
-                                className={`flex items-center justify-between px-2 h-[46px] overflow-hidden rounded-lg transition-colors gap-2 cursor-pointer ${
+                                className={`flex items-center justify-between px-2 py-1 h-[54px] rounded-lg transition-colors gap-2 cursor-pointer ${
                                   isPenalized
                                     ? 'bg-red-50 border-2 border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-md ring-2 ring-red-300'
                                     : (player.hasSubstitutionWarning || player.hasMaxTeamWarning)
@@ -1180,8 +1180,8 @@ export default function JornadaPage() {
                                     </div>
                                   )}
                                   <div className="min-w-0 relative flex-1">
-                                    <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden relative z-10">
-                                      <span className={`font-semibold truncate leading-tight ${
+                                    <div className="flex items-center gap-1.5 min-w-0 relative z-10">
+                                      <span className={`font-semibold truncate block shrink ${
                                         (player.short_name || player.first_name || '').length > 15
                                           ? 'text-[9px]'
                                           : (player.short_name || player.first_name || '').length > 11
