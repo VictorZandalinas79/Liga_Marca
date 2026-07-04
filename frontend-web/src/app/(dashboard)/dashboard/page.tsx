@@ -1518,7 +1518,7 @@ export default function DashboardPage() {
                     }`}
                   >
                     {/* === CONTENIDO INTERNO DE LA TARJETA (Recortado) === */}
-                    <div className={`absolute inset-0 overflow-hidden rounded-t-xl rounded-b-3xl border ${
+                    <div className={`absolute inset-0 overflow-hidden rounded-xl border ${
                       isUnlockWindowOpen
                         ? 'bg-slate-900 border-slate-800'
                         : isLockedPlayer
@@ -1636,26 +1636,26 @@ export default function DashboardPage() {
 
                       {/* Jugador reemplazado (mini tarjeta) */}
                       {replacedPlayer && (
-                        <div className="flex flex-col items-center pointer-events-none drop-shadow-xl mt-0.5">
+                        <div className="flex flex-col items-center pointer-events-none drop-shadow-xl -mt-1 md:mt-0.5 translate-x-1.5 md:translate-x-0">
                           <div className="relative">
                             {replacedPlayer.photo ? (
                               <img
                                 src={replacedPlayer.photo}
-                                className="w-7 h-7 md:w-10 md:h-10 rounded-full object-cover border-[1.5px] border-red-400 shadow-xl bg-slate-200 grayscale-[10%]"
+                                className="w-6 h-6 md:w-10 md:h-10 rounded-full object-cover border-[1.5px] border-red-400 shadow-xl bg-slate-200 grayscale-[10%]"
                               />
                             ) : (
-                              <div className="w-7 h-7 md:w-10 md:h-10 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] font-bold border-[1.5px] border-red-400 shadow-xl">
+                              <div className="w-6 h-6 md:w-10 md:h-10 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] font-bold border-[1.5px] border-red-400 shadow-xl">
                                 {replacedPlayer.shirt_number || '?'}
                               </div>
                             )}
                             {replacedPlayer.team?.logo_url && (
                               <img
                                 src={replacedPlayer.team.logo_url}
-                                className="absolute -bottom-1 -left-1 w-3.5 h-3.5 md:w-4 md:h-4 object-contain bg-white rounded-full p-[1px] shadow-sm"
+                                className="absolute -bottom-1 -left-1 w-3 h-3 md:w-4 md:h-4 object-contain bg-white rounded-full p-[1px] shadow-sm"
                               />
                             )}
                           </div>
-                          <div className="mt-1 bg-black/95 rounded px-1.5 py-0.5 flex flex-col items-center shadow-xl border border-red-500/30">
+                          <div className="mt-0.5 md:mt-1 bg-black/95 rounded px-1 md:px-1.5 py-0.5 flex flex-col items-center shadow-xl border border-red-500/30">
                             <p className="font-bold text-red-100 text-[6px] md:text-[7px] leading-tight truncate text-center max-w-[45px]">
                               {replacedPlayer.short_name || replacedPlayer.first_name}
                             </p>
