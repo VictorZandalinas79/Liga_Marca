@@ -437,6 +437,8 @@ export default function ClasificacionPage() {
               })
 
               const usedOutIds = new Set<string>()
+              const unmatchedInIds: string[] = []
+
               inIds.forEach(inId => {
                 const pInfoIn = playersInfoMap.get(inId)
                 const pos = posLabel(pInfoIn?.position || '')
@@ -447,6 +449,25 @@ export default function ClasificacionPage() {
                   const starterObj = startersList.find(s => s.id === inId)
                   const newPoints = starterObj ? starterObj.puntos : 0
                   const oldPoints = playerPointsByMatchday.get(availableOutId)?.get(md) ?? 0
+                  const diff = newPoints - oldPoints
+
+                  userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + diff)
+                  userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + 1)
+                } else {
+                  unmatchedInIds.push(inId)
+                }
+              })
+
+              // Fallback para emparejar cambios de sistema
+              const remainingOutIds = outIds.filter(id => !usedOutIds.has(id))
+              unmatchedInIds.forEach((inId, i) => {
+                if (i < remainingOutIds.length) {
+                  const outId = remainingOutIds[i]
+                  usedOutIds.add(outId)
+
+                  const starterObj = startersList.find(s => s.id === inId)
+                  const newPoints = starterObj ? starterObj.puntos : 0
+                  const oldPoints = playerPointsByMatchday.get(outId)?.get(md) ?? 0
                   const diff = newPoints - oldPoints
 
                   userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + diff)
