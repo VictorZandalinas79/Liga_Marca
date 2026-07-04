@@ -429,51 +429,26 @@ export default function ClasificacionPage() {
               const inIds = currentStarterIds.filter(id => !prevIds.includes(id))
               const outIds = prevIds.filter(id => !currentStarterIds.includes(id))
 
-              const outByPos: Record<string, string[]> = {}
-              outIds.forEach(id => {
-                const pInfo = playersInfoMap.get(id)
-                const pos = posLabel(pInfo?.position || '')
-                ;(outByPos[pos] ??= []).push(id)
-              })
+              const numChanges = Math.min(inIds.length, outIds.length)
 
-              const usedOutIds = new Set<string>()
-              const unmatchedInIds: string[] = []
-
-              inIds.forEach(inId => {
-                const pInfoIn = playersInfoMap.get(inId)
-                const pos = posLabel(pInfoIn?.position || '')
-                const availableOutId = (outByPos[pos] || []).find(outId => !usedOutIds.has(outId))
-                if (availableOutId) {
-                  usedOutIds.add(availableOutId)
-
+              if (numChanges > 0) {
+                let inPoints = 0
+                for (let i = 0; i < numChanges; i++) {
+                  const inId = inIds[i]
                   const starterObj = startersList.find(s => s.id === inId)
-                  const newPoints = starterObj ? starterObj.puntos : 0
-                  const oldPoints = playerPointsByMatchday.get(availableOutId)?.get(md) ?? 0
-                  const diff = newPoints - oldPoints
-
-                  userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + diff)
-                  userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + 1)
-                } else {
-                  unmatchedInIds.push(inId)
+                  inPoints += starterObj ? (starterObj.puntos ?? 0) : 0
                 }
-              })
 
-              // Fallback para emparejar cambios de sistema
-              const remainingOutIds = outIds.filter(id => !usedOutIds.has(id))
-              unmatchedInIds.forEach((inId, i) => {
-                if (i < remainingOutIds.length) {
-                  const outId = remainingOutIds[i]
-                  usedOutIds.add(outId)
-
-                  const starterObj = startersList.find(s => s.id === inId)
-                  const newPoints = starterObj ? starterObj.puntos : 0
-                  const oldPoints = playerPointsByMatchday.get(outId)?.get(md) ?? 0
-                  const diff = newPoints - oldPoints
-
-                  userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + diff)
-                  userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + 1)
+                let outPoints = 0
+                for (let i = 0; i < numChanges; i++) {
+                  const outId = outIds[i]
+                  outPoints += playerPointsByMatchday.get(outId)?.get(md) ?? 0
                 }
-              })
+
+                const diff = inPoints - outPoints
+                userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + diff)
+                userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + numChanges)
+              }
             }
 
             // Sumar puntos
