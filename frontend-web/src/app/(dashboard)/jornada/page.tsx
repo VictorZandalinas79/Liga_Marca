@@ -1163,11 +1163,11 @@ export default function JornadaPage() {
                                       <Badge className="text-[9px] px-1 py-0 bg-yellow-500 text-white shrink-0 leading-none">C</Badge>
                                     )}
                                     {player.hasPlayed && (
-                                      <span className="text-[9px] text-slate-400 font-medium shrink-0 leading-none">✓ jugó</span>
+                                      <Badge className="text-[9px] px-1 py-0 bg-emerald-500 text-white shrink-0 leading-none">J</Badge>
                                     )}
                                   </div>
                                   
-                                  {/* Row 2: Metadata (Order, Shirt, Photo, Team, Value, Replaced) */}
+                                  {/* Row 2: Metadata (Order, Shirt, Photo, Team, Value) */}
                                   <div className="flex items-center gap-1.5 text-[10px] text-slate-500 min-w-0 w-full">
                                     <span className="font-bold text-slate-400 shrink-0">{idx + 1}</span>
                                     
@@ -1195,32 +1195,17 @@ export default function JornadaPage() {
                                       <img src={player.team.logo_url} alt="" className="w-3 h-3 object-contain shrink-0" />
                                     )}
                                     
-                                    {!player.replacedPlayer && (
-                                      <span className="truncate max-w-[50px] shrink">{player.team?.name}</span>
-                                    )}
+                                    <span className="truncate max-w-[50px] shrink">{player.team?.name}</span>
                                     
                                     <span className="shrink-0">· {fmtValor(player.valor || 0)}</span>
-                                    
-                                    {player.replacedPlayer && (
-                                      <div className="flex items-center gap-1 min-w-0 shrink">
-                                        <span className="text-slate-300 shrink-0">|</span>
-                                        <span className="text-[9px] text-slate-400 shrink-0">por</span>
-                                        {player.replacedPlayer.photo && (
-                                          <img src={player.replacedPlayer.photo} className="w-3 h-3 rounded-full object-cover border border-slate-300 shrink-0" alt="" />
-                                        )}
-                                        <span className="text-[9px] text-red-500 font-medium truncate shrink">
-                                          {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
-                                        </span>
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
 
-                                {/* Right Side: Points */}
-                                <div className="text-right shrink-0">
+                                {/* Right Side: Points + Replacement */}
+                                <div className="flex flex-col items-end justify-center shrink-0 min-w-0 pl-1">
                                   {player.sanctionReason ? (
                                     <div className="flex flex-col items-end justify-center leading-none">
-                                      <span className="text-[10px] font-bold text-red-500 line-through mb-0.5">
+                                      <span className="text-[9px] font-bold text-red-500 line-through mb-0.5">
                                         {Math.round((player.originalPuntos ?? 0) * 10) / 10} pts
                                       </span>
                                       <span className="text-sm font-extrabold text-red-600">
@@ -1228,11 +1213,24 @@ export default function JornadaPage() {
                                       </span>
                                     </div>
                                   ) : (
-                                    <div className="flex items-baseline justify-end">
+                                    <div className="flex items-baseline justify-end leading-tight">
                                       <span className={`text-sm font-bold ${player.hasPlayed ? 'text-slate-500' : 'text-emerald-600'}`}>
                                         {Math.round((player.puntos ?? 0) * 10) / 10}
                                       </span>
                                       <span className="text-[10px] text-slate-500 ml-0.5">pts</span>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Replacement Row on the right */}
+                                  {player.replacedPlayer && (
+                                    <div className="flex items-center gap-1 mt-0.5 justify-end w-full">
+                                      <span className="text-[9px] text-slate-400">por</span>
+                                      {player.replacedPlayer.photo && (
+                                        <img src={player.replacedPlayer.photo} className="w-3.5 h-3.5 rounded-full object-cover border border-slate-300 shrink-0" alt="" />
+                                      )}
+                                      <span className="text-[9px] text-red-500 font-medium truncate max-w-[70px]">
+                                        {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
+                                      </span>
                                     </div>
                                   )}
                                 </div>
