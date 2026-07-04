@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { createServerSupabase } from '@/lib/supabase/server'
-import { getLiveInfractions, getCurrentMatchday } from '@/lib/infractions'
+import { getLiveInfractions, getCurrentMatchday, isMatchdayLockStarted } from '@/lib/infractions'
 
 export async function GET() {
   const supabase = await createServerSupabase()
@@ -49,15 +49,19 @@ export async function GET() {
     // no mostramos las advertencias dinámicas duplicadas.
     let liveNotifications: any[] = []
     if (!penalties || penalties.length === 0) {
-      const liveInfractions = await getLiveInfractions(supabase, currentMatchday)
-      liveNotifications = liveInfractions.map(inf => ({
-        id: `live-inf-${inf.id}`,
-        type: 'players_locked',
-        title: `Sanción en Juego J${inf.matchday}: ${inf.full_name}`,
-        body: `${inf.description} (Puntuarán 0 pts esta jornada)`,
-        created_at: new Date().toISOString(),
-        read_at: null
-      }))
+      // SOLO mostrar sanciones en vivo si ya estamos a <= 1 hora del primer partido
+      const isLocked = await isMatchdayLockStarted(supabase, currentMatchday)
+      if (isLocked) {
+        const liveInfractions = await getLiveInfractions(supabase, currentMatchday)
+        liveNotifications = liveInfractions.map(inf => ({
+          id: `live-inf-${inf.id}`,
+          type: 'players_locked',
+          title: `Sanción en Juego J${inf.matchday}: ${inf.full_name}`,
+          body: `${inf.description} (Puntuarán 0 pts esta jornada)`,
+          created_at: new Date().toISOString(),
+          read_at: null
+        }))
+      }
     }
 
     penaltyNotifications.push(...liveNotifications)

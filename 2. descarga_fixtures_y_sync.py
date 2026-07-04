@@ -515,27 +515,28 @@ def upload_fixtures_to_supabase(matches):
         fid = f.get('id')
         old_time = existing_map.get(fid)
         new_time = f.get('start_time', '')
-        if old_time and old_time != new_time and new_time:
+        if old_time and new_time:
             display = fixture_display_names.get(fid, fid)
             old_fmt = old_time[:16].replace('T', ' ')
             new_fmt = new_time[:16].replace('T', ' ')
-            schedule_notifications.append({
-                "type": "fixture_changed",
-                "title": "Cambio de horario",
-                "body": f"{display}: {old_fmt} → {new_fmt}"
-            })
-            # Si el nuevo horario deja el partido fuera de su jornada, los
-            # jugadores de ambos equipos quedan bloqueados: avisamos en la campana.
-            if fid in out_of_order:
-                tipo, md = out_of_order[fid]
-                motivo = ("aplazado a una jornada posterior" if tipo == "delayed"
-                          else "adelantado a una jornada anterior")
+            if old_fmt != new_fmt:
                 schedule_notifications.append({
-                    "type": "players_locked",
-                    "title": "Jugadores bloqueados",
-                    "body": (f"{display}: partido de la J{md} {motivo}. "
-                             f"Sus jugadores quedan bloqueados hasta que se resuelva.")
+                    "type": "fixture_changed",
+                    "title": "Cambio de horario",
+                    "body": f"{display}: {old_fmt} → {new_fmt}"
                 })
+                # Si el nuevo horario deja el partido fuera de su jornada, los
+                # jugadores de ambos equipos quedan bloqueados: avisamos en la campana.
+                if fid in out_of_order:
+                    tipo, md = out_of_order[fid]
+                    motivo = ("aplazado a una jornada posterior" if tipo == "delayed"
+                              else "adelantado a una jornada anterior")
+                    schedule_notifications.append({
+                        "type": "players_locked",
+                        "title": "Jugadores bloqueados",
+                        "body": (f"{display}: partido de la J{md} {motivo}. "
+                                 f"Sus jugadores quedan bloqueados hasta que se resuelva.")
+                    })
 
     # Subir a Supabase
     try:
@@ -927,11 +928,13 @@ def sync_players_with_csv(squads_data):
     # 4. Subir a Supabase TODOS los jugadores
     if players_payload:
         try:
-            # Detectar jugadores nuevos para las notificaciones
+            # Detectar jugadores nuevos o traspasados para las notificaciones
             try:
-                existing_ids_resp = supabase.table("players").select("id").execute()
-                existing_player_ids = {r['id'] for r in (existing_ids_resp.data or [])}
+                existing_ids_resp = supabase.table("players").select("id, team_id").execute()
+                existing_player_map = {r['id']: r for r in (existing_ids_resp.data or [])}
+                existing_player_ids = set(existing_player_map.keys())
             except Exception:
+                existing_player_map = {}
                 existing_player_ids = set()
 
             # IMPORTANTE: ignore_duplicates=False para que actualice fotos y precios 
@@ -939,14 +942,28 @@ def sync_players_with_csv(squads_data):
             result = supabase.table("players").upsert(players_payload, ignore_duplicates=False).execute()
 
             new_player_notifications = []
+            team_names = {s['team']['id']: s['team']['name'] for s in squads_data if 'team' in s and 'id' in s['team']}
+
             for p in players_payload:
-                if p.get('id') and p['id'] not in existing_player_ids:
-                    name = p.get('short_name')
+                pid = p.get('id')
+                name = p.get('short_name')
+                new_team_id = p.get('team_id')
+                
+                if pid and pid not in existing_player_ids:
                     new_player_notifications.append({
                         "type": "new_player",
                         "title": "Nuevo jugador disponible",
                         "body": f"{name} ({p.get('position', '')}) ha sido añadido al juego"
                     })
+                elif pid in existing_player_map:
+                    old_team_id = existing_player_map[pid].get('team_id')
+                    if old_team_id and new_team_id and old_team_id != new_team_id:
+                        new_team_name = team_names.get(new_team_id, "otro equipo")
+                        new_player_notifications.append({
+                            "type": "squad_changed",
+                            "title": "Cambio de Plantilla (Traspaso)",
+                            "body": f"{name} ha sido traspasado a {new_team_name}"
+                        })
             
             save_notifications(new_player_notifications)
 

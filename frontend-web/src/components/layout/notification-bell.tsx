@@ -5,7 +5,7 @@ import { Bell, Copy, Check } from 'lucide-react'
 
 interface Notification {
   id: string
-  type: 'fixture_changed' | 'new_player' | 'sync_complete' | 'players_locked'
+  type: 'fixture_changed' | 'new_player' | 'sync_complete' | 'players_locked' | 'squad_changed'
   title: string
   body: string
   created_at: string
@@ -147,6 +147,7 @@ export function NotificationBell() {
     new_player: '⚽',
     sync_complete: '✅',
     players_locked: '🔒',
+    squad_changed: '🔄',
   }
 
   return (

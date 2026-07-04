@@ -80,6 +80,34 @@ export async function getCurrentMatchday(supabase: SupabaseClient): Promise<numb
   return sortedJornadas.length > 0 ? sortedJornadas[sortedJornadas.length - 1].matchday : 1
 }
 
+export async function isMatchdayLockStarted(supabase: SupabaseClient, matchday: number): Promise<boolean> {
+  const { data: cfg } = await supabase
+    .from('league_config')
+    .select('matchday_start_hours_before')
+    .eq('id', 1)
+    .maybeSingle()
+
+  let unlockOffsetMs = 60 * 60 * 1000
+  if (cfg && cfg.matchday_start_hours_before != null) {
+    unlockOffsetMs = Number(cfg.matchday_start_hours_before) * 60 * 60 * 1000
+  }
+
+  const { data: fixtures } = await supabase
+    .from('fixtures')
+    .select('start_time')
+    .eq('matchday', matchday)
+    .order('start_time', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (!fixtures || !fixtures.start_time) return false
+
+  const firstMatchTime = new Date(fixtures.start_time).getTime()
+  const unlockTime = firstMatchTime - unlockOffsetMs
+  
+  return Date.now() >= unlockTime
+}
+
 export async function getLiveInfractions(supabase: SupabaseClient, matchday: number): Promise<Infraction[]> {
   // 1. Obtener perfiles y equipos
   const { data: profiles } = await supabase.from('profiles').select('id, full_name, email')
