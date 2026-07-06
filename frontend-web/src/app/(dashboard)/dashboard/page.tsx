@@ -1331,7 +1331,7 @@ export default function DashboardPage() {
           {isUnlockWindowOpen ? (
             <div className="flex flex-col lg:flex-row gap-4 items-start">
               {/* Pitch */}
-              <div className="relative w-full lg:flex-1 max-w-md mx-auto bg-[#43a047] border-2 border-white rounded-xl overflow-hidden p-2 sm:p-3 select-none min-h-[480px] sm:min-h-[580px] flex flex-col justify-between shadow-2xl aspect-[3/4]" style={{
+              <div className="relative w-full lg:flex-1 max-w-md mx-auto bg-[#43a047] border-2 border-white rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]" style={{
                 backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
               }}>
               {/* Soccer field markings */}
@@ -1357,7 +1357,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Player rows (top-down: Delanteros -> Mediocampistas -> Defensas -> Porteros) */}
-              <div className="relative z-10 flex flex-col justify-between h-full min-h-[440px] sm:min-h-[500px] md:min-h-[600px] lg:min-h-[700px] pt-12 sm:pt-16 md:pt-20 lg:pt-24 pb-1 md:pb-2 lg:pb-4">
+              <div className="relative z-10 flex flex-col justify-between h-full pt-10 pb-6 sm:pt-14 sm:pb-8 md:pt-16 md:pb-10 lg:pt-20 lg:pb-12">
                 {/* Delanteros */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map((player, idx, arr) => (
