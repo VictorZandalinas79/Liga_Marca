@@ -882,6 +882,10 @@ class MatchEventDownloader:
     def _handle_shot_target(self, event, current_min):
         self.apply_points(event.get('playerId'), 'shots_total', 1, current_min)
         self.apply_points(event.get('playerId'), 'shots_on_target', 1, current_min)
+        # typeId 15 = "Attempt Saved": si es un penalti a puerta (no gol), lo ha
+        # parado el portero -> cuenta como penalti fallado para el lanzador.
+        if self.has_qualifier(event, Q_PENALTY):
+            self.apply_points(event.get('playerId'), 'penalties_missed', 1, current_min)
 
     def _handle_shot_miss(self, event, current_min):
         self.apply_points(event.get('playerId'), 'shots_total', 1, current_min)
