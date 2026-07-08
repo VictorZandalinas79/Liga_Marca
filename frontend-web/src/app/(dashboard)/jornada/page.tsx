@@ -1040,7 +1040,7 @@ export default function JornadaPage() {
             <Card
               key={team.team_id}
               ref={(el) => { teamRefs.current[team.team_id] = el; }}
-              className={`!border-slate-300 shadow-md scroll-mt-20 overflow-hidden flex flex-col ${
+              className={`!border-slate-300 shadow-md scroll-mt-20 overflow-hidden min-w-0 flex flex-col ${
                 isCurrentUser ? '!border-emerald-500 ring-2 ring-emerald-500/50' : ''
               }`}
             >
@@ -1063,7 +1063,7 @@ export default function JornadaPage() {
                   <div className="flex items-center justify-center gap-2 sm:gap-4">
                     <div className="text-center">
                       <p className="text-xs text-slate-400">Sistema</p>
-                      <p className={`text-sm font-mono font-bold ${team.hasTacticsWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{getFormacion(team.jugadores)}</p>
+                      <p className={`text-sm font-mono font-bold whitespace-nowrap ${team.hasTacticsWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{getFormacion(team.jugadores)}</p>
                     </div>
                     <div className="w-px h-8 bg-slate-600" />
                     <div className="text-center">
@@ -1204,13 +1204,13 @@ export default function JornadaPage() {
                                 </div>
 
                                 {/* Right Side: Points + Replacement */}
-                                <div className="flex flex-col items-end justify-center shrink-0 min-w-0 pl-1">
+                                <div className="flex flex-col items-end justify-center shrink min-w-0 pl-1">
                                   {player.sanctionReason ? (
                                     <div className="flex flex-col items-end justify-center leading-none">
-                                      <span className="text-[9px] font-bold text-red-500 line-through mb-0.5">
+                                      <span className="text-[9px] font-bold text-red-500 line-through mb-0.5 whitespace-nowrap">
                                         {Math.round((player.originalPuntos ?? 0) * 10) / 10} pts
                                       </span>
-                                      <span className="text-sm font-extrabold text-red-600">
+                                      <span className="text-sm font-extrabold text-red-600 whitespace-nowrap">
                                         0 pts
                                       </span>
                                     </div>
