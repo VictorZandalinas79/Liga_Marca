@@ -1007,18 +1007,35 @@ export default function DashboardPage() {
       return selectedPlayers.indexOf(a.id) - selectedPlayers.indexOf(b.id)
     })
 
+  // Mapa de cambios cross-session para evitar que varios jugadores entrantes se asignen al mismo saliente
+  const crossSessionChangesMap = useMemo(() => {
+    const map = new Map<string, string>()
+    if (basePlayers.length > 0) {
+      const incoming = selectedPlayers.filter(id => !basePlayers.includes(id))
+      const outgoing = basePlayers.filter(id => !selectedPlayers.includes(id))
+      
+      const inPlayers = incoming.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[]
+      const outPlayers = outgoing.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[]
+      
+      const positions = ['GK', 'DEF', 'MID', 'FWD']
+      for (const pos of positions) {
+        const inPos = inPlayers.filter(p => getPositionCode(p.position) === pos)
+        const outPos = outPlayers.filter(p => getPositionCode(p.position) === pos)
+        
+        for (let i = 0; i < Math.min(inPos.length, outPos.length); i++) {
+          map.set(inPos[i].id, outPos[i].id)
+        }
+      }
+    }
+    return map
+  }, [basePlayers, selectedPlayers, players])
+
   // Helper para buscar al jugador reemplazado (cambio)
   const getReplacedPlayer = (inPlayerId: string): Player | undefined => {
     const change = [...changeHistory].reverse().find(ch => ch.inId === inPlayerId)
     if (change) return players.find(p => p.id === change.outId)
     if (basePlayers.length > 0 && !basePlayers.includes(inPlayerId)) {
-      const player = players.find(p => p.id === inPlayerId)
-      const currentPosCode = player ? getPositionCode(player.position) : ''
-      const originalId = basePlayers.find(bpId => {
-        if (selectedPlayers.includes(bpId)) return false
-        const bp = players.find(p => p.id === bpId)
-        return bp && getPositionCode(bp.position) === currentPosCode
-      })
+      const originalId = crossSessionChangesMap.get(inPlayerId)
       if (originalId) return players.find(p => p.id === originalId)
     }
     return undefined
