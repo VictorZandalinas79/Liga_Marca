@@ -1057,10 +1057,10 @@ export default function JornadaPage() {
                     }`}>
                       <span className="text-white text-sm font-bold">{displayPos}º</span>
                     </div>
-                    <h3 className="font-bold text-white truncate text-base uppercase">{team.user_name}</h3>
+                    <h3 className="font-bold text-white text-base uppercase leading-tight whitespace-normal break-words">{team.user_name}</h3>
                   </div>
                   {/* Fila 2: Sistema · Valor · Puntos centrados */}
-                  <div className="flex items-center justify-center gap-6">
+                  <div className="flex items-center justify-center gap-2 sm:gap-4">
                     <div className="text-center">
                       <p className="text-xs text-slate-400">Sistema</p>
                       <p className={`text-sm font-mono font-bold ${team.hasTacticsWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{getFormacion(team.jugadores)}</p>
