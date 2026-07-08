@@ -1653,7 +1653,7 @@ export default function DashboardPage() {
                     {/* Jugador reemplazado (mini tarjeta) */}
                     {replacedPlayer && (
                       <div className="absolute z-40 flex flex-col items-center pointer-events-none drop-shadow-xl 
-                        -top-[6cqw] left-1/2 -translate-x-1/2 
+                        -top-6 sm:-top-[8cqw] left-1/2 -translate-x-1/2 
                         md:top-[9cqw] md:left-auto md:-right-[4cqw] md:translate-x-0 md:items-center
                       ">
                         <div className="relative">
