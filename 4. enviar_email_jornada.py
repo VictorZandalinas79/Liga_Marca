@@ -29,7 +29,9 @@ def send_matchday_start_emails(matchday):
     user_names = {p['id']: p.get('full_name') or p.get('email', '').split('@')[0] for p in profiles if p.get('id')}
     
     if penalties:
-        sanctions_html = "<h3 style='color: #991b1b; margin-top: 20px;'>⚖️ Sanciones de la Jornada</h3><ul style='color: #7f1d1d;'>"
+        sanctions_html = "<h3 style='color: #991b1b; margin-top: 20px;'>⚖️ Posibles Sanciones de la Jornada</h3>"
+        sanctions_html += "<p style='color: #4b5563; font-size: 14px;'><i>Las alineaciones han sido bloqueadas. Estas son las posibles sanciones por infracciones en tu alineación. Se te restarán puntos al finalizar la jornada.</i></p>"
+        sanctions_html += "<ul style='color: #7f1d1d;'>"
         grouped = {}
         for p in penalties:
             uid = p.get('user_id')
@@ -39,7 +41,7 @@ def send_matchday_start_emails(matchday):
             uname = user_names.get(uid, "Un usuario")
             sanctions_html += f"<li style='margin-bottom: 5px;'><strong>{uname}:</strong><ul>"
             for pen in user_penalties:
-                sanctions_html += f"<li>{pen.get('description')} (<strong>-{pen.get('points', 0)} pts</strong>)</li>"
+                sanctions_html += f"<li>{pen.get('description')} (<strong>se restarán los puntos al final de la jornada</strong>)</li>"
             sanctions_html += "</ul></li>"
         sanctions_html += "</ul>"
     else:

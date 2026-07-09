@@ -518,6 +518,5 @@ def main():
     run_matchday(sb, matchday)
     log("✅ Hecho")
 
-
 if __name__ == "__main__":
     main()
