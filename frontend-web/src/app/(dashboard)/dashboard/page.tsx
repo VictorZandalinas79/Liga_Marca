@@ -485,6 +485,9 @@ export default function DashboardPage() {
           .filter(tp => tp.matchday === prevMd)
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
           .map(tp => tp.player_id)
+        // Descartar IDs duplicados (filas repetidas en BD) para no inflar la
+        // lista de salientes y que un mismo jugador aparezca varias veces.
+        baseIds = [...new Set(baseIds)]
       }
       setBasePlayers(baseIds)
 
@@ -1007,39 +1010,56 @@ export default function DashboardPage() {
       return selectedPlayers.indexOf(a.id) - selectedPlayers.indexOf(b.id)
     })
 
-  // Mapa de cambios cross-session para evitar que varios jugadores entrantes se asignen al mismo saliente
-  const crossSessionChangesMap = useMemo(() => {
-    const map = new Map<string, string>()
-    if (basePlayers.length > 0) {
-      const incoming = selectedPlayers.filter(id => !basePlayers.includes(id))
-      const outgoing = basePlayers.filter(id => !selectedPlayers.includes(id))
-      
-      const inPlayers = incoming.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[]
-      const outPlayers = outgoing.map(id => players.find(p => p.id === id)).filter(Boolean) as Player[]
-      
-      const positions = ['GK', 'DEF', 'MID', 'FWD']
-      for (const pos of positions) {
-        const inPos = inPlayers.filter(p => getPositionCode(p.position) === pos)
-        const outPos = outPlayers.filter(p => getPositionCode(p.position) === pos)
-        
-        for (let i = 0; i < Math.min(inPos.length, outPos.length); i++) {
-          map.set(inPos[i].id, outPos[i].id)
+  // Mapa entrante -> jugador reemplazado (saliente).
+  // Cada saliente se asigna a UN SOLO entrante: así un mismo jugador sustituido
+  // (p.ej. Joaquín) no puede aparecer repetido en varias tarjetas, ni siquiera
+  // aunque el once base tenga IDs duplicados o hayamos hecho varios cambios.
+  const replacedPlayerByInId = useMemo(() => {
+    const result = new Map<string, Player>()
+    const usedOutIds = new Set<string>()
+
+    // 1) Cambios de ESTA sesión: cada entrante -> su saliente registrado.
+    for (const player of selectedPlayersData) {
+      const change = [...changeHistory].reverse().find(ch => ch.inId === player.id)
+      if (change && !usedOutIds.has(change.outId)) {
+        const out = players.find(p => p.id === change.outId)
+        if (out) {
+          result.set(player.id, out)
+          usedOutIds.add(change.outId)
         }
       }
     }
-    return map
-  }, [basePlayers, selectedPlayers, players])
+
+    // 2) Cambios cross-session (tras recargar): emparejar por posición,
+    //    sin reutilizar un saliente ya asignado.
+    if (basePlayers.length > 0) {
+      const baseUnique = [...new Set(basePlayers)]
+      const outgoingPlayers = baseUnique
+        .filter(id => !selectedPlayers.includes(id) && !usedOutIds.has(id))
+        .map(id => players.find(p => p.id === id))
+        .filter(Boolean) as Player[]
+
+      for (const pos of ['GK', 'DEF', 'MID', 'FWD']) {
+        const outPos = outgoingPlayers.filter(p => getPositionCode(p.position) === pos && !usedOutIds.has(p.id))
+        let oi = 0
+        for (const player of selectedPlayersData) {
+          if (oi >= outPos.length) break
+          if (result.has(player.id)) continue            // ya asignado en la sesión
+          if (basePlayers.includes(player.id)) continue  // no ha cambiado
+          if (getPositionCode(player.position) !== pos) continue
+          const out = outPos[oi++]
+          result.set(player.id, out)
+          usedOutIds.add(out.id)
+        }
+      }
+    }
+
+    return result
+  }, [selectedPlayersData, changeHistory, basePlayers, selectedPlayers, players])
 
   // Helper para buscar al jugador reemplazado (cambio)
-  const getReplacedPlayer = (inPlayerId: string): Player | undefined => {
-    const change = [...changeHistory].reverse().find(ch => ch.inId === inPlayerId)
-    if (change) return players.find(p => p.id === change.outId)
-    if (basePlayers.length > 0 && !basePlayers.includes(inPlayerId)) {
-      const originalId = crossSessionChangesMap.get(inPlayerId)
-      if (originalId) return players.find(p => p.id === originalId)
-    }
-    return undefined
-  }
+  const getReplacedPlayer = (inPlayerId: string): Player | undefined =>
+    replacedPlayerByInId.get(inPlayerId)
 
   // Calcular sanciones dinámicas para la visualización del campo
   const startersForSanctions = selectedPlayersData.map(p => ({
