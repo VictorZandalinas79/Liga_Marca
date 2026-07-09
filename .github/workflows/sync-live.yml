@@ -53,3 +53,11 @@ jobs:
           SYNC_FIXTURE_IDS: ${{ github.event.inputs.fixture_ids }}
           SYNC_MATCHDAY: ${{ github.event.inputs.matchday }}
         run: python ci/run_live_sync.py
+      - name: Comprobar si empieza una jornada y enviar sanciones
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: python "../5. check_inicio_jornada.py"
+
