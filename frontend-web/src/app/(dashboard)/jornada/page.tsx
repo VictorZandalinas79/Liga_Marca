@@ -899,7 +899,7 @@ export default function JornadaPage() {
 
       {/* Buscador tipo Ctrl+F */}
       {showEquipos && userTeams.length > 0 && (
-        <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm rounded-lg border border-slate-300 shadow-sm px-3 py-2 flex items-center gap-2">
+        <div className="sticky top-16 z-30 bg-white/95 backdrop-blur-sm rounded-lg border border-slate-300 shadow-md px-3 py-2 flex items-center gap-2">
           <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <input
             type="text"
@@ -1128,15 +1128,21 @@ export default function JornadaPage() {
                                 key={player.id}
                                 ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
                                 onClick={() => openPlayerStats(player.id, finalSanctionReason)}
-                                className={`flex items-center justify-between px-1 py-1 h-[52px] rounded-lg transition-colors gap-1 cursor-pointer ${
+                                className={`flex items-center justify-between px-1 py-1 h-[52px] rounded-lg transition-all gap-1 cursor-pointer ${
+                                  isActive
+                                    ? 'ring-2 ring-orange-500 ring-offset-1 shadow-md relative z-10 scale-[1.02]'
+                                    : isMatch
+                                    ? 'ring-2 ring-amber-400 ring-offset-1'
+                                    : ''
+                                } ${
                                   isPenalized
                                     ? 'bg-red-50 border border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-sm'
                                     : (player.hasSubstitutionWarning || player.hasMaxTeamWarning)
                                     ? 'bg-red-100/50 border border-red-400 text-red-900 hover:bg-red-100'
                                     : isActive
-                                    ? 'bg-orange-200 ring-1 ring-orange-400 hover:bg-orange-300'
+                                    ? 'bg-orange-200 hover:bg-orange-300'
                                     : isMatch
-                                    ? 'bg-yellow-100 ring-1 ring-yellow-300 hover:bg-yellow-200'
+                                    ? 'bg-yellow-100 hover:bg-yellow-200'
                                     : player.hasPlayed
                                     ? 'bg-slate-200 hover:bg-slate-300'
                                     : 'bg-slate-50 hover:bg-slate-100'
