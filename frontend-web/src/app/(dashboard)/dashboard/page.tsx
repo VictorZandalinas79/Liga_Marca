@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
+import { getStandings } from '@/lib/standings'
 interface Player {
   id: string
   first_name: string
@@ -144,6 +145,8 @@ export default function DashboardPage() {
   const [usersOnline, setUsersOnline] = useState<Array<{ id: string; full_name: string }>>([])
   const [onlineCount, setOnlineCount] = useState(0)
   const [showOnlineList, setShowOnlineList] = useState(false)
+  const [userRanks, setUserRanks] = useState<any>(null)
+  const [loadingRanks, setLoadingRanks] = useState(true)
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento } = useMatchdayLock()
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
@@ -754,6 +757,47 @@ export default function DashboardPage() {
       return () => clearInterval(interval)
     }
   }, [isRegistered, supabase])
+
+  useEffect(() => {
+    const fetchRanks = async () => {
+      if (!user?.id) return;
+      try {
+        const { standings } = await getStandings(supabase);
+        if (!standings || standings.length === 0) {
+          setLoadingRanks(false);
+          return;
+        }
+        
+        const getRank = (field: string, asc: boolean = false) => {
+          // Filtrar valores nulos o Infinity
+          const sorted = [...standings].sort((a: any, b: any) => {
+            const valA = a[field] ?? (asc ? Infinity : -Infinity);
+            const valB = b[field] ?? (asc ? Infinity : -Infinity);
+            return asc ? valA - valB : valB - valA;
+          });
+          const index = sorted.findIndex(s => s.user_id === user.id);
+          const value = index !== -1 ? sorted[index][field as keyof typeof sorted[0]] : null;
+          return { position: index + 1, total: sorted.length, value };
+        };
+
+        setUserRanks({
+          avg3: getRank('last_3_jornadas_avg'),
+          impact: getRank('change_impact_points'),
+          changes: getRank('total_changes'),
+          kamikaze: getRank('kamikaze_score', true),
+          appOpens: getRank('app_opens')
+        });
+      } catch (err) {
+        console.error('[RANKINGS] Error:', err);
+      } finally {
+        setLoadingRanks(false);
+      }
+    };
+    
+    if (isRegistered) {
+      fetchRanks();
+    }
+  }, [user?.id, isRegistered, supabase])
 
   const saveTeam = async () => {
     if (isUnlockWindowOpen) {
@@ -1443,7 +1487,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Estadísticas del equipo (al lado en PC, debajo en móvil) */}
+            {/* Estadísticas del equipo (Columna 2 en PC, debajo en móvil) */}
             <div className="w-full lg:w-64 shrink-0">
               <Card className="!bg-emerald-50 border-emerald-200">
                 <CardContent className="p-4">
@@ -1532,6 +1576,71 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tus Rankings (Columna 3 en PC, debajo en móvil) */}
+            <div className="w-full lg:w-64 shrink-0">
+              <Card className="!bg-indigo-50 border-indigo-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Trophy className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-sm font-bold text-indigo-900">Tus Rankings</h3>
+                  </div>
+                  {loadingRanks ? (
+                    <div className="text-center text-xs text-indigo-500 py-4">Cargando rankings...</div>
+                  ) : userRanks ? (
+                    <div className="space-y-2">
+                      <div className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase">Promedio (Últ. 3)</p>
+                          <p className="text-xs font-semibold text-slate-800">{Math.round(userRanks.avg3.value * 10) / 10} pts</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-indigo-600">#{userRanks.avg3.position}</p>
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase">Impacto Cambios</p>
+                          <p className="text-xs font-semibold text-slate-800">{userRanks.impact.value > 0 ? '+' : ''}{Math.round(userRanks.impact.value * 10) / 10} pts</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-indigo-600">#{userRanks.impact.position}</p>
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase">Cambios Totales</p>
+                          <p className="text-xs font-semibold text-slate-800">{userRanks.changes.value}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-indigo-600">#{userRanks.changes.position}</p>
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase">Premio Kamikaze</p>
+                          <p className="text-xs font-semibold text-slate-800">{userRanks.kamikaze.value === Infinity || userRanks.kamikaze.value === 999999 ? '-' : `${Math.round(userRanks.kamikaze.value)} min`}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-indigo-600">#{userRanks.kamikaze.position}</p>
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase">Adictos a la App</p>
+                          <p className="text-xs font-semibold text-slate-800">{userRanks.appOpens.value} accesos</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-indigo-600">#{userRanks.appOpens.position}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-xs text-indigo-500 py-4">Sin datos</div>
+                  )}
                 </CardContent>
               </Card>
             </div>

@@ -17,30 +17,48 @@
             max-width: 600px;
             margin: 20px auto;
             background-color: #ffffff;
-            border-radius: 8px;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
         }
         .header {
-            background-color: #1e3a8a;
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%);
             color: #ffffff;
-            padding: 20px;
+            padding: 35px 20px 25px;
             text-align: center;
+            border-bottom: 4px solid #f59e0b;
+        }
+        .header-logos {
+            margin-bottom: 20px;
+        }
+        .header-logos img {
+            height: 55px;
+            vertical-align: middle;
+            margin: 0 10px;
+            border-radius: 8px;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
         }
         .header h1 {
             margin: 0;
-            font-size: 24px;
+            font-size: 22px;
+            font-weight: 800;
             letter-spacing: 1px;
+            text-transform: uppercase;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .header h1 .highlight {
+            color: #f59e0b;
         }
         .content {
-            padding: 30px 20px;
+            padding: 35px 30px;
         }
         .footer {
             background-color: #f8fafc;
             color: #64748b;
             text-align: center;
-            padding: 15px;
-            font-size: 12px;
+            padding: 20px;
+            font-size: 13px;
             border-top: 1px solid #e2e8f0;
         }
         .button {
@@ -49,23 +67,29 @@
             color: #ffffff !important;
             text-decoration: none;
             padding: 12px 24px;
-            border-radius: 6px;
+            border-radius: 8px;
             font-weight: bold;
             margin-top: 20px;
             text-align: center;
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+            transition: background-color 0.2s;
         }
         .greeting {
-            font-size: 18px;
-            font-weight: bold;
+            font-size: 20px;
+            font-weight: 800;
             margin-bottom: 20px;
+            color: #1e293b;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <img src="cid:icono_lliga" alt="Icono Liga" style="height: 50px; vertical-align: middle; margin-right: 15px; border-radius: 8px;">
-            <img src="cid:liga" alt="Liga Marca Fantasy" style="height: 50px; vertical-align: middle;">
+            <div class="header-logos">
+                <img src="cid:icono_lliga" alt="Icono Liga">
+                <img src="cid:liga" alt="Liga Marca Fantasy">
+            </div>
+            <h1>LIGA FANTÁSTICA VILAFRANCA <span class="highlight">INFORMA</span></h1>
         </div>
         <div class="content">
             <div class="greeting">¡Hola {{name}}!</div>
