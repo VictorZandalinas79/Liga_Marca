@@ -50,7 +50,7 @@ export async function getStandings(supabase: any): Promise<{ standings: UserStan
         .select('id, full_name, email')
         .in('id', userIds)
 
-      const usersMap = new Map(usersData?.map(u => [u.id, u]) || [])
+      const usersMap = new Map<string, any>(usersData?.map((u: any) => [u.id, u]) || [])
 
       const teamIdToUserName = new Map<string, string>()
       for (const ut of userTeamsData) {
@@ -92,12 +92,12 @@ export async function getStandings(supabase: any): Promise<{ standings: UserStan
         .from('players')
         .select('id, position, team_id, precio, short_name, first_name')
         .in('id', playerIds)
-      const playersInfoMap = new Map(playersData?.map(p => [p.id, p]) || [])
+      const playersInfoMap = new Map<string, any>(playersData?.map((p: any) => [p.id, p]) || [])
 
       const { data: realTeams } = await supabase
         .from('real_teams')
         .select('id, name')
-      const realTeamNames = new Map(realTeams?.map(rt => [rt.id, rt.name]) || [])
+      const realTeamNames = new Map<string, string>(realTeams?.map((rt: any) => [rt.id, rt.name]) || [])
 
       // Obtener config de la liga desde Supabase
       const { data: configData } = await supabase.from('league_config').select('*').eq('id', 1).maybeSingle()
@@ -114,7 +114,7 @@ export async function getStandings(supabase: any): Promise<{ standings: UserStan
       const fixtureToMatchday = new Map<string, number>()
       const matchdayToDeadline = new Map<number, Date>()
 
-      fixturesData?.forEach(f => {
+      fixturesData?.forEach((f: any) => {
         if (f.id && f.matchday && f.matchday > 0) {
           fixtureToMatchday.set(f.id, f.matchday)
           if (f.start_time) {
@@ -246,7 +246,7 @@ export async function getStandings(supabase: any): Promise<{ standings: UserStan
           }))
 
           // Insertar en la base de datos (persistir la herencia)
-          supabase.from('team_players').insert(inheritedRows).then(({ error }) => {
+          supabase.from('team_players').insert(inheritedRows).then(({ error }: any) => {
             if (error) {
               // Ignorar errores de duplicados (por si otra pestaña ya lo insertó)
               console.log(`[CLASIFICACION] Auto-herencia J${playedMd} equipo ${teamId}:`, error.message)
