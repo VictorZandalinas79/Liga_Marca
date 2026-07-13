@@ -313,7 +313,7 @@ export default function DashboardPage() {
       while (true) {
         const { data: page, error } = await supabase
           .from('player_scores')
-          .select('player_id, matchday, total_points')
+          .select('player_id, matchday, total_points, created_at')
           .range(from, from + pageSize - 1)
         if (error || !page || page.length === 0) break
         allScores.push(...page)
@@ -321,7 +321,7 @@ export default function DashboardPage() {
         from += pageSize
       }
 
-      const stats = new Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>()
+      const stats = new Map<string, { total: number, avg: number, history: {md: number, pts: number, created_at?: string}[] }>()
       
       allScores.forEach(score => {
         if (!stats.has(score.player_id)) {
@@ -329,13 +329,25 @@ export default function DashboardPage() {
         }
         const s = stats.get(score.player_id)!
         s.total += (score.total_points || 0)
-        if (score.matchday) {
-          s.history.push({ md: score.matchday, pts: score.total_points || 0 })
-        }
+        s.history.push({ 
+          md: score.matchday || 0, 
+          pts: score.total_points || 0,
+          created_at: score.created_at
+        })
       })
 
       stats.forEach(s => {
-        s.history.sort((a, b) => a.md - b.md)
+        s.history.sort((a, b) => {
+          if (a.md && b.md) return a.md - b.md
+          if (a.created_at && b.created_at) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          return 0
+        })
+        
+        // Ensure md has a valid value for recharts x-axis if it was 0/null
+        s.history.forEach((h, i) => {
+          if (!h.md) h.md = i + 1
+        })
+        
         s.avg = s.history.length > 0 ? s.total / s.history.length : 0
       })
 
