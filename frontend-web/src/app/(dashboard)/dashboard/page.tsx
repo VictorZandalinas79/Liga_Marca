@@ -147,6 +147,7 @@ export default function DashboardPage() {
   const [showOnlineList, setShowOnlineList] = useState(false)
   const [userRanks, setUserRanks] = useState<any>(null)
   const [loadingRanks, setLoadingRanks] = useState(true)
+  const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>>(new Map())
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento } = useMatchdayLock()
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
@@ -303,6 +304,48 @@ export default function DashboardPage() {
       fetchHistory();
     }
   }, [userTeamId, activeMatchday, allPenalties, user?.id, supabase]);
+
+  useEffect(() => {
+    const fetchAllPlayerStats = async () => {
+      let allScores: any[] = []
+      const pageSize = 1000
+      let from = 0
+      while (true) {
+        const { data: page, error } = await supabase
+          .from('player_scores')
+          .select('player_id, matchday, total_points')
+          .range(from, from + pageSize - 1)
+        if (error || !page || page.length === 0) break
+        allScores.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+
+      const stats = new Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>()
+      
+      allScores.forEach(score => {
+        if (!stats.has(score.player_id)) {
+          stats.set(score.player_id, { total: 0, avg: 0, history: [] })
+        }
+        const s = stats.get(score.player_id)!
+        s.total += (score.total_points || 0)
+        if (score.matchday) {
+          s.history.push({ md: score.matchday, pts: score.total_points || 0 })
+        }
+      })
+
+      stats.forEach(s => {
+        s.history.sort((a, b) => a.md - b.md)
+        s.avg = s.history.length > 0 ? s.total / s.history.length : 0
+      })
+
+      setAllPlayerStats(stats)
+    }
+
+    if (isRegistered) {
+      fetchAllPlayerStats()
+    }
+  }, [isRegistered, supabase])
 
   const [showAllHistory, setShowAllHistory] = useState(false)
   const lockedTeamIds = new Set(lockedTeams.map(l => l.teamId))
@@ -2099,6 +2142,42 @@ export default function DashboardPage() {
                         <p className="text-lg font-bold text-emerald-600">
                           {player.precio ? `${player.precio}M` : '-'}
                         </p>
+                        {(() => {
+                          const stats = allPlayerStats.get(player.id)
+                          if (!stats) return null
+                          
+                          return (
+                            <div className="w-full mt-2 flex flex-col gap-2 bg-white rounded-lg p-2 border border-slate-100 shadow-sm">
+                              <div className="flex justify-between items-center text-xs">
+                                <div className="flex flex-col items-center flex-1 border-r border-slate-100">
+                                  <span className="text-slate-400 font-medium text-[10px] uppercase tracking-wider">Total</span>
+                                  <span className="font-black text-slate-800">{Math.round(stats.total * 10) / 10}</span>
+                                </div>
+                                <div className="flex flex-col items-center flex-1">
+                                  <span className="text-slate-400 font-medium text-[10px] uppercase tracking-wider">Media</span>
+                                  <span className="font-black text-slate-800">{Math.round(stats.avg * 10) / 10}</span>
+                                </div>
+                              </div>
+                              {stats.history.length > 0 && (
+                                <div className="h-8 w-full mt-1">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={stats.history}>
+                                      <YAxis domain={['dataMin', 'dataMax']} hide />
+                                      <Line 
+                                        type="monotone" 
+                                        dataKey="pts" 
+                                        stroke="#10b981" 
+                                        strokeWidth={2}
+                                        dot={false}
+                                        isAnimationActive={false}
+                                      />
+                                    </LineChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </div>
                     </div>
                     )
