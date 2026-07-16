@@ -8,7 +8,7 @@ import { useLockedTeams } from '@/lib/locked-teams'
 import { useLeagueConfig } from '@/lib/league-config'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { Card, CardContent } from '@/components/ui/card'
-import NotificationBadge from '@/components/NotificationBadge'
+
 
 function formatKamikazeTime(totalMinutes: number): string {
   if (totalMinutes === Infinity || totalMinutes === 999999) return '-'
