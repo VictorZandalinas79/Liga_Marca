@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Medal, Trophy, Star, ChevronDown, ChevronUp, Minus, Search, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, MousePointerClick, History, Target, Users, AlertTriangle, ArrowUpDown, CheckCircle } from 'lucide-react'
+import { Medal, Trophy, Star, ChevronDown, ChevronUp, Minus, Search, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, MousePointerClick, History, Target, Users, AlertTriangle, ArrowUpDown, CheckCircle, X } from 'lucide-react'
 
 function formatKamikazeTime(totalMinutes: number): string {
   if (totalMinutes === Infinity || totalMinutes === 999999) return '-'
@@ -58,6 +58,7 @@ export default function ClasificacionPage() {
   const [lastPlayedMatchday, setLastPlayedMatchday] = useState<number>(1)
   const [sortField, setSortField] = useState<SortField>('total_points')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+  const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   const [expandedUser, setExpandedUser] = useState<string | null>(null)
   const [userTeamData, setUserTeamData] = useState<Record<string, any>>({})
@@ -993,12 +994,12 @@ export default function ClasificacionPage() {
   const topOpens = [...standings].filter(u => (u.app_opens || 0) > 0).sort((a, b) => (b.app_opens || 0) - (a.app_opens || 0)).slice(0, 3)
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-3 max-w-5xl mx-auto">
       {/* Cabecera */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Clasificación General</h1>
-          <p className="text-slate-600 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900">Clasificación General</h1>
+          <p className="text-sm text-slate-600 mt-0">
             Ranking acumulado de todas las jornadas
           </p>
         </div>
@@ -1009,6 +1010,54 @@ export default function ClasificacionPage() {
           </span>
         </div>
       </div>
+      
+      {selectedRanking && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
+            <div className="p-4 bg-indigo-600 text-white flex justify-between items-center shrink-0">
+              <h2 className="font-bold text-lg">
+                {selectedRanking === 'avg3' && 'Mayor Promedio (Últ. 3)'}
+                {selectedRanking === 'impact' && 'Mejor Impacto Cambios'}
+                {selectedRanking === 'changes' && 'Más Cambios en Total'}
+                {selectedRanking === 'kamikaze' && 'Premio Kamikaze'}
+                {selectedRanking === 'appOpens' && 'Adictos a la App'}
+              </h2>
+              <button onClick={() => setSelectedRanking(null)} className="p-1 hover:bg-indigo-500 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto">
+              {(() => {
+                let list: any[] = [];
+                switch (selectedRanking) {
+                   case 'avg3': list = [...standings].filter(u => u.last_3_jornadas_avg > 0).sort((a, b) => b.last_3_jornadas_avg - a.last_3_jornadas_avg); break;
+                   case 'impact': list = [...standings].filter(u => u.change_impact_points !== 0).sort((a, b) => b.change_impact_points - a.change_impact_points); break;
+                   case 'changes': list = [...standings].filter(u => u.total_changes > 0).sort((a, b) => b.total_changes - a.total_changes); break;
+                   case 'kamikaze': list = [...standings].filter(u => u.kamikaze_score && u.kamikaze_score !== 999999).sort((a, b) => (a.kamikaze_score || Infinity) - (b.kamikaze_score || Infinity)); break;
+                   case 'appOpens': list = [...standings].filter(u => (u.app_opens || 0) > 0).sort((a, b) => (b.app_opens || 0) - (a.app_opens || 0)); break;
+                }
+                return list.map((u: any, i: number) => (
+                  <div key={u.user_id} className={`flex justify-between items-center py-3 border-b border-slate-100 last:border-0 ${u.user_id === currentUserId ? 'bg-indigo-50/50 -mx-4 px-4 font-bold' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-sm font-bold w-6 ${i === 0 ? 'text-amber-500' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-amber-700' : 'text-slate-500'}`}>
+                        {i + 1}
+                      </span>
+                      <span className="text-sm text-slate-700 uppercase">{u.user_name}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-indigo-600">
+                      {selectedRanking === 'avg3' && `${Math.round((u.last_3_jornadas_avg ?? 0) * 10) / 10} pts`}
+                      {selectedRanking === 'impact' && `${(u.change_impact_points ?? 0) > 0 ? '+' : ''}${Math.round((u.change_impact_points ?? 0) * 10) / 10} pts`}
+                      {selectedRanking === 'changes' && u.total_changes}
+                      {selectedRanking === 'kamikaze' && formatKamikazeTime(u.kamikaze_score ?? 0)}
+                      {selectedRanking === 'appOpens' && `${u.app_opens ?? 0} accesos`}
+                    </span>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {/* Tabla de clasificación */}
@@ -1018,10 +1067,10 @@ export default function ClasificacionPage() {
             <table className="min-w-max w-full">
               <thead>
                 <tr className="border-b border-slate-700">
-                  <th className="text-left text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap">Pos</th>
-                  <th className="text-left text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap">Jugador</th>
+                  <th className="text-left text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap">Pos</th>
+                  <th className="text-left text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap">Jugador</th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('total_points')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -1030,7 +1079,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('average_points')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -1039,7 +1088,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('last_3_jornadas_avg')}
                     title="Promedio de las últimas 3 jornadas"
                   >
@@ -1048,9 +1097,9 @@ export default function ClasificacionPage() {
                       <SortIcon field="last_3_jornadas_avg" />
                     </div>
                   </th>
-                  <th className="text-center text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap" title="Tendencia en las últimas 5 jornadas">Tendencia</th>
+                  <th className="text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap" title="Tendencia en las últimas 5 jornadas">Tendencia</th>
                   <th
-                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('sanctioned_matchdays')}
                     title="Jornadas con alguna sanción"
                   >
@@ -1060,7 +1109,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('change_impact_points')}
                     title="Puntos netos ganados o perdidos por cambios"
                   >
@@ -1070,7 +1119,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('podium_finishes')}
                     title="Veces entre los 3 primeros de una jornada"
                   >
@@ -1081,7 +1130,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1.5 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('bottom_finishes')}
                     title="Veces entre los 3 últimos de una jornada"
                   >
@@ -1107,76 +1156,61 @@ export default function ClasificacionPage() {
                     } cursor-pointer`}
                     onClick={() => handleUserClick(standing.user_id)}
                   >
-                    <td className="px-1 py-1.5">
+                    <td className="px-1 py-1">
                       {getPositionMedal(standing.current_position, isLast)}
                     </td>
-                    <td className="px-1 py-1.5">
+                    <td className="px-1 py-1">
                       <div className="min-w-0">
-                        <p className="font-semibold text-white text-xs whitespace-nowrap uppercase">{standing.user_name}</p>
+                        <p className="font-semibold text-white text-[11px] whitespace-nowrap uppercase">{standing.user_name}</p>
                         {standing.best_matchday_points > 0 && (
-                          <p className="text-xs text-amber-400 font-medium whitespace-nowrap">
+                          <p className="text-[10px] text-amber-400 font-medium whitespace-nowrap">
                             Mejor: {Math.round(standing.best_matchday_points * 10) / 10} pts (J{standing.best_matchday})
                           </p>
                         )}
                       </div>
                     </td>
-                    <td className="px-1 py-1.5 text-right whitespace-nowrap">
-                      <span className="text-base font-bold text-emerald-400">
+                    <td className="px-1 py-1 text-right whitespace-nowrap">
+                      <span className="text-sm font-bold text-emerald-400">
                         {Math.round(standing.total_points * 10) / 10}
                       </span>
-                      <span className="text-xs text-slate-400 ml-1">pts</span>
+                      <span className="text-[10px] text-slate-400 ml-0.5">pts</span>
                     </td>
-                    <td className="px-1 py-1.5 text-right whitespace-nowrap">
-                      <span className="text-sm font-semibold text-slate-200">
+                    <td className="px-1 py-1 text-right whitespace-nowrap">
+                      <span className="text-xs font-semibold text-slate-200">
                         {standing.average_points}
                       </span>
-                      <span className="text-xs text-slate-400 ml-1">pts/j</span>
+                      <span className="text-[10px] text-slate-400 ml-0.5">pts/j</span>
                     </td>
-                    <td className="px-1 py-1.5 text-right whitespace-nowrap">
-                      <span className="text-sm font-semibold text-blue-400">
+                    <td className="px-1 py-1 text-right whitespace-nowrap">
+                      <span className="text-xs font-semibold text-blue-400">
                         {Math.round(standing.last_3_jornadas_avg * 10) / 10}
                       </span>
                     </td>
-                    <td className="px-1 py-1.5">
+                    <td className="px-1 py-1">
                       <div className="flex justify-center">
                         {getTrendIcon(standing.last_5_trend)}
                       </div>
                     </td>
-                    <td className="px-1 py-1.5 text-center whitespace-nowrap">
+                    <td className="px-1 py-1 text-center whitespace-nowrap">
                       <span className={`text-sm font-bold ${
                         standing.sanctioned_matchdays > 0 ? 'text-red-400' : 'text-slate-400'
                       }`}>
                         {standing.sanctioned_matchdays}
                       </span>
                     </td>
-                    <td className="px-1 py-1.5 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1">
-                        <span className={`text-sm font-bold ${
-                          standing.change_impact_points > 0 ? 'text-emerald-400' :
-                          standing.change_impact_points < 0 ? 'text-red-400' : 'text-slate-400'
-                        }`}>
-                          {standing.change_impact_points > 0 ? `+${Math.round(standing.change_impact_points * 10) / 10}` : Math.round(standing.change_impact_points * 10) / 10} pts
+                    <td className="px-1 py-1 text-right whitespace-nowrap">
+                      <div className="flex flex-col items-end">
+                        <span className={`text-xs font-bold leading-none ${standing.change_impact_points > 0 ? 'text-emerald-400' : standing.change_impact_points < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                          {standing.change_impact_points > 0 ? '+' : ''}{Math.round(standing.change_impact_points * 10) / 10}
                         </span>
-                      </div>
-                      <p className="text-xs text-slate-400 whitespace-nowrap">
-                        {standing.total_changes} cambios
-                      </p>
-                    </td>
-                    <td className="px-1 py-1.5 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-1">
-                        <Trophy className="w-3 h-3 text-yellow-500 shrink-0" />
-                        <span className="text-sm font-bold text-yellow-400">
-                          {standing.podium_finishes}
-                        </span>
+                        <span className="text-[9px] text-slate-500">{standing.total_changes} cambios</span>
                       </div>
                     </td>
-                    <td className="px-1 py-1.5 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-1">
-                        <TrendingDown className="w-3 h-3 text-red-500 shrink-0" />
-                        <span className="text-sm font-bold text-red-400">
-                          {standing.bottom_finishes}
-                        </span>
-                      </div>
+                    <td className="px-1 py-1 text-center whitespace-nowrap">
+                      <span className="text-[11px] font-bold text-yellow-500">{standing.podium_finishes}</span>
+                    </td>
+                    <td className="px-1 py-1 text-center whitespace-nowrap">
+                      <span className="text-[11px] font-bold text-red-500">{standing.bottom_finishes}</span>
                     </td>
                   </tr>
                   {/* Equipo desplegable */}
@@ -1321,7 +1355,7 @@ export default function ClasificacionPage() {
       {(topEvolution.length > 0 || topChanges.length > 0 || topTotalChanges.length > 0 || topKamikaze.length > 0 || topOpens.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {topEvolution.length > 0 && (
-            <Card className="!bg-emerald-50 border-emerald-200">
+            <Card className="!bg-emerald-50 border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors" onClick={() => setSelectedRanking('avg3')}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center shrink-0 mt-1">
@@ -1344,7 +1378,7 @@ export default function ClasificacionPage() {
           )}
 
           {topChanges.length > 0 && (
-            <Card className="!bg-blue-50 border-blue-200">
+            <Card className="!bg-blue-50 border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors" onClick={() => setSelectedRanking('impact')}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-1">
@@ -1367,7 +1401,7 @@ export default function ClasificacionPage() {
           )}
 
           {topTotalChanges.length > 0 && (
-            <Card className="!bg-purple-50 border-purple-200">
+            <Card className="!bg-purple-50 border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors" onClick={() => setSelectedRanking('changes')}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center shrink-0 mt-1">
@@ -1390,7 +1424,7 @@ export default function ClasificacionPage() {
           )}
 
           {topKamikaze.length > 0 && (
-            <Card className="!bg-rose-50 border-rose-200">
+            <Card className="!bg-rose-50 border-rose-200 cursor-pointer hover:bg-rose-100 transition-colors" onClick={() => setSelectedRanking('kamikaze')}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-rose-600 flex items-center justify-center shrink-0 mt-1">
@@ -1413,7 +1447,7 @@ export default function ClasificacionPage() {
           )}
 
           {topOpens.length > 0 && (
-            <Card className="!bg-indigo-50 border-indigo-200">
+            <Card className="!bg-indigo-50 border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors" onClick={() => setSelectedRanking('appOpens')}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-1">
