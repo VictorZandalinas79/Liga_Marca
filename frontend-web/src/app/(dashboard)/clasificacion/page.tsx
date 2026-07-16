@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Medal, Trophy, Star, ChevronDown, ChevronUp, Minus, Search, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, MousePointerClick, History, Target, Users, AlertTriangle } from 'lucide-react'
+import { Medal, Trophy, Star, ChevronDown, ChevronUp, Minus, Search, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, MousePointerClick, History, Target, Users, AlertTriangle, ArrowUpDown, CheckCircle } from 'lucide-react'
 
 function formatKamikazeTime(totalMinutes: number): string {
   if (totalMinutes === Infinity || totalMinutes === 999999) return '-'
