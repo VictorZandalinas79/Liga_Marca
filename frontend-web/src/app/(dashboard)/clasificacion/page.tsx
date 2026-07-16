@@ -1376,6 +1376,7 @@ export default function ClasificacionPage() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           )}
 
           {topChanges.length > 0 && (
@@ -1400,6 +1401,7 @@ export default function ClasificacionPage() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           )}
 
           {topTotalChanges.length > 0 && (
@@ -1424,6 +1426,7 @@ export default function ClasificacionPage() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           )}
 
           {topKamikaze.length > 0 && (
@@ -1448,6 +1451,7 @@ export default function ClasificacionPage() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           )}
 
           {topOpens.length > 0 && (
@@ -1472,6 +1476,7 @@ export default function ClasificacionPage() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           )}
         </div>
       )}
