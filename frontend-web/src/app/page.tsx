@@ -94,6 +94,15 @@ export default function Home() {
                 placeholder="••••••••"
                 required
               />
+              <div className="flex justify-end mt-1">
+                <button
+                  type="button"
+                  onClick={() => router.push('/recuperar')}
+                  className="text-sm text-emerald-600 hover:text-emerald-700 hover:underline"
+                >
+                  ¿Has olvidado tu contraseña?
+                </button>
+              </div>
             </div>
 
             {error && (
