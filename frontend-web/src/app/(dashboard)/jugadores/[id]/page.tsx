@@ -36,6 +36,13 @@ interface PlayerScore {
   is_starter: boolean
   position: string
   relevo_points: number
+  relevo_participation_pts?: number
+  relevo_passes_pts?: number
+  relevo_opp_half_pts?: number
+  relevo_shots_pts?: number
+  relevo_duels_pts?: number
+  relevo_aerials_pts?: number
+  relevo_takeons_pts?: number
 
   // Goles
   goals: number
@@ -640,7 +647,7 @@ export default function JugadorDetallePage() {
     const b7: ScoreRow[] = []
     if (score.passes_completed > 0) b7.push(u(score.passes_completed, SR.per_unit.passes_completed, 'Pases completados'))
     if (g('forward_passes') > 0) b7.push(u(g('forward_passes'), SR.per_unit.forward_passes, 'Pases hacia adelante'))
-    if (g('box_entries') > 0) b7.push(u(g('box_entries'), SR.per_unit.box_entries, 'Entradas al área'))
+    if (g('box_entries') > 0) b7.push(u(g('box_entries'), SR.per_unit.box_entries, 'Pases al área exitosos'))
     if (g('successful_crosses') > 0) b7.push(u(g('successful_crosses'), SR.per_unit.successful_crosses, 'Centros exitosos'))
     if (g('set_pieces_taken') > 0) b7.push(u(g('set_pieces_taken'), SR.per_unit.set_pieces_taken, 'Balón parado'))
     if (score.takeons_won > 0) b7.push(u(score.takeons_won, SR.per_unit.takeons_won, 'Regates ganados'))
@@ -662,13 +669,29 @@ export default function JugadorDetallePage() {
     // BLOQUE 9: Puntos RELEVO
     const b9: ScoreRow[] = []
     if (score.relevo_points) {
-      const takeonTotal = g('takeons_won') + g('takeons_lost')
-      const takeonBonus = takeonTotal > 0 && (g('takeons_won') / takeonTotal) > 0.5 ? 1 : 0
-      const baseRelevo = score.relevo_points - takeonBonus
-      if (baseRelevo > 0) b9.push({ label: 'Bonus RELEVO (participación, pases, duelos, tiros)', count: 0, unit: 0, points: baseRelevo, flat: true })
-      if (takeonBonus > 0) {
-        const takeonAcc = Math.round((g('takeons_won') / takeonTotal) * 100)
-        b9.push({ label: `Regates ${takeonAcc}% éxito (${g('takeons_won')}/${takeonTotal})`, count: 0, unit: 0, points: 1, flat: true })
+      if ('relevo_participation_pts' in score && score.relevo_participation_pts !== undefined && score.relevo_participation_pts !== null) {
+        // Nueva versión explícita
+        const addRelevoRow = (label: string, val: number | undefined) => {
+          const v = Number(val) || 0
+          if (v !== 0) b9.push({ label, count: 0, unit: 0, points: v, flat: true })
+        }
+        addRelevoRow('Participación', score.relevo_participation_pts)
+        addRelevoRow('Precisión de pase', score.relevo_passes_pts)
+        addRelevoRow('Pases campo rival', score.relevo_opp_half_pts)
+        addRelevoRow('Eficacia tiro', score.relevo_shots_pts)
+        addRelevoRow('Duelos terrestres', score.relevo_duels_pts)
+        addRelevoRow('Duelos aéreos', score.relevo_aerials_pts)
+        addRelevoRow('Regates completados', score.relevo_takeons_pts)
+      } else {
+        // Versión antigua agrupada
+        const takeonTotal = g('takeons_won') + g('takeons_lost')
+        const takeonBonus = takeonTotal > 0 && (g('takeons_won') / takeonTotal) > 0.5 ? 1 : 0
+        const baseRelevo = score.relevo_points - takeonBonus
+        if (baseRelevo > 0) b9.push({ label: 'Bonus RELEVO (participación, pases, duelos, tiros)', count: 0, unit: 0, points: baseRelevo, flat: true })
+        if (takeonBonus > 0) {
+          const takeonAcc = Math.round((g('takeons_won') / takeonTotal) * 100)
+          b9.push({ label: `Regates ${takeonAcc}% éxito (${g('takeons_won')}/${takeonTotal})`, count: 0, unit: 0, points: 1, flat: true })
+        }
       }
     }
 

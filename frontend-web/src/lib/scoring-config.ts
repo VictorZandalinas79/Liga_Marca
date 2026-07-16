@@ -57,7 +57,7 @@ export const BONUS_LABELS: Record<string, string> = {
   forward_passes: 'Pase hacia adelante',
   shots_on_target: 'Tiro a puerta',
   takeons_won: 'Regate completado',
-  box_entries: 'Pase al área',
+  box_entries: 'Pases al área exitosos',
   recoveries_high: 'Recuperación (campo rival)',
   recoveries_med: 'Recuperación (centro)',
   recoveries_low: 'Recuperación (campo propio)',
@@ -131,6 +131,26 @@ export interface ScoringRates {
     long_balls_completed: number
   }
   lost_balls: Record<Position, number>
+  relevo_rules: {
+    participation_step_percent: number
+    participation_points_per_step: number
+    min_passes: number
+    pass_accuracy_high: number
+    pass_accuracy_excel: number
+    pass_accuracy_low: number
+    min_opp_half_passes: number
+    opp_half_accuracy_high: number
+    min_shots: number
+    shot_accuracy_high: number
+    min_duels: number
+    duels_step_percent: number
+    duels_points_per_step: number
+    duels_won_high: number
+    duels_won_low: number
+    min_aerials: number
+    aerials_won_high: number
+    aerials_won_low: number
+  }
 }
 
 // Valores por defecto (espejo de scoring_rules.json) usados como fallback.
@@ -158,6 +178,26 @@ export const DEFAULT_RATES: ScoringRates = {
     long_balls_completed: 0.5,
   },
   lost_balls: { POR: -0.1, DEF: -0.1, MED: -0.1, DEL: -0.1 },
+  relevo_rules: {
+    participation_step_percent: 10,
+    participation_points_per_step: 1,
+    min_passes: 10,
+    pass_accuracy_high: 85,
+    pass_accuracy_excel: 92,
+    pass_accuracy_low: 65,
+    min_opp_half_passes: 10,
+    opp_half_accuracy_high: 75,
+    min_shots: 2,
+    shot_accuracy_high: 50,
+    min_duels: 5,
+    duels_step_percent: 10,
+    duels_points_per_step: 0.2,
+    duels_won_high: 60,
+    duels_won_low: 30,
+    min_aerials: 3,
+    aerials_won_high: 60,
+    aerials_won_low: 30
+  }
 }
 
 // Lee un valor de evento por posición (cae a 'all' y luego al fallback).
@@ -245,6 +285,7 @@ export function resolveRates(rules: ScoringRules | null): ScoringRates {
       MED: lostBallVal(rules, 'MED', d.lost_balls.MED),
       DEL: lostBallVal(rules, 'DEL', d.lost_balls.DEL),
     },
+    relevo_rules: (rules.relevo_rules as ScoringRates['relevo_rules']) ?? d.relevo_rules,
   }
 }
 

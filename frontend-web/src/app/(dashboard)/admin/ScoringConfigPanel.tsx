@@ -65,6 +65,17 @@ export function ScoringConfigPanel() {
     })
   }
 
+  const setRelevoValue = (key: string, raw: string) => {
+    const value = raw === '' || raw === '-' ? 0 : Number(raw)
+    setRules((r) => {
+      if (!r) return r
+      const next = JSON.parse(JSON.stringify(r)) as ScoringRules
+      const relevoRules = (next.relevo_rules ??= {}) as Record<string, unknown>
+      relevoRules[key] = value
+      return next
+    })
+  }
+
   const setPenaltyValue = (group: string, pos: string, raw: string) => {
     const value = raw === '' || raw === '-' ? 0 : Number(raw)
     setRules((r) => {
@@ -92,6 +103,7 @@ export function ScoringConfigPanel() {
           events: rules.events,
           bonuses_per_X: rules.bonuses_per_X,
           penalties_per_X: rules.penalties_per_X,
+          relevo_rules: rules.relevo_rules,
         }),
       })
       if (!res.ok) {
@@ -112,6 +124,7 @@ export function ScoringConfigPanel() {
   const events = (rules?.events ?? {}) as Record<string, Record<string, unknown>>
   const bonuses = (rules?.bonuses_per_X ?? {}) as Record<string, Record<string, unknown>>
   const lostBalls = ((rules?.penalties_per_X as Record<string, unknown>)?.lost_balls ?? {}) as Record<string, Record<string, unknown>>
+  const relevo = (rules?.relevo_rules ?? {}) as Record<string, unknown>
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-6">
@@ -187,7 +200,7 @@ export function ScoringConfigPanel() {
           <section className="space-y-3">
             <p className="text-sm font-semibold text-slate-700">Bonus por métrica (puntos por unidad)</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {Object.keys(bonuses).map((key) => (
+              {Object.keys(BONUS_LABELS).map((key) => (
                 <LabeledInput
                   key={key}
                   label={BONUS_LABELS[key] ?? key}
@@ -212,6 +225,24 @@ export function ScoringConfigPanel() {
                   step="0.05"
                 />
               ))}
+            </div>
+          </section>
+
+          {/* RELEVO Rules */}
+          <section className="space-y-3">
+            <p className="text-sm font-semibold text-slate-700">Reglas Puntos RELEVO (Algoritmo)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 bg-violet-50 p-4 rounded-xl border border-violet-100">
+              <LabeledInput label="Duelos % cada paso" value={Number(relevo.duels_step_percent ?? 10)} onChange={(v) => setRelevoValue('duels_step_percent', v)} step="1" />
+              <LabeledInput label="Duelos ptos por paso" value={Number(relevo.duels_points_per_step ?? 0.2)} onChange={(v) => setRelevoValue('duels_points_per_step', v)} step="0.1" />
+              
+              <LabeledInput label="Participación % paso" value={Number(relevo.participation_step_percent ?? 10)} onChange={(v) => setRelevoValue('participation_step_percent', v)} step="1" />
+              <LabeledInput label="Participación ptos por paso" value={Number(relevo.participation_points_per_step ?? 1)} onChange={(v) => setRelevoValue('participation_points_per_step', v)} step="1" />
+              
+              <LabeledInput label="Pases mín int." value={Number(relevo.min_passes ?? 10)} onChange={(v) => setRelevoValue('min_passes', v)} step="1" />
+              <LabeledInput label="Pases % Excel (>X)" value={Number(relevo.pass_accuracy_excel ?? 92)} onChange={(v) => setRelevoValue('pass_accuracy_excel', v)} step="1" />
+              
+              <LabeledInput label="Pases C. Rival mín int." value={Number(relevo.min_opp_half_passes ?? 10)} onChange={(v) => setRelevoValue('min_opp_half_passes', v)} step="1" />
+              <LabeledInput label="Pases C. Rival % Alto (>X)" value={Number(relevo.opp_half_accuracy_high ?? 75)} onChange={(v) => setRelevoValue('opp_half_accuracy_high', v)} step="1" />
             </div>
           </section>
 

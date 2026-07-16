@@ -416,35 +416,53 @@ class MatchEventDownloader:
         team_events = max(1, self.team_total_events.get(team_id, 1))
         player_events = stats.get('total_events', 0)
         
-        relevo = 0
+        relevo = 0.0
+        breakdown = {
+            'relevo_participation_pts': 0.0,
+            'relevo_passes_pts': 0.0,
+            'relevo_opp_half_pts': 0.0,
+            'relevo_shots_pts': 0.0,
+            'relevo_duels_pts': 0.0,
+            'relevo_aerials_pts': 0.0,
+            'relevo_takeons_pts': 0.0
+        }
         
         # 1. PARTICIPACIÓN (% de eventos del equipo)
         pct_participacion = (player_events / team_events) * 100
-        step = rules.get('participation_step_percent', 5)
-        relevo += int(pct_participacion // step) * rules.get('participation_points_per_step', 1)
+        step = rules.get('participation_step_percent', 10)
+        p_pts = int(pct_participacion // step) * rules.get('participation_points_per_step', 1)
+        breakdown['relevo_participation_pts'] = float(p_pts)
+        relevo += p_pts
         
         # 2. PASES (% de acierto global)
         passes_att = stats.get('passes_attempted', 0)
         if passes_att >= rules.get('min_passes', 10):
             pass_acc = (stats.get('passes_completed', 0) / passes_att) * 100
-            if pass_acc >= rules.get('pass_accuracy_excel', 92): relevo += 2
-            elif pass_acc >= rules.get('pass_accuracy_high', 85): relevo += 1
-            elif pass_acc < rules.get('pass_accuracy_low', 65): relevo -= 1
+            pts = 0
+            if pass_acc >= rules.get('pass_accuracy_excel', 92): pts = 2
+            elif pass_acc >= rules.get('pass_accuracy_high', 85): pts = 1
+            elif pass_acc < rules.get('pass_accuracy_low', 65): pts = -1
+            breakdown['relevo_passes_pts'] = float(pts)
+            relevo += pts
             
         # 3. PASES CAMPO RIVAL (% de acierto)
         opp_att = stats.get('pass_opp_half_attempted', 0)
         if opp_att >= rules.get('min_opp_half_passes', 10):
             opp_acc = (stats.get('pass_opp_half_completed', 0) / opp_att) * 100
-            if opp_acc >= rules.get('opp_half_accuracy_high', 75): relevo += 1
+            if opp_acc >= rules.get('opp_half_accuracy_high', 75):
+                breakdown['relevo_opp_half_pts'] = 1.0
+                relevo += 1
             
         # 4. TIROS (% a puerta)
         total_shots = stats.get('shots_total', 0)
         if total_shots >= rules.get('min_shots', 2):
-            # Goles + tiros a puerta sobre total de tiros
             on_target_total = stats.get('shots_on_target', 0) + stats.get('goals', 0)
             shot_acc = (on_target_total / total_shots) * 100
-            if shot_acc >= rules.get('shot_accuracy_high', 50): relevo += 1
-            elif shot_acc == 0: relevo -= 1
+            pts = 0
+            if shot_acc >= rules.get('shot_accuracy_high', 50): pts = 1
+            elif shot_acc == 0: pts = -1
+            breakdown['relevo_shots_pts'] = float(pts)
+            relevo += pts
             
         # 5. DUELOS (Ganados vs Perdidos)
         duels_won = stats.get('tackles_won', 0) + stats.get('takeons_won', 0) + stats.get('fouls_won', 0)
@@ -452,25 +470,32 @@ class MatchEventDownloader:
         total_duels = duels_won + duels_lost
         if total_duels >= rules.get('min_duels', 5):
             duel_acc = (duels_won / total_duels) * 100
-            if duel_acc >= rules.get('duels_won_high', 60): relevo += 1
-            elif duel_acc < rules.get('duels_won_low', 30): relevo -= 1
+            d_step = rules.get('duels_step_percent', 10)
+            d_pts_per_step = rules.get('duels_points_per_step', 0.2)
+            pts = float(int(duel_acc // d_step) * d_pts_per_step)
+            breakdown['relevo_duels_pts'] = pts
+            relevo += pts
             
         # 6. DUELOS AÉREOS
         aerials_total = stats.get('aerials_won', 0) + stats.get('aerials_lost', 0)
         if aerials_total >= rules.get('min_aerials', 3):
             aer_acc = (stats.get('aerials_won', 0) / aerials_total) * 100
-            if aer_acc >= rules.get('aerials_won_high', 60): relevo += 1
-            elif aer_acc < rules.get('aerials_won_low', 30): relevo -= 1
+            pts = 0
+            if aer_acc >= rules.get('aerials_won_high', 60): pts = 1
+            elif aer_acc < rules.get('aerials_won_low', 30): pts = -1
+            breakdown['relevo_aerials_pts'] = float(pts)
+            relevo += pts
 
         # 7. REGATES INTENTADOS (>50% de éxito)
         takeons_won = stats.get('takeons_won', 0)
         takeons_lost = stats.get('takeons_lost', 0)
         takeons_total = takeons_won + takeons_lost
         if takeons_total > 0 and (takeons_won / takeons_total) > 0.5:
+            breakdown['relevo_takeons_pts'] = 1.0
             relevo += 1
 
-        # GARANTIZAR LÍMITE (De 0 a 4 Puntos)
-        return max(0, min(4, relevo))
+        breakdown['total'] = max(0.0, relevo) # Podemos quitar el max(4) si queremos que escale o dejarlo. Mejor dejar max(0) mínimo.
+        return breakdown
 
     def recalculate_player_points(self, player_id, current_min):
         """Motor que calcula los puntos totales del jugador en tiempo real usando las reglas del JSON."""
@@ -601,9 +626,11 @@ class MatchEventDownloader:
         # ============================================
         # === APLICAR PUNTOS RELEVO AL TOTAL ===
         # ============================================
-        relevo_points = self.calculate_relevo_points(player_id)
+        relevo_breakdown = self.calculate_relevo_points(player_id)
+        relevo_points = relevo_breakdown['total']
         # Guardamos en stats para subirlo opcionalmente a base de datos
         self.stats[player_id]['relevo_points'] = relevo_points 
+        self.stats[player_id].update(relevo_breakdown)
         
         # Sumar los puntos Relevo al total
         points += relevo_points
@@ -1166,6 +1193,13 @@ class MatchEventDownloader:
                 
                 # RELEVO Points
                 'relevo_points': stats.get('relevo_points', 0),
+                'relevo_participation_pts': stats.get('relevo_participation_pts', 0.0),
+                'relevo_passes_pts': stats.get('relevo_passes_pts', 0.0),
+                'relevo_opp_half_pts': stats.get('relevo_opp_half_pts', 0.0),
+                'relevo_shots_pts': stats.get('relevo_shots_pts', 0.0),
+                'relevo_duels_pts': stats.get('relevo_duels_pts', 0.0),
+                'relevo_aerials_pts': stats.get('relevo_aerials_pts', 0.0),
+                'relevo_takeons_pts': stats.get('relevo_takeons_pts', 0.0),
             }
 
             try:

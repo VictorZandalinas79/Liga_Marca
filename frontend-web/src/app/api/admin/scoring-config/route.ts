@@ -98,6 +98,19 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  // --- relevo_rules ---
+  if (body.relevo_rules && typeof body.relevo_rules === 'object') {
+    const relevoRules = (rules.relevo_rules ??= {}) as Record<string, unknown>
+    for (const [key, val] of Object.entries(body.relevo_rules as Record<string, unknown>)) {
+      if (val === undefined) continue
+      if (!isNum(val)) {
+        return NextResponse.json({ error: `Valor inválido en relevo_rules.${key}` }, { status: 400 })
+      }
+      relevoRules[key] = val
+      changed = true
+    }
+  }
+
   if (!changed) {
     return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 })
   }

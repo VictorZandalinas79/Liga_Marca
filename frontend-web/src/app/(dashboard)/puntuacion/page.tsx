@@ -186,7 +186,7 @@ export default function PuntuacionPage() {
             { accion: 'Paradas del portero', detalle: 'por cada 2 paradas', pts: '+1' },
             { accion: 'Remates a puerta', detalle: 'por cada 2 remates a portería', pts: '+1' },
             { accion: 'Regates completados', detalle: 'por cada 2 regates con éxito', pts: '+1' },
-            { accion: 'Llegadas al área', detalle: 'por cada 2 pases completados en el área rival', pts: '+1' },
+            { accion: 'Pases al área exitosos', detalle: 'por cada 2 pases completados en el área rival', pts: '+1' },
             { accion: 'Balones recuperados', detalle: 'por cada 5 recuperaciones', pts: '+1' },
             { accion: 'Despejes', detalle: 'por cada 3 despejes', pts: '+1' },
             { accion: 'Pases completados', detalle: 'por cada 10 pases con éxito', pts: '+1' },
