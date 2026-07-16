@@ -797,12 +797,12 @@ export default function JornadaPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-screen-2xl mx-auto w-full pb-4">
+    <div className="flex flex-col gap-3 max-w-screen-2xl mx-auto w-full pb-4">
       {/* Cabecera con selector de jornada por flechas */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Jornada</h1>
-          <p className="text-slate-600 mt-1 text-sm sm:text-base">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Jornada</h1>
+          <p className="text-slate-600 mt-1 text-xs sm:text-sm">
             Equipos, puntos y valor de cada usuario por jornada
           </p>
         </div>
@@ -846,13 +846,13 @@ export default function JornadaPage() {
       {/* Botón para desplegar/ocultar las sanciones */}
       <button
         onClick={() => setShowSanciones(v => !v)}
-        className="flex items-center justify-between w-full px-4 py-3 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors mt-4"
+        className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors mt-2 text-sm"
       >
         <span className="flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 text-red-400" />
+          <AlertTriangle className="w-4 h-4 text-red-400" />
           Sanciones {matchdayInfractions.length > 0 ? `(${matchdayInfractions.length})` : ''}
         </span>
-        {showSanciones ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+        {showSanciones ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
 
       {/* Sanciones de la Jornada */}
@@ -888,13 +888,13 @@ export default function JornadaPage() {
       {/* Botón para desplegar/ocultar los equipos */}
       <button
         onClick={() => setShowEquipos(v => !v)}
-        className="flex items-center justify-between w-full px-4 py-3 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors mt-4"
+        className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors mt-2 text-sm"
       >
         <span className="flex items-center gap-2">
-          <Users className="w-5 h-5 text-emerald-400" />
+          <Users className="w-4 h-4 text-emerald-400" />
           Equipos
         </span>
-        {showEquipos ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+        {showEquipos ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
 
       {/* Buscador tipo Ctrl+F */}
@@ -956,23 +956,23 @@ export default function JornadaPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700">
-                    <th className="text-left py-1.5 px-2 text-xs sm:text-sm font-semibold text-slate-300">Pos</th>
-                    <th className="text-left py-1.5 px-2 text-xs sm:text-sm font-semibold text-slate-300">Equipo</th>
+                    <th className="text-left py-1 px-1 text-xs sm:text-sm font-semibold text-slate-300">Pos</th>
+                    <th className="text-left py-1 px-1 text-xs sm:text-sm font-semibold text-slate-300">Equipo</th>
                     <th
                       onClick={() => setSortBy('valor')}
-                      className={`text-right py-1.5 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'valor' ? 'text-emerald-400' : 'text-slate-300'}`}
+                      className={`text-right py-1 px-1 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'valor' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Valor
                     </th>
                     <th
                       onClick={() => setSortBy('puntos')}
-                      className={`text-right py-1.5 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'puntos' ? 'text-emerald-400' : 'text-slate-300'}`}
+                      className={`text-right py-1 px-1 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'puntos' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Pts
                     </th>
                     <th
                       onClick={() => setSortBy('promedio')}
-                      className={`text-right py-1.5 px-2 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}
+                      className={`text-right py-1 px-1 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Prom
                     </th>
@@ -996,29 +996,29 @@ export default function JornadaPage() {
                         teamRefs.current[team.team_id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                       }}
                     >
-                      <td className="py-1.5 px-2">
+                      <td className="py-1 px-1">
                         {getPositionMedal(pos, isLast)}
                       </td>
-                      <td className="py-1.5 px-2 max-w-[120px] sm:max-w-none">
-                        <span className="font-semibold text-white text-xs uppercase">{team.team_name}</span>
-                        <span className="block text-xs text-slate-400">
+                      <td className="py-1 px-1 max-w-[120px] sm:max-w-none">
+                        <span className="font-semibold text-white text-[11px] uppercase">{team.team_name}</span>
+                        <span className="block text-[10px] text-slate-400">
                           {jugaron} / {total} jugaron
                         </span>
                       </td>
-                      <td className="py-1.5 px-2 text-right">
-                        <span className="text-xs sm:text-sm font-semibold text-slate-200">{fmtValor(team.valor_total)}</span>
+                      <td className="py-1 px-1 text-right">
+                        <span className="text-[11px] sm:text-xs font-semibold text-slate-200">{fmtValor(team.valor_total)}</span>
                       </td>
-                      <td className="py-1.5 px-2 text-right whitespace-nowrap">
-                        <span className="text-base font-bold text-emerald-400">
+                      <td className="py-1 px-1 text-right whitespace-nowrap">
+                        <span className="text-sm font-bold text-emerald-400">
                           {Math.round(team.puntos_totales * 10) / 10}
                         </span>
-                        <span className="text-xs text-slate-400 ml-1">pts</span>
+                        <span className="text-[10px] text-slate-400 ml-0.5">pts</span>
                       </td>
-                      <td className="py-1.5 px-2 text-right whitespace-nowrap">
-                        <span className="text-sm font-semibold text-slate-200">
+                      <td className="py-1 px-1 text-right whitespace-nowrap">
+                        <span className="text-xs font-semibold text-slate-200">
                           {jugaron > 0 ? Math.round(promedio * 10) / 10 : '—'}
                         </span>
-                        <span className="text-xs text-slate-400 ml-1">pts/j</span>
+                        <span className="text-[10px] text-slate-400 ml-0.5">pts/j</span>
                       </td>
                     </tr>
                   )
