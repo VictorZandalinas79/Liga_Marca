@@ -1355,7 +1355,8 @@ export default function ClasificacionPage() {
       {(topEvolution.length > 0 || topChanges.length > 0 || topTotalChanges.length > 0 || topKamikaze.length > 0 || topOpens.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {topEvolution.length > 0 && (
-            <Card className="!bg-emerald-50 border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors" onClick={() => setSelectedRanking('avg3')}>
+            <div onClick={() => setSelectedRanking('avg3')}>
+              <Card className="!bg-emerald-50 border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center shrink-0 mt-1">
@@ -1378,7 +1379,8 @@ export default function ClasificacionPage() {
           )}
 
           {topChanges.length > 0 && (
-            <Card className="!bg-blue-50 border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors" onClick={() => setSelectedRanking('impact')}>
+            <div onClick={() => setSelectedRanking('impact')}>
+              <Card className="!bg-blue-50 border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-1">
@@ -1401,7 +1403,8 @@ export default function ClasificacionPage() {
           )}
 
           {topTotalChanges.length > 0 && (
-            <Card className="!bg-purple-50 border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors" onClick={() => setSelectedRanking('changes')}>
+            <div onClick={() => setSelectedRanking('changes')}>
+              <Card className="!bg-purple-50 border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center shrink-0 mt-1">
@@ -1424,7 +1427,8 @@ export default function ClasificacionPage() {
           )}
 
           {topKamikaze.length > 0 && (
-            <Card className="!bg-rose-50 border-rose-200 cursor-pointer hover:bg-rose-100 transition-colors" onClick={() => setSelectedRanking('kamikaze')}>
+            <div onClick={() => setSelectedRanking('kamikaze')}>
+              <Card className="!bg-rose-50 border-rose-200 cursor-pointer hover:bg-rose-100 transition-colors">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-rose-600 flex items-center justify-center shrink-0 mt-1">
@@ -1447,7 +1451,8 @@ export default function ClasificacionPage() {
           )}
 
           {topOpens.length > 0 && (
-            <Card className="!bg-indigo-50 border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors" onClick={() => setSelectedRanking('appOpens')}>
+            <div onClick={() => setSelectedRanking('appOpens')}>
+              <Card className="!bg-indigo-50 border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-1">
