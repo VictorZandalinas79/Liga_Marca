@@ -399,8 +399,10 @@ export async function getStandings(supabase: any): Promise<{ standings: UserStan
                 }
 
                 const diff = inPoints - outPoints
-                userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + diff)
-                userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + numChanges)
+                if (md > 1) {
+                  userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + diff)
+                  userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + numChanges)
+                }
               }
             }
 

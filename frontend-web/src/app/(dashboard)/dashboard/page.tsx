@@ -8,6 +8,16 @@ import { useLockedTeams } from '@/lib/locked-teams'
 import { useLeagueConfig } from '@/lib/league-config'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { Card, CardContent } from '@/components/ui/card'
+import NotificationBadge from '@/components/NotificationBadge'
+
+function formatKamikazeTime(totalMinutes: number): string {
+  if (totalMinutes === Infinity || totalMinutes === 999999) return '-'
+  const mins = Math.floor(totalMinutes)
+  const secs = Math.round((totalMinutes % 1) * 60)
+  if (mins === 0) return `${secs} s`
+  if (secs === 0) return `${mins} min`
+  return `${mins} min ${secs} s`
+}
 import { Badge } from '@/components/ui/badge'
 import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
@@ -147,6 +157,7 @@ export default function DashboardPage() {
   const [showOnlineList, setShowOnlineList] = useState(false)
   const [userRanks, setUserRanks] = useState<any>(null)
   const [loadingRanks, setLoadingRanks] = useState(true)
+  const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
   const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>>(new Map())
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento } = useMatchdayLock()
@@ -832,7 +843,7 @@ export default function DashboardPage() {
           });
           const index = sorted.findIndex(s => s.user_id === user.id);
           const value = index !== -1 ? sorted[index][field as keyof typeof sorted[0]] : null;
-          return { position: index + 1, total: sorted.length, value };
+          return { position: index + 1, total: sorted.length, value, list: sorted };
         };
 
         setUserRanks({
@@ -1647,7 +1658,10 @@ export default function DashboardPage() {
                     <div className="text-center text-xs text-indigo-500 py-4">Cargando rankings...</div>
                   ) : userRanks ? (
                     <div className="space-y-2">
-                      <div className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center">
+                      <div 
+                        className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition-colors"
+                        onClick={() => setSelectedRanking('avg3')}
+                      >
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase">Promedio (Últ. 3)</p>
                           <p className="text-xs font-semibold text-slate-800">{Math.round(userRanks.avg3.value * 10) / 10} pts</p>
@@ -1656,7 +1670,10 @@ export default function DashboardPage() {
                           <p className="text-lg font-black text-indigo-600">#{userRanks.avg3.position}</p>
                         </div>
                       </div>
-                      <div className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center">
+                      <div 
+                        className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition-colors"
+                        onClick={() => setSelectedRanking('impact')}
+                      >
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase">Impacto Cambios</p>
                           <p className="text-xs font-semibold text-slate-800">{userRanks.impact.value > 0 ? '+' : ''}{Math.round(userRanks.impact.value * 10) / 10} pts</p>
@@ -1665,7 +1682,10 @@ export default function DashboardPage() {
                           <p className="text-lg font-black text-indigo-600">#{userRanks.impact.position}</p>
                         </div>
                       </div>
-                      <div className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center">
+                      <div 
+                        className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition-colors"
+                        onClick={() => setSelectedRanking('changes')}
+                      >
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase">Cambios Totales</p>
                           <p className="text-xs font-semibold text-slate-800">{userRanks.changes.value}</p>
@@ -1674,16 +1694,22 @@ export default function DashboardPage() {
                           <p className="text-lg font-black text-indigo-600">#{userRanks.changes.position}</p>
                         </div>
                       </div>
-                      <div className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center">
+                      <div 
+                        className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition-colors"
+                        onClick={() => setSelectedRanking('kamikaze')}
+                      >
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase">Premio Kamikaze</p>
-                          <p className="text-xs font-semibold text-slate-800">{userRanks.kamikaze.value === Infinity || userRanks.kamikaze.value === 999999 ? '-' : `${Math.round(userRanks.kamikaze.value)} min`}</p>
+                          <p className="text-xs font-semibold text-slate-800">{formatKamikazeTime(userRanks.kamikaze.value)}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-lg font-black text-indigo-600">#{userRanks.kamikaze.position}</p>
                         </div>
                       </div>
-                      <div className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center">
+                      <div 
+                        className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition-colors"
+                        onClick={() => setSelectedRanking('appOpens')}
+                      >
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase">Adictos a la App</p>
                           <p className="text-xs font-semibold text-slate-800">{userRanks.appOpens.value} accesos</p>
@@ -2391,6 +2417,44 @@ export default function DashboardPage() {
           </div>
         )
       })()}
+
+      {selectedRanking && userRanks && userRanks[selectedRanking] && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
+            <div className="p-4 bg-indigo-600 text-white flex justify-between items-center shrink-0">
+              <h2 className="font-bold text-lg">
+                {selectedRanking === 'avg3' && 'Promedio (Últ. 3)'}
+                {selectedRanking === 'impact' && 'Impacto Cambios'}
+                {selectedRanking === 'changes' && 'Cambios Totales'}
+                {selectedRanking === 'kamikaze' && 'Premio Kamikaze'}
+                {selectedRanking === 'appOpens' && 'Adictos a la App'}
+              </h2>
+              <button onClick={() => setSelectedRanking(null)} className="p-1 hover:bg-indigo-500 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto">
+              {userRanks[selectedRanking].list.map((u: any, i: number) => (
+                <div key={u.user_id} className={`flex justify-between items-center py-3 border-b border-slate-100 last:border-0 ${u.user_id === user?.id ? 'bg-indigo-50/50 -mx-4 px-4 font-bold' : ''}`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm font-bold w-6 ${i === 0 ? 'text-amber-500' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-amber-700' : 'text-slate-500'}`}>
+                      {i + 1}
+                    </span>
+                    <span className="text-sm text-slate-700 uppercase">{u.user_name}</span>
+                  </div>
+                  <span className="text-sm font-semibold text-indigo-600">
+                    {selectedRanking === 'avg3' && `${Math.round((u.last_3_jornadas_avg ?? 0) * 10) / 10} pts`}
+                    {selectedRanking === 'impact' && `${(u.change_impact_points ?? 0) > 0 ? '+' : ''}${Math.round((u.change_impact_points ?? 0) * 10) / 10} pts`}
+                    {selectedRanking === 'changes' && u.total_changes}
+                    {selectedRanking === 'kamikaze' && formatKamikazeTime(u.kamikaze_score ?? 0)}
+                    {selectedRanking === 'appOpens' && `${u.app_opens ?? 0} accesos`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

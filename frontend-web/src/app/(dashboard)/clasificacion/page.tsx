@@ -4,7 +4,16 @@ import { useEffect, useState, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, TrendingUp, TrendingDown, Minus, Medal, ArrowUpDown, Target, CheckCircle, Users, AlertTriangle } from 'lucide-react'
+import { Medal, Trophy, Star, ChevronDown, ChevronUp, Minus, Search, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, MousePointerClick, History, Target, Users, AlertTriangle } from 'lucide-react'
+
+function formatKamikazeTime(totalMinutes: number): string {
+  if (totalMinutes === Infinity || totalMinutes === 999999) return '-'
+  const mins = Math.floor(totalMinutes)
+  const secs = Math.round((totalMinutes % 1) * 60)
+  if (mins === 0) return `${secs} s`
+  if (secs === 0) return `${mins} min`
+  return `${mins} min ${secs} s`
+}
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { useLeagueConfig } from '@/lib/league-config'
 
@@ -446,8 +455,10 @@ export default function ClasificacionPage() {
                 }
 
                 const diff = inPoints - outPoints
-                userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + diff)
-                userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + numChanges)
+                if (md > 1) {
+                  userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + diff)
+                  userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + numChanges)
+                }
               }
             }
 
@@ -1392,7 +1403,7 @@ export default function ClasificacionPage() {
                         <p className="text-sm font-bold text-rose-900 uppercase pr-2 leading-tight">
                           {i + 1}. {u.user_name}
                         </p>
-                        <p className="text-xs text-rose-700 font-medium whitespace-nowrap pt-0.5">{Math.round(u.kamikaze_score || 0)} min</p>
+                        <p className="text-xs text-rose-700 font-medium whitespace-nowrap pt-0.5">{formatKamikazeTime(u.kamikaze_score || 0)}</p>
                       </div>
                     ))}
                   </div>
