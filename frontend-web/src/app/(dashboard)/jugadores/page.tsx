@@ -258,58 +258,74 @@ export default function JugadoresPage() {
         })).sort((a, b) => a.name.localeCompare(b.name))
       )
 
-      const playersWithStats = await Promise.all(
-        playersData.map(async (player) => {
-          const { data: scores } = await supabase
-            .from('player_scores')
-            .select('total_points, goals, assists, yellow_cards, red_cards, minutes_played, shots_on_target, passes_completed, passes_attempted, tackles_won, interceptions, saves, clearances, takeons_won, ball_recoveries, key_passes, big_chances_created, aerials_won, penalties_won, dispossessed, bad_touches, own_goals')
-            .eq('player_id', player.id)
+      const allScores: any[] = []
+      let scoresFrom = 0
+      while (true) {
+        const { data: page, error } = await supabase
+          .from('player_scores')
+          .select('player_id, total_points, goals, assists, yellow_cards, red_cards, minutes_played, shots_on_target, passes_completed, passes_attempted, tackles_won, interceptions, saves, clearances, takeons_won, ball_recoveries, key_passes, big_chances_created, aerials_won, penalties_won, dispossessed, bad_touches, own_goals')
+          .range(scoresFrom, scoresFrom + PAGE_SIZE - 1)
+        if (error || !page || page.length === 0) break
+        allScores.push(...page)
+        if (page.length < PAGE_SIZE) break
+        scoresFrom += PAGE_SIZE
+      }
 
-          const zero: PlayerStats = {
-            total_points: 0, goals: 0, assists: 0, yellow_cards: 0, red_cards: 0,
-            minutes_played: 0, matches_played: 0, avg_points: 0,
-            shots_on_target: 0, passes_completed: 0, passes_attempted: 0,
-            tackles_won: 0, interceptions: 0, saves: 0, clearances: 0,
-            takeons_won: 0, ball_recoveries: 0, key_passes: 0,
-            big_chances_created: 0, aerials_won: 0, penalties_won: 0,
-            dispossessed: 0, bad_touches: 0, own_goals: 0,
-          }
+      const scoresByPlayer = new Map<string, any[]>()
+      for (const score of allScores) {
+        if (!scoresByPlayer.has(score.player_id)) {
+          scoresByPlayer.set(score.player_id, [])
+        }
+        scoresByPlayer.get(score.player_id)!.push(score)
+      }
 
-          const stats = scores?.reduce((acc, s) => ({
-            total_points: acc.total_points + (s.total_points || 0),
-            goals: acc.goals + (s.goals || 0),
-            assists: acc.assists + (s.assists || 0),
-            yellow_cards: acc.yellow_cards + (s.yellow_cards || 0),
-            red_cards: acc.red_cards + (s.red_cards || 0),
-            minutes_played: acc.minutes_played + (s.minutes_played || 0),
-            matches_played: scores.length,
-            avg_points: 0,
-            shots_on_target: acc.shots_on_target + (s.shots_on_target || 0),
-            passes_completed: acc.passes_completed + (s.passes_completed || 0),
-            passes_attempted: acc.passes_attempted + (s.passes_attempted || 0),
-            tackles_won: acc.tackles_won + (s.tackles_won || 0),
-            interceptions: acc.interceptions + (s.interceptions || 0),
-            saves: acc.saves + (s.saves || 0),
-            clearances: acc.clearances + (s.clearances || 0),
-            takeons_won: acc.takeons_won + (s.takeons_won || 0),
-            ball_recoveries: acc.ball_recoveries + (s.ball_recoveries || 0),
-            key_passes: acc.key_passes + (s.key_passes || 0),
-            big_chances_created: acc.big_chances_created + (s.big_chances_created || 0),
-            aerials_won: acc.aerials_won + (s.aerials_won || 0),
-            penalties_won: acc.penalties_won + (s.penalties_won || 0),
-            dispossessed: acc.dispossessed + (s.dispossessed || 0),
-            bad_touches: acc.bad_touches + (s.bad_touches || 0),
-            own_goals: acc.own_goals + (s.own_goals || 0),
-          }), zero) as PlayerStats || zero
+      const playersWithStats = playersData.map((player) => {
+        const scores = scoresByPlayer.get(player.id) || []
 
-          stats.avg_points = stats.matches_played > 0
-            ? Math.round((stats.total_points / stats.matches_played) * 10) / 10
-            : 0
+        const zero: PlayerStats = {
+          total_points: 0, goals: 0, assists: 0, yellow_cards: 0, red_cards: 0,
+          minutes_played: 0, matches_played: 0, avg_points: 0,
+          shots_on_target: 0, passes_completed: 0, passes_attempted: 0,
+          tackles_won: 0, interceptions: 0, saves: 0, clearances: 0,
+          takeons_won: 0, ball_recoveries: 0, key_passes: 0,
+          big_chances_created: 0, aerials_won: 0, penalties_won: 0,
+          dispossessed: 0, bad_touches: 0, own_goals: 0,
+        }
 
-          const team = player.team_id ? teamsMap.get(player.team_id) : null
-          return { ...player, stats, team: team || null }
-        })
-      )
+        const stats = scores.reduce((acc, s) => ({
+          total_points: acc.total_points + (s.total_points || 0),
+          goals: acc.goals + (s.goals || 0),
+          assists: acc.assists + (s.assists || 0),
+          yellow_cards: acc.yellow_cards + (s.yellow_cards || 0),
+          red_cards: acc.red_cards + (s.red_cards || 0),
+          minutes_played: acc.minutes_played + (s.minutes_played || 0),
+          matches_played: scores.length,
+          avg_points: 0,
+          shots_on_target: acc.shots_on_target + (s.shots_on_target || 0),
+          passes_completed: acc.passes_completed + (s.passes_completed || 0),
+          passes_attempted: acc.passes_attempted + (s.passes_attempted || 0),
+          tackles_won: acc.tackles_won + (s.tackles_won || 0),
+          interceptions: acc.interceptions + (s.interceptions || 0),
+          saves: acc.saves + (s.saves || 0),
+          clearances: acc.clearances + (s.clearances || 0),
+          takeons_won: acc.takeons_won + (s.takeons_won || 0),
+          ball_recoveries: acc.ball_recoveries + (s.ball_recoveries || 0),
+          key_passes: acc.key_passes + (s.key_passes || 0),
+          big_chances_created: acc.big_chances_created + (s.big_chances_created || 0),
+          aerials_won: acc.aerials_won + (s.aerials_won || 0),
+          penalties_won: acc.penalties_won + (s.penalties_won || 0),
+          dispossessed: acc.dispossessed + (s.dispossessed || 0),
+          bad_touches: acc.bad_touches + (s.bad_touches || 0),
+          own_goals: acc.own_goals + (s.own_goals || 0),
+        }), zero) as PlayerStats || zero
+
+        stats.avg_points = stats.matches_played > 0
+          ? Math.round((stats.total_points / stats.matches_played) * 10) / 10
+          : 0
+
+        const team = player.team_id ? teamsMap.get(player.team_id) : null
+        return { ...player, stats, team: team || null }
+      })
 
       setPlayers(playersWithStats)
       setLoading(false)

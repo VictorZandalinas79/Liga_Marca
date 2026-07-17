@@ -673,8 +673,16 @@ export default function PartidosPage() {
                     startsSoon ? 'ring-2 ring-green-500 animate-pulse' : ''
                   } ${fixture.is_complete ? 'border-emerald-600 ring-1 ring-emerald-600' : ''}`}
                 >
-                  <CardContent className="p-4">
-                    <div className="w-full h-full" onClick={() => handleMatchClick(fixture)}>
+                  <CardContent className="p-4 relative overflow-hidden">
+                    {/* Fondo semitransparente del icono de la liga */}
+                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 opacity-10 pointer-events-none z-0">
+                      <img 
+                        src="/icono_lliga.png" 
+                        alt="Fondo Liga" 
+                        className="w-full h-full object-contain grayscale"
+                      />
+                    </div>
+                    <div className="w-full h-full relative z-10" onClick={() => handleMatchClick(fixture)}>
                       {/* Estado y hora */}
                       <div className="flex items-center justify-between mb-4">
                         {getStatusBadge(fixture.is_complete, fixture.status)}
