@@ -136,15 +136,15 @@ export default function DashboardPage() {
   const [savedPlayers, setSavedPlayers] = useState<string[]>([])
   // Alineación de la jornada ANTERIOR: sirve de base para resaltar los cambios
   const [basePlayers, setBasePlayers] = useState<string[]>([])
-  const [changeHistory, setChangeHistory] = useState<Array<{outId: string, inId: string}>>([])
+  const [changeHistory, setChangeHistory] = useState<Array<{outId: string, inId: string, index: number}>>([])
   const [formation, setFormation] = useState<Formation>(FORMATIONS[1])
-  const [cancelConfirmPlayerId, setCancelConfirmPlayerId] = useState<string | null>(null)
+  const [cancelConfirmUniqueKey, setCancelConfirmUniqueKey] = useState<string | null>(null)
   const [userTeamId, setUserTeamId] = useState<string | null>(null)
   const [isRegistered, setIsRegistered] = useState<boolean>(false)
   const [showSwapConfirm, setShowSwapConfirm] = useState(false)
-  const [pendingSwap, setPendingSwap] = useState<{ outId: string; inId: string } | null>(null)
+  const [pendingSwap, setPendingSwap] = useState<{ outId: string; inId: string; index: number } | null>(null)
   const [currentMatchday, setCurrentMatchday] = useState<number>(1)
-  const [playerToSwap, setPlayerToSwap] = useState<string | null>(null)
+  const [playerToSwap, setPlayerToSwap] = useState<{ id: string; index: number } | null>(null)
   const [searchFilter, setSearchFilter] = useState('')
   const [positionFilter, setPositionFilter] = useState<string>('ALL')
   const [teamFilter, setTeamFilter] = useState<string>('')
@@ -958,53 +958,67 @@ export default function DashboardPage() {
     }
   }
 
-  const cancelChange = async (playerId: string) => {
-    // 1. Intentar revertir desde changeHistory (cambio de esta sesión)
-    const change = [...changeHistory].reverse().find(ch => ch.inId === playerId)
-    if (change) {
-      setSelectedPlayers(prev => prev.map(id => id === playerId ? change.outId : id))
-      setChangeHistory(prev => {
-        const revIdx = [...prev].reverse().findIndex(ch => ch.inId === playerId)
-        if (revIdx === -1) return prev
-        const realIdx = prev.length - 1 - revIdx
-        return [...prev.slice(0, realIdx), ...prev.slice(realIdx + 1)]
+  const cancelChange = async (uniqueKey: string) => {
+    const playerMatch = selectedPlayersData.find(p => p._uniqueKey === uniqueKey)
+    if (!playerMatch) return
+    const index = playerMatch._originalIndex
+
+    const changeIdx = changeHistory.findIndex(ch => ch.index === index)
+    if (changeIdx !== -1) {
+      const change = changeHistory[changeIdx]
+      let newSelected: string[] = []
+      setSelectedPlayers(prev => {
+        newSelected = [...prev]
+        newSelected[index] = change.outId
+        return newSelected
       })
-      setCancelConfirmPlayerId(null)
+      setChangeHistory(prev => {
+        const next = [...prev]
+        next.splice(changeIdx, 1)
+        return next
+      })
+      setCancelConfirmUniqueKey(null)
+
+      if (userTeamId) {
+        const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+        await supabase.from('team_players').delete().eq('team_id', userTeamId).eq('matchday', matchdayToSave)
+        const teamPlayers = newSelected.map((pid, i) => ({
+          team_id: userTeamId,
+          player_id: pid,
+          is_starter: true,
+          is_captain: i === 0,
+          order: i,
+          matchday: matchdayToSave,
+        }))
+        await supabase.from('team_players').insert(teamPlayers)
+      }
       return
     }
 
-    // 2. Cambio cross-session: el jugador no está en basePlayers pero sí en el equipo actual.
-    //    Encontrar qué jugador de basePlayers ocupaba esta posición y restaurarlo.
-    if (basePlayers.length > 0 && !basePlayers.includes(playerId)) {
-      const currentPlayer = players.find(p => p.id === playerId)
-      const currentPosCode = currentPlayer ? getPositionCode(currentPlayer.position) : ''
-      // Buscar en basePlayers un jugador de la misma posición que ya no esté en selectedPlayers
-      const originalId = basePlayers.find(bpId => {
-        if (selectedPlayers.includes(bpId)) return false // ya está en el equipo
-        const bp = players.find(p => p.id === bpId)
-        return bp && getPositionCode(bp.position) === currentPosCode
+    const outPlayer = replacedPlayerByUniqueKey.get(uniqueKey)
+    if (outPlayer) {
+      let newSelected: string[] = []
+      setSelectedPlayers(prev => {
+        newSelected = [...prev]
+        newSelected[index] = outPlayer.id
+        return newSelected
       })
-      if (originalId) {
-        const newSelected = selectedPlayers.map(id => id === playerId ? originalId : id)
-        setSelectedPlayers(newSelected)
 
-        // Auto-guardar la reversión en la BD
-        if (userTeamId) {
-          const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
-          await supabase.from('team_players').delete().eq('team_id', userTeamId).eq('matchday', matchdayToSave)
-          const teamPlayers = newSelected.map((pid, index) => ({
-            team_id: userTeamId,
-            player_id: pid,
-            is_starter: true,
-            is_captain: index === 0,
-            order: index,
-            matchday: matchdayToSave,
-          }))
-          await supabase.from('team_players').insert(teamPlayers)
-        }
+      if (userTeamId) {
+        const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+        await supabase.from('team_players').delete().eq('team_id', userTeamId).eq('matchday', matchdayToSave)
+        const teamPlayers = newSelected.map((pid, i) => ({
+          team_id: userTeamId,
+          player_id: pid,
+          is_starter: true,
+          is_captain: i === 0,
+          order: i,
+          matchday: matchdayToSave,
+        }))
+        await supabase.from('team_players').insert(teamPlayers)
       }
     }
-    setCancelConfirmPlayerId(null)
+    setCancelConfirmUniqueKey(null)
   }
 
   const swapPlayer = (newPlayerId: string) => {
@@ -1017,7 +1031,7 @@ export default function DashboardPage() {
       return
     }
     if (playerToSwap) {
-      setPendingSwap({ outId: playerToSwap, inId: newPlayerId })
+      setPendingSwap({ outId: playerToSwap.id, inId: newPlayerId, index: playerToSwap.index })
       setShowSwapConfirm(true)
       closePlayerSelector()
     }
@@ -1026,33 +1040,35 @@ export default function DashboardPage() {
   const confirmSwap = async () => {
     if (!pendingSwap) return
 
-    const { outId, inId } = pendingSwap
-    setChangeHistory(prev => [...prev, { outId, inId }])
-    setSelectedPlayers(prev => prev.map(id => id === outId ? inId : id))
+    const { outId, inId, index } = pendingSwap
+    setChangeHistory(prev => [...prev, { outId, inId, index }])
+    
+    let newSelected: string[] = []
+    setSelectedPlayers(prev => {
+      newSelected = [...prev]
+      newSelected[index] = inId
+      return newSelected
+    })
 
-    // Guardar automáticamente en la BD
     if (!userTeamId) return
 
     const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
 
-    // Actualizar el equipo en la BD
     const { error: deleteError } = await supabase
       .from('team_players')
       .delete()
       .eq('team_id', userTeamId)
       .eq('matchday', matchdayToSave)
 
-    if (!deleteError) {
-      const newSelected = selectedPlayers.map(id => id === outId ? inId : id)
-      const teamPlayers = newSelected.map((playerId, index) => ({
+    if (!deleteError && newSelected.length > 0) {
+      const teamPlayers = newSelected.map((playerId, i) => ({
         team_id: userTeamId,
         player_id: playerId,
         is_starter: true,
-        is_captain: index === 0,
-        order: index,
+        is_captain: i === 0,
+        order: i,
         matchday: matchdayToSave,
       }))
-
       await supabase.from('team_players').insert(teamPlayers)
     }
 
@@ -1065,7 +1081,7 @@ export default function DashboardPage() {
     setShowSwapConfirm(false)
   }
 
-  const openPlayerSelector = (playerId: string) => {
+  const openPlayerSelector = (playerId: string, playerIndex: number) => {
     if (isUnlockWindowOpen) {
       alert('No se pueden realizar cambios durante el tramo de jornada')
       return
@@ -1074,7 +1090,7 @@ export default function DashboardPage() {
       alert('Este jugador está bloqueado: su equipo tiene un partido fuera de la jornada y no puede cambiarse hasta que se resuelva.')
       return
     }
-    setPlayerToSwap(playerId)
+    setPlayerToSwap({ id: playerId, index: playerIndex })
     setSearchFilter('')
     setPositionFilter('ALL')
     setTeamFilter('')
@@ -1091,12 +1107,17 @@ export default function DashboardPage() {
     setPriceMaxFilter('')
   }
 
-  const undoLastChange = () => {
+  const undoLastChange = async () => {
     if (changeHistory.length === 0) return
 
     const lastChange = changeHistory[changeHistory.length - 1]
-    // Revertir el último cambio: poner el jugador que salió y quitar el que entró
-    setSelectedPlayers(prev => prev.map(id => id === lastChange.inId ? lastChange.outId : id))
+    
+    let newSelected: string[] = []
+    setSelectedPlayers(prev => {
+      newSelected = [...prev]
+      newSelected[lastChange.index] = lastChange.outId
+      return newSelected
+    })
     setChangeHistory(prev => prev.slice(0, -1))
     setPlayerToSwap(null)
     setSearchFilter('')
@@ -1104,10 +1125,35 @@ export default function DashboardPage() {
     setTeamFilter('')
     setPriceMinFilter('')
     setPriceMaxFilter('')
+
+    if (userTeamId) {
+      const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+      const { error: deleteError } = await supabase
+        .from('team_players')
+        .delete()
+        .eq('team_id', userTeamId)
+        .eq('matchday', matchdayToSave)
+
+      if (!deleteError && newSelected.length > 0) {
+        const teamPlayers = newSelected.map((pid, i) => ({
+          team_id: userTeamId,
+          player_id: pid,
+          is_starter: true,
+          is_captain: i === 0,
+          order: i,
+          matchday: matchdayToSave,
+        }))
+        await supabase.from('team_players').insert(teamPlayers)
+      }
+    }
   }
 
-  const selectedPlayersData = players
-    .filter(p => selectedPlayers.includes(p.id))
+  const selectedPlayersData = selectedPlayers
+    .map((id, idx) => {
+      const p = players.find(p => p.id === id)
+      return p ? { ...p, _uniqueKey: `${id}-${idx}`, _originalIndex: idx } : null
+    })
+    .filter((p): p is Player & { _uniqueKey: string; _originalIndex: number } => p !== null)
     .sort((a, b) => {
       // Ordenar por posición: GK → DEF → MID → FWD
       const order = { GK: 0, DEF: 1, MID: 2, FWD: 3 }
@@ -1116,8 +1162,8 @@ export default function DashboardPage() {
       if (order[posA] !== order[posB]) {
         return (order[posA] ?? 4) - (order[posB] ?? 4)
       }
-      // Dentro de cada posición, ordenar por orden de selección
-      return selectedPlayers.indexOf(a.id) - selectedPlayers.indexOf(b.id)
+      // Dentro de cada posición, mantener orden original basado en idx
+      return a._originalIndex - b._originalIndex
     })
 
   // Mapa entrante -> jugador reemplazado (saliente).
@@ -1243,7 +1289,7 @@ export default function DashboardPage() {
     })(),
   }
 
-  const availablePlayers = players.filter(p => !selectedPlayers.includes(p.id))
+  const availablePlayers = players
 
   // Obtener lista única de equipos para el filtro
   const uniqueTeams = Array.from(
@@ -1251,30 +1297,39 @@ export default function DashboardPage() {
   ).map(([name, id]) => ({ name, id })).sort((a, b) => a.name.localeCompare(b.name))
 
   // Filtrar jugadores disponibles
-  const filteredAvailablePlayers = availablePlayers.filter(p => {
-    const normalize = (text: string) => text ? text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() : ''
+  const filteredAvailablePlayers = useMemo(() => {
+    const normalize = (text: string) => text ? text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() : ''
     const q = normalize(searchFilter)
-    const displayName = normalize(p.short_name || `${p.first_name || ''} ${p.last_name || ''}`)
     
-    const matchesSearch = !q || displayName.includes(q) || normalize(p.team?.name || '').includes(q)
-    const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
-    const matchesTeam = teamFilter === '' || p.team_id === teamFilter
-    const matchesPriceMin = priceMinFilter === '' || (p.precio ?? 0) >= priceMinFilter
-    const matchesPriceMax = priceMaxFilter === '' || (p.precio ?? 0) <= priceMaxFilter
-    return matchesSearch && matchesPosition && matchesTeam && matchesPriceMin && matchesPriceMax
-  }).sort((a, b) => {
-    const normalize = (text: string) => text ? text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() : ''
-    const q = normalize(searchFilter)
-    if (q) {
-      const aName = normalize(a.short_name || `${a.first_name || ''} ${a.last_name || ''}`)
-      const bName = normalize(b.short_name || `${b.first_name || ''} ${b.last_name || ''}`)
-      const aExact = aName === q
-      const bExact = bName === q
-      if (aExact && !bExact) return -1
-      if (bExact && !aExact) return 1
-    }
-    return 0
-  })
+    return availablePlayers.filter(p => {
+      const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
+      if (!matchesPosition) return false
+      const matchesTeam = teamFilter === '' || p.team_id === teamFilter
+      if (!matchesTeam) return false
+      const matchesPriceMin = priceMinFilter === '' || (p.precio ?? 0) >= priceMinFilter
+      if (!matchesPriceMin) return false
+      const matchesPriceMax = priceMaxFilter === '' || (p.precio ?? 0) <= priceMaxFilter
+      if (!matchesPriceMax) return false
+
+      if (q) {
+        // Cached normalized names to avoid recalculating on every filter run
+        const displayName = (p as any)._normalizedName || ((p as any)._normalizedName = normalize(p.short_name || `${p.first_name || ''} ${p.last_name || ''}`))
+        const teamName = (p as any)._normalizedTeam || ((p as any)._normalizedTeam = normalize(p.team?.name || ''))
+        return displayName.includes(q) || teamName.includes(q)
+      }
+      return true
+    }).sort((a, b) => {
+      if (q) {
+        const aName = (a as any)._normalizedName
+        const bName = (b as any)._normalizedName
+        const aExact = aName === q
+        const bExact = bName === q
+        if (aExact && !bExact) return -1
+        if (bExact && !aExact) return 1
+      }
+      return 0
+    })
+  }, [availablePlayers, searchFilter, positionFilter, teamFilter, priceMinFilter, priceMaxFilter])
 
   const changedCount = changeHistory.length
 
@@ -1520,7 +1575,7 @@ export default function DashboardPage() {
                 {/* Delanteros */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map((player, idx, arr) => (
-                    <div key={player.id} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
+                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                     </div>
                   ))}
@@ -1532,7 +1587,7 @@ export default function DashboardPage() {
                 {/* Mediocampistas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map((player, idx, arr) => (
-                    <div key={player.id} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
+                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                     </div>
                   ))}
@@ -1544,7 +1599,7 @@ export default function DashboardPage() {
                 {/* Defensas */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map((player, idx, arr) => (
-                    <div key={player.id} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
+                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                     </div>
                   ))}
@@ -1556,7 +1611,7 @@ export default function DashboardPage() {
                 {/* Portero */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
-                    <PitchPlayerCard key={player.id} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
+                    <PitchPlayerCard key={player._uniqueKey} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Portero</div>
@@ -1748,8 +1803,8 @@ export default function DashboardPage() {
                 const replacedPlayer = isChanged ? getReplacedPlayer(player.id) : undefined
                 return (
                   <div
-                    key={player.id}
-                    onClick={() => openPlayerSelector(player.id)}
+                    key={player._uniqueKey}
+                    onClick={() => openPlayerSelector(player.id, player._originalIndex)}
                     className={`@container relative w-full aspect-[5/7] transition-all group ${
                       isUnlockWindowOpen || isLockedPlayer
                         ? 'cursor-not-allowed opacity-60'
@@ -1863,7 +1918,7 @@ export default function DashboardPage() {
                       )}
                       {isChanged && (
                         <button
-                          onClick={e => { e.stopPropagation(); setCancelConfirmPlayerId(player.id) }}
+                          onClick={e => { e.stopPropagation(); setCancelConfirmUniqueKey(player.id) }}
                           className="w-[12cqw] h-[12cqw] bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20 transition-colors"
                           title="Cancelar cambio"
                         >
@@ -2141,8 +2196,9 @@ export default function DashboardPage() {
               {filteredAvailablePlayers.length === 0 ? (
                 <p className="text-center text-slate-500 py-8">No hay jugadores disponibles</p>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {filteredAvailablePlayers.map((player) => {
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {filteredAvailablePlayers.slice(0, 50).map((player) => {
                     const lockedPlayer = isTeamLocked(player.team_id)
                     return (
                     <div
@@ -2233,6 +2289,12 @@ export default function DashboardPage() {
                     )
                   })}
                 </div>
+                {filteredAvailablePlayers.length > 50 && (
+                  <p className="text-center text-slate-500 text-sm mt-6 font-medium">
+                    Mostrando 50 de {filteredAvailablePlayers.length}. Usa el buscador para ver más jugadores.
+                  </p>
+                )}
+                </>
               )}
             </div>
           </div>
@@ -2389,20 +2451,9 @@ export default function DashboardPage() {
       })()}
 
       {/* Modal de confirmación: cancelar cambio de un jugador */}
-      {cancelConfirmPlayerId && (() => {
-        const player = players.find(p => p.id === cancelConfirmPlayerId)
-        const change = [...changeHistory].reverse().find(ch => ch.inId === cancelConfirmPlayerId)
-        let outPlayer = change ? players.find(p => p.id === change.outId) : null
-        // Para cambios cross-session, buscar el jugador original de basePlayers
-        if (!outPlayer && basePlayers.length > 0 && !basePlayers.includes(cancelConfirmPlayerId)) {
-          const currentPosCode = player ? getPositionCode(player.position) : ''
-          const originalId = basePlayers.find(bpId => {
-            if (selectedPlayers.includes(bpId)) return false
-            const bp = players.find(p => p.id === bpId)
-            return bp && getPositionCode(bp.position) === currentPosCode
-          })
-          if (originalId) outPlayer = players.find(p => p.id === originalId) || null
-        }
+      {cancelConfirmUniqueKey && (() => {
+        const player = selectedPlayersData.find(p => p._uniqueKey === cancelConfirmUniqueKey)
+        const outPlayer = replacedPlayerByUniqueKey.get(cancelConfirmUniqueKey)
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
@@ -2413,13 +2464,13 @@ export default function DashboardPage() {
               </p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => setCancelConfirmPlayerId(null)}
+                  onClick={() => setCancelConfirmUniqueKey(null)}
                   className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors text-sm"
                 >
                   Mantener
                 </button>
                 <button
-                  onClick={() => cancelChange(cancelConfirmPlayerId)}
+                  onClick={() => cancelChange(cancelConfirmUniqueKey)}
                   className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors text-sm"
                 >
                   Cancelar cambio

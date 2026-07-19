@@ -662,6 +662,29 @@ export function applySanctionsToTeam(
     }
   }
 
+  // 6) Jugadores duplicados
+  const playerCounts = new Map<string, number>()
+  starters.forEach(p => {
+    playerCounts.set(p.id, (playerCounts.get(p.id) || 0) + 1)
+  })
+
+  let hasDuplicates = false
+  for (const [pid, count] of playerCounts.entries()) {
+    if (count > 1) {
+      hasDuplicates = true
+      const reason = "Jugador duplicado en la alineación"
+      zero([pid], reason)
+    }
+  }
+
+  if (hasDuplicates) {
+    const excludeMap = new Map<string, boolean>()
+    const bestInTeam = bestPlayer(starters, excludeMap)
+    if (bestInTeam) {
+      zero([bestInTeam.id], "Sanción por jugador duplicado (Mejor jugador restante)")
+    }
+  }
+
   // Calculate net points
   let netPoints = 0
   starters.forEach(p => {
