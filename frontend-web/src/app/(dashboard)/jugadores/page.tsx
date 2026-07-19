@@ -89,12 +89,11 @@ function PlayerSearchPicker({
 
   const filtered = query.trim()
     ? players
-        .filter(p =>
-          normalize(p.short_name || '').includes(normalize(query)) ||
-          normalize(p.first_name || '').includes(normalize(query)) ||
-          normalize(p.last_name || '').includes(normalize(query)) ||
-          normalize(p.team?.name || '').includes(normalize(query))
-        )
+        .filter(p => {
+          const q = normalize(query)
+          const displayName = normalize(p.short_name || `${p.first_name} ${p.last_name}`)
+          return displayName.includes(q) || normalize(p.team?.name || '').includes(q)
+        })
         .slice(0, 40)
     : players.slice(0, 30)
 
@@ -375,14 +374,23 @@ export default function JugadoresPage() {
   const filteredPlayers = players
     .filter(p => {
       const q = normalize(filter)
-      const matchesFilter = normalize(p.short_name ?? '').includes(q) ||
-        normalize(p.first_name ?? '').includes(q) ||
-        normalize(p.last_name ?? '').includes(q)
+      const displayName = normalize(p.short_name || `${p.first_name} ${p.last_name}`)
+      const matchesFilter = !q || displayName.includes(q)
       const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
       const matchesTeam = teamFilter === 'ALL' || p.team_id === teamFilter
       return matchesFilter && matchesPosition && matchesTeam
     })
     .sort((a, b) => {
+      const q = normalize(filter)
+      if (q) {
+        const aName = normalize(a.short_name || `${a.first_name} ${a.last_name}`)
+        const bName = normalize(b.short_name || `${b.first_name} ${b.last_name}`)
+        const aExact = aName === q
+        const bExact = bName === q
+        if (aExact && !bExact) return -1
+        if (bExact && !aExact) return 1
+      }
+      
       if (sortBy === 'price') return (b.precio || 0) - (a.precio || 0)
       if (sortBy === 'points') return (b.stats?.total_points || 0) - (a.stats?.total_points || 0)
       if (sortBy === 'goals') return (b.stats?.goals || 0) - (a.stats?.goals || 0)

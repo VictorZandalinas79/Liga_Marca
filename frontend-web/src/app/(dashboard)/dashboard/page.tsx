@@ -1252,16 +1252,28 @@ export default function DashboardPage() {
 
   // Filtrar jugadores disponibles
   const filteredAvailablePlayers = availablePlayers.filter(p => {
-    const matchesSearch = searchFilter === '' ||
-      p.short_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      p.first_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      p.last_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      p.team?.name?.toLowerCase().includes(searchFilter.toLowerCase())
+    const normalize = (text: string) => text ? text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() : ''
+    const q = normalize(searchFilter)
+    const displayName = normalize(p.short_name || `${p.first_name || ''} ${p.last_name || ''}`)
+    
+    const matchesSearch = !q || displayName.includes(q) || normalize(p.team?.name || '').includes(q)
     const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
     const matchesTeam = teamFilter === '' || p.team_id === teamFilter
     const matchesPriceMin = priceMinFilter === '' || (p.precio ?? 0) >= priceMinFilter
     const matchesPriceMax = priceMaxFilter === '' || (p.precio ?? 0) <= priceMaxFilter
     return matchesSearch && matchesPosition && matchesTeam && matchesPriceMin && matchesPriceMax
+  }).sort((a, b) => {
+    const normalize = (text: string) => text ? text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() : ''
+    const q = normalize(searchFilter)
+    if (q) {
+      const aName = normalize(a.short_name || `${a.first_name || ''} ${a.last_name || ''}`)
+      const bName = normalize(b.short_name || `${b.first_name || ''} ${b.last_name || ''}`)
+      const aExact = aName === q
+      const bExact = bName === q
+      if (aExact && !bExact) return -1
+      if (bExact && !aExact) return 1
+    }
+    return 0
   })
 
   const changedCount = changeHistory.length
