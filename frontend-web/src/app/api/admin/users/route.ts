@@ -21,6 +21,7 @@ export type AdminUser = {
   has_paid: boolean
   paid_at: string | null
   amount_paid: number
+  division: number | null
   created_at: string
 }
 
@@ -36,7 +37,7 @@ export async function GET() {
   // 1. Perfiles (estado de pago + teléfono) indexados por id.
   const { data: profiles, error: profilesError } = await admin
     .from('profiles')
-    .select('id, phone, has_paid, paid_at, amount_paid')
+    .select('id, phone, has_paid, paid_at, amount_paid, division')
   if (profilesError) {
     return NextResponse.json({ error: profilesError.message }, { status: 500 })
   }
@@ -66,6 +67,7 @@ export async function GET() {
         has_paid: Boolean(profile?.has_paid),
         paid_at: (profile?.paid_at as string) ?? null,
         amount_paid: Number(profile?.amount_paid ?? 0),
+        division: (profile?.division as number | null) ?? null,
         created_at: u.created_at,
       })
     }

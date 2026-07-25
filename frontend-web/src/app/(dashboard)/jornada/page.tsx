@@ -90,6 +90,9 @@ export default function JornadaPage() {
   const [searchActiveIndex, setSearchActiveIndex] = useState(0)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [matchdayInfractions, setMatchdayInfractions] = useState<any[]>([])
+  // División seleccionada (pestaña). Jornadas y sanciones independientes por división.
+  const [selectedDivision, setSelectedDivision] = useState<number | null>(null)
+  const [currentUserDivision, setCurrentUserDivision] = useState<number | null>(null)
   const supabase = createClient()
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const playerRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -226,15 +229,22 @@ export default function JornadaPage() {
     const info = availableMatchdays.find(m => m.matchday === matchday)
 
     // Fechas de creación de usuarios (para mostrar el nombre correcto)
-    const { data: profiles } = await supabase.from('profiles').select('id, created_at, full_name, email')
+    const { data: profiles } = await supabase.from('profiles').select('id, created_at, full_name, email, division')
     const createdDates = new Map<string, string>()
     profiles?.forEach(p => createdDates.set(p.id, p.created_at))
     const usersMap = new Map(profiles?.map(u => [u.id, u]) || [])
 
-    // Todos los equipos de usuario
-    const { data: userTeamsData } = await supabase
+    // Usuarios de la división seleccionada (sanciones/jornada independientes por división)
+    const divisionUserIds = new Set(
+      (profiles ?? []).filter(p => (p as any).division === selectedDivision).map(p => p.id)
+    )
+
+    // Equipos de usuario, restringidos a la división seleccionada
+    const { data: userTeamsRaw } = await supabase
       .from('user_teams')
       .select('id, user_id, name, created_at')
+
+    const userTeamsData = (userTeamsRaw ?? []).filter(t => divisionUserIds.has(t.user_id))
 
     if (!userTeamsData || userTeamsData.length === 0) {
       setUserTeams([])
@@ -618,18 +628,33 @@ export default function JornadaPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setCurrentUserId(user.id)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('division')
+          .eq('id', user.id)
+          .maybeSingle()
+        const div = (profile?.division as number | null) ?? null
+        setCurrentUserDivision(div)
+        setSelectedDivision(prev => prev ?? (div ?? 1))
       }
     }
     getCurrentUser()
   }, [])
 
   useEffect(() => {
-    if (selectedMatchday > 0) {
+    if (selectedMatchday > 0 && selectedDivision != null) {
       loadUserTeamsForMatchday(selectedMatchday)
 
       const fetchInfractions = async () => {
         const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
         if (!info) return
+
+        // Usuarios de la división seleccionada (para filtrar sanciones por división)
+        const { data: divProfiles } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('division', selectedDivision)
+        const divisionUserIds = new Set((divProfiles ?? []).map(p => p.id as string))
 
         let infractionsData: any[] = []
         // 1. Siempre intentar obtener las sanciones consolidadas de la base de datos
@@ -638,11 +663,13 @@ export default function JornadaPage() {
           .select('id, matchday, description, points, user_id, profiles(full_name)')
           .eq('matchday', selectedMatchday)
 
-        if (dbPenalties && dbPenalties.length > 0) {
-          infractionsData = dbPenalties
+        const dbPenaltiesDiv = (dbPenalties ?? []).filter(p => divisionUserIds.has(p.user_id as string))
+
+        if (dbPenaltiesDiv.length > 0) {
+          infractionsData = dbPenaltiesDiv
         } else if (info.started) {
           // 2. Si el mercado ya está cerrado (jornada iniciada) y no hay sanciones consolidadas, buscar las dinámicas
-          const res = await fetch(`/api/penalties/live?matchday=${selectedMatchday}`)
+          const res = await fetch(`/api/penalties/live?matchday=${selectedMatchday}&division=${selectedDivision}`)
           if (res.ok) {
             const data = await res.json()
             infractionsData = data.infractions || []
@@ -652,17 +679,17 @@ export default function JornadaPage() {
       }
       fetchInfractions()
     }
-  }, [selectedMatchday, availableMatchdays, config])
+  }, [selectedMatchday, availableMatchdays, config, selectedDivision])
 
   // Polling en tiempo real cuando la jornada seleccionada está en directo
   useEffect(() => {
     const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
-    if (!info?.live) return
+    if (!info?.live || selectedDivision == null) return
     const interval = setInterval(() => {
       loadUserTeamsForMatchday(selectedMatchday, true)
     }, 45000)
     return () => clearInterval(interval)
-  }, [selectedMatchday, availableMatchdays])
+  }, [selectedMatchday, availableMatchdays, selectedDivision])
 
   const getPositionLabel = (position: string) => {
     const posLower = position.toLowerCase()
@@ -841,6 +868,24 @@ export default function JornadaPage() {
             </button>
           </div>
         )}
+      </div>
+
+      {/* Pestañas de división: cada una tiene sus jornadas y sanciones independientes */}
+      <div className="flex gap-1.5 bg-slate-100 rounded-xl p-1">
+        {([1, 2, 3] as const).map((d) => (
+          <button
+            key={d}
+            onClick={() => setSelectedDivision(d)}
+            className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              selectedDivision === d ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {d}ª División
+            {currentUserDivision === d && (
+              <span className="ml-1.5 text-[10px] font-bold text-emerald-600">(la tuya)</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Botón para desplegar/ocultar las sanciones */}

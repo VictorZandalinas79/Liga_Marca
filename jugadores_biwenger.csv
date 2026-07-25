@@ -1,5 +1,6 @@
 Nombre,Equipo,Posicion,Valor,Fecha_Nacimiento,Foto
 Kike García,Espanyol,DEL,30,25/11/1989,https://media.futbolfantasy.com/thumb/400x400/v202602020148/uploads/images/jugadores/ficha/2751.png
+Antonio Blanco,Alavés,MED,37,23/07/2000,https://media.futbolfantasy.com/thumb/400x400/v202607150033/uploads/images/jugadores/ficha/8737.png
 Javi López,Real Sociedad,DEF,23,25/03/2002,https://media.futbolfantasy.com/thumb/400x400/v202607080544/uploads/images/jugadores/ficha/7781.png
 Antonio Sivera,Alavés,POR,40,11/08/1996,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/1059.png
 Jon Guridi,Sevilla,MED,20,28/02/1995,https://media.futbolfantasy.com/thumb/400x400/v202607061113/uploads/images/jugadores/ficha/3736.png
@@ -11,98 +12,100 @@ Jesús Owono,Alavés,POR,16,01/03/2001,https://media.futbolfantasy.com/thumb/400
 Abdel Abqar,Getafe,DEF,20,10/03/1999,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/5083.png
 Carlos Benavidez,Alavés,MED,16,30/03/1998,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/10448.png
 Abde Rebbach,Alavés,MED,24,11/08/1998,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/10476.png
-Giuliano Simeone,Atlético,MED,68,18/12/2002,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/9276.png
-Álex Berenguer,Athletic,MED,40,04/07/1995,https://media.futbolfantasy.com/thumb/400x400/v202607131125/uploads/images/jugadores/ficha/3204.png
-Yuri Berchiche,Athletic,DEF,26,10/02/1990,https://media.futbolfantasy.com/thumb/400x400/v202607131125/uploads/images/jugadores/ficha/735.png
+Giuliano Simeone,Atlético,MED,68,18/12/2002,https://media.futbolfantasy.com/thumb/400x400/v202607201514/uploads/images/jugadores/ficha/9276.png
+Álex Berenguer,Athletic,MED,40,04/07/1995,https://media.futbolfantasy.com/thumb/400x400/v202607211128/uploads/images/jugadores/ficha/3204.png
+Yuri Berchiche,Athletic,DEF,26,10/02/1990,https://media.futbolfantasy.com/thumb/400x400/v202607231137/uploads/images/jugadores/ficha/735.png
 Iñaki Williams,Athletic,DEL,49,15/06/1994,https://media.futbolfantasy.com/thumb/400x400/v202607081122/uploads/images/jugadores/ficha/1934.png
-Íñigo Ruiz de Galarreta,Athletic,MED,31,06/08/1993,https://media.futbolfantasy.com/thumb/400x400/v202605142259/uploads/images/jugadores/ficha/44.png
-Mikel Vesga,Athletic,MED,17,08/04/1993,https://media.futbolfantasy.com/thumb/400x400/v202607141413/uploads/images/jugadores/ficha/3249.png
+Íñigo Ruiz de Galarreta,Athletic,MED,31,06/08/1993,https://media.futbolfantasy.com/thumb/400x400/v202607211128/uploads/images/jugadores/ficha/44.png
+Mikel Vesga,Athletic,MED,17,08/04/1993,https://media.futbolfantasy.com/thumb/400x400/v202607201448/uploads/images/jugadores/ficha/3249.png
 Yeray Álvarez,Athletic,DEF,24,24/01/1995,https://media.futbolfantasy.com/thumb/400x400/v202604211141/uploads/images/jugadores/ficha/1972.png
-Dani Vivian,Athletic,DEF,36,05/07/1999,https://media.futbolfantasy.com/thumb/400x400/v202605211307/uploads/images/jugadores/ficha/5245.png
-Unai Simón,Athletic,POR,45,11/06/1997,https://media.futbolfantasy.com/thumb/400x400/v202607090015/uploads/images/jugadores/ficha/3693.png
+Asier Villalibre,Racing,DEL,29,30/09/1997,https://media.futbolfantasy.com/thumb/400x400/v202607100045/uploads/images/jugadores/ficha/3671.png
+Dani Vivian,Athletic,DEF,36,05/07/1999,https://media.futbolfantasy.com/thumb/400x400/v202607161347/uploads/images/jugadores/ficha/5245.png
+Unai Simón,Athletic,POR,45,11/06/1997,https://media.futbolfantasy.com/thumb/400x400/v202607201513/uploads/images/jugadores/ficha/3693.png
 Gorka Guruzeta,Athletic,DEL,42,12/09/1996,https://media.futbolfantasy.com/thumb/400x400/v202602100140/uploads/images/jugadores/ficha/5859.png
 Oihan Sancet,Athletic,MED,50,25/04/2000,https://media.futbolfantasy.com/thumb/400x400/v202607081118/uploads/images/jugadores/ficha/7006.png
 Julen Agirrezabala,Athletic,POR,29,26/12/2000,https://media.futbolfantasy.com/thumb/400x400/v202607011229/uploads/images/jugadores/ficha/9213.png
-Nico Williams,Athletic,DEL,82,12/07/2002,https://media.futbolfantasy.com/thumb/400x400/v202607090015/uploads/images/jugadores/ficha/8693.png
+Nico Williams,Athletic,DEL,82,12/07/2002,https://media.futbolfantasy.com/thumb/400x400/v202607201513/uploads/images/jugadores/ficha/8693.png
 Beñat Prados,Athletic,MED,27,08/02/2001,https://media.futbolfantasy.com/thumb/400x400/v202604301159/uploads/images/jugadores/ficha/7917.png
 Aitor Paredes,Athletic,DEF,26,29/04/2000,https://media.futbolfantasy.com/thumb/400x400/v202604081109/uploads/images/jugadores/ficha/7916.png
 Mikel Jauregizar,Athletic,MED,40,13/11/2003,https://media.futbolfantasy.com/thumb/400x400/v202602261305/uploads/images/jugadores/ficha/12605.png
 Adama Boiro,Athletic,DEF,17,22/06/2002,https://media.futbolfantasy.com/thumb/400x400/v202602100141/uploads/images/jugadores/ficha/11688.png
-Koke Resurrección,Atlético,MED,40,08/01/1992,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/63.png
-José María Giménez,Atlético,DEF,33,20/01/1995,https://media.futbolfantasy.com/thumb/400x400/v202607130935/uploads/images/jugadores/ficha/775.png
-Jan Oblak,Atlético,POR,43,07/01/1993,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/1826.png
-Marcos Llorente,Atlético,DEF,56,30/01/1995,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/1931.png
+Koke Resurrección,Atlético,MED,40,08/01/1992,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/63.png
+José María Giménez,Atlético,DEF,33,20/01/1995,https://media.futbolfantasy.com/thumb/400x400/v202607201929/uploads/images/jugadores/ficha/775.png
+Jan Oblak,Atlético,POR,43,07/01/1993,https://media.futbolfantasy.com/thumb/400x400/v202607201927/uploads/images/jugadores/ficha/1826.png
+Marcos Llorente,Atlético,DEF,56,30/01/1995,https://media.futbolfantasy.com/thumb/400x400/v202607201514/uploads/images/jugadores/ficha/1931.png
 Rodrigo Riquelme,Betis,MED,21,02/04/2000,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/6450.png
-Thomas Lemar,Atlético,MED,29,12/11/1995,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/3427.png
-Nahuel Molina,Atlético,DEF,31,06/04/1998,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/8120.png
-Pablo Barrios,Atlético,MED,56,15/06/2003,https://media.futbolfantasy.com/thumb/400x400/v202607130935/uploads/images/jugadores/ficha/10005.png
-Marc-André ter Stegen,Barcelona,POR,31,30/04/1992,https://media.futbolfantasy.com/thumb/400x400/v202607141309/uploads/images/jugadores/ficha/1263.png
-Alejandro Balde,Barcelona,DEF,44,18/10/2003,https://media.futbolfantasy.com/thumb/400x400/v202605241841/uploads/images/jugadores/ficha/9316.png
-Ferrán Torres,Barcelona,DEL,94,29/02/2000,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/5050.png
+Thomas Lemar,Atlético,MED,29,12/11/1995,https://media.futbolfantasy.com/thumb/400x400/v202607181453/uploads/images/jugadores/ficha/3427.png
+Nahuel Molina,Atlético,DEF,31,06/04/1998,https://media.futbolfantasy.com/thumb/400x400/v202607201514/uploads/images/jugadores/ficha/8120.png
+Pablo Barrios,Atlético,MED,56,15/06/2003,https://media.futbolfantasy.com/thumb/400x400/v202607202050/uploads/images/jugadores/ficha/10005.png
+Marc-André ter Stegen,Barcelona,POR,31,30/04/1992,https://media.futbolfantasy.com/thumb/400x400/v202607171238/uploads/images/jugadores/ficha/1263.png
+Alejandro Balde,Barcelona,DEF,44,18/10/2003,https://media.futbolfantasy.com/thumb/400x400/v202607211335/uploads/images/jugadores/ficha/9316.png
+Ferrán Torres,Barcelona,DEL,94,29/02/2000,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/5050.png
 Frenkie de Jong,Barcelona,MED,72,12/05/1997,https://media.futbolfantasy.com/thumb/400x400/v202607141313/uploads/images/jugadores/ficha/6210.png
-Jules Koundé,Barcelona,DEF,70,12/11/1998,https://media.futbolfantasy.com/thumb/400x400/v202607042135/uploads/images/jugadores/ficha/6674.png
-Pedri González,Barcelona,MED,165,25/11/2002,https://media.futbolfantasy.com/thumb/400x400/v202606152348/uploads/images/jugadores/ficha/7257.png
-Ronald Araújo,Barcelona,DEF,35,07/03/1999,https://media.futbolfantasy.com/thumb/400x400/v202607141313/uploads/images/jugadores/ficha/7004.png
-Pablo Gavi,Barcelona,MED,62,05/08/2004,https://media.futbolfantasy.com/thumb/400x400/v202606152348/uploads/images/jugadores/ficha/9273.png
-Lamine Yamal,Barcelona,DEL,178,13/07/2007,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/11520.png
+Jules Koundé,Barcelona,DEF,70,12/11/1998,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/6674.png
+Pedri González,Barcelona,MED,165,25/11/2002,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/7257.png
+Ronald Araújo,Barcelona,DEF,35,07/03/1999,https://media.futbolfantasy.com/thumb/400x400/v202607201341/uploads/images/jugadores/ficha/7004.png
+Pablo Gavi,Barcelona,MED,62,05/08/2004,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/9273.png
+Lamine Yamal,Barcelona,DEL,178,13/07/2007,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/11520.png
 Andreas Christensen,Barcelona,DEF,22,10/04/1996,https://media.futbolfantasy.com/thumb/400x400/v202607080331/uploads/images/jugadores/ficha/2417.png
 Raphinha,Barcelona,DEL,136,14/12/1996,https://media.futbolfantasy.com/thumb/400x400/v202607141313/uploads/images/jugadores/ficha/4288.png
 Marcos Alonso,Celta,DEF,31,28/12/1990,https://media.futbolfantasy.com/thumb/400x400/v202607060442/uploads/images/jugadores/ficha/4397.png
 Fermín López,Barcelona,MED,89,11/05/2003,https://media.futbolfantasy.com/thumb/400x400/v202607080331/uploads/images/jugadores/ficha/11709.png
-Pau Cubarsí,Barcelona,DEF,90,22/01/2007,https://media.futbolfantasy.com/thumb/400x400/v202606152348/uploads/images/jugadores/ficha/11706.png
+Pau Cubarsí,Barcelona,DEF,90,22/01/2007,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/11706.png
 Héctor Fort,Barcelona,DEF,25,02/08/2006,https://media.futbolfantasy.com/thumb/400x400/v202607080332/uploads/images/jugadores/ficha/11577.png
 Guido Rodríguez,Valencia,MED,30,12/04/1994,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/7676.png
 Marc Bartra,Betis,DEF,27,15/01/1991,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/322.png
-Isco Alarcón,Betis,MED,64,21/04/1992,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/336.png
+Isco Alarcón,Betis,MED,64,21/04/1992,https://media.futbolfantasy.com/thumb/400x400/v202607230120/uploads/images/jugadores/ficha/336.png
 Ayoze Pérez,Villarreal,DEL,42,29/07/1993,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/4511.png
 Héctor Bellerín,Betis,DEF,32,19/03/1995,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/2153.png
 Pablo Fornals,Betis,MED,87,22/02/1996,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/2632.png
 Marc Roca,Betis,MED,28,26/11/1996,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/3215.png
-Aitor Ruibal,Betis,MED,26,22/03/1996,https://media.futbolfantasy.com/thumb/400x400/v202607091404/uploads/images/jugadores/ficha/5051.png
-Abde Ezzalzouli,Betis,DEL,101,17/12/2001,https://media.futbolfantasy.com/thumb/400x400/v202607091404/uploads/images/jugadores/ficha/9750.png
-Johnny Cardoso,Atlético,MED,36,20/09/2001,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/12647.png
+Aitor Ruibal,Betis,MED,26,22/03/1996,https://media.futbolfantasy.com/thumb/400x400/v202607202156/uploads/images/jugadores/ficha/5051.png
+Abde Ezzalzouli,Betis,DEL,101,17/12/2001,https://media.futbolfantasy.com/thumb/400x400/v202607202156/uploads/images/jugadores/ficha/9750.png
+Johnny Cardoso,Atlético,MED,36,20/09/2001,https://media.futbolfantasy.com/thumb/400x400/v202607211012/uploads/images/jugadores/ficha/12647.png
 Iago Aspas,Celta,DEL,34,01/08/1987,https://media.futbolfantasy.com/thumb/400x400/v202605140335/uploads/images/jugadores/ficha/175.png
-Manu Sánchez,Celta,DEF,24,24/08/2000,https://media.futbolfantasy.com/thumb/400x400/v202607080409/uploads/images/jugadores/ficha/6605.png
+Manu Sánchez,Levante,DEF,24,24/08/2000,https://media.futbolfantasy.com/thumb/400x400/v202607080409/uploads/images/jugadores/ficha/6605.png
 Carlos Dominguez,Celta,DEF,18,11/02/2001,https://media.futbolfantasy.com/thumb/400x400/v202605140335/uploads/images/jugadores/ficha/8702.png
 Iván Villar,Celta,POR,16,09/07/1997,https://media.futbolfantasy.com/thumb/400x400/v202605140335/uploads/images/jugadores/ficha/3255.png
 Unai Núñez,Celta,DEF,19,30/01/1997,https://media.futbolfantasy.com/thumb/400x400/v202607080411/uploads/images/jugadores/ficha/3785.png
 Carles Pérez,Celta,MED,18,16/02/1998,https://media.futbolfantasy.com/thumb/400x400/v202607101505/uploads/images/jugadores/ficha/6606.png
-Hugo Sotelo,Celta,MED,20,19/12/2003,https://media.futbolfantasy.com/thumb/400x400/v202605140335/uploads/images/jugadores/ficha/8988.png
+Hugo Sotelo,Levante,MED,20,19/12/2003,https://media.futbolfantasy.com/thumb/400x400/v202605140335/uploads/images/jugadores/ficha/8988.png
 Williot Swedberg,Celta,MED,31,01/02/2004,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/10207.png
-Carlos Dotor,Celta,MED,18,15/03/2001,https://media.futbolfantasy.com/thumb/400x400/v202607141401/uploads/images/jugadores/ficha/10860.png
+Carlos Dotor,Málaga,MED,18,15/03/2001,https://media.futbolfantasy.com/thumb/400x400/v202607141401/uploads/images/jugadores/ficha/10860.png
 Carl Starfelt,Celta,DEF,24,01/06/1995,https://media.futbolfantasy.com/thumb/400x400/v202607101436/uploads/images/jugadores/ficha/9612.png
 Hugo Álvarez,Celta,MED,28,02/07/2003,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/9740.png
 David Soria,Getafe,POR,48,04/04/1993,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/1919.png
 Borja Mayoral,Getafe,DEL,28,05/04/1997,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/1989.png
 Dakonam Djené,Getafe,DEF,23,31/12/1991,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/3881.png
 Carles Aleñá,Alavés,MED,19,05/01/1998,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/2759.png
-Ilaix Moriba,Celta,MED,35,19/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202605141324/uploads/images/jugadores/ficha/8082.png
+Ilaix Moriba,Celta,MED,35,19/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202607231518/uploads/images/jugadores/ficha/8082.png
 Juan Iglesias,Sevilla,DEF,34,03/07/1998,https://media.futbolfantasy.com/thumb/400x400/v202607080552/uploads/images/jugadores/ficha/8686.png
-José Ángel Carmona,Sevilla,DEF,27,29/01/2002,https://media.futbolfantasy.com/thumb/400x400/v202607061113/uploads/images/jugadores/ficha/9317.png
-Eric Garcia,Barcelona,DEF,77,09/01/2001,https://media.futbolfantasy.com/thumb/400x400/v202607060442/uploads/images/jugadores/ficha/7542.png
+José Ángel Carmona,Sevilla,DEF,27,29/01/2002,https://media.futbolfantasy.com/thumb/400x400/v202607181530/uploads/images/jugadores/ficha/9317.png
+Eric Garcia,Barcelona,DEF,77,09/01/2001,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/7542.png
 Yangel Herrera,Real Sociedad,MED,26,07/01/1998,https://media.futbolfantasy.com/thumb/400x400/v202607101513/uploads/images/jugadores/ficha/6446.png
 Javi Muñoz,Getafe,MED,17,28/02/1995,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/1981.png
 Álvaro Valles,Betis,POR,35,25/07/1997,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/3686.png
 Sergi Cardona,Villarreal,DEF,28,08/07/1999,https://media.futbolfantasy.com/thumb/400x400/v202602161630/uploads/images/jugadores/ficha/9989.png
-Alberto Moleiro,Villarreal,MED,81,30/09/2003,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/9990.png
-José Manuel Copete,Valencia,DEF,19,10/10/1999,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/9234.png
+Alberto Moleiro,Villarreal,MED,81,30/09/2003,https://media.futbolfantasy.com/thumb/400x400/v202607211338/uploads/images/jugadores/ficha/9990.png
+José Manuel Copete,Valencia,DEF,19,10/10/1999,https://media.futbolfantasy.com/thumb/400x400/v202607202247/uploads/images/jugadores/ficha/9234.png
 Moi Gómez,Osasuna,MED,20,23/06/1994,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/841.png
-Rubén García,Osasuna,MED,30,14/07/1993,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/660.png
+Rubén García,Osasuna,MED,30,14/07/1993,https://media.futbolfantasy.com/thumb/400x400/v202607201356/uploads/images/jugadores/ficha/660.png
 Jesús Areso,Athletic,DEF,23,02/07/1999,https://media.futbolfantasy.com/thumb/400x400/v202602100140/uploads/images/jugadores/ficha/7638.png
 Jon Moncayola,Osasuna,MED,37,13/05/1998,https://media.futbolfantasy.com/thumb/400x400/v202602171442/uploads/images/jugadores/ficha/7204.png
+Pablo Ibáñez,Alavés,MED,24,20/09/1998,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/10258.png
 Aitor Fernández,Osasuna,POR,17,03/05/1991,https://media.futbolfantasy.com/thumb/400x400/v202605120539/uploads/images/jugadores/ficha/829.png
 Alejandro Catena,Osasuna,DEF,36,28/10/1994,https://media.futbolfantasy.com/thumb/400x400/v202601270343/uploads/images/jugadores/ficha/6493.png
 Iker Muñoz,Osasuna,MED,17,05/09/2002,https://media.futbolfantasy.com/thumb/400x400/v202601270343/uploads/images/jugadores/ficha/11362.png
 Sergio Herrera,Osasuna,POR,34,05/06/1993,https://media.futbolfantasy.com/thumb/400x400/v202603261710/uploads/images/jugadores/ficha/6611.png
 Kike Barja,Osasuna,MED,17,01/04/1997,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/3206.png
 Raúl García,Osasuna,DEL,31,03/11/2000,https://media.futbolfantasy.com/thumb/400x400/v202603131323/uploads/images/jugadores/ficha/7027.png
-Ante Budimir,Osasuna,DEL,89,22/07/1991,https://media.futbolfantasy.com/thumb/400x400/v202607101636/uploads/images/jugadores/ficha/6635.png
+Ante Budimir,Osasuna,DEL,89,22/07/1991,https://media.futbolfantasy.com/thumb/400x400/v202607211338/uploads/images/jugadores/ficha/6635.png
 Lucas Torró,Osasuna,MED,26,19/07/1994,https://media.futbolfantasy.com/thumb/400x400/v202607141339/uploads/images/jugadores/ficha/1928.png
 Aimar Oroz,Osasuna,MED,33,27/11/2001,https://media.futbolfantasy.com/thumb/400x400/v202605101448/uploads/images/jugadores/ficha/7203.png
 Jorge Herrando,Osasuna,DEF,19,28/02/2001,https://media.futbolfantasy.com/thumb/400x400/v202601270343/uploads/images/jugadores/ficha/7082.png
-Álvaro García,Rayo,MED,32,27/10/1992,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/867.png
+Álvaro García,Rayo,MED,32,27/10/1992,https://media.futbolfantasy.com/thumb/400x400/v202607201547/uploads/images/jugadores/ficha/867.png
 Unai López,Rayo,MED,21,30/10/1995,https://media.futbolfantasy.com/thumb/400x400/v202604121805/uploads/images/jugadores/ficha/1881.png
-Florian Lejeune,Rayo,DEF,51,20/05/1991,https://media.futbolfantasy.com/thumb/400x400/v202604121805/uploads/images/jugadores/ficha/863.png
+Florian Lejeune,Rayo,DEF,51,20/05/1991,https://media.futbolfantasy.com/thumb/400x400/v202607201436/uploads/images/jugadores/ficha/863.png
 Isi Palazón,Rayo,MED,31,27/12/1994,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/6957.png
 Óscar Valentín,Rayo,MED,27,20/08/1994,https://media.futbolfantasy.com/thumb/400x400/v202604121805/uploads/images/jugadores/ficha/6889.png
 Raúl De Tomás,Rayo,DEL,23,17/10/1994,https://media.futbolfantasy.com/thumb/400x400/v202607082144/uploads/images/jugadores/ficha/1123.png
@@ -113,49 +116,48 @@ Iván Balliu,Rayo,DEF,17,01/01/1992,https://media.futbolfantasy.com/thumb/400x40
 Dani Cárdenas,Rayo,POR,17,28/03/1997,https://media.futbolfantasy.com/thumb/400x400/v202604121805/uploads/images/jugadores/ficha/7570.png
 Pathé Ciss,Rayo,MED,36,16/03/1994,https://media.futbolfantasy.com/thumb/400x400/v202607081136/uploads/images/jugadores/ficha/7307.png
 Randy Nteka,Rayo,DEL,16,06/12/1997,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/6853.png
-Andrei Ratiu,Rayo,DEF,54,20/06/1998,https://media.futbolfantasy.com/thumb/400x400/v202607060442/uploads/images/jugadores/ficha/6560.png
+Andrei Ratiu,Rayo,DEF,54,20/06/1998,https://media.futbolfantasy.com/thumb/400x400/v202607201436/uploads/images/jugadores/ficha/6560.png
 Pep Chavarría,Rayo,DEF,29,10/04/1998,https://media.futbolfantasy.com/thumb/400x400/v202607060442/uploads/images/jugadores/ficha/7992.png
-Brahim Díaz,Real Madrid,MED,56,03/08/1999,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/5035.png
-Eduardo Camavinga,Real Madrid,MED,54,10/11/2002,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/8479.png
-Ferland Mendy,Real Madrid,DEF,20,08/06/1995,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/6158.png
-Antonio Rüdiger,Real Madrid,DEF,40,03/03/1993,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/2536.png
+Brahim Díaz,Real Madrid,MED,56,03/08/1999,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/5035.png
+Eduardo Camavinga,Real Madrid,MED,54,10/11/2002,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/8479.png
+Ferland Mendy,Real Madrid,DEF,20,08/06/1995,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/6158.png
+Antonio Rüdiger,Real Madrid,DEF,40,03/03/1993,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/2536.png
 Fran García,Betis,DEF,29,14/08/1999,https://media.futbolfantasy.com/thumb/400x400/v202607101421/uploads/images/jugadores/ficha/6392.png
-Federico Valverde,Real Madrid,MED,125,22/07/1998,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/3758.png
-Andriy Lunin,Real Madrid,POR,33,11/02/1999,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/5526.png
-Vinicius Junior,Real Madrid,DEL,155,12/07/2000,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/5565.png
-Thibaut Courtois,Real Madrid,POR,48,11/05/1992,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/59.png
-Éder Militão,Real Madrid,DEF,40,18/01/1998,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/6062.png
-Rodrygo Goes,Real Madrid,DEL,62,09/01/2001,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/6631.png
-Aurélien Tchouaméni,Real Madrid,MED,90,27/01/2000,https://media.futbolfantasy.com/thumb/400x400/v202607120016/uploads/images/jugadores/ficha/9669.png
-Jude Bellingham,Real Madrid,MED,150,29/06/2003,https://media.futbolfantasy.com/thumb/400x400/v202606180624/uploads/images/jugadores/ficha/8386.png
-Arda Güler,Real Madrid,MED,75,25/02/2005,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/11439.png
+Federico Valverde,Real Madrid,MED,125,22/07/1998,https://media.futbolfantasy.com/thumb/400x400/v202607221032/uploads/images/jugadores/ficha/3758.png
+Andriy Lunin,Real Madrid,POR,33,11/02/1999,https://media.futbolfantasy.com/thumb/400x400/v202607211239/uploads/images/jugadores/ficha/5526.png
+Vinicius Junior,Real Madrid,DEL,155,12/07/2000,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/5565.png
+Thibaut Courtois,Real Madrid,POR,48,11/05/1992,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/59.png
+Éder Militão,Real Madrid,DEF,40,18/01/1998,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/6062.png
+Rodrygo Goes,Real Madrid,DEL,62,09/01/2001,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/6631.png
+Aurélien Tchouaméni,Real Madrid,MED,90,27/01/2000,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/9669.png
+Jude Bellingham,Real Madrid,MED,150,29/06/2003,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/8386.png
+Arda Güler,Real Madrid,MED,75,25/02/2005,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/11439.png
 Carlos Fernández,Real Sociedad,DEL,21,22/05/1996,https://media.futbolfantasy.com/thumb/400x400/v202607080544/uploads/images/jugadores/ficha/1042.png
 Ander Barrenetxea,Real Sociedad,MED,43,27/12/2001,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/6363.png
-Mikel Oyarzabal,Real Sociedad,DEL,118,21/04/1997,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/2675.png
+Mikel Oyarzabal,Real Sociedad,DEL,118,21/04/1997,https://media.futbolfantasy.com/thumb/400x400/v202607201518/uploads/images/jugadores/ficha/2675.png
 Álvaro Odriozola,Real Sociedad,DEF,16,14/12/1995,https://media.futbolfantasy.com/thumb/400x400/v202607080544/uploads/images/jugadores/ficha/2807.png
 Álex Remiro,Real Sociedad,POR,40,24/03/1995,https://media.futbolfantasy.com/thumb/400x400/v202607080544/uploads/images/jugadores/ficha/1975.png
 Igor Zubeldia,Real Sociedad,DEF,23,30/03/1997,https://media.futbolfantasy.com/thumb/400x400/v202605081233/uploads/images/jugadores/ficha/2802.png
 Jon Pacheco,Real Sociedad,DEF,22,08/01/2001,https://media.futbolfantasy.com/thumb/400x400/v202607131430/uploads/images/jugadores/ficha/7725.png
-Robin Le Normand,Atlético,DEF,36,11/11/1996,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/6002.png
-Aihen Muñoz,Real Sociedad,DEF,17,16/08/1997,https://media.futbolfantasy.com/thumb/400x400/v202603181342/uploads/images/jugadores/ficha/6394.png
+Robin Le Normand,Atlético,DEF,36,11/11/1996,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/6002.png
+Aihen Muñoz,Real Sociedad,DEF,17,16/08/1997,https://media.futbolfantasy.com/thumb/400x400/v202607221558/uploads/images/jugadores/ficha/6394.png
 Javi Galán,Celta,DEF,29,19/11/1994,https://media.futbolfantasy.com/thumb/400x400/v202604301517/uploads/images/jugadores/ficha/6487.png
-Takefusa Kubo,Real Sociedad,MED,62,04/06/2001,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/7091.png
+Takefusa Kubo,Real Sociedad,MED,62,04/06/2001,https://media.futbolfantasy.com/thumb/400x400/v202607232230/uploads/images/jugadores/ficha/7091.png
 Urko González de Zarate,Espanyol,MED,28,20/03/2001,https://media.futbolfantasy.com/thumb/400x400/v202604170902/uploads/images/jugadores/ficha/8228.png
 Beñat Turrientes,Real Sociedad,MED,24,31/01/2002,https://media.futbolfantasy.com/thumb/400x400/v202607061647/uploads/images/jugadores/ficha/8651.png
 Umar Sadiq,Valencia,DEL,30,02/02/1997,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/8294.png
 Pablo Marín,Real Sociedad,MED,21,03/07/2003,https://media.futbolfantasy.com/thumb/400x400/v202607141502/uploads/images/jugadores/ficha/10830.png
-Jon Ander Olasagasti,Levante,MED,26,16/08/2000,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/8961.png
+Jon Ander Olasagasti,Levante,MED,26,16/08/2000,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/8961.png
 Unai Marrero,Real Sociedad,POR,18,09/10/2001,https://media.futbolfantasy.com/thumb/400x400/v202604300210/uploads/images/jugadores/ficha/8679.png
 Arsen Zakharyan,Real Sociedad,MED,18,26/05/2003,https://media.futbolfantasy.com/thumb/400x400/v202604231935/uploads/images/jugadores/ficha/9011.png
 Jon Aramburu,Real Sociedad,DEF,34,23/07/2002,https://media.futbolfantasy.com/thumb/400x400/v202607101513/uploads/images/jugadores/ficha/12538.png
-Joan Jordan,Sevilla,MED,17,06/07/1994,https://media.futbolfantasy.com/thumb/400x400/v202607071600/uploads/images/jugadores/ficha/1887.png
+Joan Jordan,Sevilla,MED,17,06/07/1994,https://media.futbolfantasy.com/thumb/400x400/v202607220955/uploads/images/jugadores/ficha/1887.png
 Mariano Díaz,Alavés,DEL,16,01/08/1993,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/3226.png
 Marko Dmitrovic,Espanyol,POR,32,24/01/1992,https://media.futbolfantasy.com/thumb/400x400/v202602020148/uploads/images/jugadores/ficha/3759.png
 Adrià Pedrosa,Sevilla,DEF,18,13/05/1998,https://media.futbolfantasy.com/thumb/400x400/v202607080552/uploads/images/jugadores/ficha/5587.png
-Rafa Mir,Sevilla,DEL,27,18/06/1997,https://media.futbolfantasy.com/thumb/400x400/v202607080552/uploads/images/jugadores/ficha/2687.png
-Juanlu Sánchez,Sevilla,DEF,25,15/08/2003,https://media.futbolfantasy.com/thumb/400x400/v202607141015/uploads/images/jugadores/ficha/7779.png
-Marcão,Sevilla,DEF,17,05/06/1996,https://media.futbolfantasy.com/thumb/400x400/v202607130932/uploads/images/jugadores/ficha/4208.png
-Tanguy Nianzou,Sevilla,DEF,16,07/06/2002,https://media.futbolfantasy.com/thumb/400x400/v202607061136/uploads/images/jugadores/ficha/7386.png
+Rafa Mir,Sevilla,DEL,27,18/06/1997,https://media.futbolfantasy.com/thumb/400x400/v202607181530/uploads/images/jugadores/ficha/2687.png
+Juanlu Sánchez,Sevilla,DEF,25,15/08/2003,https://media.futbolfantasy.com/thumb/400x400/v202607181530/uploads/images/jugadores/ficha/7779.png
+Marcão,Sevilla,DEF,17,05/06/1996,https://media.futbolfantasy.com/thumb/400x400/v202607251335/uploads/images/jugadores/ficha/4208.png
 Kike Salas,Sevilla,DEF,37,23/04/2002,https://media.futbolfantasy.com/thumb/400x400/v202607061113/uploads/images/jugadores/ficha/9931.png
 Djibril Sow,Sevilla,MED,30,06/02/1997,https://media.futbolfantasy.com/thumb/400x400/v202607122018/uploads/images/jugadores/ficha/3357.png
 Lucien Agoume,Sevilla,MED,31,09/02/2002,https://media.futbolfantasy.com/thumb/400x400/v202607061113/uploads/images/jugadores/ficha/7249.png
@@ -167,58 +169,63 @@ Pepelu,Valencia,MED,31,11/08/1998,https://media.futbolfantasy.com/thumb/400x400/
 Mouctar Diakhaby,Valencia,DEF,23,19/12/1996,https://media.futbolfantasy.com/thumb/400x400/v202607152151/uploads/images/jugadores/ficha/3607.png
 Cristian Rivero,Valencia,POR,15,21/03/1998,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/5080.png
 Jesús Vázquez,Valencia,DEF,17,02/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/8684.png
-Cenk Özkacar,Valencia,DEF,18,06/10/2000,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/10530.png
 André Almeida,Valencia,MED,22,30/05/2000,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/10533.png
-Diego López,Valencia,DEL,35,13/05/2002,https://media.futbolfantasy.com/thumb/400x400/v202607141035/uploads/images/jugadores/ficha/9304.png
+Diego López,Valencia,DEL,35,13/05/2002,https://media.futbolfantasy.com/thumb/400x400/v202607202247/uploads/images/jugadores/ficha/9304.png
 Fran Pérez,Rayo,MED,17,09/09/2002,https://media.futbolfantasy.com/thumb/400x400/v202607081136/uploads/images/jugadores/ficha/10210.png
-Javi Guerra,Valencia,MED,46,13/05/2003,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/9927.png
-Alberto Mari,Valencia,DEL,16,11/07/2001,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/11391.png
-Sergi Canós,Valencia,MED,17,02/02/1997,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/9201.png
+Javi Guerra,Valencia,MED,46,13/05/2003,https://media.futbolfantasy.com/thumb/400x400/v202607170030/uploads/images/jugadores/ficha/9927.png
+Alberto Mari,Valencia,DEL,16,11/07/2001,https://media.futbolfantasy.com/thumb/400x400/v202607202247/uploads/images/jugadores/ficha/11391.png
+Sergi Canós,Valencia,MED,17,02/02/1997,https://media.futbolfantasy.com/thumb/400x400/v202607202247/uploads/images/jugadores/ficha/9201.png
 Kiko Femenia,Getafe,DEF,18,02/02/1991,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/3178.png
 Denis Suárez,Alavés,MED,19,06/01/1994,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/1778.png
 Gerard Moreno,Villarreal,DEL,61,07/04/1992,https://media.futbolfantasy.com/thumb/400x400/v202607091246/uploads/images/jugadores/ficha/843.png
-Santi Comesaña,Villarreal,MED,47,05/10/1996,https://media.futbolfantasy.com/thumb/400x400/v202607091246/uploads/images/jugadores/ficha/5549.png
+Aissa Mandi,Levante,DEF,22,22/10/1991,https://media.futbolfantasy.com/thumb/400x400/v202607170442/uploads/images/jugadores/ficha/1566.png
+Santi Comesaña,Villarreal,MED,47,05/10/1996,https://media.futbolfantasy.com/thumb/400x400/v202607202125/uploads/images/jugadores/ficha/5549.png
 Gonçalo Guedes,Real Sociedad,DEL,43,29/11/1996,https://media.futbolfantasy.com/thumb/400x400/v202607101638/uploads/images/jugadores/ficha/2242.png
-Álex Baena,Atlético,MED,65,20/07/2001,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/7645.png
+Álex Baena,Atlético,MED,65,20/07/2001,https://media.futbolfantasy.com/thumb/400x400/v202607201514/uploads/images/jugadores/ficha/7645.png
 Juan Foyth,Villarreal,DEF,25,12/01/1998,https://media.futbolfantasy.com/thumb/400x400/v202607091246/uploads/images/jugadores/ficha/4705.png
-Alexander Sorloth,Atlético,DEL,69,05/12/1995,https://media.futbolfantasy.com/thumb/400x400/v202607122018/uploads/images/jugadores/ficha/5134.png
+Alexander Sorloth,Atlético,DEL,69,05/12/1995,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/5134.png
 Ilias Akhomach,Villarreal,MED,26,16/04/2004,https://media.futbolfantasy.com/thumb/400x400/v202607080715/uploads/images/jugadores/ficha/9763.png
 Ramón Terrats,Getafe,MED,29,18/10/2000,https://media.futbolfantasy.com/thumb/400x400/v202607080715/uploads/images/jugadores/ficha/8944.png
 Carlos Romero,Villarreal,DEF,63,29/10/2001,https://media.futbolfantasy.com/thumb/400x400/v202607091246/uploads/images/jugadores/ficha/11172.png
+Adrià Altimira,Deportivo,DEF,19,28/03/2001,https://media.futbolfantasy.com/thumb/400x400/v202607221734/uploads/images/jugadores/ficha/10357.png
 Pere Milla,Espanyol,MED,28,23/09/1992,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/1927.png
+Fernando Calero,Málaga,DEF,20,14/09/1995,https://media.futbolfantasy.com/thumb/400x400/v202607151606/uploads/images/jugadores/ficha/5553.png
 Leandro Cabrera,Espanyol,DEF,34,17/06/1991,https://media.futbolfantasy.com/thumb/400x400/v202607140852/uploads/images/jugadores/ficha/582.png
-José Gragera,Espanyol,MED,18,14/05/2000,https://media.futbolfantasy.com/thumb/400x400/v202607071703/uploads/images/jugadores/ficha/8106.png
-Joan Garcia,Barcelona,POR,83,04/05/2001,https://media.futbolfantasy.com/thumb/400x400/v202606152348/uploads/images/jugadores/ficha/7279.png
+José Gragera,Espanyol,MED,18,14/05/2000,https://media.futbolfantasy.com/thumb/400x400/v202607231310/uploads/images/jugadores/ficha/8106.png
+Joan Garcia,Barcelona,POR,83,04/05/2001,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/7279.png
 Javi Puado,Espanyol,DEL,29,25/05/1998,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/3807.png
 Pol Lozano,Espanyol,MED,20,06/10/1999,https://media.futbolfantasy.com/thumb/400x400/v202602020148/uploads/images/jugadores/ficha/3879.png
-Edu Expósito,Espanyol,MED,41,01/08/1996,https://media.futbolfantasy.com/thumb/400x400/v202602020148/uploads/images/jugadores/ficha/3738.png
+Edu Expósito,Espanyol,MED,41,01/08/1996,https://media.futbolfantasy.com/thumb/400x400/v202607171538/uploads/images/jugadores/ficha/3738.png
 Rubén Sánchez,Espanyol,DEF,17,04/02/2001,https://media.futbolfantasy.com/thumb/400x400/v202604170902/uploads/images/jugadores/ficha/9695.png
 Jofre Carreras,Espanyol,MED,18,17/06/2001,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/9850.png
 Omar El Hilali,Espanyol,DEF,29,12/09/2003,https://media.futbolfantasy.com/thumb/400x400/v202602020148/uploads/images/jugadores/ficha/10220.png
-Antoniu Roca,Espanyol,MED,16,05/09/2002,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/12980.png
 Daniel Raba,Valencia,DEL,17,29/10/1995,https://media.futbolfantasy.com/thumb/400x400/v202607152151/uploads/images/jugadores/ficha/3732.png
+Juan Cruz,Málaga,MED,17,25/04/2000,https://media.futbolfantasy.com/thumb/400x400/v202607200440/uploads/images/jugadores/ficha/10823.png
 César Tárrega,Valencia,DEF,26,26/02/2002,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/9762.png
 Boyomo,Osasuna,DEF,35,07/10/2001,https://media.futbolfantasy.com/thumb/400x400/v202603161419/uploads/images/jugadores/ficha/8695.png
 Álvaro Djaló,Athletic,DEL,30,16/08/1999,https://media.futbolfantasy.com/thumb/400x400/v202607080251/uploads/images/jugadores/ficha/11983.png
-Christantus Uche,Getafe,MED,36,19/05/2003,https://media.futbolfantasy.com/thumb/400x400/v202607131453/uploads/images/jugadores/ficha/13780.png
-Diego Conde,Villarreal,POR,18,28/10/1998,https://media.futbolfantasy.com/thumb/400x400/v202602141505/uploads/images/jugadores/ficha/7554.png
-Yvan Neyou,Getafe,MED,17,03/01/1997,https://media.futbolfantasy.com/thumb/400x400/v202607131453/uploads/images/jugadores/ficha/10564.png
-Kylian Mbappé,Real Madrid,DEL,178,20/12/1998,https://media.futbolfantasy.com/thumb/400x400/v202606170215/uploads/images/jugadores/ficha/3429.png
-Endrick,Real Madrid,DEL,63,21/07/2006,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/13564.png
+Christantus Uche,Getafe,MED,36,19/05/2003,https://media.futbolfantasy.com/thumb/400x400/v202607161632/uploads/images/jugadores/ficha/13780.png
+Diego Conde,Betis,POR,18,28/10/1998,https://media.futbolfantasy.com/thumb/400x400/v202602141505/uploads/images/jugadores/ficha/7554.png
+Yvan Neyou,Getafe,MED,17,03/01/1997,https://media.futbolfantasy.com/thumb/400x400/v202607220001/uploads/images/jugadores/ficha/10564.png
+Kylian Mbappé,Real Madrid,DEL,178,20/12/1998,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/3429.png
+Endrick,Real Madrid,DEL,63,21/07/2006,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/13564.png
 Chidera Ejuke,Sevilla,MED,26,02/01/1998,https://media.futbolfantasy.com/thumb/400x400/v202607111525/uploads/images/jugadores/ficha/12042.png
 Raul Moro,Osasuna,MED,20,05/12/2002,https://media.futbolfantasy.com/thumb/400x400/v202607101359/uploads/images/jugadores/ficha/7870.png
 Nikola Maras,Alavés,DEF,17,19/12/1995,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/4715.png
-Juanmi Jiménez,Getafe,DEL,16,20/05/1993,https://media.futbolfantasy.com/thumb/400x400/v202607131453/uploads/images/jugadores/ficha/340.png
-Borja Iglesias,Celta,DEL,55,17/01/1993,https://media.futbolfantasy.com/thumb/400x400/v202607150034/uploads/images/jugadores/ficha/1945.png
+Juanmi Jiménez,Getafe,DEL,16,20/05/1993,https://media.futbolfantasy.com/thumb/400x400/v202607220001/uploads/images/jugadores/ficha/340.png
+Borja Iglesias,Celta,DEL,55,17/01/1993,https://media.futbolfantasy.com/thumb/400x400/v202607201521/uploads/images/jugadores/ficha/1945.png
 Robert Navarro,Athletic,MED,29,12/04/2002,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/7293.png
 Jon Karrikaburu,Real Sociedad,DEL,16,19/09/2002,https://media.futbolfantasy.com/thumb/400x400/v202605051336/uploads/images/jugadores/ficha/9423.png
-Federico Gattoni,Sevilla,DEF,15,16/02/1999,https://media.futbolfantasy.com/thumb/400x400/v202607071600/uploads/images/jugadores/ficha/11381.png
+Federico Gattoni,Sevilla,DEF,15,16/02/1999,https://media.futbolfantasy.com/thumb/400x400/v202607220955/uploads/images/jugadores/ficha/11381.png
 Germán Valera,Elche,MED,52,16/03/2002,https://media.futbolfantasy.com/thumb/400x400/v202607160024/uploads/images/jugadores/ficha/7658.png
-Carlos Martín,Atlético,DEL,17,22/04/2002,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/9755.png
+Carlos Martín,Atlético,DEL,17,22/04/2002,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/9755.png
 Santiago Mouriño,Villarreal,DEF,35,13/02/2002,https://media.futbolfantasy.com/thumb/400x400/v202604301202/uploads/images/jugadores/ficha/11678.png
 Marc Casadó,Barcelona,MED,24,14/09/2003,https://media.futbolfantasy.com/thumb/400x400/v202605241841/uploads/images/jugadores/ficha/10217.png
 Sergio Carreira,Celta,DEF,30,13/10/2000,https://media.futbolfantasy.com/thumb/400x400/v202607060442/uploads/images/jugadores/ficha/7199.png
 Damián Rodríguez,Celta,MED,17,17/03/2003,https://media.futbolfantasy.com/thumb/400x400/v202607101436/uploads/images/jugadores/ficha/10193.png
+Julen Lobete,Málaga,DEL,17,18/09/2000,https://media.futbolfantasy.com/thumb/400x400/v202607141559/uploads/images/jugadores/ficha/7686.png
+Leo Román,Deportivo,POR,40,06/07/2000,https://media.futbolfantasy.com/thumb/400x400/v202607071504/uploads/images/jugadores/ficha/9405.png
+Andrés Martín,Racing,DEL,39,11/07/1999,https://media.futbolfantasy.com/thumb/400x400/v202607232304/uploads/images/jugadores/ficha/6890.png
 Pelayo Fernández,Rayo,DEF,15,29/04/2003,https://media.futbolfantasy.com/thumb/400x400/v202607080450/uploads/images/jugadores/ficha/13801.png
 Arnaut Danjuma,Valencia,DEL,25,31/01/1997,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/6174.png
 Unai Vencedor,Athletic,MED,17,15/11/2000,https://media.futbolfantasy.com/thumb/400x400/v202607080251/uploads/images/jugadores/ficha/7737.png
@@ -229,8 +236,8 @@ Iker Losada,Betis,MED,17,01/08/2001,https://media.futbolfantasy.com/thumb/400x40
 Valentin Rosier,Osasuna,DEF,30,19/08/1996,https://media.futbolfantasy.com/thumb/400x400/v202603110904/uploads/images/jugadores/ficha/9531.png
 Abel Bretones,Osasuna,DEF,23,21/08/2000,https://media.futbolfantasy.com/thumb/400x400/v202607060442/uploads/images/jugadores/ficha/11230.png
 Diego Javier Llorente,Betis,DEF,30,16/08/1993,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/707.png
-Maroan Sannadi,Athletic,DEL,17,01/02/2001,https://media.futbolfantasy.com/thumb/400x400/v202603111258/uploads/images/jugadores/ficha/13830.png
-Peque,Sevilla,DEL,24,04/10/2002,https://media.futbolfantasy.com/thumb/400x400/v202607061113/uploads/images/jugadores/ficha/10341.png
+Maroan Sannadi,Athletic,DEL,17,01/02/2001,https://media.futbolfantasy.com/thumb/400x400/v202607231137/uploads/images/jugadores/ficha/13830.png
+Peque,Sevilla,DEL,24,04/10/2002,https://media.futbolfantasy.com/thumb/400x400/v202607171152/uploads/images/jugadores/ficha/10341.png
 Jiri Letácek,Getafe,POR,15,09/01/1999,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/13877.png
 Sergio Gómez,Real Sociedad,DEF,35,04/09/2000,https://media.futbolfantasy.com/thumb/400x400/v202607080544/uploads/images/jugadores/ficha/6180.png
 Willy Kambwala,Villarreal,DEF,16,25/08/2004,https://media.futbolfantasy.com/thumb/400x400/v202603140009/uploads/images/jugadores/ficha/12634.png
@@ -241,27 +248,27 @@ Hugo Novoa,Alavés,DEF,17,24/01/2003,https://media.futbolfantasy.com/thumb/400x4
 Luka Sucic,Real Sociedad,MED,29,08/09/2002,https://media.futbolfantasy.com/thumb/400x400/v202607051450/uploads/images/jugadores/ficha/8392.png
 Pedro Díaz,Rayo,MED,20,05/06/1998,https://media.futbolfantasy.com/thumb/400x400/v202604121805/uploads/images/jugadores/ficha/3623.png
 Nicolas Pépé,Villarreal,DEL,76,29/05/1995,https://media.futbolfantasy.com/thumb/400x400/v202607091246/uploads/images/jugadores/ficha/7209.png
-Dani Olmo,Barcelona,MED,89,07/05/1998,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/2288.png
-Julián Álvarez,Atlético,DEL,105,31/01/2000,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/10287.png
+Dani Olmo,Barcelona,MED,89,07/05/1998,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/2288.png
+Julián Álvarez,Atlético,DEL,105,31/01/2000,https://media.futbolfantasy.com/thumb/400x400/v202607201514/uploads/images/jugadores/ficha/10287.png
+Álvaro Fernández,Deportivo,POR,19,13/04/1998,https://media.futbolfantasy.com/thumb/400x400/v202607091837/uploads/images/jugadores/ficha/3612.png
 Natan,Betis,DEF,38,06/02/2001,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/11813.png
-Pau López,Betis,POR,28,13/12/1994,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/1067.png
 Marc Bernal,Barcelona,MED,35,26/05/2007,https://media.futbolfantasy.com/thumb/400x400/v202605241841/uploads/images/jugadores/ficha/13864.png
 Juan Berrocal,Getafe,DEF,17,05/02/1999,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/5671.png
 Luiz Junior,Villarreal,POR,33,14/01/2001,https://media.futbolfantasy.com/thumb/400x400/v202602141505/uploads/images/jugadores/ficha/14125.png
 Javi Rodríguez,Celta,DEF,28,27/06/2003,https://media.futbolfantasy.com/thumb/400x400/v202607131229/uploads/images/jugadores/ficha/12534.png
 Augusto Batalla,Rayo,POR,38,30/04/1996,https://media.futbolfantasy.com/thumb/400x400/v202604211535/uploads/images/jugadores/ficha/12651.png
 Mario Martín,Getafe,MED,21,05/03/2004,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/11202.png
-Logan Costa,Villarreal,DEF,26,01/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607091246/uploads/images/jugadores/ficha/12354.png
-Alfonso González,Sevilla,MED,21,04/05/1999,https://media.futbolfantasy.com/thumb/400x400/v202607080552/uploads/images/jugadores/ficha/8703.png
+Logan Costa,Villarreal,DEF,26,01/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607202125/uploads/images/jugadores/ficha/12354.png
+Alfonso González,Sevilla,MED,21,04/05/1999,https://media.futbolfantasy.com/thumb/400x400/v202607220955/uploads/images/jugadores/ficha/8703.png
 Jon Martín,Real Sociedad,DEF,36,23/04/2006,https://media.futbolfantasy.com/thumb/400x400/v202607061647/uploads/images/jugadores/ficha/11792.png
-Toni Martinez,Alavés,DEL,51,30/06/1997,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/5032.png
-Juan Musso,Atlético,POR,21,06/05/1994,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/5942.png
-Giovani Lo Celso,Betis,MED,45,09/04/1996,https://media.futbolfantasy.com/thumb/400x400/v202607130054/uploads/images/jugadores/ficha/3717.png
+Toni Martinez,Alavés,DEL,51,30/06/1997,https://media.futbolfantasy.com/thumb/400x400/v202607171538/uploads/images/jugadores/ficha/5032.png
+Juan Musso,Atlético,POR,21,06/05/1994,https://media.futbolfantasy.com/thumb/400x400/v202607201514/uploads/images/jugadores/ficha/5942.png
+Giovani Lo Celso,Betis,MED,45,09/04/1996,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/3717.png
 Orri Steinn Óskarsson,Real Sociedad,DEL,41,29/08/2004,https://media.futbolfantasy.com/thumb/400x400/v202607101513/uploads/images/jugadores/ficha/10660.png
 Gerard Martín,Barcelona,DEF,47,26/02/2002,https://media.futbolfantasy.com/thumb/400x400/v202605241841/uploads/images/jugadores/ficha/12641.png
 Ángel Fortuño,Espanyol,POR,15,05/10/2001,https://media.futbolfantasy.com/thumb/400x400/v202602020148/uploads/images/jugadores/ficha/10219.png
 Wojciech Szczesny,Barcelona,POR,25,18/04/1990,https://media.futbolfantasy.com/thumb/400x400/v202607080332/uploads/images/jugadores/ficha/2534.png
-Raúl Asencio,Real Madrid,DEF,34,13/02/2003,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/12639.png
+Raúl Asencio,Real Madrid,DEF,34,13/02/2003,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/12639.png
 Pau Navarro,Villarreal,DEF,26,25/04/2005,https://media.futbolfantasy.com/thumb/400x400/v202603111433/uploads/images/jugadores/ficha/12860.png
 Manu Bueno,Sevilla,MED,16,27/07/2004,https://media.futbolfantasy.com/thumb/400x400/v202607061113/uploads/images/jugadores/ficha/11180.png
 Facundo Garcés,Alavés,DEF,20,05/09/1999,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/14045.png
@@ -270,45 +277,44 @@ Jones El-Abdellaoui,Celta,MED,17,12/01/2006,https://media.futbolfantasy.com/thum
 Rubén Vargas,Sevilla,DEL,47,05/08/1998,https://media.futbolfantasy.com/thumb/400x400/v202607122018/uploads/images/jugadores/ficha/9125.png
 Roberto Fernández,Espanyol,DEL,38,03/07/2002,https://media.futbolfantasy.com/thumb/400x400/v202602020148/uploads/images/jugadores/ficha/9987.png
 Ángel Ortiz,Betis,DEF,16,25/07/2004,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/10233.png
-Antony,Betis,DEL,99,24/02/2000,https://media.futbolfantasy.com/thumb/400x400/v202607141425/uploads/images/jugadores/ficha/8405.png
-Akor Adams,Sevilla,DEL,34,29/01/2000,https://media.futbolfantasy.com/thumb/400x400/v202607111525/uploads/images/jugadores/ficha/15134.png
+Antony,Betis,DEL,99,24/02/2000,https://media.futbolfantasy.com/thumb/400x400/v202607212256/uploads/images/jugadores/ficha/8405.png
 Yoel Lago,Celta,DEF,18,25/03/2004,https://media.futbolfantasy.com/thumb/400x400/v202605140335/uploads/images/jugadores/ficha/13036.png
 Tajon Buchanan,Villarreal,MED,35,08/02/1999,https://media.futbolfantasy.com/thumb/400x400/v202607091246/uploads/images/jugadores/ficha/10638.png
 Cucho Hernández,Betis,DEL,70,20/04/1999,https://media.futbolfantasy.com/thumb/400x400/v202607091404/uploads/images/jugadores/ficha/5546.png
 Peio Canales,Athletic,MED,22,17/01/2005,https://media.futbolfantasy.com/thumb/400x400/v202607080251/uploads/images/jugadores/ficha/14017.png
 Adrián Rodríguez,Alavés,POR,15,12/12/2000,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/9897.png
-Fran González,Real Madrid,POR,15,24/06/2005,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/11554.png
+Fran González,Real Madrid,POR,15,24/06/2005,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/11554.png
 Rafel Bauzà,Espanyol,MED,17,30/01/2005,https://media.futbolfantasy.com/thumb/400x400/v202607071703/uploads/images/jugadores/ficha/12918.png
 Pablo García,Betis,DEL,17,13/06/2006,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/13822.png
-Karl Etta Eyong,Levante,DEL,36,14/10/2003,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/10326.png
-Gonzalo García,Real Madrid,DEL,40,24/03/2004,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/11885.png
-Nobel Mendy,Rayo,DEF,20,03/09/2004,https://media.futbolfantasy.com/thumb/400x400/v202604121805/uploads/images/jugadores/ficha/12595.png
+Karl Etta Eyong,Levante,DEL,36,14/10/2003,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/10326.png
+Gonzalo García,Real Madrid,DEL,40,24/03/2004,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/11885.png
+Nobel Mendy,Rayo,DEF,20,03/09/2004,https://media.futbolfantasy.com/thumb/400x400/v202607201547/uploads/images/jugadores/ficha/12595.png
 Miguel Ángel Rubio,Espanyol,DEF,17,11/03/1998,https://media.futbolfantasy.com/thumb/400x400/v202602020148/uploads/images/jugadores/ficha/5220.png
 Ionut Radu,Celta,POR,37,28/05/1997,https://media.futbolfantasy.com/thumb/400x400/v202605140335/uploads/images/jugadores/ficha/5978.png
 Pedro Bigas,Elche,DEF,26,15/05/1990,https://media.futbolfantasy.com/thumb/400x400/v202604021030/uploads/images/jugadores/ficha/404.png
-Matías Dituro,Elche,POR,25,08/05/1987,https://media.futbolfantasy.com/thumb/400x400/v202602030453/uploads/images/jugadores/ficha/9161.png
+Matías Dituro,Elche,POR,25,08/05/1987,https://media.futbolfantasy.com/thumb/400x400/v202607210000/uploads/images/jugadores/ficha/9161.png
 Aleix Febas,Celta,MED,58,02/02/1996,https://media.futbolfantasy.com/thumb/400x400/v202607080410/uploads/images/jugadores/ficha/6885.png
 John Chetauya,Elche,DEF,17,25/09/2000,https://media.futbolfantasy.com/thumb/400x400/v202607060442/uploads/images/jugadores/ficha/8680.png
-Adam Boayar,Elche,MED,16,13/10/2005,https://media.futbolfantasy.com/thumb/400x400/v202607011712/uploads/images/jugadores/ficha/12922.png
+Adam Boayar,Elche,MED,16,13/10/2005,https://media.futbolfantasy.com/thumb/400x400/v202607210000/uploads/images/jugadores/ficha/12922.png
 Bambo Diaby,Elche,DEF,15,17/12/1997,https://media.futbolfantasy.com/thumb/400x400/v202607090305/uploads/images/jugadores/ficha/5022.png
 Marc Aguado,Elche,MED,24,22/02/2000,https://media.futbolfantasy.com/thumb/400x400/v202607080702/uploads/images/jugadores/ficha/10358.png
 Álvaro Núñez,Celta,DEF,24,07/07/2000,https://media.futbolfantasy.com/thumb/400x400/v202605140335/uploads/images/jugadores/ficha/11767.png
 Yago Santiago,Elche,MED,16,15/04/2003,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/11562.png
 José Salinas,Espanyol,DEF,16,30/09/2000,https://media.futbolfantasy.com/thumb/400x400/v202602020148/uploads/images/jugadores/ficha/8250.png
-Rodrigo Mendoza,Atlético,MED,22,15/03/2005,https://media.futbolfantasy.com/thumb/400x400/v202607130935/uploads/images/jugadores/ficha/10237.png
+Rodrigo Mendoza,Atlético,MED,22,15/03/2005,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/10237.png
 David Affengruber,Elche,DEF,43,19/03/2001,https://media.futbolfantasy.com/thumb/400x400/v202607140852/uploads/images/jugadores/ficha/8816.png
-Roger Brugué,Levante,DEL,17,04/11/1996,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/9157.png
-Unai Elgezabal,Levante,DEF,17,25/04/1993,https://media.futbolfantasy.com/thumb/400x400/v202607061756/uploads/images/jugadores/ficha/3158.png
-Iván Romero,Levante,DEL,34,10/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/7629.png
-Carlos Álvarez,Levante,MED,31,06/08/2003,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/8646.png
-Carlos Espí,Levante,DEL,50,24/07/2005,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/12870.png
-Jorge Cabello,Levante,DEF,15,25/04/2004,https://media.futbolfantasy.com/thumb/400x400/v202607080433/uploads/images/jugadores/ficha/12879.png
+Roger Brugué,Levante,DEL,17,04/11/1996,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/9157.png
+Unai Elgezabal,Levante,DEF,17,25/04/1993,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/3158.png
+Iván Romero,Levante,DEL,34,10/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/7629.png
+Carlos Álvarez,Levante,MED,31,06/08/2003,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/8646.png
+Carlos Espí,Levante,DEL,50,24/07/2005,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/12870.png
+Jorge Cabello,Levante,DEF,15,25/04/2004,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/12879.png
 Alex Forés,Villarreal,DEL,16,12/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607091255/uploads/images/jugadores/ficha/12656.png
-Oriol Rey,Levante,MED,17,25/02/1998,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/8088.png
-Xavi Grande,Levante,DEF,15,28/01/2005,https://media.futbolfantasy.com/thumb/400x400/v202607080433/uploads/images/jugadores/ficha/12715.png
-Adrián de la Fuente,Levante,DEF,32,26/02/1999,https://media.futbolfantasy.com/thumb/400x400/v202607141546/uploads/images/jugadores/ficha/6346.png
-Dean Huijsen,Real Madrid,DEF,72,14/04/2005,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/11830.png
-Trent Alexander-Arnold,Real Madrid,DEF,64,07/10/1998,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/4480.png
+Oriol Rey,Levante,MED,17,25/02/1998,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/8088.png
+Xavi Grande,Levante,DEF,15,28/01/2005,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/12715.png
+Adrián de la Fuente,Levante,DEF,32,26/02/1999,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/6346.png
+Dean Huijsen,Real Madrid,DEF,72,14/04/2005,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/11830.png
+Trent Alexander-Arnold,Real Madrid,DEF,64,07/10/1998,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/4480.png
 Ferran Jutglà,Celta,DEL,47,01/02/1999,https://media.futbolfantasy.com/thumb/400x400/v202605140335/uploads/images/jugadores/ficha/7842.png
 Marcos Fernández,Espanyol,DEL,17,17/05/2003,https://media.futbolfantasy.com/thumb/400x400/v202607071703/uploads/images/jugadores/ficha/10893.png
 Alemão,Rayo,DEL,28,01/04/1998,https://media.futbolfantasy.com/thumb/400x400/v202604121805/uploads/images/jugadores/ficha/11758.png
@@ -316,36 +322,36 @@ Javi Rueda,Celta,DEF,23,08/05/2002,https://media.futbolfantasy.com/thumb/400x400
 Ismael Bekhoucha,Getafe,DEF,15,20/11/2004,https://media.futbolfantasy.com/thumb/400x400/v202607131453/uploads/images/jugadores/ficha/13875.png
 Jonny Castro,Alavés,DEF,23,03/03/1994,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/189.png
 Hugo Rincón,Athletic,DEF,22,27/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202607080251/uploads/images/jugadores/ficha/11677.png
-Matteo Ruggeri,Atlético,DEF,31,11/07/2002,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/8256.png
+Matteo Ruggeri,Atlético,DEF,31,11/07/2002,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/8256.png
 Manu Fernández,Celta,DEF,16,23/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607101436/uploads/images/jugadores/ficha/16003.png
 Rafa Núñez,Elche,MED,16,25/01/2002,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/00.png
 Matia Barzic,Elche,DEF,15,31/05/2004,https://media.futbolfantasy.com/thumb/400x400/v202607080702/uploads/images/jugadores/ficha/14115.png
 Javier Hernández,Espanyol,MED,17,30/01/2004,https://media.futbolfantasy.com/thumb/400x400/v202607091502/uploads/images/jugadores/ficha/14024.png
 Álex Sancris,Getafe,MED,16,18/01/1997,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/11766.png
-Víctor García,Levante,DEF,19,16/09/1997,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/7644.png
-Dani Martín,Levante,POR,15,26/09/2005,https://media.futbolfantasy.com/thumb/400x400/v202607091144/uploads/images/jugadores/ficha/14065.png
-Kervin Arriaga,Levante,MED,26,05/01/1998,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/14989.png
+Víctor García,Levante,DEF,19,16/09/1997,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/7644.png
+Dani Martín,Levante,POR,15,26/09/2005,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/14065.png
+Kervin Arriaga,Levante,MED,26,05/01/1998,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/14989.png
 Jon Gorrotxategi,Real Sociedad,MED,34,02/02/2002,https://media.futbolfantasy.com/thumb/400x400/v202605161413/uploads/images/jugadores/ficha/11683.png
 Davinchi,Getafe,DEF,16,16/10/2007,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/16004.png
 Luiz Felipe,Rayo,DEF,17,22/03/1997,https://media.futbolfantasy.com/thumb/400x400/v202607091429/uploads/images/jugadores/ficha/5705.png
 Unai Egiluz,Athletic,DEF,16,19/03/2002,https://media.futbolfantasy.com/thumb/400x400/v202605151118/uploads/images/jugadores/ficha/11676.png
-Jeremy Toljan,Levante,DEF,20,08/08/1994,https://media.futbolfantasy.com/thumb/400x400/v202607061748/uploads/images/jugadores/ficha/4976.png
-Franco Mastantuono,Real Madrid,MED,47,14/08/2007,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/15437.png
+Jeremy Toljan,Levante,DEF,20,08/08/1994,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/4976.png
+Franco Mastantuono,Real Madrid,MED,47,14/08/2007,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/15437.png
 Gabriel Suazo,Sevilla,DEF,26,09/08/1997,https://media.futbolfantasy.com/thumb/400x400/v202607081014/uploads/images/jugadores/ficha/12358.png
 Roony Bardghji,Barcelona,DEL,30,15/11/2005,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/10658.png
-Álvaro F. Carreras,Real Madrid,DEF,43,23/03/2003,https://media.futbolfantasy.com/thumb/400x400/v202607131944/uploads/images/jugadores/ficha/10176.png
+Álvaro F. Carreras,Real Madrid,DEF,43,23/03/2003,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/10176.png
 Youssef Enríquez,Alavés,DEF,17,07/10/2005,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/14935.png
-Thiago Almada,Atlético,MED,37,26/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/11138.png
+Thiago Almada,Atlético,MED,37,26/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607201514/uploads/images/jugadores/ficha/11138.png
 Alejandro Iturbe,Elche,POR,16,02/09/2003,https://media.futbolfantasy.com/thumb/400x400/v202602030453/uploads/images/jugadores/ficha/9759.png
 Junior Firpo,Betis,DEF,19,22/08/1996,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/4620.png
 Gonzalo Petit,Betis,DEL,17,21/09/2006,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/16197.png
 Etienne Eto'o,Rayo,DEL,16,18/08/2002,https://media.futbolfantasy.com/thumb/400x400/v202607111513/uploads/images/jugadores/ficha/13811.png
-Marc Pubill,Atlético,DEF,53,20/06/2003,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/9823.png
-David Hancko,Atlético,DEF,42,13/12/1997,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/5995.png
+Marc Pubill,Atlético,DEF,53,20/06/2003,https://media.futbolfantasy.com/thumb/400x400/v202607201514/uploads/images/jugadores/ficha/9823.png
+David Hancko,Atlético,DEF,42,13/12/1997,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/5995.png
 Tyrhys Dolan,Espanyol,DEL,31,28/12/2001,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/16202.png
 Valentín Gómez,Betis,DEF,23,26/06/2003,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/16203.png
 Martim Neto,Elche,MED,19,14/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202602030453/uploads/images/jugadores/ficha/13883.png
-Pablo Campos,Levante,POR,18,28/04/2002,https://media.futbolfantasy.com/thumb/400x400/v202607061747/uploads/images/jugadores/ficha/11807.png
+Pablo Campos,Levante,POR,18,28/04/2002,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/11807.png
 Nelson Deossa,Betis,MED,24,06/02/2000,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/15696.png
 Víctor Chust,Elche,DEF,24,05/03/2000,https://media.futbolfantasy.com/thumb/400x400/v202604071509/uploads/images/jugadores/ficha/8273.png
 Filip Ugrinic,Valencia,MED,24,05/01/1999,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/12025.png
@@ -354,112 +360,171 @@ Odysseas Vlachodimos,Sevilla,POR,28,26/04/1994,https://media.futbolfantasy.com/t
 Federico Redondo,Elche,MED,17,18/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202605061142/uploads/images/jugadores/ficha/15505.png
 Mikel Goti,Real Sociedad,MED,17,23/05/2002,https://media.futbolfantasy.com/thumb/400x400/v202602020008/uploads/images/jugadores/ficha/11684.png
 Miguel Román,Celta,MED,20,26/12/2002,https://media.futbolfantasy.com/thumb/400x400/v202607101436/uploads/images/jugadores/ficha/13808.png
-Andrés Castrín,Sevilla,DEF,21,26/05/2003,https://media.futbolfantasy.com/thumb/400x400/v202607081013/uploads/images/jugadores/ficha/13888.png
+Andrés Castrín,Sevilla,DEF,21,26/05/2003,https://media.futbolfantasy.com/thumb/400x400/v202607220955/uploads/images/jugadores/ficha/13888.png
+Lucas Boyé,Alavés,DEL,32,28/02/1996,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/5124.png
 Renato Veiga,Villarreal,DEF,34,29/07/2003,https://media.futbolfantasy.com/thumb/400x400/v202607091246/uploads/images/jugadores/ficha/10114.png
 Ali Houary,Elche,MED,16,05/08/2005,https://media.futbolfantasy.com/thumb/400x400/v202607080702/uploads/images/jugadores/ficha/14118.png
 Clemens Riedel,Espanyol,DEF,20,19/07/2003,https://media.futbolfantasy.com/thumb/400x400/v202602020148/uploads/images/jugadores/ficha/16308.png
-Alejandro Primo,Levante,POR,15,10/07/2004,https://media.futbolfantasy.com/thumb/400x400/v202607061756/uploads/images/jugadores/ficha/10191.png
+Alejandro Primo,Levante,POR,15,10/07/2004,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/10191.png
 Arnau Tenas,Villarreal,POR,21,30/05/2001,https://media.futbolfantasy.com/thumb/400x400/v202602141505/uploads/images/jugadores/ficha/7569.png
 Grady Diangana,Elche,MED,16,19/04/1998,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/5194.png
 Tani Oluwaseyi,Villarreal,DEL,24,15/05/2000,https://media.futbolfantasy.com/thumb/400x400/v202607091246/uploads/images/jugadores/ficha/13440.png
 Carlos Soler,Real Sociedad,MED,48,02/01/1997,https://media.futbolfantasy.com/thumb/400x400/v202604081236/uploads/images/jugadores/ficha/2799.png
-Fábio Cardoso,Sevilla,DEF,16,19/04/1994,https://media.futbolfantasy.com/thumb/400x400/v202607071600/uploads/images/jugadores/ficha/9500.png
+Fábio Cardoso,Sevilla,DEF,16,19/04/1994,https://media.futbolfantasy.com/thumb/400x400/v202607181530/uploads/images/jugadores/ficha/9500.png
 Georges Mikautadze,Villarreal,DEL,86,31/10/2000,https://media.futbolfantasy.com/thumb/400x400/v202604011155/uploads/images/jugadores/ficha/12139.png
-Aymeric Laporte,Athletic,DEF,43,27/05/1994,https://media.futbolfantasy.com/thumb/400x400/v202607100038/uploads/images/jugadores/ficha/697.png
+Aymeric Laporte,Athletic,DEF,43,27/05/1994,https://media.futbolfantasy.com/thumb/400x400/v202607201513/uploads/images/jugadores/ficha/697.png
 Alejandro Rego,Athletic,MED,17,11/06/2003,https://media.futbolfantasy.com/thumb/400x400/v202604131910/uploads/images/jugadores/ficha/15409.png
+Jofre Torrents,Barcelona,DEF,15,,https://media.futbolfantasy.com/thumb/400x400/v202605241841/uploads/images/jugadores/ficha/16167.png
 Iñigo Arguibide,Osasuna,DEF,15,19/04/2005,https://media.futbolfantasy.com/thumb/400x400/v202607060442/uploads/images/jugadores/ficha/12823.png
 Selton Sánchez,Athletic,MED,16,20/02/2007,https://media.futbolfantasy.com/thumb/400x400/v202607081118/uploads/images/jugadores/ficha/16810.png
 Joaquín Oso,Sevilla,DEF,25,09/07/2003,https://media.futbolfantasy.com/thumb/400x400/v202607131043/uploads/images/jugadores/ficha/12596.png
-Kareem Tunde,Levante,MED,16,19/08/2005,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/16022.png
-Paco Cortés,Levante,MED,16,11/08/2007,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/13145.png
+Kareem Tunde,Levante,MED,16,19/08/2005,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/16022.png
+Paco Cortés,Levante,MED,16,11/08/2007,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/13145.png
 Thiago Fernández,Villarreal,MED,27,03/04/2004,https://media.futbolfantasy.com/thumb/400x400/v202607080715/uploads/images/jugadores/ficha/17116.png
 Martín Satriano,Getafe,DEL,33,20/02/2001,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/8496.png
 Sebastián Boselli,Getafe,DEF,16,04/12/2003,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/17161.png
 Carlos Macià,Villarreal,MED,16,01/09/2008,https://media.futbolfantasy.com/thumb/400x400/v202602141505/uploads/images/jugadores/ficha/00.png
 Zaid Romero,Getafe,DEF,25,15/12/1999,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/14210.png
-Tai Abed,Levante,MED,16,03/08/2004,https://media.futbolfantasy.com/thumb/400x400/v202607061755/uploads/images/jugadores/ficha/15086.png
+Tai Abed,Levante,MED,16,03/08/2004,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/15086.png
 Lucas Cepeda,Elche,MED,16,31/10/2002,https://media.futbolfantasy.com/thumb/400x400/v202607060441/uploads/images/jugadores/ficha/17248.png
 Ángel Pérez,Alavés,DEF,23,08/06/2002,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/15127.png
 Asier Osambela,Osasuna,MED,16,30/10/2004,https://media.futbolfantasy.com/thumb/400x400/v202607080436/uploads/images/jugadores/ficha/12453.png
 Ville Koski,Alavés,DEF,17,27/01/2002,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/17284.png
 Gonzalo Villar,Elche,MED,22,23/03/1998,https://media.futbolfantasy.com/thumb/400x400/v202603131742/uploads/images/jugadores/ficha/5227.png
 Alex Freeman,Villarreal,DEF,19,09/08/2004,https://media.futbolfantasy.com/thumb/400x400/v202607091246/uploads/images/jugadores/ficha/17275.png
-Ademola Lookman,Atlético,DEL,87,20/10/1997,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/4434.png
+Ademola Lookman,Atlético,DEL,87,20/10/1997,https://media.futbolfantasy.com/thumb/400x400/v202607171538/uploads/images/jugadores/ficha/4434.png
 Álvaro Fidalgo,Betis,MED,26,09/04/1997,https://media.futbolfantasy.com/thumb/400x400/v202607091404/uploads/images/jugadores/ficha/6393.png
 Tete Morente,Elche,MED,17,04/12/1996,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/6882.png
-Obed Vargas,Atlético,MED,23,05/08/2005,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/15572.png
+Obed Vargas,Atlético,MED,23,05/08/2005,https://media.futbolfantasy.com/thumb/400x400/v202607201929/uploads/images/jugadores/ficha/15572.png
 Matías Vecino,Celta,MED,17,24/08/1991,https://media.futbolfantasy.com/thumb/400x400/v202605141324/uploads/images/jugadores/ficha/5313.png
 Buba Sangaré,Elche,DEF,15,06/08/2007,https://media.futbolfantasy.com/thumb/400x400/v202607122018/uploads/images/jugadores/ficha/12878.png
-Thiago Pitarch,Real Madrid,MED,24,03/08/2007,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/16237.png
+Julio Díaz,Atlético,DEF,15,10/01/2005,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/17129.png
+Thiago Pitarch,Real Madrid,MED,24,03/08/2007,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/16237.png
 Xavi Espart,Barcelona,DEF,17,21/05/2007,https://media.futbolfantasy.com/thumb/400x400/v202607141312/uploads/images/jugadores/ficha/16765.png
-Manuel Ángel,Real Madrid,MED,16,15/03/2004,https://media.futbolfantasy.com/thumb/400x400/v202607132001/uploads/images/jugadores/ficha/11886.png
-César Palacios,Real Madrid,MED,17,11/11/2004,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/00.png
-Nacho Pérez,Levante,DEF,15,29/08/2008,https://media.futbolfantasy.com/thumb/400x400/v202607080434/uploads/images/jugadores/ficha/16020.png
+Manuel Ángel,Real Madrid,MED,16,15/03/2004,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/11886.png
+César Palacios,Real Madrid,MED,17,11/11/2004,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/00.png
+Nacho Pérez,Levante,DEF,15,29/08/2008,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/16020.png
 Aitor Mañas,Alavés,DEL,16,05/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202607080734/uploads/images/jugadores/ficha/12925.png
 Iker Córdoba,Valencia,DEF,15,11/11/2005,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/14034.png
 Hugo López,Villarreal,MED,16,04/03/2007,https://media.futbolfantasy.com/thumb/400x400/v202607080715/uploads/images/jugadores/ficha/16319.png
 Tomás Mendes,Alavés,MED,16,21/11/2004,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/9863.png
 Selu Diallo,Alavés,MED,16,01/10/2003,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/11719.png
 Beñat Gerenabarrena,Athletic,MED,17,29/03/2003,https://media.futbolfantasy.com/thumb/400x400/v202607081118/uploads/images/jugadores/ficha/10213.png
-Álex Grimaldo,Atlético,DEF,52,20/09/1995,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/2771.png
+Álex Grimaldo,Atlético,DEF,52,20/09/1995,https://media.futbolfantasy.com/thumb/400x400/v202607201514/uploads/images/jugadores/ficha/2771.png
 Toni Fernández,Barcelona,DEL,17,15/07/2008,https://media.futbolfantasy.com/thumb/400x400/v202607141312/uploads/images/jugadores/ficha/13860.png
 Tomás Marqués,Barcelona,MED,15,30/10/2006,https://media.futbolfantasy.com/thumb/400x400/v202607141309/uploads/images/jugadores/ficha/00.png
 Álvaro Cortés,Barcelona,DEF,17,17/03/2005,https://media.futbolfantasy.com/thumb/400x400/v202607080332/uploads/images/jugadores/ficha/00.png
-Anthony Gordon,Barcelona,DEL,110,24/02/2001,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/7595.png
+Anthony Gordon,Barcelona,DEL,110,24/02/2001,https://media.futbolfantasy.com/thumb/400x400/v202607201517/uploads/images/jugadores/ficha/7595.png
 Áron Yaakobishvili,Barcelona,POR,15,06/03/2006,https://media.futbolfantasy.com/thumb/400x400/v202607141312/uploads/images/jugadores/ficha/12566.png
-Guilherme Fernandes,Betis,POR,16,28/03/2001,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/11874.png
 Abiel Osorio,Elche,DEL,23,13/06/2002,https://media.futbolfantasy.com/thumb/400x400/v202607100048/uploads/images/jugadores/ficha/00.png
 Roger Hinojo,Espanyol,DEF,17,21/02/2005,https://media.futbolfantasy.com/thumb/400x400/v202607090442/uploads/images/jugadores/ficha/15316.png
-Enzo Bardelli,Levante,MED,20,11/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607080433/uploads/images/jugadores/ficha/00.png
-Edgar Alcañiz,Levante,MED,15,18/03/2005,https://media.futbolfantasy.com/thumb/400x400/v202607080433/uploads/images/jugadores/ficha/12889.png
+Enzo Bardelli,Levante,MED,20,11/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/18006.png
+Edgar Alcañiz,Levante,MED,15,18/03/2005,https://media.futbolfantasy.com/thumb/400x400/v202607161602/uploads/images/jugadores/ficha/12889.png
 Samu Becerra,Rayo,MED,16,01/06/2006,https://media.futbolfantasy.com/thumb/400x400/v202607092217/uploads/images/jugadores/ficha/16146.png
-Marc Cucurella,Real Madrid,DEF,86,22/07/1998,https://media.futbolfantasy.com/thumb/400x400/v202607060442/uploads/images/jugadores/ficha/5013.png
-Bernardo Silva,Real Madrid,MED,72,10/08/1994,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/3431.png
-Ibrahima Konaté,Real Madrid,DEF,67,25/05/1999,https://media.futbolfantasy.com/thumb/400x400/v202607042135/uploads/images/jugadores/ficha/4884.png
+Marc Cucurella,Real Madrid,DEF,86,22/07/1998,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/5013.png
+Bernardo Silva,Real Madrid,MED,72,10/08/1994,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/3431.png
+Ibrahima Konaté,Real Madrid,DEF,67,25/05/1999,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/4884.png
 Iñaki Rupérez,Real Sociedad,DEF,15,07/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202607091145/uploads/images/jugadores/ficha/12694.png
 Kazunari Kita,R. Sociedad B,DEF,15,16/09/2005,https://media.futbolfantasy.com/thumb/400x400/v202607101514/uploads/images/jugadores/ficha/16217.png
 Arouna Sangante,Sevilla,DEF,29,12/04/2002,https://media.futbolfantasy.com/thumb/400x400/v202607132122/uploads/images/jugadores/ficha/00.png
 Justin de Haas,Valencia,DEF,29,01/02/2000,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/18018.png
-Dani Requena,Villarreal,MED,17,12/02/2004,https://media.futbolfantasy.com/thumb/400x400/v202607091254/uploads/images/jugadores/ficha/12598.png
+Dani Requena,Levante,MED,17,12/02/2004,https://media.futbolfantasy.com/thumb/400x400/v202607201251/uploads/images/jugadores/ficha/12598.png
 Facundo Bernal,Betis,MED,20,21/08/2003,https://media.futbolfantasy.com/thumb/400x400/v202607091403/uploads/images/jugadores/ficha/15736.png
 Álex Calatrava,Espanyol,MED,19,22/06/2000,https://media.futbolfantasy.com/thumb/400x400/v202607091502/uploads/images/jugadores/ficha/11863.png
 Quilindschy Hartman,Espanyol,DEF,28,14/11/2001,https://media.futbolfantasy.com/thumb/400x400/v202607091502/uploads/images/jugadores/ficha/11467.png
 Jean Ives Valou,Getafe,DEF,15,22/12/2005,https://media.futbolfantasy.com/thumb/400x400/v202607131453/uploads/images/jugadores/ficha/14816.png
-David Jiménez,Real Madrid,DEF,17,14/03/2004,https://media.futbolfantasy.com/thumb/400x400/v202607132001/uploads/images/jugadores/ficha/14700.png
-Denzel Dumfries,Real Madrid,DEF,51,18/04/1996,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/6055.png
+David Jiménez,Real Madrid,DEF,17,14/03/2004,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/14700.png
+Denzel Dumfries,Real Madrid,DEF,51,18/04/1996,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/6055.png
 Ryunosuke Sato,Valencia,MED,18,16/10/2006,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/18031.png
 Aliou Dieng,Valencia,MED,29,16/10/1997,https://media.futbolfantasy.com/thumb/400x400/v202607141031/uploads/images/jugadores/ficha/15928.png
 Gabriel Moscardo,Espanyol,MED,19,28/09/2005,https://media.futbolfantasy.com/thumb/400x400/v202607101051/uploads/images/jugadores/ficha/15957.png
-Morten Hjulmand,Atlético,MED,85,25/06/1999,https://media.futbolfantasy.com/thumb/400x400/v202607140920/uploads/images/jugadores/ficha/10393.png
-Antonio Blanco,Alavés,MED,37,23/07/2000,https://media.futbolfantasy.com/thumb/400x400/v202607150033/uploads/images/jugadores/ficha/8737.png
-Pablo Ibáñez,Alavés,MED,24,20/09/1998,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/10258.png
-Lucas Boyé,Alavés,DEL,32,28/02/1996,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/5124.png
+Morten Hjulmand,Atlético,MED,85,25/06/1999,https://media.futbolfantasy.com/thumb/400x400/v202607181452/uploads/images/jugadores/ficha/10393.png
+Mikel Rodriguez,Alavés,MED,16,03/04/2002,https://media.futbolfantasy.com/thumb/400x400/v202607180900/uploads/images/jugadores/ficha/00.png
+Andrés García,Getafe,DEF,17,07/02/2003,https://media.futbolfantasy.com/thumb/400x400/v202607180443/uploads/images/jugadores/ficha/11916.png
+Germán Parreño,Deportivo,POR,15,16/02/1993,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/698.png
+Ximo Navarro,Deportivo,DEF,17,23/01/1990,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/392.png
+Pierre-Emerick Aubameyang,Deportivo,DEL,33,18/06/1989,https://media.futbolfantasy.com/thumb/400x400/v202607201705/uploads/images/jugadores/ficha/3414.png
+Luismi Cruz,Deportivo,MED,18,23/05/2001,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/9772.png
+Bil Nsongo,Deportivo,DEL,18,21/09/2004,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/16863.png
+Noé Carrillo,Deportivo,MED,15,28/12/2006,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/00.png
+Giacomo Quagliata,Deportivo,DEF,17,19/02/2000,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/10473.png
+Arnau Comas,Deportivo,DEF,16,11/04/2000,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/9854.png
+José Ángel Jurado,Deportivo,MED,17,21/06/1992,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/1980.png
+Miguel Loureiro,Deportivo,DEF,18,21/11/1996,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/10478.png
+Mario Soriano,Deportivo,DEL,26,22/04/2002,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/8712.png
+Zakaria Eddahchouri,Deportivo,DEL,18,11/05/2000,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/15164.png
+Charlie Patino,Deportivo,MED,16,17/10/2003,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/9847.png
+Diego Villares,Deportivo,MED,17,17/06/1996,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/13972.png
+David Mella,Deportivo,DEL,28,23/05/2005,https://media.futbolfantasy.com/thumb/400x400/v202607231723/uploads/images/jugadores/ficha/13975.png
+Dani Barcia,Deportivo,DEF,17,19/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/13970.png
+Riki Rodríguez,Deportivo,MED,17,25/09/1997,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/7309.png
+Yeremay Hernández,Deportivo,DEL,50,10/12/2002,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/13974.png
+Lucas Noubi,Deportivo,DEF,17,15/01/2005,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/16099.png
+Eric Puerto,Deportivo,POR,15,28/10/2002,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/13968.png
+Teun Gijselhart,Deportivo,MED,17,06/04/2005,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/00.png
+Jairo Noriega,Deportivo,MED,16,14/08/2003,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/00.png
+Rubén López,Deportivo,MED,16,26/08/2004,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/13973.png
+Kevin Sánchez,Deportivo,DEL,16,20/02/2005,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/00.png
+Mohamed Bouldini,Deportivo,DEL,16,27/11/1995,https://media.futbolfantasy.com/thumb/400x400/v202607221734/uploads/images/jugadores/ficha/9997.png
+Bright Ede,Deportivo,DEF,15,18/02/2007,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/00.png
+Lorenzo Amatucci,Deportivo,MED,20,05/02/2004,https://media.futbolfantasy.com/thumb/400x400/v202607191856/uploads/images/jugadores/ficha/11198.png
+Jonathan Asp Jensen,Deportivo,MED,20,,https://media.futbolfantasy.com/thumb/400x400/v202607210054/uploads/images/jugadores/ficha/00.png
+Einar Galilea,Málaga,DEF,15,22/05/1994,https://media.futbolfantasy.com/thumb/400x400/v202607221746/uploads/images/jugadores/ficha/3174.png
+Joaquín Muñoz,Málaga,MED,18,10/03/1999,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/6050.png
+Adrián Niño,Málaga,DEL,18,19/06/2004,https://media.futbolfantasy.com/thumb/400x400/v202607191842/uploads/images/jugadores/ficha/12475.png
+Carlos López,Málaga,POR,15,13/11/2004,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/13978.png
+Rafa Rodríguez,Málaga,MED,16,10/07/2003,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/15336.png
+Rafa Garrido,Málaga,DEF,15,09/11/2004,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/15344.png
+Eneko Jauregi,Málaga,DEL,15,13/07/1996,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/6814.png
+Aarón Ochoa,Málaga,MED,16,18/04/2007,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/13984.png
+Izan Merino,Málaga,MED,19,15/04/2006,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/13983.png
+Álex Pastor,Málaga,DEF,17,01/10/1999,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/10353.png
+Alfonso Herrero,Málaga,POR,21,21/04/1994,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/6973.png
+Ramón Enríquez,Málaga,MED,16,19/04/2001,https://media.futbolfantasy.com/thumb/400x400/v202607221746/uploads/images/jugadores/ficha/7703.png
+David Larrubia,Málaga,MED,30,20/04/2002,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/8780.png
+Diego Murillo,Málaga,DEF,16,14/03/2001,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/13979.png
+Dani Sánchez,Málaga,DEF,16,14/01/2000,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/13980.png
+Juanpe Jiménez,Málaga,MED,16,31/03/1996,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/7238.png
+Carlos Puga,Málaga,DEF,18,26/11/2000,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/13982.png
+Dani Lorenzo,Málaga,MED,19,05/04/2003,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/16286.png
+Angel Recio,Málaga,DEF,15,05/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/15417.png
+Chupete,Málaga,DEL,33,24/08/2004,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/14096.png
+Haitam Abaida,Málaga,DEL,15,01/06/2002,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/9321.png
+Pablo Arriaza,Málaga,DEF,15,20/08/2003,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/00.png
+Moussa Diarra,Málaga,DEF,15,20/01/2002,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/10832.png
+Sergio Canales,Racing,MED,44,16/02/1991,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/132.png
+Iñigo Vicente,Racing,MED,32,06/01/1998,https://media.futbolfantasy.com/thumb/400x400/v202607232304/uploads/images/jugadores/ficha/6442.png
+Sergio Martínez,Racing,MED,16,15/05/2007,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/16262.png
+Giorgi Guliashvili,Racing,DEL,18,05/09/2001,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/00.png
+Juan Carlos Arana,Racing,DEL,17,08/02/2000,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/9930.png
+Manu Hernando,Racing,DEF,17,19/07/1998,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/3836.png
+Álvaro Mantilla,Racing,DEF,18,09/05/2000,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/10336.png
+Íñigo Sainz-Maza,Racing,MED,16,16/06/1998,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/10338.png
+Suleiman Camara,Racing,DEL,16,07/12/2001,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/10348.png
+Maguette Gueye,Racing,MED,18,30/12/2002,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/14155.png
+Simon Eriksson,Racing,POR,16,24/04/2006,https://media.futbolfantasy.com/thumb/400x400/v202607191857/uploads/images/jugadores/ficha/15033.png
+Jorge Salinas,Racing,DEF,18,03/04/2007,https://media.futbolfantasy.com/thumb/400x400/v202607210408/uploads/images/jugadores/ficha/14105.png
+Gustavo Puerta,Racing,MED,21,23/07/2003,https://media.futbolfantasy.com/thumb/400x400/v202607210408/uploads/images/jugadores/ficha/12079.png
+Facundo González,Racing,DEF,18,06/06/2003,https://media.futbolfantasy.com/thumb/400x400/v202607232304/uploads/images/jugadores/ficha/10209.png
+Karim Adeyemi,Barcelona,DEL,75,18/01/2002,https://media.futbolfantasy.com/thumb/400x400/v202509300516/uploads/images/jugadores/ficha/8395.png
 Patrik Mercado,Sevilla,MED,25,31/07/2003,https://media.futbolfantasy.com/thumb/400x400/v202607100905/uploads/images/jugadores/ficha/00.png
 Gustavo Albarracín,Alavés,MED,15,28/04/2006,https://media.futbolfantasy.com/thumb/400x400/v202607091514/uploads/images/jugadores/ficha/16242.png
-Jorge Cestero,Real Madrid,MED,7,24/03/2006,https://media.futbolfantasy.com/thumb/400x400/v202607131946/uploads/images/jugadores/ficha/00.png
-Miguel Sierra,Sevilla,MED,16,,https://media.futbolfantasy.com/thumb/400x400/v202607020905/uploads/images/jugadores/ficha/16236.png
-Asier Villalibre,Racing,DEL,7,30/09/1997,https://media.futbolfantasy.com/thumb/400x400/v202607100045/uploads/images/jugadores/ficha/3671.png
-Fernando Calero,Málaga,DEF,8,14/09/1995,https://media.futbolfantasy.com/thumb/400x400/v202607151606/uploads/images/jugadores/ficha/5553.png
-Jofre Torrents,Barcelona,DEF,7,,https://media.futbolfantasy.com/thumb/400x400/v202605241841/uploads/images/jugadores/ficha/16167.png
-Alberto Risco,Getafe,MED,7,30/08/2005,https://media.futbolfantasy.com/thumb/400x400/v202607062104/uploads/images/jugadores/ficha/12917.png
+Josan Ferrández,Elche,MED,8,03/12/1989,https://media.futbolfantasy.com/thumb/400x400/v202607060440/uploads/images/jugadores/ficha/1859.png
+Jorge Cestero,Real Madrid,MED,7,24/03/2006,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/00.png
+Miguel Sierra,Sevilla,MED,16,,https://media.futbolfantasy.com/thumb/400x400/v202607181530/uploads/images/jugadores/ficha/16236.png
+Alberto Risco,Getafe,MED,7,30/08/2005,https://media.futbolfantasy.com/thumb/400x400/v202607172244/uploads/images/jugadores/ficha/12917.png
 Pau Cabanes,Villarreal,DEL,7,17/02/2005,https://media.futbolfantasy.com/thumb/400x400/v202607091255/uploads/images/jugadores/ficha/13032.png
 Arkaitz Mariezkurrena,Real Sociedad,MED,7,05/04/2005,https://media.futbolfantasy.com/thumb/400x400/v202602020153/uploads/images/jugadores/ficha/14020.png
-Víctor Valdepeñas,Real Madrid,DEF,7,20/10/2006,https://media.futbolfantasy.com/thumb/400x400/v202607132001/uploads/images/jugadores/ficha/15326.png
-Julio Díaz,Atlético,DEF,8,10/01/2005,https://media.futbolfantasy.com/thumb/400x400/v202607130938/uploads/images/jugadores/ficha/17129.png
-Javi Morcillo,Atlético,MED,7,15/03/2006,https://media.futbolfantasy.com/thumb/400x400/v202607130938/uploads/images/jugadores/ficha/00.png
-Javier Boñar,Atlético,DEF,7,03/06/2005,https://media.futbolfantasy.com/thumb/400x400/v202607130938/uploads/images/jugadores/ficha/12484.png
-Dani Martínez,Atlético,DEF,7,05/05/2004,https://media.futbolfantasy.com/thumb/400x400/v202607130946/uploads/images/jugadores/ficha/11861.png
-Rayane Belaid,Atlético,MED,7,11/02/2005,https://media.futbolfantasy.com/thumb/400x400/v202607130938/uploads/images/jugadores/ficha/12608.png
-Miguel Cubo,Atlético,DEL,8,,https://media.futbolfantasy.com/thumb/400x400/v202607130938/uploads/images/jugadores/ficha/00.png
-Leo Román,Deportivo,POR,9,06/07/2000,https://media.futbolfantasy.com/thumb/400x400/v202607071504/uploads/images/jugadores/ficha/9405.png
-Adrià Altimira,Deportivo,DEF,7,28/03/2001,https://media.futbolfantasy.com/thumb/400x400/v202607091838/uploads/images/jugadores/ficha/10357.png
-Álvaro Fernández,Deportivo,POR,8,13/04/1998,https://media.futbolfantasy.com/thumb/400x400/v202607091837/uploads/images/jugadores/ficha/3612.png
+Víctor Valdepeñas,Real Madrid,DEF,7,20/10/2006,https://media.futbolfantasy.com/thumb/400x400/v202607210851/uploads/images/jugadores/ficha/15326.png
+Javi Morcillo,Atlético,MED,7,15/03/2006,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/00.png
+Javier Boñar,Atlético,DEF,7,03/06/2005,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/12484.png
+Dani Martínez,Atlético,DEF,7,05/05/2004,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/11861.png
+Rayane Belaid,Atlético,MED,7,11/02/2005,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/12608.png
+Miguel Cubo,Atlético,DEL,8,,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/00.png
 Miguel Angel Morro,Rayo,POR,7,11/09/2000,https://media.futbolfantasy.com/thumb/400x400/v202607082137/uploads/images/jugadores/ficha/5718.png
 Hugo González,Celta,MED,7,07/02/2003,https://media.futbolfantasy.com/thumb/400x400/v202607101436/uploads/images/jugadores/ficha/9744.png
 Aingeru Olabarrieta,Athletic,MED,8,14/11/2005,https://media.futbolfantasy.com/thumb/400x400/v202607080253/uploads/images/jugadores/ficha/12604.png
-Javi Serrano,Atlético,MED,7,16/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202607112032/uploads/images/jugadores/ficha/9314.png
-Julen Lobete,Málaga,DEL,7,18/09/2000,https://media.futbolfantasy.com/thumb/400x400/v202607141559/uploads/images/jugadores/ficha/7686.png
-Andrés Martín,Racing,DEL,7,11/07/1999,https://media.futbolfantasy.com/thumb/400x400/v202607160030/uploads/images/jugadores/ficha/6890.png
-Arnau Ortiz,Atlético,DEL,7,29/10/2001,https://media.futbolfantasy.com/thumb/400x400/v202607130948/uploads/images/jugadores/ficha/00.png
-Alberto Flores,Sevilla,POR,7,10/11/2003,https://media.futbolfantasy.com/thumb/400x400/v202605101450/uploads/images/jugadores/ficha/9824.png
-Mario Domínguez,Valencia,DEL,7,10/02/2004,https://media.futbolfantasy.com/thumb/400x400/v202607152151/uploads/images/jugadores/ficha/10166.png
+Javi Serrano,Atlético,MED,7,16/01/2003,https://media.futbolfantasy.com/thumb/400x400/v202607170354/uploads/images/jugadores/ficha/9314.png
+Arnau Ortiz,Atlético,DEL,7,29/10/2001,https://media.futbolfantasy.com/thumb/400x400/v202607211012/uploads/images/jugadores/ficha/00.png
+Alberto Flores,Sevilla,POR,7,10/11/2003,https://media.futbolfantasy.com/thumb/400x400/v202607181530/uploads/images/jugadores/ficha/9824.png
+Mario Domínguez,Valencia,DEL,7,10/02/2004,https://media.futbolfantasy.com/thumb/400x400/v202607171158/uploads/images/jugadores/ficha/10166.png

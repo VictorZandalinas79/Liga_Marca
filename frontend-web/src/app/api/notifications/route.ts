@@ -21,13 +21,36 @@ export async function GET() {
   // 2. Obtener la jornada en marcha para mostrar sus multas
   const currentMatchday = await getCurrentMatchday(supabase)
 
+  // División del usuario actual: solo se le notifican las sanciones de su
+  // propia división (las sanciones son independientes por división).
+  const { data: myProfile } = await supabase
+    .from('profiles')
+    .select('division')
+    .eq('id', user.id)
+    .maybeSingle()
+  const myDivision = (myProfile?.division as number | null) ?? null
+
+  // Conjunto de usuarios de mi división (para filtrar las sanciones ya
+  // consolidadas en BD, que no llevan columna de división).
+  let divisionUserIds: Set<string> | null = null
+  if (myDivision != null) {
+    const { data: divProfiles } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('division', myDivision)
+    divisionUserIds = new Set((divProfiles ?? []).map(p => p.id as string))
+  }
+
   let penaltyNotifications: any[] = []
   if (currentMatchday) {
     // A. Sanciones consolidadas en base de datos
-    const { data: penalties } = await supabase
+    const { data: penaltiesRaw } = await supabase
       .from('penalties')
       .select('id, matchday, description, points, user_id, created_at, profiles(full_name)')
       .eq('matchday', currentMatchday)
+    const penalties = divisionUserIds
+      ? (penaltiesRaw ?? []).filter(p => divisionUserIds!.has(p.user_id as string))
+      : penaltiesRaw
 
     if (penalties) {
       penaltyNotifications = penalties.map(p => {
@@ -52,7 +75,7 @@ export async function GET() {
       // SOLO mostrar sanciones en vivo si ya estamos a <= 1 hora del primer partido
       const isLocked = await isMatchdayLockStarted(supabase, currentMatchday)
       if (isLocked) {
-        const liveInfractions = await getLiveInfractions(supabase, currentMatchday)
+        const liveInfractions = await getLiveInfractions(supabase, currentMatchday, myDivision)
         liveNotifications = liveInfractions.map(inf => ({
           id: `live-inf-${inf.id}`,
           type: 'players_locked',

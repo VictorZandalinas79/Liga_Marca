@@ -12,11 +12,14 @@ export async function GET(request: NextRequest) {
   const matchdayParam = request.nextUrl.searchParams.get('matchday')
   const currentMatchday = matchdayParam ? parseInt(matchdayParam, 10) : await getCurrentMatchday(supabase)
 
+  const divisionParam = request.nextUrl.searchParams.get('division')
+  const division = divisionParam ? parseInt(divisionParam, 10) : null
+
   if (!currentMatchday) {
     return NextResponse.json({ infractions: [] })
   }
 
-  const infractions = await getLiveInfractions(supabase, currentMatchday)
+  const infractions = await getLiveInfractions(supabase, currentMatchday, division)
 
   // Verificar si ya hay sanciones oficiales consolidadas en base de datos para esta jornada.
   // Si las hay, no mostramos las infracciones en vivo (que son temporales/duplicadas).

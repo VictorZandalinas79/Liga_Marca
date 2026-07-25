@@ -889,7 +889,14 @@ export default function DashboardPage() {
     const fetchRanks = async () => {
       if (!user?.id) return;
       try {
-        const { standings } = await getStandings(supabase);
+        // Rankings dentro de la propia división del usuario (independientes por división)
+        const { data: myProfile } = await supabase
+          .from('profiles')
+          .select('division')
+          .eq('id', user.id)
+          .maybeSingle();
+        const myDivision = (myProfile?.division as number | null) ?? null;
+        const { standings } = await getStandings(supabase, myDivision);
         if (!standings || standings.length === 0) {
           setLoadingRanks(false);
           return;

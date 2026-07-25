@@ -63,6 +63,17 @@ export async function PATCH(
     update.amount_paid = Number.isFinite(n) && n >= 0 ? n : 0
     touchProfile = true
   }
+  if ('division' in body) {
+    // null / '' => sin asignar; solo se aceptan las divisiones 1, 2 y 3.
+    const raw = body.division
+    if (raw === null || raw === '' || raw === undefined) {
+      update.division = null
+    } else {
+      const d = Number(raw)
+      update.division = [1, 2, 3].includes(d) ? d : null
+    }
+    touchProfile = true
+  }
 
   if (touchProfile) {
     const { error } = await admin.from('profiles').upsert(update, { onConflict: 'id' })

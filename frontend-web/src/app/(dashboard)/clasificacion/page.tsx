@@ -63,6 +63,10 @@ export default function ClasificacionPage() {
   const [expandedUser, setExpandedUser] = useState<string | null>(null)
   const [userTeamData, setUserTeamData] = useState<Record<string, any>>({})
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  // División seleccionada (pestaña). Las clasificaciones son independientes por
+  // división. Arranca en null hasta conocer la del usuario para no cargar nada global.
+  const [selectedDivision, setSelectedDivision] = useState<number | null>(null)
+  const [currentUserDivision, setCurrentUserDivision] = useState<number | null>(null)
   const supabase = createClient()
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
@@ -80,14 +84,27 @@ export default function ClasificacionPage() {
   }
 
   useEffect(() => {
+    if (selectedDivision == null) return
     const fetchStandings = async () => {
+      setLoading(true)
       await fetchMatchdays()
 
-      const { data: userTeamsData } = await supabase
+      // Solo los usuarios de la división seleccionada (sanciones y clasificación
+      // independientes por división).
+      const { data: divProfiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('division', selectedDivision)
+      const divisionUserIds = new Set((divProfiles ?? []).map((p: any) => p.id as string))
+
+      const { data: userTeamsRaw } = await supabase
         .from('user_teams')
         .select('id, user_id, name')
 
+      const userTeamsData = (userTeamsRaw ?? []).filter((ut: any) => divisionUserIds.has(ut.user_id))
+
       if (!userTeamsData || userTeamsData.length === 0) {
+        setStandings([])
         setLoading(false)
         return
       }
@@ -686,13 +703,22 @@ export default function ClasificacionPage() {
     }
 
     fetchStandings()
-  }, [sortField, sortOrder, tick])
+  }, [sortField, sortOrder, tick, selectedDivision])
 
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setCurrentUserId(user.id)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('division')
+          .eq('id', user.id)
+          .maybeSingle()
+        const div = (profile?.division as number | null) ?? null
+        setCurrentUserDivision(div)
+        // Pestaña por defecto: la división del usuario (o 1ª si aún no tiene).
+        setSelectedDivision(prev => prev ?? (div ?? 1))
       }
     }
     getCurrentUser()
@@ -1011,7 +1037,25 @@ export default function ClasificacionPage() {
           </span>
         </div>
       </div>
-      
+
+      {/* Pestañas de división: cada una tiene su clasificación independiente */}
+      <div className="flex gap-1.5 bg-slate-100 rounded-xl p-1">
+        {([1, 2, 3] as const).map((d) => (
+          <button
+            key={d}
+            onClick={() => setSelectedDivision(d)}
+            className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              selectedDivision === d ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {d}ª División
+            {currentUserDivision === d && (
+              <span className="ml-1.5 text-[10px] font-bold text-emerald-600">(la tuya)</span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {selectedRanking && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">

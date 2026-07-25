@@ -108,11 +108,23 @@ export async function isMatchdayLockStarted(supabase: SupabaseClient, matchday: 
   return Date.now() >= unlockTime
 }
 
-export async function getLiveInfractions(supabase: SupabaseClient, matchday: number): Promise<Infraction[]> {
+export async function getLiveInfractions(supabase: SupabaseClient, matchday: number, division?: number | null): Promise<Infraction[]> {
   // 1. Obtener perfiles y equipos
-  const { data: profiles } = await supabase.from('profiles').select('id, full_name, email')
-  const { data: teams } = await supabase.from('user_teams').select('id, user_id, name')
-  if (!profiles || !teams) return []
+  const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, division')
+  const { data: allTeams } = await supabase.from('user_teams').select('id, user_id, name')
+  if (!profiles || !allTeams) return []
+
+  // Sanciones INDEPENDIENTES por división: si se indica una, solo se consideran
+  // los equipos de los usuarios de esa división. La exclusividad (regla Dolly)
+  // se calcula recorriendo `teams`, así que restringir el conjunto la aísla.
+  let teams = allTeams
+  if (division != null) {
+    const divisionUserIds = new Set(
+      profiles.filter(p => (p as any).division === division).map(p => p.id)
+    )
+    teams = allTeams.filter(t => divisionUserIds.has(t.user_id))
+  }
+  if (teams.length === 0) return []
 
   const profileMap = new Map(profiles.map(p => [p.id, p]))
   const teamToUser = new Map(teams.map(t => [t.id, t.user_id]))

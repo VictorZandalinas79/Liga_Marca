@@ -25,12 +25,32 @@ export interface UserStanding {
   app_opens?: number
 }
 
-export async function getStandings(supabase: any): Promise<{ standings: UserStanding[], lastPlayedMatchday: number }> {
+export async function getStandings(supabase: any, division?: number | null): Promise<{ standings: UserStanding[], lastPlayedMatchday: number }> {
 
+      // Usuarios que pertenecen a la división solicitada. Si no se indica
+      // división, se incluyen todos (comportamiento global). Las clasificaciones
+      // y sanciones se calculan de forma INDEPENDIENTE dentro de cada división:
+      // basta con restringir el conjunto de equipos a los de esa división y todo
+      // lo demás (exclusividad, podios…) queda aislado automáticamente.
+      let allowedUserIds: Set<string> | null = null
+      if (division != null) {
+        const { data: divProfiles } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('division', division)
+        allowedUserIds = new Set((divProfiles ?? []).map((p: any) => p.id as string))
+        if (allowedUserIds.size === 0) {
+          return { standings: [], lastPlayedMatchday: 1 }
+        }
+      }
 
-      const { data: userTeamsData } = await supabase
+      const { data: userTeamsRaw } = await supabase
         .from('user_teams')
         .select('id, user_id, name')
+
+      const userTeamsData = allowedUserIds
+        ? (userTeamsRaw ?? []).filter((ut: any) => allowedUserIds!.has(ut.user_id))
+        : userTeamsRaw
 
       if (!userTeamsData || userTeamsData.length === 0) {
         return { standings: [], lastPlayedMatchday: 1 }

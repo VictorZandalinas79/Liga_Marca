@@ -17,7 +17,13 @@ type AdminUser = {
   has_paid: boolean
   paid_at: string | null
   amount_paid: number
+  division: number | null
   created_at: string
+}
+
+const DIVISION_LABELS: Record<number, string> = { 1: '1ª División', 2: '2ª División', 3: '3ª División' }
+function divisionLabel(d: number | null): string {
+  return d ? DIVISION_LABELS[d] : 'Sin asignar'
 }
 
 function formatDate(iso: string | null): string {
@@ -38,6 +44,7 @@ export default function AdminPage() {
   const [forbidden, setForbidden] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
+  const [divFilter, setDivFilter] = useState<'all' | '1' | '2' | '3' | 'none'>('all')
   const [savingId, setSavingId] = useState<string | null>(null)
 
   // Modales
@@ -109,6 +116,8 @@ export default function AdminPage() {
     return users.filter((u) => {
       if (filter === 'paid' && !u.has_paid) return false
       if (filter === 'unpaid' && u.has_paid) return false
+      if (divFilter === 'none' && u.division != null) return false
+      if (divFilter !== 'all' && divFilter !== 'none' && u.division !== Number(divFilter)) return false
       if (!q) return true
       return (
         u.full_name.toLowerCase().includes(q) ||
@@ -116,7 +125,7 @@ export default function AdminPage() {
         u.phone.toLowerCase().includes(q)
       )
     })
-  }, [users, search, filter])
+  }, [users, search, filter, divFilter])
 
   const stats = useMemo(() => {
     const paid = users.filter((u) => u.has_paid).length
@@ -125,11 +134,12 @@ export default function AdminPage() {
   }, [users])
 
   const exportCsv = () => {
-    const headers = ['Nombre', 'Email', 'Teléfono', 'Ha pagado', 'Importe (€)', 'Fecha de pago', 'Fecha de registro']
+    const headers = ['Nombre', 'Email', 'Teléfono', 'División', 'Ha pagado', 'Importe (€)', 'Fecha de pago', 'Fecha de registro']
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
     const rows = filtered.map((u) =>
       [
         u.full_name, u.email, u.phone,
+        divisionLabel(u.division),
         u.has_paid ? 'Sí' : 'No',
         (u.amount_paid || 0).toFixed(2).replace('.', ','),
         formatDate(u.paid_at), formatDate(u.created_at),
@@ -209,6 +219,17 @@ export default function AdminPage() {
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border-2 border-slate-200 outline-none focus:border-emerald-500 bg-white"
           />
         </div>
+        <select
+          value={divFilter}
+          onChange={(e) => setDivFilter(e.target.value as typeof divFilter)}
+          className="px-3 py-2.5 rounded-xl border-2 border-slate-200 outline-none focus:border-emerald-500 bg-white font-semibold text-slate-700 text-sm"
+        >
+          <option value="all">Todas las divisiones</option>
+          <option value="1">1ª División</option>
+          <option value="2">2ª División</option>
+          <option value="3">3ª División</option>
+          <option value="none">Sin asignar</option>
+        </select>
         <div className="flex bg-slate-100 rounded-xl p-1">
           {([['all', 'Todos'], ['paid', 'Pagados'], ['unpaid', 'Pendientes']] as const).map(([key, label]) => (
             <button
@@ -238,6 +259,7 @@ export default function AdminPage() {
                 <th className="px-4 py-3 font-semibold">Email</th>
                 <th className="px-4 py-3 font-semibold">Teléfono</th>
                 <th className="px-4 py-3 font-semibold">Registro</th>
+                <th className="px-4 py-3 font-semibold">División</th>
                 <th className="px-4 py-3 font-semibold">Importe (€)</th>
                 <th className="px-4 py-3 font-semibold">Fecha de pago</th>
                 <th className="px-4 py-3 font-semibold text-center">Estado</th>
@@ -246,9 +268,9 @@ export default function AdminPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">Cargando usuarios…</td></tr>
+                <tr><td colSpan={9} className="px-4 py-12 text-center text-slate-400">Cargando usuarios…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">No hay usuarios que coincidan.</td></tr>
+                <tr><td colSpan={9} className="px-4 py-12 text-center text-slate-400">No hay usuarios que coincidan.</td></tr>
               ) : (
                 filtered.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/60">
@@ -256,6 +278,26 @@ export default function AdminPage() {
                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{u.phone || '—'}</td>
                     <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{formatDate(u.created_at)}</td>
+
+                    {/* División (asignada por el admin) */}
+                    <td className="px-4 py-3">
+                      <select
+                        value={u.division ?? ''}
+                        disabled={savingId === u.id}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? null : Number(e.target.value)
+                          if (v !== (u.division ?? null)) saveUser(u.id, { division: v }).catch(() => {})
+                        }}
+                        className={`px-2 py-1.5 rounded-lg border-2 outline-none focus:border-emerald-500 text-sm font-medium ${
+                          u.division ? 'border-slate-200 text-slate-700' : 'border-amber-200 text-amber-700 bg-amber-50'
+                        }`}
+                      >
+                        <option value="">Sin asignar</option>
+                        <option value="1">1ª División</option>
+                        <option value="2">2ª División</option>
+                        <option value="3">3ª División</option>
+                      </select>
+                    </td>
 
                     {/* Importe editable */}
                     <td className="px-4 py-3">

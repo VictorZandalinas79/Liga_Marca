@@ -4,6 +4,7 @@ node_modules/
 # Python
 __pycache__/
 *.pyc
+sync_venv/
 
 # Variables de entorno y logs
 .env
