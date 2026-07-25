@@ -1,0 +1,38 @@
+name: API Core Sync (Fixtures & Squads)
+
+on:
+  schedule:
+    # Lunes a las 06:00 UTC
+    - cron: '0 6 * * 1'
+    # Cada 3 días a las 06:00 UTC
+    - cron: '0 6 */3 * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync_core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install "supabase>=2.0.0" "python-dotenv>=1.0.0" "requests>=2.31.0" "deep-translator>=1.11.0" "beautifulsoup4>=4.12.0"
+
+      - name: Run weekly fixtures & squads sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SDAPI_OUTLET_KEY: ${{ secrets.SDAPI_OUTLET_KEY }}
+        run: python "2. descarga_fixtures_y_sync.py"
+
+      - name: Sync players with photos
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python "sync_players_with_photos.py"
