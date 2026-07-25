@@ -13,8 +13,8 @@ with open('settings.json', 'r', encoding='utf-8') as f:
     config = json.load(f)
 
 ACTIVE_LEAGUE_ID = config['active_league']['id']
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().strip('"').strip("'")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip().strip('"').strip("'")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 

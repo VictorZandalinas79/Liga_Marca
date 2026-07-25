@@ -10,9 +10,9 @@ load_dotenv()
 with open('settings.json', 'r', encoding='utf-8') as f:
     config = json.load(f)
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().strip('"').strip("'")
 # Usar la service role key para tener permisos de escritura
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+SUPABASE_KEY = (os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_KEY", "")).strip().strip('"').strip("'")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 

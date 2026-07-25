@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 
 # Load env
 load_dotenv()
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().strip('"').strip("'")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip().strip('"').strip("'")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("Faltan credenciales de Supabase.")
