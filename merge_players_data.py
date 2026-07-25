@@ -131,20 +131,32 @@ def main():
 
         # 1. Match by Date
         if bw_date:
-            for p in team_api_players:
-                if p.get('date_of_birth') == bw_date:
-                    match = p
-                    break
+            date_matches = [p for p in team_api_players if p.get('date_of_birth') == bw_date and p['id'] not in matched_api_ids]
+            if len(date_matches) == 1:
+                match = date_matches[0]
+            elif len(date_matches) > 1:
+                # Disambiguate by name
+                api_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in date_matches]
+                best_match = difflib.get_close_matches(bw_name, api_names, n=1, cutoff=0.3)
+                if best_match:
+                    best_name = best_match[0]
+                    for p in date_matches:
+                        p_name = p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '')
+                        if p_name == best_name:
+                            match = p
+                            break
+                if not match:
+                    match = date_matches[0]
 
         # 2. Match by Name (Fallback)
         if not match:
-            # try finding in other teams just in case of transfer? The user said match by team.
-            # let's find by name in the same team
-            api_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in team_api_players]
+            # let's find by name in the same team among unmatched players
+            unmatched_team_players = [p for p in team_api_players if p['id'] not in matched_api_ids]
+            api_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in unmatched_team_players]
             best_match = difflib.get_close_matches(bw_name, api_names, n=1, cutoff=0.5)
             if best_match:
                 best_name = best_match[0]
-                for p in team_api_players:
+                for p in unmatched_team_players:
                     p_name = p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '')
                     if p_name == best_name:
                         match = p
@@ -206,10 +218,22 @@ def main():
             # Let's check if the player exists in another team! (Team change)
             all_other_players = [p for p in all_api_players if p['id'] not in matched_api_ids and p.get('team_id') != team_id]
             if bw_date:
-                for p in all_other_players:
-                    if p.get('date_of_birth') == bw_date:
+                date_matches = [p for p in all_other_players if p.get('date_of_birth') == bw_date]
+                if len(date_matches) == 1:
+                    p = date_matches[0]
+                    p_name = p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '')
+                    if difflib.SequenceMatcher(None, bw_name.lower(), p_name.lower()).ratio() > 0.4:
                         match = p
-                        break
+                elif len(date_matches) > 1:
+                    api_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in date_matches]
+                    best_match = difflib.get_close_matches(bw_name, api_names, n=1, cutoff=0.4)
+                    if best_match:
+                        best_name = best_match[0]
+                        for p in date_matches:
+                            p_name = p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '')
+                            if p_name == best_name:
+                                match = p
+                                break
             
             if not match:
                 other_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in all_other_players]
