@@ -22,7 +22,7 @@ def main():
     headers = {'User-Agent': 'Mozilla/5.0'}
     
     print(f"Fetching main page: {url}")
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=15)
     soup = BeautifulSoup(response.text, 'html.parser')
     
     # FutbolFantasy carga todos los jugadores en la tabla inicial (aunque estén ocultos por paginación en el frontend)
@@ -64,7 +64,7 @@ def main():
             print(f"[{i+1}/{len(rows)}] Extrayendo detalle de: {name}...")
             
             time.sleep(0.3) # Pausa
-            modal_resp = requests.get(modal_url, headers=headers)
+            modal_resp = requests.get(modal_url, headers=headers, timeout=15)
             modal_soup = BeautifulSoup(modal_resp.text, 'html.parser')
             
             link_tag = modal_soup.select_one('a.jugador')
@@ -76,7 +76,7 @@ def main():
                 detail_url = f"https://www.futbolfantasy.com/jugadores/{slug}"
             
             time.sleep(0.3) # Pausa
-            det_resp = requests.get(detail_url, headers=headers)
+            det_resp = requests.get(detail_url, headers=headers, timeout=15)
             
             photo_url = ""
             birth_date = ""
