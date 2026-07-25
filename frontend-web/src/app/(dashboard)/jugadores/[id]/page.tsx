@@ -1325,7 +1325,7 @@ export default function JugadorDetallePage() {
               <img
                 src={player.photo}
                 alt={player.short_name || ''}
-                className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-white shadow-lg shrink-0"
+                className="w-32 h-32 sm:w-48 sm:h-48 object-contain shrink-0 drop-shadow-xl"
               />
             ) : (
               <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-slate-700 flex items-center justify-center text-4xl font-bold text-slate-400 border-4 border-slate-600 shrink-0">
