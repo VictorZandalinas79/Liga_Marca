@@ -172,6 +172,8 @@ def main():
             if is_new:
                 notifications.append({
                     "type": "transfer",
+                    "title": "Nuevo Jugador en el Mercado",
+                    "body": f"{bw_name} ({team_name})",
                     "player_id": match['id'],
                     "player_name": bw_name,
                     "team_id": team_id,
@@ -181,6 +183,8 @@ def main():
             elif pos_changed:
                 notifications.append({
                     "type": "transfer",
+                    "title": "Cambio de Posición",
+                    "body": f"{bw_name} ({team_name}) ahora es {bw_pos}",
                     "player_id": match['id'],
                     "player_name": bw_name,
                     "team_id": team_id,
@@ -228,6 +232,8 @@ def main():
                 
                 notifications.append({
                     "type": "transfer",
+                    "title": "Nuevo Fichaje",
+                    "body": f"{bw_name} se une al {team_name}",
                     "player_id": match['id'],
                     "player_name": bw_name,
                     "team_id": team_id,
@@ -247,6 +253,8 @@ def main():
                 not_found.append(bw)
                 notifications.append({
                     "type": "unmatched",
+                    "title": "Error de Sincronización",
+                    "body": f"Jugador no encontrado en API: {bw_name}",
                     "player_id": None,
                     "player_name": bw_name,
                     "team_id": team_id,
