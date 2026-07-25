@@ -5,7 +5,7 @@ on:
     # Red de seguridad. Los crons de GitHub se retrasan y se saltan ejecuciones,
     # así que el disparador fiable es un cron externo (cron-job.org) que llama al
     # workflow_dispatch de abajo cada 5 min. Este schedule queda como respaldo.
-    - cron: '*/5 * * * *'
+    # - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       fixture_ids:
