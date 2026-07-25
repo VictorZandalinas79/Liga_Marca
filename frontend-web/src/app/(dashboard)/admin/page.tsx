@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { LeagueConfigPanel } from './LeagueConfigPanel'
 import { ScoringConfigPanel } from './ScoringConfigPanel'
+import { UnmatchedPlayersPanel } from './UnmatchedPlayersPanel'
 
 type AdminUser = {
   id: string
@@ -340,6 +341,9 @@ export default function AdminPage() {
 
       {/* Configuración del sistema de puntuación */}
       <ScoringConfigPanel />
+
+      {/* Panel de Jugadores No Emparejados (Biwenger -> API) */}
+      <UnmatchedPlayersPanel />
 
       {editUser && (
         <EditModal

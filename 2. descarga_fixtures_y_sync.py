@@ -32,7 +32,7 @@ with open('settings.json', 'r', encoding='utf-8') as f:
     config = json.load(f)
 
 # ID de liga configurado por el usuario
-ACTIVE_LEAGUE_ID = "70excpe1synn9kadnbppahdn7"
+ACTIVE_LEAGUE_ID = config['active_league']['id']
 LEAGUE_NAME = config['active_league']['name']
 SEASON_NAME = config['active_league']['season_name']
 SEASON_ID = config['active_league'].get('season_id')
@@ -436,6 +436,8 @@ def upload_fixtures_to_supabase(matches):
 
         start_date = info.get('date', '').replace('Z', '')
         start_time = info.get('time', '').replace('Z', '')
+        if not start_time:
+            start_time = '00:00:00'
         full_timestamp = f"{start_date}T{start_time}"
 
         contestants = info.get('contestant', [{}, {}])

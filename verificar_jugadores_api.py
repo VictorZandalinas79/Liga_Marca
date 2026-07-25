@@ -16,7 +16,7 @@ load_dotenv()
 try:
     with open('settings.json', 'r', encoding='utf-8') as f:
         config = json.load(f)
-    ACTIVE_LEAGUE_ID = "70excpe1synn9kadnbppahdn7"
+    ACTIVE_LEAGUE_ID = config['active_league']['id']
     LEAGUE_NAME = config['active_league']['name']
     SEASON_NAME = config['active_league']['season_name']
     SEASON_ID = config['active_league'].get('season_id')

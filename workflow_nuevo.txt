@@ -1,0 +1,44 @@
+name: Weekly Fixtures & Squads Sync
+
+on:
+  schedule:
+    # Lunes a las 06:00 UTC (08:00 en horario de verano de Madrid).
+    - cron: '0 6 * * 1'
+    # Cada 3 días a las 06:00 UTC.
+    - cron: '0 6 */3 * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        # El script solo necesita estas librerías (el resto del root requirements
+        # incluye selenium/pandas que no hacen falta aquí y ralentizan el job).
+        # deep-translator lo usa para traducir nombres de equipos al cruzar el CSV.
+        run: pip install "supabase>=2.0.0" "python-dotenv>=1.0.0" "requests>=2.31.0" "deep-translator>=1.11.0" "beautifulsoup4>=4.12.0"
+
+      - name: Run Scraping Biwenger
+        run: python "1.1 scraping_liga_2627.py"
+
+      - name: Run weekly fixtures sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SDAPI_OUTLET_KEY: ${{ secrets.SDAPI_OUTLET_KEY }}
+        run: python "2. descarga_fixtures_y_sync.py"
+
+      - name: Run Merge Players Data
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python "merge_players_data.py"
