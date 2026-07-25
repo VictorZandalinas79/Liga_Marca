@@ -10,6 +10,8 @@ export interface LeagueConfig {
   pay_rest: number
   matchday_start_hours_before: number
   matchday_end_hours_after: number
+  fantasy_starting_matchday: number
+  max_changes_per_matchday: number
 }
 
 export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
@@ -21,6 +23,8 @@ export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
   pay_rest: 1,
   matchday_start_hours_before: 1,
   matchday_end_hours_after: 2,
+  fantasy_starting_matchday: 1,
+  max_changes_per_matchday: 3,
 }
 
 export interface ParsedFormation {

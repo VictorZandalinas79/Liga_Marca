@@ -429,19 +429,80 @@ export default function DashboardPage() {
   }
 
   const selectRandomPlayers = async (allPlayers: Player[], formation: Formation, autoSave: boolean = false, matchdayToSave: number = 0, teamIdParam: string | null = null) => {
-    const goalkeepers = allPlayers.filter(p => getPositionCode(p.position) === 'GK')
-    const defenders = allPlayers.filter(p => getPositionCode(p.position) === 'DEF')
-    const midfielders = allPlayers.filter(p => getPositionCode(p.position) === 'MID')
-    const forwards = allPlayers.filter(p => getPositionCode(p.position) === 'FWD')
+    const playersByPos = {
+      GK: allPlayers.filter(p => getPositionCode(p.position) === 'GK'),
+      DEF: allPlayers.filter(p => getPositionCode(p.position) === 'DEF'),
+      MID: allPlayers.filter(p => getPositionCode(p.position) === 'MID'),
+      FWD: allPlayers.filter(p => getPositionCode(p.position) === 'FWD')
+    };
 
-    const shuffle = (arr: Player[]) => arr.sort(() => Math.random() - 0.5)
+    const reqs = [
+      { pos: 'GK', count: 1 },
+      { pos: 'DEF', count: formation.defenders },
+      { pos: 'MID', count: formation.midfielders },
+      { pos: 'FWD', count: formation.forwards },
+    ];
 
-    const selected: string[] = [
-      ...shuffle(goalkeepers).slice(0, 1).map(p => p.id),
-      ...shuffle(defenders).slice(0, formation.defenders).map(p => p.id),
-      ...shuffle(midfielders).slice(0, formation.midfielders).map(p => p.id),
-      ...shuffle(forwards).slice(0, formation.forwards).map(p => p.id),
-    ]
+    let bestSquad: string[] = [];
+    let bestValid = false;
+
+    // Intentamos generar equipos al azar
+    for (let attempt = 0; attempt < 500; attempt++) {
+      let currentSquad: Player[] = [];
+      let currentPrice = 0;
+      let teamCounts: Record<string, number> = {};
+      let valid = true;
+
+      for (const req of reqs) {
+        const availablePos = [...playersByPos[req.pos as keyof typeof playersByPos]].sort(() => Math.random() - 0.5);
+        let picked = 0;
+        
+        for (const p of availablePos) {
+          if (picked === req.count) break;
+          const pTeam = p.team_id || 'unknown';
+          const pPrice = p.precio || 0;
+          if ((teamCounts[pTeam] || 0) < config.max_players_per_team) {
+             currentSquad.push(p);
+             currentPrice += pPrice;
+             teamCounts[pTeam] = (teamCounts[pTeam] || 0) + 1;
+             picked++;
+          }
+        }
+        if (picked < req.count) {
+          valid = false;
+          break;
+        }
+      }
+      
+      if (valid && currentPrice <= config.budget_limit) {
+        bestSquad = currentSquad.map(p => p.id);
+        bestValid = true;
+        break;
+      }
+    }
+
+    // Si no se pudo (muy raro), fallback a lo más barato
+    if (!bestValid) {
+      console.warn("No se encontró squad aleatorio válido tras 500 intentos. Usando fallback...");
+      let currentSquad: Player[] = [];
+      let teamCounts: Record<string, number> = {};
+      for (const req of reqs) {
+        const availablePos = [...playersByPos[req.pos as keyof typeof playersByPos]].sort((a,b) => (a.precio||0) - (b.precio||0));
+        let picked = 0;
+        for (const p of availablePos) {
+          if (picked === req.count) break;
+          const pTeam = p.team_id || 'unknown';
+          if ((teamCounts[pTeam] || 0) < config.max_players_per_team) {
+             currentSquad.push(p);
+             teamCounts[pTeam] = (teamCounts[pTeam] || 0) + 1;
+             picked++;
+          }
+        }
+      }
+      bestSquad = currentSquad.map(p => p.id);
+    }
+
+    const selected = bestSquad;
 
     setSelectedPlayers(selected)
     setSavedPlayers(selected)
@@ -1031,6 +1092,23 @@ export default function DashboardPage() {
       return
     }
     if (playerToSwap) {
+      const changesLimit = (activeMatchday && activeMatchday >= config.fantasy_starting_matchday) 
+        ? config.max_changes_per_matchday 
+        : Infinity;
+      
+      const currentChanges = selectedPlayers.filter(id => !basePlayers.includes(id)).length;
+      const isOutOriginal = basePlayers.includes(playerToSwap.id);
+      const isInOriginal = basePlayers.includes(newPlayerId);
+      
+      let newChangesCount = currentChanges;
+      if (isOutOriginal && !isInOriginal) newChangesCount += 1;
+      if (!isOutOriginal && isInOriginal) newChangesCount -= 1;
+      
+      if (newChangesCount > changesLimit) {
+        alert(`Has alcanzado el límite de cambios para esta jornada (${changesLimit}).`);
+        return;
+      }
+
       setPendingSwap({ outId: playerToSwap.id, inId: newPlayerId, index: playerToSwap.index })
       setShowSwapConfirm(true)
       closePlayerSelector()
@@ -1343,6 +1421,10 @@ export default function DashboardPage() {
   }, [availablePlayers, searchFilter, positionFilter, teamFilter, priceMinFilter, priceMaxFilter])
 
   const changedCount = changeHistory.length
+  const actualChangesCount = selectedPlayers.filter(id => !basePlayers.includes(id)).length
+  const changesLimit = (activeMatchday && activeMatchday >= config.fantasy_starting_matchday) 
+        ? config.max_changes_per_matchday 
+        : Infinity;
 
   // Avisos permanentes de equipos bloqueados, agrupados por partido fuera de orden.
   const teamNameById = new Map<string, string>()
@@ -1982,19 +2064,21 @@ export default function DashboardPage() {
           <div className="text-xs text-slate-500">
             Los cambios se guardan automáticamente
           </div>
-          {changedCount > 0 && (
-            <>
-              <button
-                onClick={undoLastChange}
-                className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
-              >
-                <X className="w-4 h-4" />
-                <span className="hidden sm:inline">Deshacer ({changedCount})</span>
-              </button>
+          {actualChangesCount > 0 && (
+            <div className="flex items-center gap-2">
+              {changedCount > 0 && (
+                <button
+                  onClick={undoLastChange}
+                  className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+                >
+                  <X className="w-4 h-4" />
+                  <span className="hidden sm:inline">Deshacer ({changedCount})</span>
+                </button>
+              )}
               <span className="text-sm text-emerald-600 font-medium">
-                {changedCount} cambio{changedCount !== 1 ? 's' : ''}
+                {actualChangesCount} cambio{actualChangesCount !== 1 ? 's' : ''} {changesLimit !== Infinity ? `/ ${changesLimit}` : ''}
               </span>
-            </>
+            </div>
           )}
         </div>
       )}

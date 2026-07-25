@@ -161,7 +161,8 @@ export default function ClasificacionPage() {
       const leagueConfig = {
         budget_limit: configData?.budget_limit ?? 275,
         max_players_per_team: configData?.max_players_per_team ?? 4,
-        formations: configData?.formations ?? ['3-5-2', '3-4-3', '4-4-2', '4-3-3', '4-5-1', '5-4-1', '5-3-2']
+        formations: configData?.formations ?? ['3-5-2', '3-4-3', '4-4-2', '4-3-3', '4-5-1', '5-4-1', '5-3-2'],
+        fantasy_starting_matchday: configData?.fantasy_starting_matchday ?? 1
       }
 
       const { data: fixturesData } = await supabase
@@ -217,7 +218,7 @@ export default function ClasificacionPage() {
           md = fixtureToMatchday.get(score.fixture_id)
         }
 
-        if (!md || md <= 0) {
+        if (!md || md < leagueConfig.fantasy_starting_matchday) {
           scoresSinMatchday++
           continue
         } else {

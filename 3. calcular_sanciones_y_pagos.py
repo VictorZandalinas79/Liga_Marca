@@ -507,11 +507,18 @@ def run_matchday(sb, matchday):
 
 def main():
     sb = get_client()
+    cfg = load_config(sb)
     env_md = os.environ.get("SANCTION_MATCHDAY", "").strip()
     matchday = int(env_md) if env_md.isdigit() else detect_matchday(sb)
     if not matchday:
         log("ℹ️ No hay ninguna jornada finalizada que procesar")
         return
+        
+    fantasy_starting_matchday = cfg.get("fantasy_starting_matchday", 1)
+    if matchday < fantasy_starting_matchday:
+        log(f"ℹ️ La jornada {matchday} es anterior al inicio de la liga ({fantasy_starting_matchday}). No se calculan sanciones ni pagos.")
+        return
+        
     log("=" * 60)
     log(f"🏁 Procesando sanciones y pagos de la jornada {matchday}")
     log("=" * 60)

@@ -129,7 +129,7 @@ export default function RegistroPage() {
             {/* Input Nombre con icono */}
             <div className="relative">
               <label htmlFor="nombre" className="block text-sm font-semibold text-slate-700 mb-2">
-                Nombre Completo
+                Nombre
               </label>
               <div className="relative">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
@@ -147,7 +147,7 @@ export default function RegistroPage() {
                       ? 'border-emerald-500 bg-white shadow-lg shadow-emerald-500/10'
                       : 'border-slate-200 hover:border-slate-300'
                   }`}
-                  placeholder="Tu nombre completo"
+                  placeholder="Tu nombre"
                   required
                 />
               </div>

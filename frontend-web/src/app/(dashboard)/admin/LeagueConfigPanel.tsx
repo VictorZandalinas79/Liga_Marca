@@ -108,6 +108,18 @@ export function LeagueConfigPanel() {
               onChange={(v) => setNum('max_players_per_team', v)}
               step="1"
             />
+            <NumberField
+              label="Jornada de inicio (LaLiga)"
+              value={config.fantasy_starting_matchday}
+              onChange={(v) => setNum('fantasy_starting_matchday', v)}
+              step="1"
+            />
+            <NumberField
+              label="Cambios por jornada (después del inicio)"
+              value={config.max_changes_per_matchday}
+              onChange={(v) => setNum('max_changes_per_matchday', v)}
+              step="1"
+            />
           </div>
 
           {/* Pagos por jornada */}
