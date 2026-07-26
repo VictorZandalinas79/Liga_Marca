@@ -1,17 +1,24 @@
 name: Biwenger Market Sync (Scraping & Prices)
 
+# Se dispara al terminar API Core, no por cron propio: API Core repuebla
+# players con todos los jugadores de la API y este workflow es el único que
+# borra los que no están en Biwenger. Encadenarlos evita que la tabla se quede
+# con sobrantes si los horarios se desfasan.
 on:
-  schedule:
-    # Lunes a las 06:30 UTC (después del core)
-    - cron: '30 6 * * 1'
-    # Cada 3 días a las 06:30 UTC
-    - cron: '30 6 */3 * *'
+  workflow_run:
+    workflows: ["API Core Sync (Fixtures & Squads)"]
+    types: [completed]
   workflow_dispatch: {}
 
 jobs:
   sync_market:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # En workflow_run se ejecuta aunque el anterior falle; solo interesa
+    # continuar si API Core terminó bien. El dispatch manual pasa siempre.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Checkout
         uses: actions/checkout@v5
