@@ -15,8 +15,14 @@ with open('settings.json', 'r', encoding='utf-8') as f:
 ACTIVE_LEAGUE_ID = config['active_league']['id']
 SEASON_ID = config['active_league']['season_id']
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+def _clean_env(value):
+    """Quita espacios y comillas envolventes que se cuelan al pegar secrets."""
+    if value is None:
+        return None
+    return value.strip().strip('"').strip("'").strip()
+
+SUPABASE_URL = _clean_env(os.environ.get("SUPABASE_URL"))
+SUPABASE_KEY = _clean_env(os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY"))
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 BASE_PATH = Path("./data/LaLiga/2025/2026")
