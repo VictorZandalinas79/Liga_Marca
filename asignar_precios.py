@@ -14,7 +14,7 @@ with open('settings.json', 'r', encoding='utf-8') as f:
 
 ACTIVE_LEAGUE_ID = config['active_league']['id']
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().strip('"').strip("'")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip().strip('"').strip("'")
+SUPABASE_KEY = (os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_KEY", "")).strip().strip('"').strip("'")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
