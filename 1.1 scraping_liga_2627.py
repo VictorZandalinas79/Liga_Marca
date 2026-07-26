@@ -1,9 +1,22 @@
 import requests
 from bs4 import BeautifulSoup
 import csv
+import os
 import re
+import sys
 import unicodedata
 import time
+
+def contar_jugadores_previos(csv_file):
+    """Filas del CSV del scraping anterior. 0 si no existe o está vacío."""
+    if not os.path.exists(csv_file):
+        return 0
+    try:
+        with open(csv_file, 'r', newline='', encoding='utf-8') as f:
+            return max(sum(1 for _ in csv.reader(f)) - 1, 0)  # -1 por la cabecera
+    except Exception as e:
+        print(f"Aviso: no se pudo leer el CSV anterior ({e}). Se omite la comprobación.")
+        return 0
 
 def slugify(text):
     text = unicodedata.normalize('NFD', text).encode('ascii', 'ignore').decode('utf-8')
@@ -111,12 +124,27 @@ def main():
             continue
 
     csv_file = 'jugadores_biwenger.csv'
+
+    # Guardarraíl: merge_players_data.py borra de la BD a todo el que no esté
+    # en este CSV. Si el scraping ha salido corto (web caída, cambio de HTML,
+    # rate limit), ese borrado se llevaría por delante a media liga. Ante la
+    # duda no se toca el CSV y se sale con error, así el step siguiente no corre.
+    previos = contar_jugadores_previos(csv_file)
+    if previos and len(data) < previos * 0.75:
+        print(f"\n❌ Scraping abortado: {len(data)} jugadores, menos de 3/4 de los "
+              f"{previos} anteriores (mínimo {int(previos * 0.75)}).")
+        print(f"   Se conserva el CSV anterior y no se sincroniza nada.")
+        sys.exit(1)
+
     with open(csv_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['Nombre', 'Equipo', 'Posicion', 'Valor', 'Fecha_Nacimiento', 'Foto'])
         writer.writerows(data)
-        
-    print(f"\n¡Completado! Se han guardado {len(data)} jugadores en {csv_file}")
+
+    if previos:
+        print(f"\n¡Completado! Se han guardado {len(data)} jugadores en {csv_file} (antes: {previos})")
+    else:
+        print(f"\n¡Completado! Se han guardado {len(data)} jugadores en {csv_file}")
 
 if __name__ == '__main__':
     main()
