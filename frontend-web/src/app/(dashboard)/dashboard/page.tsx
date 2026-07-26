@@ -1179,8 +1179,6 @@ export default function DashboardPage() {
     setSearchFilter('')
     setPositionFilter('ALL')
     setTeamFilter('')
-    setPriceMinFilter('')
-    setPriceMaxFilter('')
   }
 
   const closePlayerSelector = () => {
@@ -1188,8 +1186,6 @@ export default function DashboardPage() {
     setSearchFilter('')
     setPositionFilter('ALL')
     setTeamFilter('')
-    setPriceMinFilter('')
-    setPriceMaxFilter('')
   }
 
   const undoLastChange = async () => {
@@ -1423,7 +1419,7 @@ export default function DashboardPage() {
         if (aExact && !bExact) return -1
         if (bExact && !aExact) return 1
       }
-      return 0
+      return (b.precio || 0) - (a.precio || 0)
     })
   }, [availablePlayers, searchFilter, positionFilter, teamFilter, priceMinFilter, priceMaxFilter])
 
@@ -2298,7 +2294,7 @@ export default function DashboardPage() {
               ) : (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {filteredAvailablePlayers.slice(0, 50).map((player) => {
+                  {filteredAvailablePlayers.map((player) => {
                     const lockedPlayer = isTeamLocked(player.team_id)
                     return (
                     <div
@@ -2389,11 +2385,6 @@ export default function DashboardPage() {
                     )
                   })}
                 </div>
-                {filteredAvailablePlayers.length > 50 && (
-                  <p className="text-center text-slate-500 text-sm mt-6 font-medium">
-                    Mostrando 50 de {filteredAvailablePlayers.length}. Usa el buscador para ver más jugadores.
-                  </p>
-                )}
                 </>
               )}
             </div>

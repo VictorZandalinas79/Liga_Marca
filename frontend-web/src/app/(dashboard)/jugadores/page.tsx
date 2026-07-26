@@ -747,7 +747,7 @@ export default function JugadoresPage() {
                       </div>
                       <div className="flex items-center space-x-2 mt-1">
                         {player.team?.logo_url && (
-                          <img src={player.team.logo_url} alt={player.team.name || ''} className="w-4 h-4 object-contain shrink-0" />
+                          <img src={player.team.logo_url} alt={player.team.name || ''} className="w-6 h-6 object-contain shrink-0" />
                         )}
                         <p className="text-sm text-slate-400 truncate">{player.team?.name || 'Sin equipo'}</p>
                         {player.shirt_number && (
