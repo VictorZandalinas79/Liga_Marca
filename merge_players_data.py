@@ -124,6 +124,18 @@ def main():
         if not team_id:
             print(f"  Aviso: Equipo '{team_name}' no mapeado para el jugador {bw_name}.")
             not_found.append(bw)
+            # Se queda fuera de la BD igual que un jugador sin match, así que
+            # tiene que verse en el panel de admin y no solo en el log.
+            notifications.append({
+                "type": "unmatched",
+                "title": "Error de Sincronización",
+                "body": f"Equipo no mapeado: {team_name}",
+                "player_id": None,
+                "player_name": bw_name,
+                "team_id": None,
+                "team_name": team_name,
+                "message": f"Equipo '{team_name}' no está en TEAM_MAPPING. Fecha: {bw_date}, Pos: {bw_pos_raw}"
+            })
             continue
 
         team_api_players = api_players_by_team.get(team_id, [])
