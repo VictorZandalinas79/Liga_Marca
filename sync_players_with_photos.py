@@ -286,9 +286,9 @@ def sync_players_with_photos():
 
 
 if __name__ == "__main__":
-    # Primero sincronizar equipos y escudos
+    # Solo equipos y escudos: los jugadores los sincroniza antes
+    # "2. descarga_fixtures_y_sync.py", que lee el CSV con el esquema actual
+    # (Equipo/Nombre/Foto) y además guarda el precio. Ejecutar aquí
+    # sync_players_with_photos() haría un upsert sin 'precio' y lo borraría.
     squad_files = list((BASE_PATH / "squads").glob("*.json"))
     sync_teams_and_badges(squad_files)
-
-    # Luego sincronizar jugadores con fotos
-    sync_players_with_photos()
