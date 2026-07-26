@@ -109,7 +109,7 @@ export function LeagueConfigPanel() {
               step="1"
             />
             <NumberField
-              label="Jornada de inicio (LaLiga)"
+              label="Jornada en la que empieza el juego"
               value={config.fantasy_starting_matchday}
               onChange={(v) => setNum('fantasy_starting_matchday', v)}
               step="1"
@@ -121,6 +121,11 @@ export function LeagueConfigPanel() {
               step="1"
             />
           </div>
+          <p className="text-xs text-slate-500 -mt-2">
+            Los jugadores puntúan desde la J1, pero los equipos de los usuarios no
+            contabilizan puntos hasta la jornada indicada. Hasta entonces el mercado
+            queda abierto y la cuenta atrás marca el inicio de esa jornada.
+          </p>
 
           {/* Pagos por jornada */}
           <div>

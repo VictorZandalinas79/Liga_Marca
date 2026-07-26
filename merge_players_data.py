@@ -1,5 +1,6 @@
 import os
 import csv
+import re
 import difflib
 import requests
 from datetime import datetime
@@ -41,6 +42,31 @@ TEAM_MAPPING = {
     "Deportivo": "1r541mega6d838hi0p44sv0h2"
 }
 
+# Nombre del equipo a partir del team_id, para poder decir de dónde viene un
+# jugador cuando cambia de equipo.
+TEAM_NAME_BY_ID = {v: k for k, v in TEAM_MAPPING.items()}
+
+# Solo para el texto de las notificaciones; en BD la posición sigue en inglés.
+POS_LABEL = {
+    "Goalkeeper": "portero",
+    "Defender": "defensa",
+    "Midfielder": "centrocampista",
+    "Forward": "delantero",
+}
+
+# La CDN de las fotos mete un cache-buster que cambia en cada scraping aunque la
+# imagen sea la misma:
+#   .../thumb/400x400/v202607201517/uploads/images/jugadores/ficha/5050.png
+_PHOTO_VERSION_RE = re.compile(r"/v\d{6,}/")
+
+
+def photo_key(url):
+    """Identidad real de una foto, ignorando el cache-buster de la CDN."""
+    if not url:
+        return ""
+    return _PHOTO_VERSION_RE.sub("/", url.strip())
+
+
 def parse_date(date_str):
     if not date_str:
         return ""
@@ -49,6 +75,23 @@ def parse_date(date_str):
         return datetime.strptime(date_str.strip(), "%d/%m/%Y").strftime("%Y-%m-%d")
     except ValueError:
         return ""
+
+
+def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto):
+    """Payload de actualización. La foto solo se toca si el scraping trajo una:
+    si viene vacía (fallo puntual al leer la ficha) se conserva la que había en
+    lugar de borrarla."""
+    update = {
+        "id": player_id,
+        "position": bw_pos,
+        "precio": bw_precio,
+        "price": bw_price,
+        # Enforce team_id just in case
+        "team_id": team_id,
+    }
+    if bw_foto:
+        update["photo"] = bw_foto
+    return update
 
 def main():
     print("1. Obteniendo jugadores actuales de Supabase (API)...")
@@ -185,19 +228,27 @@ def main():
                 continue
                 
             matched_api_ids.add(match['id'])
-            
-            # Check for changes to generate notifications
-            is_new = (match.get('photo') is None or match.get('precio') is None)
-            
-            # Position change
+
+            # Nuevo en el mercado: la API lo dio de alta pero nunca se había
+            # cruzado con Biwenger, así que aún no tiene precio.
+            is_new = match.get('precio') is None
+
             old_pos = match.get('position')
-            pos_changed = old_pos and old_pos != bw_pos and not is_new
+            pos_changed = bool(old_pos) and old_pos != bw_pos and not is_new
+
+            old_photo = match.get('photo')
+            photo_changed = (
+                bool(bw_foto)
+                and bool(old_photo)
+                and photo_key(old_photo) != photo_key(bw_foto)
+                and not is_new
+            )
 
             if is_new:
                 notifications.append({
-                    "type": "transfer",
+                    "type": "new_player",
                     "title": "Nuevo Jugador en el Mercado",
-                    "body": f"{bw_name} ({team_name})",
+                    "body": f"{bw_name} ({team_name}) ya está disponible en {POS_LABEL.get(bw_pos, bw_pos)}.",
                     "player_id": match['id'],
                     "player_name": bw_name,
                     "team_id": team_id,
@@ -206,9 +257,9 @@ def main():
                 })
             elif pos_changed:
                 notifications.append({
-                    "type": "transfer",
+                    "type": "position_changed",
                     "title": "Cambio de Posición",
-                    "body": f"{bw_name} ({team_name}) ahora es {bw_pos}",
+                    "body": f"{bw_name} ({team_name}) pasa de {POS_LABEL.get(old_pos, old_pos)} a {POS_LABEL.get(bw_pos, bw_pos)}.",
                     "player_id": match['id'],
                     "player_name": bw_name,
                     "team_id": team_id,
@@ -216,16 +267,21 @@ def main():
                     "message": f"Ha cambiado de posición: {bw_pos}"
                 })
 
+            # La foto es independiente: puede cambiar a la vez que la posición.
+            if photo_changed:
+                notifications.append({
+                    "type": "photo_changed",
+                    "title": "Foto Actualizada",
+                    "body": f"{bw_name} ({team_name}) tiene foto nueva.",
+                    "player_id": match['id'],
+                    "player_name": bw_name,
+                    "team_id": team_id,
+                    "team_name": team_name,
+                    "message": f"Foto actualizada: {bw_foto}"
+                })
+
             # Queue update
-            updates.append({
-                "id": match['id'],
-                "photo": bw_foto,
-                "position": bw_pos,
-                "precio": bw_precio,
-                "price": bw_price,
-                # Enforce team_id just in case
-                "team_id": team_id
-            })
+            updates.append(build_update(match['id'], team_id, bw_pos, bw_precio, bw_price, bw_foto))
         else:
             # Let's check if the player exists in another team! (Team change)
             all_other_players = [p for p in all_api_players if p['id'] not in matched_api_ids and p.get('team_id') != team_id]
@@ -265,26 +321,21 @@ def main():
                     
                 matched_api_ids.add(match['id'])
                 match_by_date += 1 if bw_date and match.get('date_of_birth') == bw_date else match_by_name + 1
-                
+
+                old_team_name = TEAM_NAME_BY_ID.get(match.get('team_id'))
+                desde = f" (venía del {old_team_name})" if old_team_name else ""
                 notifications.append({
-                    "type": "transfer",
-                    "title": "Nuevo Fichaje",
-                    "body": f"{bw_name} se une al {team_name}",
+                    "type": "team_changed",
+                    "title": "Cambio de Equipo",
+                    "body": f"{bw_name} se une al {team_name}{desde}.",
                     "player_id": match['id'],
                     "player_name": bw_name,
                     "team_id": team_id,
                     "team_name": team_name,
                     "message": f"Fichaje: se une al {team_name}"
                 })
-                
-                updates.append({
-                    "id": match['id'],
-                    "photo": bw_foto,
-                    "position": bw_pos,
-                    "precio": bw_precio,
-                    "price": bw_price,
-                    "team_id": team_id
-                })
+
+                updates.append(build_update(match['id'], team_id, bw_pos, bw_precio, bw_price, bw_foto))
             else:
                 not_found.append(bw)
                 notifications.append({

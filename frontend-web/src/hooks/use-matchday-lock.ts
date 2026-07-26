@@ -32,14 +32,16 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       // jornada (cierra el mercado) y cuándo se considera cerrada.
       let unlockOffsetMs = 60 * 60 * 1000      // 1h antes del primer partido
       let lockOffsetMs = 2 * 60 * 60 * 1000    // 2h después del último partido
+      let fantasyStart = 1                     // jornada en la que arranca el juego
       const { data: cfg } = await supabase
         .from('league_config')
-        .select('matchday_start_hours_before, matchday_end_hours_after')
+        .select('matchday_start_hours_before, matchday_end_hours_after, fantasy_starting_matchday')
         .eq('id', 1)
         .maybeSingle()
       if (cfg) {
         if (cfg.matchday_start_hours_before != null) unlockOffsetMs = Number(cfg.matchday_start_hours_before) * 60 * 60 * 1000
         if (cfg.matchday_end_hours_after != null) lockOffsetMs = Number(cfg.matchday_end_hours_after) * 60 * 60 * 1000
+        if (cfg.fantasy_starting_matchday != null) fantasyStart = Number(cfg.fantasy_starting_matchday)
       }
 
       // Obtener todos los fixtures ordenados por fecha
@@ -175,6 +177,18 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
             targetMatchday = lastJornada.matchday
             targetMomento = lastJornada.momento || null
           }
+        }
+      }
+
+      // El juego puede arrancar más tarde que LaLiga (Admin → Reglas del Juego).
+      // Mientras no se llegue a esa jornada, el reloj y la cabecera apuntan a
+      // ella: el mercado sigue abierto y la cuenta atrás marca cuándo empieza
+      // de verdad, no la próxima jornada de LaLiga que se juegue.
+      if (!currentMatchday && targetMatchday < fantasyStart) {
+        const startJornada = allJornadas.find(j => j.matchday === fantasyStart)
+        if (startJornada) {
+          targetMatchday = startJornada.matchday
+          targetMomento = startJornada.momento || null
         }
       }
 

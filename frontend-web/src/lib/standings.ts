@@ -124,8 +124,16 @@ export async function getStandings(supabase: any, division?: number | null): Pro
       const leagueConfig = {
         budget_limit: configData?.budget_limit ?? 275,
         max_players_per_team: configData?.max_players_per_team ?? 4,
-        formations: configData?.formations ?? ['3-5-2', '3-4-3', '4-4-2', '4-3-3', '4-5-1', '5-4-1', '5-3-2']
+        formations: configData?.formations ?? ['3-5-2', '3-4-3', '4-4-2', '4-3-3', '4-5-1', '5-4-1', '5-3-2'],
+        fantasy_starting_matchday: configData?.fantasy_starting_matchday ?? 1
       }
+
+      // Jornada en la que arranca el juego (Admin → Reglas del Juego). Los
+      // jugadores reales puntúan desde la J1, pero los equipos de los usuarios
+      // no empiezan a contabilizar hasta esta jornada.
+      // Nunca por debajo de 1: una jornada 0 o negativa dejaría pasar los
+      // registros sin jornada asignada.
+      const fantasyStart = Math.max(1, leagueConfig.fantasy_starting_matchday)
 
       const { data: fixturesData } = await supabase
         .from('fixtures')
@@ -180,7 +188,8 @@ export async function getStandings(supabase: any, division?: number | null): Pro
           md = fixtureToMatchday.get(score.fixture_id)
         }
 
-        if (!md || md <= 0) {
+        // Las jornadas anteriores al arranque del juego no suman para nadie.
+        if (!md || md < fantasyStart) {
           scoresSinMatchday++
           continue
         } else {
@@ -459,7 +468,7 @@ export async function getStandings(supabase: any, division?: number | null): Pro
         const uid = pen.user_id as string | null
         const md = typeof pen.matchday === 'string' ? parseInt(pen.matchday, 10) : (pen.matchday as number)
         const pts = typeof pen.points === 'string' ? parseFloat(pen.points) : (pen.points as number)
-        if (!uid || !md || md <= 0) continue
+        if (!uid || !md || md < fantasyStart) continue
 
         // Registrar la jornada sancionada en la base de datos para este usuario
         if (!userSanctionedMatchdays.has(uid)) {
@@ -481,7 +490,7 @@ export async function getStandings(supabase: any, division?: number | null): Pro
       const participantsByMatchday = new Map<number, { userId: string; points: number }[]>()
       for (const [userId, pointsMap] of userPointsByMatchday.entries()) {
         for (const [md, pts] of pointsMap.entries()) {
-          if (md <= 0) continue
+          if (md < fantasyStart) continue
           if (!participantsByMatchday.has(md)) participantsByMatchday.set(md, [])
           participantsByMatchday.get(md)!.push({ userId, points: pts })
         }

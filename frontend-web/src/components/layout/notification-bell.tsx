@@ -5,14 +5,34 @@ import { createPortal } from 'react-dom'
 import { Bell, Copy, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
+type NotificationType =
+  | 'fixture_changed'
+  | 'new_player'
+  | 'sync_complete'
+  | 'players_locked'
+  | 'squad_changed'
+  | 'position_changed'
+  | 'team_changed'
+  | 'photo_changed'
+  | 'transfer'
+  | 'unmatched'
+
 interface Notification {
   id: string
-  type: 'fixture_changed' | 'new_player' | 'sync_complete' | 'players_locked' | 'squad_changed'
+  type: NotificationType
   title: string
   body: string
   created_at: string
   read_at: string | null
 }
+
+/**
+ * Notificaciones que la API calcula al vuelo (sanciones en vivo, bloqueos por
+ * partido intercalado): no tienen fila en base de datos, así que su estado de
+ * leído se guarda en localStorage.
+ */
+const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-']
+const isDerived = (id: string) => DERIVED_ID_PREFIXES.some(p => id.startsWith(p))
 
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -94,7 +114,7 @@ export function NotificationBell() {
   }
 
   async function markRead(id: string) {
-    if (id.startsWith('penalty-') || id.startsWith('live-inf-')) {
+    if (isDerived(id)) {
       // Guardar en localStorage las dinámicas que no están en sync_notifications
       try {
         let readIds: string[] = []
@@ -152,10 +172,15 @@ export function NotificationBell() {
 
   const typeIcon: Record<string, string> = {
     fixture_changed: '📅',
-    new_player: '⚽',
+    new_player: '🆕',
     sync_complete: '✅',
     players_locked: '🔒',
     squad_changed: '🔄',
+    position_changed: '🧭',
+    team_changed: '🔁',
+    photo_changed: '📸',
+    transfer: '⚽',
+    unmatched: '⚠️',
   }
 
   return (
@@ -213,7 +238,7 @@ export function NotificationBell() {
               ) : (
                 <div className="space-y-4">
                   {notifications.map(n => {
-                    const isWarning = n.type.includes('lock') || n.body.includes('multa') || n.body.includes('sanción')
+                    const isWarning = n.type.includes('lock') || n.type === 'unmatched' || n.body.includes('multa') || n.body.includes('sanción')
                     return (
                       <div
                         key={n.id}

@@ -179,7 +179,9 @@ export default function ClasificacionPage() {
         budget_limit: configData?.budget_limit ?? 275,
         max_players_per_team: configData?.max_players_per_team ?? 4,
         formations: configData?.formations ?? ['3-5-2', '3-4-3', '4-4-2', '4-3-3', '4-5-1', '5-4-1', '5-3-2'],
-        fantasy_starting_matchday: configData?.fantasy_starting_matchday ?? 1
+        // Nunca por debajo de 1: una jornada 0 o negativa dejaría pasar los
+        // registros sin jornada asignada.
+        fantasy_starting_matchday: Math.max(1, configData?.fantasy_starting_matchday ?? 1)
       }
 
       const { data: fixturesData } = await supabase
@@ -514,7 +516,7 @@ export default function ClasificacionPage() {
         const uid = pen.user_id as string | null
         const md = typeof pen.matchday === 'string' ? parseInt(pen.matchday, 10) : (pen.matchday as number)
         const pts = typeof pen.points === 'string' ? parseFloat(pen.points) : (pen.points as number)
-        if (!uid || !md || md <= 0) continue
+        if (!uid || !md || md < leagueConfig.fantasy_starting_matchday) continue
 
         // Registrar la jornada sancionada en la base de datos para este usuario
         if (!userSanctionedMatchdays.has(uid)) {
@@ -536,7 +538,7 @@ export default function ClasificacionPage() {
       const participantsByMatchday = new Map<number, { userId: string; points: number }[]>()
       for (const [userId, pointsMap] of userPointsByMatchday.entries()) {
         for (const [md, pts] of pointsMap.entries()) {
-          if (md <= 0) continue
+          if (md < leagueConfig.fantasy_starting_matchday) continue
           if (!participantsByMatchday.has(md)) participantsByMatchday.set(md, [])
           participantsByMatchday.get(md)!.push({ userId, points: pts })
         }

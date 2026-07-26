@@ -3,32 +3,54 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getLiveInfractions, getCurrentMatchday, isMatchdayLockStarted } from '@/lib/infractions'
+import { getOutOfOrderMatchNotifications } from '@/lib/matchday-notifications'
+
+// Notificaciones calculadas al vuelo, sin fila en sync_notifications.
+// (No se exporta: en un route.ts solo valen los exports que Next reconoce.)
+const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-']
 
 export async function GET() {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // 1. Obtener notificaciones estándar
-  const { data: standardNotifications, error: notifError } = await supabase
+  // 1. División del usuario actual: solo se le notifican las sanciones de su
+  // propia división (las sanciones son independientes por división).
+  const { data: myProfile } = await supabase
+    .from('profiles')
+    .select('division, is_admin')
+    .eq('id', user.id)
+    .maybeSingle()
+  const myDivision = (myProfile?.division as number | null) ?? null
+  const isAdmin = myProfile?.is_admin === true
+
+  // 2. Notificaciones estándar. Los errores de sincronización ('unmatched') son
+  // ruido para el jugador de a pie y tienen su propio panel en Admin: se
+  // descartan en la propia consulta para que no consuman el límite de 50 y
+  // acaben tapando las notificaciones que sí le interesan.
+  let standardQuery = supabase
     .from('sync_notifications')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(50)
+  if (!isAdmin) standardQuery = standardQuery.neq('type', 'unmatched')
 
+  const { data: standardNotifications, error: notifError } = await standardQuery
   if (notifError) return NextResponse.json({ error: notifError.message }, { status: 500 })
 
-  // 2. Obtener la jornada en marcha para mostrar sus multas
+  const visibleStandard = standardNotifications || []
+
+  // 3. Obtener la jornada en marcha para mostrar sus multas
   const currentMatchday = await getCurrentMatchday(supabase)
 
-  // División del usuario actual: solo se le notifican las sanciones de su
-  // propia división (las sanciones son independientes por división).
-  const { data: myProfile } = await supabase
-    .from('profiles')
-    .select('division')
-    .eq('id', user.id)
-    .maybeSingle()
-  const myDivision = (myProfile?.division as number | null) ?? null
+  // 4. Avisos de partidos intercalados entre jornadas (aplazados/adelantados):
+  // se derivan de fixtures, no están en la tabla de notificaciones.
+  let outOfOrderNotifications: any[] = []
+  try {
+    outOfOrderNotifications = await getOutOfOrderMatchNotifications(supabase)
+  } catch (e) {
+    console.error('Error calculando avisos de partidos intercalados:', e)
+  }
 
   // Conjunto de usuarios de mi división (para filtrar las sanciones ya
   // consolidadas en BD, que no llevan columna de división).
@@ -90,8 +112,8 @@ export async function GET() {
     penaltyNotifications.push(...liveNotifications)
   }
 
-  // Combinar ambas listas
-  const combined = [...penaltyNotifications, ...(standardNotifications || [])]
+  // Combinar todas las listas
+  const combined = [...penaltyNotifications, ...outOfOrderNotifications, ...visibleStandard]
 
   return NextResponse.json({ notifications: combined })
 }
@@ -105,19 +127,20 @@ export async function PATCH(request: NextRequest) {
   const { id } = body
   const now = new Date().toISOString()
 
-  if (id) {
-    const { error } = await supabase
-      .from('sync_notifications')
-      .update({ read_at: now })
-      .eq('id', id)
-      .is('read_at', null)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  } else {
-    const { error } = await supabase
-      .from('sync_notifications')
-      .update({ read_at: now })
-      .is('read_at', null)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Las notificaciones derivadas (sanciones en vivo, bloqueos por partido
+  // intercalado) no existen como fila: el cliente las marca en localStorage.
+  if (id && DERIVED_ID_PREFIXES.some(p => String(id).startsWith(p))) {
+    return NextResponse.json({ success: true })
+  }
+
+  const query = supabase.from('sync_notifications').update({ read_at: now }).is('read_at', null)
+  const { error } = id ? await query.eq('id', id) : await query
+
+  if (error) {
+    // Hay despliegues donde sync_notifications no tiene columna read_at: el
+    // estado de leído vive solo en el cliente, así que no es un fallo real.
+    if (error.code === '42703') return NextResponse.json({ success: true, persisted: false })
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   return NextResponse.json({ success: true })

@@ -191,7 +191,11 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchHistory = async () => {
       if (!userTeamId || typeof activeMatchday !== 'number') return;
-      
+
+      // Jornada en la que arranca el juego: antes de ella los equipos de los
+      // usuarios no contabilizan, aunque los jugadores ya estén puntuando.
+      const fantasyStart = Math.max(1, config.fantasy_starting_matchday);
+
       const { data: allTpData } = await supabase
         .from('team_players')
         .select('team_id, player_id, matchday, is_starter')
@@ -227,12 +231,14 @@ export default function DashboardPage() {
       for (const [teamId, mdMap] of tpByTeamAndMatchday.entries()) {
         const computedMap = new Map<number, typeof allTpData>();
         let lastValidLineup: typeof allTpData = [];
-        
+
+        // Se recorre desde la J1 para poder arrastrar el último once válido,
+        // pero solo se contabiliza a partir de la jornada de inicio del juego.
         for (let md = 1; md <= targetMaxMd; md++) {
           if (mdMap.has(md) && mdMap.get(md)!.length > 0) {
             lastValidLineup = mdMap.get(md)!;
           }
-          if (lastValidLineup.length > 0) {
+          if (md >= fantasyStart && lastValidLineup.length > 0) {
             computedMap.set(md, lastValidLineup);
             lastValidLineup.forEach(t => allUsedPlayerIds.add(t.player_id));
           }
@@ -278,7 +284,7 @@ export default function DashboardPage() {
       }
 
       const history = [];
-      for (let md = 1; md <= targetMaxMd; md++) {
+      for (let md = fantasyStart; md <= targetMaxMd; md++) {
         const myMap = computedLineupsByTeam.get(userTeamId);
         let myPoints = 0;
         let myHasPenalty = false;
@@ -314,7 +320,7 @@ export default function DashboardPage() {
     if (allPenalties.length >= 0) {
       fetchHistory();
     }
-  }, [userTeamId, activeMatchday, allPenalties, user?.id, supabase]);
+  }, [userTeamId, activeMatchday, allPenalties, user?.id, supabase, config.fantasy_starting_matchday]);
 
   useEffect(() => {
     const fetchAllPlayerStats = async () => {
