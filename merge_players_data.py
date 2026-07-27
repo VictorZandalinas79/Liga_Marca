@@ -93,6 +93,36 @@ def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto):
         update["photo"] = bw_foto
     return update
 
+def save_notifications(notifications, chunk_size=100):
+    """Inserta las notificaciones sin poder tumbar el sync.
+
+    Los datos de players ya están escritos cuando llegamos aquí (updates y
+    borrado de sobrantes), así que un fallo insertando avisos no debe marcar
+    el workflow como fallido ni obligar a repetir 20 minutos de scraping.
+    Si un lote falla (típicamente por el CHECK de `type` desactualizado en la
+    BD) se reintenta fila a fila para salvar las que sí son válidas.
+    """
+    saved = 0
+    failed = 0
+    for i in range(0, len(notifications), chunk_size):
+        batch = notifications[i:i + chunk_size]
+        try:
+            supabase.table("sync_notifications").insert(batch).execute()
+            saved += len(batch)
+            continue
+        except Exception as e:
+            print(f"-> Aviso: lote de {len(batch)} notificaciones rechazado ({e}). Reintentando una a una...")
+
+        for notif in batch:
+            try:
+                supabase.table("sync_notifications").insert(notif).execute()
+                saved += 1
+            except Exception as e:
+                failed += 1
+                print(f"   Descartada notificación '{notif.get('type')}' de {notif.get('player_name')}: {e}")
+    return saved, failed
+
+
 def main():
     print("1. Obteniendo jugadores actuales de Supabase (API)...")
     # Paginación para traer todos los jugadores de Supabase
@@ -375,8 +405,9 @@ def main():
     # 6. Notifications
     if notifications:
         print(f"6. Guardando {len(notifications)} notificaciones...")
-        supabase.table("sync_notifications").insert(notifications).execute()
-        
+        saved, failed = save_notifications(notifications)
+        print(f"-> {saved} notificaciones guardadas, {failed} descartadas.")
+
         print("7. Enviando email resumen...")
         try:
             import mailer

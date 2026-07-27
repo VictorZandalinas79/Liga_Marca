@@ -932,14 +932,33 @@ def sync_players_with_csv(squads_data):
         try:
             # Detectar jugadores nuevos o traspasados para las notificaciones
             try:
-                existing_ids_resp = supabase.table("players").select("id, team_id").execute()
+                existing_ids_resp = supabase.table("players").select("id, team_id, precio, photo").execute()
                 existing_player_map = {r['id']: r for r in (existing_ids_resp.data or [])}
                 existing_player_ids = set(existing_player_map.keys())
             except Exception:
                 existing_player_map = {}
                 existing_player_ids = set()
 
-            # IMPORTANTE: ignore_duplicates=False para que actualice fotos y precios 
+            # El CSV de Comunio solo cubre una parte de la plantilla. Si un
+            # jugador no está en él NO se borra su precio/foto: los pone
+            # merge_players_data.py con datos de Biwenger justo después, y
+            # machacarlos con None hacía que en la siguiente pasada el merge
+            # los viera como "sin precio" y emitiera un 'new_player' para casi
+            # toda la liga.
+            preserved = 0
+            for p in players_payload:
+                prev = existing_player_map.get(p.get('id'))
+                if not prev:
+                    continue
+                if p.get('precio') is None and prev.get('precio') is not None:
+                    p['precio'] = prev['precio']
+                    preserved += 1
+                if not p.get('photo') and prev.get('photo'):
+                    p['photo'] = prev['photo']
+            if preserved:
+                print(f"   ♻️  Precio conservado de la BD para {preserved} jugadores sin match en el CSV.")
+
+            # IMPORTANTE: ignore_duplicates=False para que actualice fotos y precios
             # a jugadores que ya existían pero se les acaba de agregar data en el CSV.
             result = supabase.table("players").upsert(players_payload, ignore_duplicates=False).execute()
 
