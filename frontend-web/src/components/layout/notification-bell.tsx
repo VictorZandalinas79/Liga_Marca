@@ -16,6 +16,8 @@ type NotificationType =
   | 'photo_changed'
   | 'transfer'
   | 'unmatched'
+  | 'provisional_player'
+  | 'player_promoted'
 
 interface Notification {
   id: string
@@ -181,6 +183,8 @@ export function NotificationBell() {
     photo_changed: '📸',
     transfer: '⚽',
     unmatched: '⚠️',
+    provisional_player: '🕓',
+    player_promoted: '✅',
   }
 
   return (

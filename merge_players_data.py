@@ -2,6 +2,8 @@ import os
 import csv
 import re
 import difflib
+import hashlib
+import unicodedata
 import requests
 from datetime import datetime
 from supabase import create_client
@@ -67,6 +69,226 @@ def photo_key(url):
     return _PHOTO_VERSION_RE.sub("/", url.strip())
 
 
+# --------------------------------------------------------------------------
+# Jugadores provisionales
+#
+# Biwenger publica antes que la API de Opta (canteranos que suben al primer
+# equipo, fichajes recién cerrados). Antes esos jugadores se quedaban fuera de
+# la app entera; ahora se dan de alta con lo que sí sabemos de ellos (nombre de
+# Biwenger, foto, precio, posición, equipo) y un id propio con prefijo 'bw-'.
+# Cuando la API los publica, promote_provisional_players() traspasa sus
+# referencias al id real de Opta y borra la fila provisional, así que el jugador
+# hereda el nombre y la ficha completa sin que nadie pierda su plantilla.
+#
+# El prefijo del id es lo que marca la fila como provisional: así la feature no
+# depende de aplicar ninguna migración.
+# --------------------------------------------------------------------------
+PROVISIONAL_PREFIX = "bw-"
+
+# Tablas que apuntan a players(id) y hay que repuntar al promocionar. La FK no
+# es ON DELETE CASCADE, así que sin esto un borrado revienta el sync.
+PLAYER_FK_TABLES = ("team_players", "player_scores", "match_events")
+
+
+def is_provisional(player):
+    return str(player.get("id") or "").startswith(PROVISIONAL_PREFIX)
+
+
+def normalize_name(name):
+    """Nombre comparable: sin acentos, sin puntuación, en minúsculas."""
+    if not name:
+        return ""
+    sin_acentos = "".join(
+        c for c in unicodedata.normalize("NFD", str(name))
+        if unicodedata.category(c) != "Mn"
+    )
+    limpio = "".join(c if c.isalnum() or c.isspace() else " " for c in sin_acentos.lower())
+    return " ".join(limpio.split())
+
+
+def provisional_id(nombre, fecha_iso):
+    """Id determinista para un jugador que solo está en Biwenger.
+
+    Determinista para que dos sincronizaciones seguidas no creen dos filas del
+    mismo jugador. Aun así, el emparejamiento normal por fecha encuentra la fila
+    provisional que ya existe, así que esto solo se usa al crearla.
+    """
+    base = f"{normalize_name(nombre)}|{fecha_iso or ''}"
+    return PROVISIONAL_PREFIX + hashlib.sha1(base.encode("utf-8")).hexdigest()[:20]
+
+
+def api_display_name(player):
+    """Nombre de un jugador de la API tal y como lo compara el resto del script."""
+    return player.get("short_name") or (
+        f"{player.get('first_name') or ''} {player.get('last_name') or ''}".strip()
+    )
+
+
+def split_name(nombre):
+    """Biwenger da un único campo 'Nombre'. Se parte por el primer espacio para
+    rellenar first_name/last_name, que es lo que leen algunas vistas."""
+    partes = (nombre or "").split()
+    if not partes:
+        return None, None
+    if len(partes) == 1:
+        return None, partes[0]
+    return partes[0], " ".join(partes[1:])
+
+
+def build_provisional_player(bw_name, team_id, bw_pos, bw_precio, bw_price, bw_foto, bw_date, extra_columns):
+    first_name, last_name = split_name(bw_name)
+    row = {
+        "id": provisional_id(bw_name, bw_date),
+        "team_id": team_id,
+        "first_name": first_name,
+        "last_name": last_name,
+        "short_name": bw_name,
+        "position": bw_pos,
+        "status": "active",
+        "precio": bw_precio,
+        "price": bw_price,
+        "date_of_birth": bw_date or None,
+    }
+    if bw_foto:
+        row["photo"] = bw_foto
+    # Solo si la migración 013 está aplicada; si no, el prefijo del id basta.
+    if "is_provisional" in extra_columns:
+        row["is_provisional"] = True
+    return row
+
+
+def find_real_counterpart(prov, api_players):
+    """Busca en la API al jugador que ya teníamos como provisional.
+
+    Conservador a propósito: una promoción equivocada movería la plantilla de un
+    usuario a otro jugador. Con fecha de nacimiento se exige coincidencia exacta
+    de fecha y un parecido mínimo de nombre; sin fecha se exige mismo equipo y
+    un nombre casi idéntico.
+    """
+    prov_name = normalize_name(api_display_name(prov))
+    prov_date = prov.get("date_of_birth")
+
+    candidatos = [p for p in api_players if not is_provisional(p) and p["id"] != prov["id"]]
+
+    if prov_date:
+        mismos = [p for p in candidatos if p.get("date_of_birth") == prov_date]
+
+        if len(mismos) == 1:
+            unico = mismos[0]
+            score = difflib.SequenceMatcher(
+                None, prov_name, normalize_name(api_display_name(unico))
+            ).ratio()
+            # Fecha exacta + mismo equipo es lo que el propio cruce principal ya
+            # considera concluyente, y aquí hace falta: Biwenger da el nombre
+            # largo donde la API usa el apodo ('Yuri Berchiche' -> 'Yuri'), así
+            # que exigir parecido de nombre dejaría duplicados para siempre.
+            if unico.get("team_id") == prov.get("team_id") or score >= 0.45:
+                return unico, score
+            return None, score
+
+        # Varias fechas iguales: ahí sí decide el nombre.
+        mejor, mejor_score = None, 0.0
+        for p in mismos:
+            score = difflib.SequenceMatcher(None, prov_name, normalize_name(api_display_name(p))).ratio()
+            if score > mejor_score:
+                mejor, mejor_score = p, score
+        if mejor and mejor_score >= 0.6:
+            return mejor, mejor_score
+        return None, mejor_score
+
+    mismo_equipo = [p for p in candidatos if p.get("team_id") == prov.get("team_id")]
+    mejor, mejor_score = None, 0.0
+    for p in mismo_equipo:
+        score = difflib.SequenceMatcher(None, prov_name, normalize_name(api_display_name(p))).ratio()
+        if score > mejor_score:
+            mejor, mejor_score = p, score
+    if mejor and mejor_score >= 0.9:
+        return mejor, mejor_score
+    return None, mejor_score
+
+
+def repoint_player_references(prov_id, real_id):
+    """Traspasa al id real las filas que apuntan al provisional.
+
+    team_players tiene UNIQUE(team_id, player_id): si el usuario ya tenía al
+    jugador real fichado, la fila provisional se borra en lugar de actualizarse.
+    Las tablas que no existan en este despliegue se ignoran.
+    """
+    movidas = 0
+    for tabla in PLAYER_FK_TABLES:
+        try:
+            filas = supabase.table(tabla).select("*").eq("player_id", prov_id).execute().data or []
+        except Exception:
+            continue  # la tabla no existe en este proyecto
+
+        for fila in filas:
+            try:
+                if tabla == "team_players":
+                    ya = supabase.table(tabla).select("id") \
+                        .eq("team_id", fila["team_id"]).eq("player_id", real_id).execute().data
+                    if ya:
+                        supabase.table(tabla).delete().eq("id", fila["id"]).execute()
+                        continue
+                supabase.table(tabla).update({"player_id": real_id}).eq("id", fila["id"]).execute()
+                movidas += 1
+            except Exception as e:
+                print(f"   Aviso: no se pudo mover {tabla}.{fila.get('id')} a {real_id}: {e}")
+    return movidas
+
+
+def promote_provisional_players(all_api_players, extra_columns):
+    """Sustituye cada provisional por su ficha real en cuanto la API la publica.
+
+    Devuelve (jugadores_restantes, notificaciones). Se ejecuta antes del cruce
+    para que el jugador real entre en el emparejamiento normal y el provisional
+    ya no exista cuando llegue el borrado de sobrantes.
+    """
+    provisionales = [p for p in all_api_players if is_provisional(p)]
+    if not provisionales:
+        return all_api_players, []
+
+    print(f"-> {len(provisionales)} jugadores provisionales en la BD. Comprobando si la API ya los tiene...")
+
+    notificaciones = []
+    promovidos = set()
+
+    for prov in provisionales:
+        real, score = find_real_counterpart(prov, all_api_players)
+        if not real:
+            continue
+
+        nombre_prov = api_display_name(prov)
+        nombre_real = api_display_name(real)
+        movidas = repoint_player_references(prov["id"], real["id"])
+        try:
+            supabase.table("players").delete().eq("id", prov["id"]).execute()
+        except Exception as e:
+            print(f"   Aviso: no se pudo borrar el provisional {nombre_prov}: {e}")
+            continue
+
+        promovidos.add(prov["id"])
+        print(f"  ✔ Promovido: '{nombre_prov}' -> '{nombre_real}' ({real['id']}, score {score:.2f}, {movidas} refs movidas)")
+
+        notificaciones.append({
+            "type": "player_promoted",
+            "title": "Jugador confirmado",
+            "body": f"{nombre_prov} ya tiene ficha oficial: ahora aparece como {nombre_real}.",
+            "player_id": real["id"],
+            "player_name": nombre_real,
+            "team_id": real.get("team_id"),
+            "team_name": TEAM_NAME_BY_ID.get(real.get("team_id")),
+            "message": (
+                f"Provisional {prov['id']} promovido a {real['id']} "
+                f"(score {score:.2f}, {movidas} referencias movidas)"
+            ),
+        })
+
+    if not promovidos:
+        print("-> Ninguno tiene ficha en la API todavía.")
+
+    return [p for p in all_api_players if p["id"] not in promovidos], notificaciones
+
+
 def parse_date(date_str):
     if not date_str:
         return ""
@@ -75,6 +297,27 @@ def parse_date(date_str):
         return datetime.strptime(date_str.strip(), "%d/%m/%Y").strftime("%Y-%m-%d")
     except ValueError:
         return ""
+
+
+def descartar_por_fecha(candidatos, bw_name, bw_date):
+    """Filtra los candidatos de un cruce por nombre usando la fecha de nacimiento.
+
+    Con dos fechas conocidas y distintas casi nunca son la misma persona: así se
+    emparejaba 'Miguel Sierra' con 'Miguel Morro' y se le escribía encima el
+    precio y la foto. Pero las fuentes discrepan en algunas fechas ('Jon
+    Gorrotxategi' es 02/09 en una y 09/02 en la otra, 'Javi Rodríguez' un día),
+    y ahí partir al jugador en dos sería peor. La excepción es que el nombre
+    normalizado coincida exactamente: eso ya identifica a la persona.
+    """
+    if not bw_date:
+        return candidatos
+    objetivo = normalize_name(bw_name)
+    return [
+        p for p in candidatos
+        if not p.get("date_of_birth")
+        or p["date_of_birth"] == bw_date
+        or normalize_name(api_display_name(p)) == objetivo
+    ]
 
 
 def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto):
@@ -92,6 +335,15 @@ def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto):
     if bw_foto:
         update["photo"] = bw_foto
     return update
+
+# Tipos nuevos que el CHECK de sync_notifications solo acepta con la migración
+# 013 aplicada. Mientras no lo esté, la notificación se guarda con un tipo
+# antiguo equivalente en vez de perderse.
+TYPE_FALLBACK = {
+    "provisional_player": "new_player",
+    "player_promoted": "squad_changed",
+}
+
 
 def save_notifications(notifications, chunk_size=100):
     """Inserta las notificaciones sin poder tumbar el sync.
@@ -117,10 +369,89 @@ def save_notifications(notifications, chunk_size=100):
             try:
                 supabase.table("sync_notifications").insert(notif).execute()
                 saved += 1
+                continue
+            except Exception as e:
+                fallback = TYPE_FALLBACK.get(notif.get("type"))
+                if not fallback:
+                    failed += 1
+                    print(f"   Descartada notificación '{notif.get('type')}' de {notif.get('player_name')}: {e}")
+                    continue
+
+            try:
+                supabase.table("sync_notifications").insert({**notif, "type": fallback}).execute()
+                saved += 1
+                print(f"   Notificación '{notif.get('type')}' guardada como '{fallback}' (falta la migración 013).")
             except Exception as e:
                 failed += 1
                 print(f"   Descartada notificación '{notif.get('type')}' de {notif.get('player_name')}: {e}")
     return saved, failed
+
+
+def build_sync_summary(notifications, stats):
+    """Notificación única con el balance del sync, para la campana.
+
+    Los 'unmatched' individuales solo los ve un admin (son ruido para el resto),
+    así que sin este resumen un sync con 37 jugadores fuera no dejaba ni un
+    aviso visible para el usuario normal.
+    """
+    counts = {}
+    for n in notifications:
+        counts[n["type"]] = counts.get(n["type"], 0) + 1
+
+    trozos = []
+    for tipo, singular, plural in [
+        ("new_player", "jugador nuevo", "jugadores nuevos"),
+        ("provisional_player", "alta provisional", "altas provisionales"),
+        ("player_promoted", "ficha confirmada", "fichas confirmadas"),
+        ("team_changed", "fichaje", "fichajes"),
+        ("position_changed", "cambio de posición", "cambios de posición"),
+        ("photo_changed", "foto nueva", "fotos nuevas"),
+    ]:
+        c = counts.get(tipo, 0)
+        if c:
+            trozos.append(f"{c} {singular if c == 1 else plural}")
+
+    cambios = ", ".join(trozos) if trozos else "sin cambios en las fichas"
+    body = f"{stats['matched']} jugadores sincronizados: {cambios}."
+
+    sin_match = stats.get("unmatched", 0)
+    if sin_match:
+        body += f" {sin_match} jugadores de Biwenger no se han podido dar de alta."
+    if stats.get("deleted"):
+        body += f" {stats['deleted']} eliminados por sobrantes."
+    if stats.get("protected"):
+        body += f" {stats['protected']} sobrantes conservados por estar fichados."
+
+    return {
+        "type": "sync_complete",
+        "title": "Mercado actualizado",
+        "body": body,
+        "player_id": None,
+        "player_name": None,
+        "team_id": None,
+        "team_name": None,
+        "message": (
+            f"Biwenger: {stats['biwenger_total']} | BD: {stats['api_total']} | "
+            f"Emparejados: {stats['matched']} | Provisionales: {stats.get('provisional', 0)} | "
+            f"Promovidos: {stats.get('promoted', 0)} | Sin dar de alta: {sin_match} | "
+            f"Eliminados: {stats.get('deleted', 0)} | Protegidos: {stats.get('protected', 0)}"
+        ),
+    }
+
+
+def admin_emails():
+    """Correos a los que va el resumen. SYNC_SUMMARY_EMAIL manda si está puesta;
+    si no, los perfiles marcados como admin en la base de datos."""
+    raw = os.environ.get("SYNC_SUMMARY_EMAIL", "")
+    configured = [e.strip() for e in raw.split(",") if e.strip()]
+    if configured:
+        return configured
+    try:
+        resp = supabase.table("profiles").select("email").eq("is_admin", True).execute()
+        return [p["email"] for p in (resp.data or []) if p.get("email")]
+    except Exception as e:
+        print(f"-> Aviso: no se pudieron leer los emails de admin ({e}).")
+        return []
 
 
 def main():
@@ -141,7 +472,14 @@ def main():
     print("-> Limpiando notificaciones de jugadores no encontrados anteriores...")
     supabase.table("sync_notifications").delete().eq("type", "unmatched").execute()
 
-    print(f"-> {len(all_api_players)} jugadores en la API.")
+    # Columnas opcionales que solo existen si la migración 013 está aplicada.
+    extra_columns = set(all_api_players[0].keys()) if all_api_players else set()
+
+    provisionales_previos = sum(1 for p in all_api_players if is_provisional(p))
+    print(f"-> {len(all_api_players)} jugadores en la BD ({provisionales_previos} provisionales).")
+
+    print("1.5 Promocionando provisionales que ya están en la API...")
+    all_api_players, promotion_notifications = promote_provisional_players(all_api_players, extra_columns)
 
     print("2. Leyendo jugadores de Biwenger desde CSV...")
     biwenger_players = []
@@ -149,7 +487,7 @@ def main():
         reader = csv.DictReader(f)
         for row in reader:
             biwenger_players.append(row)
-            
+
     print(f"-> {len(biwenger_players)} jugadores en Biwenger.")
 
     # Convert API players to a more accessible structure
@@ -162,8 +500,9 @@ def main():
 
     matched_api_ids = set()
     updates = []
-    notifications = []
-    
+    notifications = list(promotion_notifications)
+    new_provisionals = []
+
     match_by_date = 0
     match_by_name = 0
     not_found = []
@@ -237,6 +576,11 @@ def main():
         if not match:
             # let's find by name in the same team among unmatched players
             unmatched_team_players = [p for p in team_api_players if p['id'] not in matched_api_ids]
+            # Con dos fechas conocidas y distintas no son la misma persona, por
+            # mucho que el nombre se parezca: 'Miguel Sierra' se emparejaba con
+            # 'Miguel Morro' (cutoff 0.5) y le escribía encima precio y foto,
+            # dejando además al Morro real sin emparejar.
+            unmatched_team_players = descartar_por_fecha(unmatched_team_players, bw_name, bw_date)
             api_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in unmatched_team_players]
             best_match = difflib.get_close_matches(bw_name, api_names, n=1, cutoff=0.5)
             if best_match:
@@ -334,6 +678,8 @@ def main():
                                 break
             
             if not match:
+                # Misma guarda que en el cruce por nombre dentro del equipo.
+                all_other_players = descartar_por_fecha(all_other_players, bw_name, bw_date)
                 other_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in all_other_players]
                 best_match = difflib.get_close_matches(bw_name, other_names, n=1, cutoff=0.7)
                 if best_match:
@@ -350,7 +696,10 @@ def main():
                     continue
                     
                 matched_api_ids.add(match['id'])
-                match_by_date += 1 if bw_date and match.get('date_of_birth') == bw_date else match_by_name + 1
+                if bw_date and match.get('date_of_birth') == bw_date:
+                    match_by_date += 1
+                else:
+                    match_by_name += 1
 
                 old_team_name = TEAM_NAME_BY_ID.get(match.get('team_id'))
                 desde = f" (venía del {old_team_name})" if old_team_name else ""
@@ -367,22 +716,39 @@ def main():
 
                 updates.append(build_update(match['id'], team_id, bw_pos, bw_precio, bw_price, bw_foto))
             else:
+                # La API todavía no tiene a este jugador. Antes se quedaba fuera
+                # de la app; ahora entra como provisional con lo de Biwenger y
+                # ya se corregirá cuando Opta publique su ficha.
+                nuevo = build_provisional_player(
+                    bw_name, team_id, bw_pos, bw_precio, bw_price, bw_foto, bw_date, extra_columns
+                )
+                if nuevo["id"] in matched_api_ids:
+                    # Dos filas de Biwenger con el mismo nombre y fecha.
+                    print(f"  Aviso: {bw_name} duplicado en el CSV de Biwenger, se ignora la segunda fila.")
+                    continue
+
+                new_provisionals.append(nuevo)
+                matched_api_ids.add(nuevo["id"])
                 not_found.append(bw)
                 notifications.append({
-                    "type": "unmatched",
-                    "title": "Error de Sincronización",
-                    "body": f"Jugador no encontrado en API: {bw_name}",
-                    "player_id": None,
+                    "type": "provisional_player",
+                    "title": "Nuevo Jugador (provisional)",
+                    "body": f"{bw_name} ({team_name}) entra como {POS_LABEL.get(bw_pos, bw_pos)} con datos de Biwenger.",
+                    "player_id": nuevo["id"],
                     "player_name": bw_name,
                     "team_id": team_id,
                     "team_name": team_name,
-                    "message": f"No encontrado en API. Fecha: {bw_date}, Pos: {bw_pos_raw}"
+                    "message": (
+                        f"Alta provisional: aún no está en la API. "
+                        f"Fecha: {bw_date}, Pos: {bw_pos_raw}, Precio: {bw_precio}"
+                    ),
                 })
 
     print(f"-> Emparejados por Fecha: {match_by_date}")
     print(f"-> Emparejados por Nombre: {match_by_name}")
-    print(f"-> No encontrados en la API (Ignorados): {len(not_found)}")
-    
+    print(f"-> Altas provisionales (solo en Biwenger): {len(new_provisionals)}")
+    print(f"-> Sin emparejar y sin poder darlos de alta: {len(not_found) - len(new_provisionals)}")
+
     # 4. Updates
     if updates:
         print("4. Actualizando base de datos con los datos de Biwenger...")
@@ -391,28 +757,107 @@ def main():
             batch = updates[i:i+100]
             supabase.table("players").upsert(batch).execute()
 
+    # 4.5 Alta de los jugadores que solo están en Biwenger
+    provisionals_saved = 0
+    if new_provisionals:
+        print(f"4.5 Dando de alta {len(new_provisionals)} jugadores provisionales...")
+        for i in range(0, len(new_provisionals), 100):
+            batch = new_provisionals[i:i+100]
+            try:
+                supabase.table("players").upsert(batch).execute()
+                provisionals_saved += len(batch)
+            except Exception as e:
+                print(f"-> Aviso: lote de {len(batch)} provisionales rechazado ({e}). Reintentando uno a uno...")
+                for row in batch:
+                    try:
+                        supabase.table("players").upsert(row).execute()
+                        provisionals_saved += 1
+                    except Exception as e2:
+                        print(f"   No se pudo dar de alta a {row.get('short_name')}: {e2}")
+        print(f"-> {provisionals_saved} provisionales en la BD.")
+
     # 5. Culling (Deleting non-Biwenger players)
     print("5. Eliminando jugadores sobrantes de la API...")
     to_delete_ids = [p['id'] for p in all_api_players if p['id'] not in matched_api_ids]
+
+    # team_players.player_id no es ON DELETE CASCADE: borrar un jugador que
+    # alguien tiene fichado reventaría el sync entero. Se deja en la BD y se
+    # avisa al admin para que decida.
+    protegidos = set()
     if to_delete_ids:
-        print(f"-> Se van a eliminar {len(to_delete_ids)} jugadores sobrantes.")
         for i in range(0, len(to_delete_ids), 100):
-            batch_ids = to_delete_ids[i:i+100]
+            lote = to_delete_ids[i:i+100]
+            try:
+                filas = supabase.table("team_players").select("player_id").in_("player_id", lote).execute().data or []
+                protegidos.update(f["player_id"] for f in filas)
+            except Exception as e:
+                print(f"-> Aviso: no se pudo comprobar team_players ({e}). No se borra nada por precaución.")
+                protegidos.update(to_delete_ids)
+                break
+
+    if protegidos:
+        nombres_por_id = {p["id"]: api_display_name(p) for p in all_api_players}
+        print(f"-> {len(protegidos)} sobrantes NO se borran porque están en alguna plantilla:")
+        for pid in sorted(protegidos):
+            nombre = nombres_por_id.get(pid, pid)
+            print(f"   · {nombre} ({pid})")
+            notifications.append({
+                "type": "unmatched",
+                "title": "Jugador fichado pero fuera de Biwenger",
+                "body": f"{nombre} ya no está en Biwenger pero sigue en alguna plantilla.",
+                "player_id": pid,
+                "player_name": nombre,
+                "team_id": None,
+                "team_name": None,
+                "message": "No se ha borrado para no romper las plantillas. Revisar a mano.",
+            })
+
+    borrables = [pid for pid in to_delete_ids if pid not in protegidos]
+    if borrables:
+        print(f"-> Se van a eliminar {len(borrables)} jugadores sobrantes.")
+        for i in range(0, len(borrables), 100):
+            batch_ids = borrables[i:i+100]
             supabase.table("players").delete().in_("id", batch_ids).execute()
     else:
         print("-> No hay jugadores sobrantes que eliminar.")
 
     # 6. Notifications
-    if notifications:
-        print(f"6. Guardando {len(notifications)} notificaciones...")
-        saved, failed = save_notifications(notifications)
-        print(f"-> {saved} notificaciones guardadas, {failed} descartadas.")
+    stats = {
+        "biwenger_total": len(biwenger_players),
+        "api_total": len(all_api_players),
+        "matched": len(matched_api_ids) - len(new_provisionals),
+        "provisional": provisionals_saved,
+        "promoted": len(promotion_notifications),
+        "unmatched": len(not_found) - len(new_provisionals),
+        "deleted": len(borrables),
+        "protected": len(protegidos),
+    }
 
-        print("7. Enviando email resumen...")
+    summary = build_sync_summary(notifications, stats)
+    print(f"-> Resumen: {summary['body']}")
+
+    print(f"6. Guardando {len(notifications) + 1} notificaciones...")
+    saved, failed = save_notifications(notifications)
+    # En un insert aparte para que su created_at quede por detrás del resto y el
+    # resumen encabece la campana (la API corta a las 50 más recientes).
+    saved_summary, failed_summary = save_notifications([summary])
+    saved += saved_summary
+    failed += failed_summary
+    print(f"-> {saved} notificaciones guardadas, {failed} descartadas.")
+
+    print("7. Enviando email resumen...")
+    destinatarios = admin_emails()
+    if not destinatarios:
+        print("-> Sin destinatarios (ni SYNC_SUMMARY_EMAIL ni perfiles admin). Se omite el email.")
+    else:
         try:
             import mailer
-            mailer.send_summary_email()
-            print("-> Email enviado correctamente.")
+            # El email lleva el detalle nombre a nombre; el titular ya lo pone
+            # el propio asunto, así que la fila 'sync_complete' no va en la lista.
+            if mailer.send_summary_email(notifications, stats, destinatarios):
+                print(f"-> Email enviado a: {', '.join(destinatarios)}")
+            else:
+                print("-> El email no se pudo enviar a todos los destinatarios.")
         except Exception as e:
             print(f"-> Error enviando email: {e}")
 
