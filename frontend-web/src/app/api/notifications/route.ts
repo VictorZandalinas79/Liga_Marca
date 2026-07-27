@@ -36,6 +36,7 @@ export async function GET() {
   if (!isAdmin) standardQuery = standardQuery.neq('type', 'unmatched')
 
   const { data: standardNotifications, error: notifError } = await standardQuery
+  console.log(`[API NOTIFICATIONS] Query error:`, notifError)
   if (notifError) return NextResponse.json({ error: notifError.message }, { status: 500 })
 
   const visibleStandard = standardNotifications || []
@@ -114,6 +115,8 @@ export async function GET() {
 
   // Combinar todas las listas
   const combined = [...penaltyNotifications, ...outOfOrderNotifications, ...visibleStandard]
+
+  console.log(`[API NOTIFICATIONS] Returning ${combined.length} total notifications (standard: ${visibleStandard.length}, penalties: ${penaltyNotifications.length}, outOfOrder: ${outOfOrderNotifications.length})`)
 
   return NextResponse.json({ notifications: combined })
 }

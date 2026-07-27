@@ -1,0 +1,94 @@
+name: Reset Jugadores (reconstruir la lista desde cero)
+
+# Vacía `players` y la vuelve a construir: primero las fichas oficiales de Opta
+# (API Core) y encima los datos de Biwenger (posición, precio, foto). El cruce
+# solo empareja por fecha de nacimiento dentro del equipo, así que el que no
+# cuadre entra sin id de la API y sale en las notificaciones en vez de colarse
+# encima de otro jugador.
+#
+# Solo manual y con confirmación escrita: borra la tabla entera. Las plantillas
+# de los usuarios se guardan antes en un JSON (que además se sube como artifact)
+# y se reponen al final.
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacion:
+        description: 'Escribe BORRAR para confirmar que se vacía la tabla de jugadores'
+        required: true
+        default: ''
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Comprobar la confirmación
+        if: inputs.confirmacion != 'BORRAR'
+        run: |
+          echo "::error::Hay que escribir exactamente BORRAR en el campo de confirmación."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install "supabase>=2.0.0" "python-dotenv>=1.0.0" "requests>=2.31.0" "deep-translator>=1.11.0" "beautifulsoup4>=4.12.0"
+
+      # Guarda team_players + la identidad de cada jugador fichado, y vacía
+      # players, team_players y sync_notifications.
+      - name: Vaciar la tabla de jugadores
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python reset_players.py --confirm BORRAR
+
+      # Se sube pase lo que pase: si el job revienta a mitad, este JSON es la
+      # única copia de las plantillas.
+      - name: Guardar copia de las plantillas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team-players-backup
+          path: team_players_backup.json
+          retention-days: 90
+          if-no-files-found: warn
+
+      # Repuebla players con las fichas de Opta (ids reales, fecha de
+      # nacimiento, nombre). Con la tabla vacía no emite notificaciones.
+      - name: Repoblar jugadores desde la API (Opta)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SDAPI_OUTLET_KEY: ${{ secrets.SDAPI_OUTLET_KEY }}
+        run: python "2. descarga_fixtures_y_sync.py"
+
+      - name: Sync players with photos
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python "sync_players_with_photos.py"
+
+      - name: Scraping de Biwenger
+        run: python "1.1 scraping_liga_2627.py"
+
+      # Cruce equipo -> fecha de nacimiento -> nombre solo como desempate.
+      - name: Merge de los datos de Biwenger
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SYNC_SUMMARY_EMAIL: ${{ secrets.SYNC_SUMMARY_EMAIL }}
+          SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: python merge_players_data.py
+
+      # Devuelve cada jugador fichado a su plantilla, ya con el id definitivo.
+      - name: Restaurar las plantillas
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python restore_team_players.py

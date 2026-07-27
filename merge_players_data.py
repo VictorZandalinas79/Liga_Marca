@@ -157,54 +157,55 @@ def build_provisional_player(bw_name, team_id, bw_pos, bw_precio, bw_price, bw_f
     return row
 
 
+def best_by_name(nombre, candidatos):
+    """El candidato con el nombre más parecido, y su score."""
+    objetivo = normalize_name(nombre)
+    mejor, mejor_score = None, -1.0
+    for p in candidatos:
+        score = difflib.SequenceMatcher(None, objetivo, normalize_name(api_display_name(p))).ratio()
+        if score > mejor_score:
+            mejor, mejor_score = p, score
+    return mejor, max(mejor_score, 0.0)
+
+
 def find_real_counterpart(prov, api_players):
     """Busca en la API al jugador que ya teníamos como provisional.
 
-    Conservador a propósito: una promoción equivocada movería la plantilla de un
-    usuario a otro jugador. Con fecha de nacimiento se exige coincidencia exacta
-    de fecha y un parecido mínimo de nombre; sin fecha se exige mismo equipo y
-    un nombre casi idéntico.
+    Misma regla que el cruce principal (equipo + fecha de nacimiento exacta, y el
+    nombre solo para desempatar), porque el error a evitar es el mismo: una
+    promoción equivocada movería la plantilla de un usuario a otro jugador.
+    Sin fecha se exige mismo equipo y nombre idéntico, que es lo único
+    concluyente que queda.
     """
-    prov_name = normalize_name(api_display_name(prov))
+    prov_name = api_display_name(prov)
     prov_date = prov.get("date_of_birth")
+    equipo = prov.get("team_id")
 
-    candidatos = [p for p in api_players if not is_provisional(p) and p["id"] != prov["id"]]
+    candidatos = [
+        p for p in api_players
+        if not is_provisional(p) and p["id"] != prov["id"] and p.get("team_id") == equipo
+    ]
+    if not candidatos:
+        return None, 0.0
 
     if prov_date:
         mismos = [p for p in candidatos if p.get("date_of_birth") == prov_date]
-
         if len(mismos) == 1:
-            unico = mismos[0]
-            score = difflib.SequenceMatcher(
-                None, prov_name, normalize_name(api_display_name(unico))
+            # Biwenger da el nombre largo donde la API usa el apodo ('Yuri
+            # Berchiche' -> 'Yuri'), así que aquí el nombre no puede vetar nada:
+            # equipo + fecha exacta ya identifica a la persona.
+            return mismos[0], difflib.SequenceMatcher(
+                None, normalize_name(prov_name), normalize_name(api_display_name(mismos[0]))
             ).ratio()
-            # Fecha exacta + mismo equipo es lo que el propio cruce principal ya
-            # considera concluyente, y aquí hace falta: Biwenger da el nombre
-            # largo donde la API usa el apodo ('Yuri Berchiche' -> 'Yuri'), así
-            # que exigir parecido de nombre dejaría duplicados para siempre.
-            if unico.get("team_id") == prov.get("team_id") or score >= 0.45:
-                return unico, score
-            return None, score
+        if len(mismos) > 1:
+            return best_by_name(prov_name, mismos)
+        return None, 0.0
 
-        # Varias fechas iguales: ahí sí decide el nombre.
-        mejor, mejor_score = None, 0.0
-        for p in mismos:
-            score = difflib.SequenceMatcher(None, prov_name, normalize_name(api_display_name(p))).ratio()
-            if score > mejor_score:
-                mejor, mejor_score = p, score
-        if mejor and mejor_score >= 0.6:
-            return mejor, mejor_score
-        return None, mejor_score
-
-    mismo_equipo = [p for p in candidatos if p.get("team_id") == prov.get("team_id")]
-    mejor, mejor_score = None, 0.0
-    for p in mismo_equipo:
-        score = difflib.SequenceMatcher(None, prov_name, normalize_name(api_display_name(p))).ratio()
-        if score > mejor_score:
-            mejor, mejor_score = p, score
-    if mejor and mejor_score >= 0.9:
-        return mejor, mejor_score
-    return None, mejor_score
+    objetivo = normalize_name(prov_name)
+    exactos = [p for p in candidatos if normalize_name(api_display_name(p)) == objetivo]
+    if len(exactos) == 1:
+        return exactos[0], 1.0
+    return None, 0.0
 
 
 def repoint_player_references(prov_id, real_id):
@@ -299,25 +300,107 @@ def parse_date(date_str):
         return ""
 
 
-def descartar_por_fecha(candidatos, bw_name, bw_date):
-    """Filtra los candidatos de un cruce por nombre usando la fecha de nacimiento.
+def match_in_team(bw_name, bw_date, candidatos):
+    """El jugador de la API que corresponde a una fila de Biwenger, o None.
 
-    Con dos fechas conocidas y distintas casi nunca son la misma persona: así se
-    emparejaba 'Miguel Sierra' con 'Miguel Morro' y se le escribía encima el
-    precio y la foto. Pero las fuentes discrepan en algunas fechas ('Jon
-    Gorrotxategi' es 02/09 en una y 09/02 en la otra, 'Javi Rodríguez' un día),
-    y ahí partir al jugador en dos sería peor. La excepción es que el nombre
-    normalizado coincida exactamente: eso ya identifica a la persona.
+    La única regla de emparejamiento es la fecha de nacimiento dentro del equipo
+    que dice Biwenger. El nombre NO empareja por su cuenta, solo desempata entre
+    varios con la misma fecha: emparejar por parecido de nombre es justamente lo
+    que metía en la tabla jugadores que no existen ('Miguel Sierra' cazando a
+    'Miguel Morro' y escribiéndole encima precio y foto). Si la fecha no cuadra
+    con nadie se prefiere dar el jugador de alta como provisional antes que
+    adivinar.
     """
     if not bw_date:
-        return candidatos
-    objetivo = normalize_name(bw_name)
-    return [
-        p for p in candidatos
-        if not p.get("date_of_birth")
-        or p["date_of_birth"] == bw_date
-        or normalize_name(api_display_name(p)) == objetivo
+        return None, "la fila de Biwenger no trae fecha de nacimiento"
+
+    por_fecha = [p for p in candidatos if p.get("date_of_birth") == bw_date]
+    if not por_fecha:
+        return None, "ningún jugador de su equipo tiene esa fecha de nacimiento"
+
+    # Un provisional de una pasada anterior no debe ganarle a la ficha real: su
+    # nombre es literalmente el de Biwenger, así que desempataría siempre él.
+    reales = [p for p in por_fecha if not is_provisional(p)]
+    if reales:
+        por_fecha = reales
+
+    if len(por_fecha) == 1:
+        return por_fecha[0], "fecha de nacimiento"
+
+    mejor, score = best_by_name(bw_name, por_fecha)
+    return mejor, f"fecha compartida por {len(por_fecha)}, desempate por nombre ({score:.2f})"
+
+
+# Emparejar solo por nombre, sin que la fecha respalde nada, exige un parecido
+# casi total y encima dentro del mismo equipo. Es para las discrepancias de
+# fecha entre fuentes, que son reales y frecuentes: 'Jon Gorrotxategi' es 02/09
+# en Opta y 09/02 en Biwenger, 'Javi Rodríguez' se lleva un día, 'Ángel Pérez' y
+# 'Nacho Pérez' varios meses. Los cuatro dan 1.00 de nombre, y el siguiente
+# candidato de toda la liga se queda en 0.73 ('Toni Fernández' contra 'Carlos
+# Fernández'), así que 0.90 separa de sobra. Bajarlo es lo que emparejaba
+# 'Miguel Sierra' con 'Miguel Morro' (0.72) y le escribía encima precio y foto.
+NAME_ONLY_MIN = 0.90
+
+
+def match_by_name_only(bw_name, candidatos):
+    """El jugador del mismo equipo cuyo nombre es prácticamente idéntico."""
+    if not candidatos:
+        return None, 0.0
+
+    # Un provisional lleva literalmente el nombre de Biwenger, así que puntúa
+    # 1.00 y le ganaría a la ficha real de Opta, que suele usar el apodo. Si hay
+    # ficha oficial es la que manda: quedarse con el provisional dejaría al
+    # jugador sin id de la API y borraría su ficha buena por sobrante.
+    reales = [p for p in candidatos if not is_provisional(p)]
+    if reales:
+        candidatos = reales
+
+    mejor, score = best_by_name(bw_name, candidatos)
+    if score < NAME_ONLY_MIN:
+        return None, score
+    return mejor, score
+
+
+# Un fichaje solo se acepta con la fecha exacta Y el nombre por encima de esto.
+# La fecha sola no basta fuera del equipo: dentro de un equipo dos jugadores
+# rara vez comparten cumpleaños, pero en una liga de ~530 las coincidencias son
+# constantes y la fecha dejaría de identificar a nadie. El nombre aquí no
+# empareja por su cuenta, descarta: los fichajes reales rondan 0.80-1.00 y dos
+# desconocidos que comparten fecha no pasan de 0.45.
+TRANSFER_NAME_MIN = 0.6
+
+
+def find_transfer(bw_name, bw_date, team_id, all_api_players, matched_api_ids):
+    """El jugador que Biwenger pone en otro equipo del que le tiene la API.
+
+    Biwenger publica los fichajes antes que Opta, así que durante unos días la
+    ficha real sigue colgando del equipo anterior. Se acepta como fichaje si
+    coincide la fecha (y nombre >= 0.60) O si el nombre es casi exacto (>= 0.90)
+    aunque la fecha baile.
+    """
+    candidatos = [
+        p for p in all_api_players
+        if p['id'] not in matched_api_ids
+        and not is_provisional(p)
+        and p.get('team_id') != team_id
     ]
+    if not candidatos:
+        return None, 0.0
+
+    mejor, score = best_by_name(bw_name, candidatos)
+    if not mejor:
+        return None, 0.0
+
+    # 1. Coincide la fecha de nacimiento (exigimos nombre >= 0.60)
+    if bw_date and mejor.get('date_of_birth') == bw_date:
+        if score >= TRANSFER_NAME_MIN:
+            return mejor, score
+            
+    # 2. No coincide la fecha (o no hay), pero el nombre es idéntico (>= 0.90)
+    if score >= NAME_ONLY_MIN:
+        return mejor, score
+
+    return None, score
 
 
 def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto):
@@ -387,7 +470,7 @@ def save_notifications(notifications, chunk_size=100):
     return saved, failed
 
 
-def build_sync_summary(notifications, stats):
+def build_sync_summary(notifications, stats, cold_start=False):
     """Notificación única con el balance del sync, para la campana.
 
     Los 'unmatched' individuales solo los ve un admin (son ruido para el resto),
@@ -398,12 +481,36 @@ def build_sync_summary(notifications, stats):
     for n in notifications:
         counts[n["type"]] = counts.get(n["type"], 0) + 1
 
+    if cold_start:
+        # Reconstrucción desde cero: no hay estado anterior, así que el balance
+        # es "cuántos han quedado bien y cuántos hay que mirar", no "qué cambió".
+        sin_ficha = counts.get("provisional_player", 0)
+        body = f"Lista de jugadores reconstruida desde cero: {stats['matched']} con ficha oficial de la API"
+        body += f" y {sin_ficha} solo con datos de Biwenger." if sin_ficha else "."
+        if stats.get("unmatched"):
+            body += f" {stats['unmatched']} filas descartadas por equipo desconocido."
+        return {
+            "type": "sync_complete",
+            "title": "Jugadores reconstruidos",
+            "body": body,
+            "player_id": None,
+            "player_name": None,
+            "team_id": None,
+            "team_name": None,
+            "message": (
+                f"Arranque en frío. Biwenger: {stats['biwenger_total']} | "
+                f"Emparejados por fecha: {stats['matched']} | Sin id de la API: {sin_ficha}"
+            ),
+        }
+
     trozos = []
     for tipo, singular, plural in [
         ("new_player", "jugador nuevo", "jugadores nuevos"),
         ("provisional_player", "alta provisional", "altas provisionales"),
         ("player_promoted", "ficha confirmada", "fichas confirmadas"),
-        ("team_changed", "fichaje", "fichajes"),
+        # 'team_changed' ya no lo emite este script: los traspasos los detecta
+        # API Core contra los squads de Opta (squad_changed) y aquí un jugador
+        # solo se empareja dentro del equipo que dice Biwenger.
         ("position_changed", "cambio de posición", "cambios de posición"),
         ("photo_changed", "foto nueva", "fotos nuevas"),
     ]:
@@ -478,6 +585,16 @@ def main():
     provisionales_previos = sum(1 for p in all_api_players if is_provisional(p))
     print(f"-> {len(all_api_players)} jugadores en la BD ({provisionales_previos} provisionales).")
 
+    # Arranque en frío: la tabla se acaba de reconstruir desde cero y ningún
+    # jugador tiene todavía datos de Biwenger (el precio es lo que pone este
+    # script). Sin un estado anterior no hay cambios que anunciar, y emitir
+    # 'nuevo jugador' para la liga entera solo llena la campana de ruido; se
+    # emiten únicamente los avisos que no comparan con nada (jugadores sin ficha
+    # oficial y errores de sincronización) más el resumen final.
+    cold_start = not any(p.get("precio") is not None for p in all_api_players)
+    if cold_start:
+        print("-> Arranque en frío (no hay datos previos de Biwenger): solo se avisará de lo que haya que revisar.")
+
     print("1.5 Promocionando provisionales que ya están en la API...")
     all_api_players, promotion_notifications = promote_provisional_players(all_api_players, extra_columns)
 
@@ -500,15 +617,15 @@ def main():
 
     matched_api_ids = set()
     updates = []
-    notifications = list(promotion_notifications)
+    notifications = list(promotion_notifications) if not cold_start else []
     new_provisionals = []
 
     match_by_date = 0
     match_by_name = 0
     not_found = []
 
-    print("3. Cruzando datos...")
-    
+    print("3. Cruzando datos (equipo -> fecha de nacimiento -> nombre solo como desempate)...")
+
     POS_MAPPING = {
         "DEL": "Forward",
         "MED": "Midfielder",
@@ -516,236 +633,221 @@ def main():
         "POR": "Goalkeeper"
     }
     
-    for bw in biwenger_players:
-        team_name = bw.get('Equipo', '').strip()
-        bw_name = bw.get('Nombre', '').strip()
-        bw_date_raw = bw.get('Fecha_Nacimiento', '').strip()
-        bw_date = parse_date(bw_date_raw)
-        bw_pos_raw = bw.get('Posicion', '').strip()
-        bw_pos = POS_MAPPING.get(bw_pos_raw, bw_pos_raw)
-        bw_foto = bw.get('Foto', '').strip()
-        
+    def parse_row(bw):
+        """Los campos de una fila del CSV, ya normalizados."""
         try:
-            bw_precio = int(bw.get('Valor', 0))
-        except:
-            bw_precio = 0
-            
-        bw_price = bw_precio * 1000000
+            precio = int(bw.get('Valor', 0))
+        except (TypeError, ValueError):
+            precio = 0
+        pos_raw = bw.get('Posicion', '').strip()
+        return {
+            "row": bw,
+            "team_name": bw.get('Equipo', '').strip(),
+            "name": bw.get('Nombre', '').strip(),
+            "date": parse_date(bw.get('Fecha_Nacimiento', '').strip()),
+            "pos_raw": pos_raw,
+            "pos": POS_MAPPING.get(pos_raw, pos_raw),
+            "foto": bw.get('Foto', '').strip(),
+            "precio": precio,
+            "price": precio * 1000000,
+            "team_id": TEAM_MAPPING.get(bw.get('Equipo', '').strip()),
+        }
 
-        team_id = TEAM_MAPPING.get(team_name)
-        if not team_id:
-            print(f"  Aviso: Equipo '{team_name}' no mapeado para el jugador {bw_name}.")
+    def aplicar_match(match, d, viene_de=None):
+        """Escribe los datos de Biwenger sobre una ficha de la API y emite los
+        avisos de lo que haya cambiado. `viene_de` es el equipo anterior cuando
+        el emparejamiento ha sido un fichaje."""
+        matched_api_ids.add(match['id'])
+        bw_name, team_name, team_id = d["name"], d["team_name"], d["team_id"]
+        bw_pos, bw_foto = d["pos"], d["foto"]
+
+        # Nuevo en el mercado: la API lo dio de alta pero nunca se había cruzado
+        # con Biwenger, así que aún no tiene precio. En arranque en frío eso lo
+        # cumple TODA la liga, y avisar de 500 altas no informa de nada: ahí no
+        # hay contra qué comparar.
+        is_new = match.get('precio') is None and not cold_start
+
+        old_pos = match.get('position')
+        pos_changed = bool(old_pos) and old_pos != bw_pos and not is_new and not cold_start
+
+        old_photo = match.get('photo')
+        photo_changed = (
+            bool(bw_foto)
+            and bool(old_photo)
+            and photo_key(old_photo) != photo_key(bw_foto)
+            and not is_new
+            and not cold_start
+        )
+
+        if viene_de is not None:
+            # Un fichaje sí se avisa en arranque en frío: no compara con ningún
+            # estado anterior nuestro, es una discrepancia real entre lo que dice
+            # Biwenger hoy y el equipo que le tiene asignado la API.
+            desde = f" (venía del {viene_de})" if viene_de else ""
+            notifications.append({
+                "type": "team_changed",
+                "title": "Fichaje",
+                "body": f"{bw_name} se une al {team_name}{desde}.",
+                "player_id": match['id'],
+                "player_name": bw_name,
+                "team_id": team_id,
+                "team_name": team_name,
+                "message": f"Fichaje: se une al {team_name}. La API aún le tenía en {viene_de or 'otro equipo'}.",
+            })
+        elif is_new:
+            notifications.append({
+                "type": "new_player",
+                "title": "Nuevo Jugador en el Mercado",
+                "body": f"{bw_name} ({team_name}) ya está disponible en {POS_LABEL.get(bw_pos, bw_pos)}.",
+                "player_id": match['id'],
+                "player_name": bw_name,
+                "team_id": team_id,
+                "team_name": team_name,
+                "message": "Nuevo jugador disponible en el mercado"
+            })
+        elif pos_changed:
+            notifications.append({
+                "type": "position_changed",
+                "title": "Cambio de Posición",
+                "body": f"{bw_name} ({team_name}) pasa de {POS_LABEL.get(old_pos, old_pos)} a {POS_LABEL.get(bw_pos, bw_pos)}.",
+                "player_id": match['id'],
+                "player_name": bw_name,
+                "team_id": team_id,
+                "team_name": team_name,
+                "message": f"Ha cambiado de posición: {bw_pos}"
+            })
+
+        # La foto es independiente: puede cambiar a la vez que la posición.
+        if photo_changed:
+            notifications.append({
+                "type": "photo_changed",
+                "title": "Foto Actualizada",
+                "body": f"{bw_name} ({team_name}) tiene foto nueva.",
+                "player_id": match['id'],
+                "player_name": bw_name,
+                "team_id": team_id,
+                "team_name": team_name,
+                "message": f"Foto actualizada: {bw_foto}"
+            })
+
+        updates.append(build_update(match['id'], team_id, bw_pos, d["precio"], d["price"], bw_foto))
+
+    # --- Pasada 1: cada jugador contra su propio equipo ---------------------
+    pendientes = []
+    for bw in biwenger_players:
+        d = parse_row(bw)
+
+        if not d["team_id"]:
+            print(f"  Aviso: Equipo '{d['team_name']}' no mapeado para el jugador {d['name']}.")
             not_found.append(bw)
             # Se queda fuera de la BD igual que un jugador sin match, así que
             # tiene que verse en el panel de admin y no solo en el log.
             notifications.append({
                 "type": "unmatched",
                 "title": "Error de Sincronización",
-                "body": f"Equipo no mapeado: {team_name}",
+                "body": f"Equipo no mapeado: {d['team_name']}",
                 "player_id": None,
-                "player_name": bw_name,
+                "player_name": d["name"],
                 "team_id": None,
-                "team_name": team_name,
-                "message": f"Equipo '{team_name}' no está en TEAM_MAPPING. Fecha: {bw_date}, Pos: {bw_pos_raw}"
+                "team_name": d["team_name"],
+                "message": f"Equipo '{d['team_name']}' no está en TEAM_MAPPING. Fecha: {d['date']}, Pos: {d['pos_raw']}"
             })
             continue
 
-        team_api_players = api_players_by_team.get(team_id, [])
-        match = None
+        # El equipo de Biwenger acota la búsqueda: solo se compara contra los
+        # jugadores que la API tiene en ese equipo y que aún no ha cogido otra
+        # fila del CSV.
+        candidatos = [p for p in api_players_by_team.get(d["team_id"], []) if p['id'] not in matched_api_ids]
+        match, motivo = match_in_team(d["name"], d["date"], candidatos)
 
-        # 1. Match by Date
-        if bw_date:
-            date_matches = [p for p in team_api_players if p.get('date_of_birth') == bw_date and p['id'] not in matched_api_ids]
-            if len(date_matches) == 1:
-                match = date_matches[0]
-            elif len(date_matches) > 1:
-                # Disambiguate by name
-                api_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in date_matches]
-                best_match = difflib.get_close_matches(bw_name, api_names, n=1, cutoff=0.3)
-                if best_match:
-                    best_name = best_match[0]
-                    for p in date_matches:
-                        p_name = p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '')
-                        if p_name == best_name:
-                            match = p
-                            break
-                if not match:
-                    match = date_matches[0]
-
-        # 2. Match by Name (Fallback)
         if not match:
-            # let's find by name in the same team among unmatched players
-            unmatched_team_players = [p for p in team_api_players if p['id'] not in matched_api_ids]
-            # Con dos fechas conocidas y distintas no son la misma persona, por
-            # mucho que el nombre se parezca: 'Miguel Sierra' se emparejaba con
-            # 'Miguel Morro' (cutoff 0.5) y le escribía encima precio y foto,
-            # dejando además al Morro real sin emparejar.
-            unmatched_team_players = descartar_por_fecha(unmatched_team_players, bw_name, bw_date)
-            api_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in unmatched_team_players]
-            best_match = difflib.get_close_matches(bw_name, api_names, n=1, cutoff=0.5)
-            if best_match:
-                best_name = best_match[0]
-                for p in unmatched_team_players:
-                    p_name = p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '')
-                    if p_name == best_name:
-                        match = p
-                        break
-            
-            if match:
-                match_by_name += 1
-        else:
+            pendientes.append((d, motivo))
+            continue
+
+        if motivo == "fecha de nacimiento":
             match_by_date += 1
-
-        if match:
-            if match['id'] in matched_api_ids:
-                print(f"  Aviso: Jugador {bw_name} saltado porque su match API ya fue asignado.")
-                continue
-                
-            matched_api_ids.add(match['id'])
-
-            # Nuevo en el mercado: la API lo dio de alta pero nunca se había
-            # cruzado con Biwenger, así que aún no tiene precio.
-            is_new = match.get('precio') is None
-
-            old_pos = match.get('position')
-            pos_changed = bool(old_pos) and old_pos != bw_pos and not is_new
-
-            old_photo = match.get('photo')
-            photo_changed = (
-                bool(bw_foto)
-                and bool(old_photo)
-                and photo_key(old_photo) != photo_key(bw_foto)
-                and not is_new
-            )
-
-            if is_new:
-                notifications.append({
-                    "type": "new_player",
-                    "title": "Nuevo Jugador en el Mercado",
-                    "body": f"{bw_name} ({team_name}) ya está disponible en {POS_LABEL.get(bw_pos, bw_pos)}.",
-                    "player_id": match['id'],
-                    "player_name": bw_name,
-                    "team_id": team_id,
-                    "team_name": team_name,
-                    "message": "Nuevo jugador disponible en el mercado"
-                })
-            elif pos_changed:
-                notifications.append({
-                    "type": "position_changed",
-                    "title": "Cambio de Posición",
-                    "body": f"{bw_name} ({team_name}) pasa de {POS_LABEL.get(old_pos, old_pos)} a {POS_LABEL.get(bw_pos, bw_pos)}.",
-                    "player_id": match['id'],
-                    "player_name": bw_name,
-                    "team_id": team_id,
-                    "team_name": team_name,
-                    "message": f"Ha cambiado de posición: {bw_pos}"
-                })
-
-            # La foto es independiente: puede cambiar a la vez que la posición.
-            if photo_changed:
-                notifications.append({
-                    "type": "photo_changed",
-                    "title": "Foto Actualizada",
-                    "body": f"{bw_name} ({team_name}) tiene foto nueva.",
-                    "player_id": match['id'],
-                    "player_name": bw_name,
-                    "team_id": team_id,
-                    "team_name": team_name,
-                    "message": f"Foto actualizada: {bw_foto}"
-                })
-
-            # Queue update
-            updates.append(build_update(match['id'], team_id, bw_pos, bw_precio, bw_price, bw_foto))
         else:
-            # Let's check if the player exists in another team! (Team change)
-            all_other_players = [p for p in all_api_players if p['id'] not in matched_api_ids and p.get('team_id') != team_id]
-            if bw_date:
-                date_matches = [p for p in all_other_players if p.get('date_of_birth') == bw_date]
-                if len(date_matches) == 1:
-                    p = date_matches[0]
-                    p_name = p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '')
-                    if difflib.SequenceMatcher(None, bw_name.lower(), p_name.lower()).ratio() > 0.4:
-                        match = p
-                elif len(date_matches) > 1:
-                    api_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in date_matches]
-                    best_match = difflib.get_close_matches(bw_name, api_names, n=1, cutoff=0.4)
-                    if best_match:
-                        best_name = best_match[0]
-                        for p in date_matches:
-                            p_name = p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '')
-                            if p_name == best_name:
-                                match = p
-                                break
-            
-            if not match:
-                # Misma guarda que en el cruce por nombre dentro del equipo.
-                all_other_players = descartar_por_fecha(all_other_players, bw_name, bw_date)
-                other_names = [p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '') for p in all_other_players]
-                best_match = difflib.get_close_matches(bw_name, other_names, n=1, cutoff=0.7)
-                if best_match:
-                    best_name = best_match[0]
-                    for p in all_other_players:
-                        p_name = p.get('short_name', '') or p.get('first_name', '') + ' ' + p.get('last_name', '')
-                        if p_name == best_name:
-                            match = p
-                            break
-            
-            if match:
-                if match['id'] in matched_api_ids:
-                    print(f"  Aviso: Jugador {bw_name} saltado porque su match API ya fue asignado.")
-                    continue
-                    
-                matched_api_ids.add(match['id'])
-                if bw_date and match.get('date_of_birth') == bw_date:
-                    match_by_date += 1
-                else:
-                    match_by_name += 1
+            match_by_name += 1
+            print(f"  · {d['name']}: {motivo} -> {api_display_name(match)}")
+        aplicar_match(match, d)
 
-                old_team_name = TEAM_NAME_BY_ID.get(match.get('team_id'))
-                desde = f" (venía del {old_team_name})" if old_team_name else ""
-                notifications.append({
-                    "type": "team_changed",
-                    "title": "Cambio de Equipo",
-                    "body": f"{bw_name} se une al {team_name}{desde}.",
-                    "player_id": match['id'],
-                    "player_name": bw_name,
-                    "team_id": team_id,
-                    "team_name": team_name,
-                    "message": f"Fichaje: se une al {team_name}"
-                })
+    # --- Pasada 2: mismo equipo, nombre casi idéntico ------------------------
+    # La fecha no cuadra, pero en su propio equipo hay un nombre que coincide al
+    # 90% o más: es la misma persona con la fecha mal en una de las dos fuentes,
+    # no un jugador nuevo. Se emparejan con su id de la API para no partirlos en
+    # dos fichas ni perderles las puntuaciones. Va después de agotar las fechas
+    # para que un nombre parecido nunca le quite la ficha a quien sí cuadra.
+    sin_nombre = []
+    if pendientes:
+        print(f"3.5 Buscando nombres casi idénticos en su equipo entre los {len(pendientes)} sin emparejar...")
+    for d, motivo in pendientes:
+        libres = [p for p in api_players_by_team.get(d["team_id"], []) if p['id'] not in matched_api_ids]
+        match, score = match_by_name_only(d["name"], libres)
+        if not match:
+            sin_nombre.append((d, motivo))
+            continue
 
-                updates.append(build_update(match['id'], team_id, bw_pos, bw_precio, bw_price, bw_foto))
-            else:
-                # La API todavía no tiene a este jugador. Antes se quedaba fuera
-                # de la app; ahora entra como provisional con lo de Biwenger y
-                # ya se corregirá cuando Opta publique su ficha.
-                nuevo = build_provisional_player(
-                    bw_name, team_id, bw_pos, bw_precio, bw_price, bw_foto, bw_date, extra_columns
-                )
-                if nuevo["id"] in matched_api_ids:
-                    # Dos filas de Biwenger con el mismo nombre y fecha.
-                    print(f"  Aviso: {bw_name} duplicado en el CSV de Biwenger, se ignora la segunda fila.")
-                    continue
+        match_by_name += 1
+        print(
+            f"  · Por nombre: {d['name']} -> {api_display_name(match)} ({score:.2f}), "
+            f"fechas {d['date'] or 'sin fecha'} / {match.get('date_of_birth') or 'sin fecha'}"
+        )
+        aplicar_match(match, d)
 
-                new_provisionals.append(nuevo)
-                matched_api_ids.add(nuevo["id"])
-                not_found.append(bw)
-                notifications.append({
-                    "type": "provisional_player",
-                    "title": "Nuevo Jugador (provisional)",
-                    "body": f"{bw_name} ({team_name}) entra como {POS_LABEL.get(bw_pos, bw_pos)} con datos de Biwenger.",
-                    "player_id": nuevo["id"],
-                    "player_name": bw_name,
-                    "team_id": team_id,
-                    "team_name": team_name,
-                    "message": (
-                        f"Alta provisional: aún no está en la API. "
-                        f"Fecha: {bw_date}, Pos: {bw_pos_raw}, Precio: {bw_precio}"
-                    ),
-                })
+    # --- Pasada 3: fichajes -------------------------------------------------
+    # Solo ahora, cuando todos los equipos ya han cogido a los suyos: si se
+    # buscara sobre la marcha, un jugador podría llevarse la ficha que le
+    # correspondía a una fila del CSV todavía sin procesar.
+    resto = []
+    if sin_nombre:
+        print(f"3.6 Buscando fichajes entre los {len(sin_nombre)} que siguen sin emparejar...")
+    for d, motivo in sin_nombre:
+        fichaje, score = find_transfer(d["name"], d["date"], d["team_id"], all_api_players, matched_api_ids)
+        if not fichaje:
+            resto.append((d, motivo))
+            continue
 
-    print(f"-> Emparejados por Fecha: {match_by_date}")
-    print(f"-> Emparejados por Nombre: {match_by_name}")
+        viene_de = TEAM_NAME_BY_ID.get(fichaje.get('team_id'))
+        match_by_date += 1
+        print(f"  · Fichaje: {d['name']} {viene_de or '?'} -> {d['team_name']} (nombre {score:.2f})")
+        aplicar_match(fichaje, d, viene_de=viene_de or "")
+
+    # --- Pasada 4: los que no están en la API -------------------------------
+    for d, motivo in resto:
+        # Ni fecha en su equipo, ni un nombre casi idéntico, ni un fichaje. El
+        # jugador entra con lo que sabemos de Biwenger, sin id de la API, y se
+        # avisa para revisarlo: inventar un emparejamiento con lo que queda es
+        # justo lo que metía en la tabla jugadores que no existen.
+        nuevo = build_provisional_player(
+            d["name"], d["team_id"], d["pos"], d["precio"], d["price"], d["foto"], d["date"], extra_columns
+        )
+        if nuevo["id"] in matched_api_ids:
+            # Dos filas de Biwenger con el mismo nombre y fecha.
+            print(f"  Aviso: {d['name']} duplicado en el CSV de Biwenger, se ignora la segunda fila.")
+            continue
+
+        new_provisionals.append(nuevo)
+        matched_api_ids.add(nuevo["id"])
+        not_found.append(d["row"])
+        print(f"  · Sin id de la API: {d['name']} ({d['team_name']}) — {motivo}.")
+        # Este aviso sí se emite en arranque en frío: no compara con nada
+        # anterior, es la lista de jugadores que hay que revisar a mano.
+        notifications.append({
+            "type": "provisional_player",
+            "title": "Jugador sin ficha oficial",
+            "body": f"{d['name']} ({d['team_name']}) entra como {POS_LABEL.get(d['pos'], d['pos'])} solo con datos de Biwenger.",
+            "player_id": nuevo["id"],
+            "player_name": d["name"],
+            "team_id": d["team_id"],
+            "team_name": d["team_name"],
+            "message": (
+                f"Sin id de la API: {motivo}. "
+                f"Fecha: {d['date'] or 'sin fecha'}, Pos: {d['pos_raw']}, Precio: {d['precio']}"
+            ),
+        })
+
+    print(f"-> Emparejados por fecha de nacimiento (incluidos fichajes): {match_by_date}")
+    print(f"-> Emparejados por nombre en su equipo (desempate o fecha discrepante): {match_by_name}")
     print(f"-> Altas provisionales (solo en Biwenger): {len(new_provisionals)}")
     print(f"-> Sin emparejar y sin poder darlos de alta: {len(not_found) - len(new_provisionals)}")
 
@@ -828,12 +930,14 @@ def main():
         "matched": len(matched_api_ids) - len(new_provisionals),
         "provisional": provisionals_saved,
         "promoted": len(promotion_notifications),
+        # Lo único que queda fuera de la BD es una fila cuyo equipo no está en
+        # TEAM_MAPPING; el resto de no-emparejados entran como provisionales.
         "unmatched": len(not_found) - len(new_provisionals),
         "deleted": len(borrables),
         "protected": len(protegidos),
     }
 
-    summary = build_sync_summary(notifications, stats)
+    summary = build_sync_summary(notifications, stats, cold_start=cold_start)
     print(f"-> Resumen: {summary['body']}")
 
     print(f"6. Guardando {len(notifications) + 1} notificaciones...")
@@ -844,6 +948,16 @@ def main():
     saved += saved_summary
     failed += failed_summary
     print(f"-> {saved} notificaciones guardadas, {failed} descartadas.")
+
+    print("6.5 Limpiando notificaciones antiguas...")
+    try:
+        from datetime import timedelta
+        cutoff_date = (datetime.now() - timedelta(days=7)).isoformat()
+        res = supabase.table("sync_notifications").delete().lt("created_at", cutoff_date).execute()
+        deleted_count = len(res.data) if res.data else 0
+        print(f"-> Se eliminaron {deleted_count} notificaciones con más de 7 días de antigüedad.")
+    except Exception as e:
+        print(f"-> Error al limpiar notificaciones antiguas: {e}")
 
     print("7. Enviando email resumen...")
     destinatarios = admin_emails()

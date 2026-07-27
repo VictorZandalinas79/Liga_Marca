@@ -965,7 +965,15 @@ def sync_players_with_csv(squads_data):
             new_player_notifications = []
             team_names = {s['team']['id']: s['team']['name'] for s in squads_data if 'team' in s and 'id' in s['team']}
 
-            for p in players_payload:
+            # Arranque en frío: la tabla venía vacía (reset_players.py), así que
+            # TODOS los jugadores son "nuevos" y todos los equipos son un
+            # "traspaso". Avisar de eso son 500 notificaciones que no dicen nada:
+            # no hay estado anterior con el que comparar.
+            cold_start = not existing_player_ids
+            if cold_start:
+                print("   ℹ️  La tabla de jugadores estaba vacía: no se generan notificaciones de altas ni traspasos.")
+
+            for p in ([] if cold_start else players_payload):
                 pid = p.get('id')
                 name = p.get('short_name')
                 new_team_id = p.get('team_id')
