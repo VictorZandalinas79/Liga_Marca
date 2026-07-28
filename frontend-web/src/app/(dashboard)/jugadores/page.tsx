@@ -205,12 +205,13 @@ export default function JugadoresPage() {
   const supabase = createClient()
 
   const exportToExcel = () => {
-    const headers = ['Nombre', 'Equipo', 'Precio (M)']
+    const headers = ['Nombre', 'Equipo', 'Posición', 'Precio (M)']
     const data = players.map(player => {
       const nombre = player.short_name || `${player.first_name} ${player.last_name}`
       const equipo = player.team?.name || 'Sin equipo'
+      const posicion = getPositionLabel(player.position)
       const precio = player.precio || 0
-      return `"${nombre.replace(/"/g, '""')}";"${equipo.replace(/"/g, '""')}";${precio}`
+      return `"${nombre.replace(/"/g, '""')}";"${equipo.replace(/"/g, '""')}";"${posicion}";${precio}`
     })
     const csvContent = [headers.join(';'), ...data].join('\n')
     const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' })
