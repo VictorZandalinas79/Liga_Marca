@@ -324,7 +324,7 @@ def compute_team_sanctions(lineup, prev_mine, held_by_others_prev, points, playe
         replaced_penalized = {pid for pid in penalized_prev if pid not in lineup}
         replaced_penalized_count = len(replaced_penalized)
         
-        allowed_changes = 3 + replaced_penalized_count
+        allowed_changes = cfg.get("max_changes_per_matchday", 3) + replaced_penalized_count
         if num_changes > allowed_changes:
             excess = num_changes - allowed_changes
             new_players_sorted = sorted(list(new_players), key=lambda pid: points.get(pid, 0), reverse=True)
@@ -337,6 +337,7 @@ def compute_team_sanctions(lineup, prev_mine, held_by_others_prev, points, playe
 
 def run_matchday(sb, matchday):
     cfg = load_config(sb)
+    fantasy_starting_matchday = cfg.get("fantasy_starting_matchday", 1)
     valid_formations, pos_max = formation_maxes(cfg["formations"])
     log(f"⚙️  Config: presupuesto={cfg['budget_limit']}M, máx/equipo={cfg['max_players_per_team']}, "
         f"pagos(g/p/r)={cfg['pay_winner']}/{cfg['pay_loser']}/{cfg['pay_rest']}")
@@ -429,9 +430,13 @@ def run_matchday(sb, matchday):
             prev_mine = set(lineup_history[m - 1][tid])
             held_by_others_prev = held_by_others_prev_m[tid]
 
-            prev_penalties = penalties_history[m - 1][tid] if m > 1 else None
-            lineup_prev = lineup_history[m - 1][tid] if m > 1 else None
-            zeroed_prev = zeroed_history[m - 1][tid] if m > 1 else None
+            # La jornada en la que arranca el juego no tiene "anterior" a efectos de
+            # sanciones (exceso de cambios, multas no resueltas, etc.), aunque
+            # fantasy_starting_matchday no sea la J1 real de la liga.
+            has_prev = m > fantasy_starting_matchday
+            prev_penalties = penalties_history[m - 1][tid] if has_prev else None
+            lineup_prev = lineup_history[m - 1][tid] if has_prev else None
+            zeroed_prev = zeroed_history[m - 1][tid] if has_prev else None
 
             sanctions, zeroed = compute_team_sanctions(
                 lineup, prev_mine, held_by_others_prev, points_m, player_meta,

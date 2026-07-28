@@ -1105,23 +1105,8 @@ export default function DashboardPage() {
       return
     }
     if (playerToSwap) {
-      const changesLimit = (activeMatchday && activeMatchday >= config.fantasy_starting_matchday) 
-        ? config.max_changes_per_matchday 
-        : Infinity;
-      
-      const currentChanges = selectedPlayers.filter(id => !basePlayers.includes(id)).length;
-      const isOutOriginal = basePlayers.includes(playerToSwap.id);
-      const isInOriginal = basePlayers.includes(newPlayerId);
-      
-      let newChangesCount = currentChanges;
-      if (isOutOriginal && !isInOriginal) newChangesCount += 1;
-      if (!isOutOriginal && isInOriginal) newChangesCount -= 1;
-      
-      if (newChangesCount > changesLimit) {
-        alert(`Has alcanzado el límite de cambios para esta jornada (${changesLimit}).`);
-        return;
-      }
-
+      // Modelo "permitir + sancionar": no se bloquea el cambio aquí; el exceso
+      // sobre el límite se avisa como ruleWarning y se sanciona al cerrar la jornada.
       setPendingSwap({ outId: playerToSwap.id, inId: newPlayerId, index: playerToSwap.index })
       setShowSwapConfirm(true)
       closePlayerSelector()
@@ -1497,13 +1482,9 @@ export default function DashboardPage() {
     }
   })
 
-  // Límite de cambios permitidos
-  const allowedChanges = 3 + replacedPenalizedCount
-  const numChanges = selectedPlayers.filter(pid => !basePlayers.includes(pid)).length
-
-  if (activeMatchday > 1 && numChanges > allowedChanges) {
-    ruleWarnings.push(`Exceso de cambios: Has realizado ${numChanges} cambios de los ${allowedChanges} permitidos (3 base + ${replacedPenalizedCount} por multa previa reemplazada).`)
-  }
+  // Límite de cambios: en la primera jornada del juego no hay límite ni sanción.
+  // A partir de la siguiente, el exceso no se avisa en el dashboard (solo se
+  // sanciona al procesar la jornada), para que el usuario no lo vea venir.
 
   // Avisos específicos para penalizaciones anteriores no resueltas
   if (prevPenalties.length > 0) {
@@ -2018,7 +1999,7 @@ export default function DashboardPage() {
                       )}
                       {isChanged && (
                         <button
-                          onClick={e => { e.stopPropagation(); setCancelConfirmUniqueKey(player.id) }}
+                          onClick={e => { e.stopPropagation(); setCancelConfirmUniqueKey(player._uniqueKey) }}
                           className="w-[12cqw] h-[12cqw] bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20 transition-colors"
                           title="Cancelar cambio"
                         >
