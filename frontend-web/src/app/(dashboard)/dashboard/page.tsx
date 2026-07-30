@@ -1659,7 +1659,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Player rows (top-down: Delanteros -> Mediocampistas -> Defensas -> Porteros) */}
-              <div className="relative z-10 flex flex-col justify-between h-full pt-16 pb-2 sm:pt-20 sm:pb-4 md:pt-24 md:pb-6 lg:pt-28 lg:pb-8">
+              <div className="relative z-10 flex flex-col justify-between h-full px-6 pt-24 pb-12 sm:px-2 sm:pt-20 sm:pb-4 md:px-0 md:pt-24 md:pb-6 lg:pt-28 lg:pb-8">
                 {/* Delanteros */}
                 <div className="flex justify-around items-center gap-1">
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map((player, idx, arr) => (
