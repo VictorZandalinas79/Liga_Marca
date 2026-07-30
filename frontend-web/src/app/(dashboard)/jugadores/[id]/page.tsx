@@ -6,7 +6,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, TrendingUp, Goal, Ticket, X, Calendar, MapPin, Clock } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
-import { useScoringRules, resolveRates } from '@/lib/scoring-config'
+import { resolveRates } from '@/lib/scoring-config'
+import { useScoringRules } from '@/hooks/use-scoring-rules'
 
 interface Player {
   id: string

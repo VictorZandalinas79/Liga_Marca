@@ -6,9 +6,6 @@
 // preservan tal cual en el servidor. Aquí sólo definimos QUÉ se edita y con
 // qué etiqueta, no los valores (que vienen del GET).
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-
 // El JSON tiene formas mixtas por clave, así que tipamos de forma laxa.
 export type ScoringRules = Record<string, unknown>
 
@@ -289,16 +286,4 @@ export function resolveRates(rules: ScoringRules | null): ScoringRates {
   }
 }
 
-/** Hook cliente: carga las reglas de scoring_config (null hasta que cargan). */
-export function useScoringRules(): ScoringRules | null {
-  const [rules, setRules] = useState<ScoringRules | null>(null)
-  useEffect(() => {
-    const run = async () => {
-      const supabase = createClient()
-      const { data } = await supabase.from('scoring_config').select('rules').eq('id', 1).maybeSingle()
-      if (data?.rules) setRules(data.rules as ScoringRules)
-    }
-    run()
-  }, [])
-  return rules
-}
+

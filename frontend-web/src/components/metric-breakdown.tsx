@@ -1,7 +1,8 @@
 'use client'
 
 import { TrendingUp } from 'lucide-react'
-import { useScoringRules, resolveRates } from '@/lib/scoring-config'
+import { resolveRates } from '@/lib/scoring-config'
+import { useScoringRules } from '@/hooks/use-scoring-rules'
 
 // Acepta cualquier objeto con campos de player_scores (los lee con Number(v)||0)
 export function MetricBreakdown({ player }: { player: Record<string, any> }) {
