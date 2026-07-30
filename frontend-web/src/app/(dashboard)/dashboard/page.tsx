@@ -1662,7 +1662,7 @@ export default function DashboardPage() {
               <div 
                 className={`relative z-10 flex flex-col justify-between h-full ${
                   userDivision === 1 
-                    ? 'pt-[32%] pb-[3%] px-[10%] sm:px-[6%] scale-[0.85] origin-bottom' 
+                    ? 'pt-[28%] pb-[8%] px-[4%] sm:px-[2%] scale-[0.85] origin-bottom' 
                     : 'px-6 pt-24 pb-12 sm:px-2 sm:pt-20 sm:pb-4 md:px-0 md:pt-24 md:pb-6 lg:pt-28 lg:pb-8'
                 }`}
                 style={userDivision === 1 ? { filter: 'drop-shadow(0 25px 20px rgba(0,0,0,0.6))' } : {}}
