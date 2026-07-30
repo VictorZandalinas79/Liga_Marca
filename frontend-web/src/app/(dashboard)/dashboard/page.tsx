@@ -1633,8 +1633,8 @@ export default function DashboardPage() {
               <div className="relative w-full lg:flex-1 max-w-md mx-auto border-2 border-white rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]" style={{
                 backgroundImage: userDivision === 1 ? 'url(/pitches/pitch_div1.png)' : userDivision === 2 ? 'url(/pitches/pitch_div2.png)' : userDivision === 3 ? 'url(/pitches/dirt.png)' : 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
                 backgroundSize: userDivision === 1 || userDivision === 2 ? '100% 100%' : 'auto',
-                backgroundColor: userDivision === 1 || userDivision === 2 ? 'transparent' : userDivision === 3 ? '#8B5A2B' : '#43a047',
-                backgroundBlendMode: userDivision === 3 ? 'multiply' : 'normal',
+                backgroundColor: userDivision === 1 ? 'transparent' : userDivision === 2 ? '#dfd6a7' : userDivision === 3 ? '#8B5A2B' : '#43a047',
+                backgroundBlendMode: (userDivision === 2 || userDivision === 3) ? 'multiply' : 'normal',
               }}>
               {/* Soccer field markings */}
               <div className={`absolute inset-0 border-2 border-white/40 m-4 pointer-events-none rounded-sm ${userDivision === 1 || userDivision === 2 ? 'hidden' : ''}`}>
@@ -1707,9 +1707,8 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Estadísticas del equipo (Columna 2 en PC, debajo en móvil) */}
+            {/* Estadísticas del equipo (Columna 2 en PC, debajo en móvil) */}
           <div className="w-full lg:w-64 shrink-0">
             <Card className="!bg-emerald-50 border-emerald-200">
                 <CardContent className="p-4">
