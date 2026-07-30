@@ -14,15 +14,7 @@ export async function requireAdmin(): Promise<
     return { ok: false, status: 401, error: 'No autenticado' }
   }
 
-  // Comprobamos el flag is_admin con la service role key (evita depender de RLS).
-  const admin = createAdminSupabase()
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (!profile?.is_admin) {
+  if (user.email?.toLowerCase() !== 'vilafranca.fantasy2026@gmail.com') {
     return { ok: false, status: 403, error: 'No autorizado' }
   }
 

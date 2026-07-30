@@ -36,12 +36,7 @@ export default function DashboardLayout({
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setUserName(user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario')
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', user.id)
-          .maybeSingle()
-        setIsAdmin(Boolean(profile?.is_admin))
+        setIsAdmin(user.email?.toLowerCase() === 'vilafranca.fantasy2026@gmail.com')
       }
     }
     getUser()
