@@ -76,7 +76,7 @@ export async function PATCH(
   }
 
   if (touchProfile) {
-    const { error } = await admin.from('profiles').upsert(update, { onConflict: 'id' })
+    const { error } = await admin.from('profiles').update(update).eq('id', id)
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
