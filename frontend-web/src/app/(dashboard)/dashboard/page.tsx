@@ -1662,13 +1662,13 @@ export default function DashboardPage() {
               <div 
                 className={`relative z-10 flex flex-col justify-between h-full ${
                   userDivision === 1 
-                    ? 'pt-[28%] pb-[8%] px-[4%] sm:px-[2%] scale-[0.85] origin-bottom' 
+                    ? 'pt-[18%] pb-[18%] px-0 scale-[0.85] origin-bottom' 
                     : 'px-6 pt-24 pb-12 sm:px-2 sm:pt-20 sm:pb-4 md:px-0 md:pt-24 md:pb-6 lg:pt-28 lg:pb-8'
                 }`}
                 style={userDivision === 1 ? { filter: 'drop-shadow(0 25px 20px rgba(0,0,0,0.6))' } : {}}
               >
                 {/* Delanteros */}
-                <div className="flex justify-around items-center gap-1">
+                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-[15%]' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map((player, idx, arr) => (
                     <div key={player._uniqueKey} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
@@ -1680,7 +1680,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Mediocampistas */}
-                <div className="flex justify-around items-center gap-1">
+                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-[4%]' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map((player, idx, arr) => (
                     <div key={player._uniqueKey} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
@@ -1692,7 +1692,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Defensas */}
-                <div className="flex justify-around items-center gap-1">
+                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-0' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map((player, idx, arr) => (
                     <div key={player._uniqueKey} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
