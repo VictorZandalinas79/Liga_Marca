@@ -155,6 +155,14 @@ export default function AdminPage() {
     URL.revokeObjectURL(url)
   }
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
+      </div>
+    )
+  }
+
   if (forbidden) {
     return (
       <div className="max-w-md mx-auto mt-16 text-center">
