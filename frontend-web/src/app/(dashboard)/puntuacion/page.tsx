@@ -8,6 +8,8 @@ import {
   Gauge,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { createServerSupabase } from '@/lib/supabase/server'
+import { resolveRates, type ScoringRules } from '@/lib/scoring-config'
 
 export const metadata = {
   title: 'Sistema de Puntuación',
@@ -77,7 +79,17 @@ function Section({
   )
 }
 
-export default function PuntuacionPage() {
+function formatPts(val: number): string {
+  if (val === 0) return '0'
+  return val > 0 ? `+${val}` : `${val}`
+}
+
+export default async function PuntuacionPage() {
+  const supabase = await createServerSupabase()
+  const { data } = await supabase.from('scoring_config').select('rules').eq('id', 1).maybeSingle()
+  const rules = (data?.rules as ScoringRules) || null
+  const rates = resolveRates(rules)
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       {/* Cabecera */}
@@ -97,8 +109,8 @@ export default function PuntuacionPage() {
       >
         <PointsTable
           rows={[
-            { accion: 'Menos de 60 minutos jugados', pts: '+1' },
-            { accion: '60 minutos o más jugados', pts: '+2' },
+            { accion: `Menos de ${rates.participation.minutes_threshold} minutos jugados`, pts: formatPts(rates.participation.substitute_bonus) },
+            { accion: `${rates.participation.minutes_threshold} minutos o más jugados`, pts: formatPts(rates.participation.starter_bonus) },
           ]}
         />
       </Section>
@@ -112,20 +124,21 @@ export default function PuntuacionPage() {
       >
         <PointsTable
           rows={[
-            { accion: 'Gol marcado', detalle: 'Portero (POR) / Defensa (DEF)', pts: '+6' },
-            { accion: 'Gol marcado', detalle: 'Mediocentro (MED)', pts: '+5' },
-            { accion: 'Gol marcado', detalle: 'Delantero (DEL)', pts: '+4' },
-            { accion: 'Asistencia de gol', detalle: 'Último pase que acaba en gol (qualifier 210 con valor 16) · todas las posiciones', pts: '+3' },
+            { accion: 'Gol marcado', detalle: 'Portero (POR)', pts: formatPts(rates.goal.POR) },
+            { accion: 'Gol marcado', detalle: 'Defensa (DEF)', pts: formatPts(rates.goal.DEF) },
+            { accion: 'Gol marcado', detalle: 'Mediocentro (MED)', pts: formatPts(rates.goal.MED) },
+            { accion: 'Gol marcado', detalle: 'Delantero (DEL)', pts: formatPts(rates.goal.DEL) },
+            { accion: 'Asistencia de gol', detalle: 'Último pase que acaba en gol', pts: formatPts(rates.assist_goal) },
             {
               accion: 'Asistencia sin gol / Pase clave',
-              detalle: 'Pase que asiste un remate sin acabar en gol (qualifier 210 con valores 13, 14 o 15) · todas las posiciones',
-              pts: '+1',
+              detalle: 'Pase que asiste un remate sin acabar en gol',
+              pts: formatPts(rates.assist_no_goal),
             },
-            { accion: 'Gol en contra (propia puerta)', detalle: 'Todas las posiciones (con qualifier 28)', pts: '-2' },
-            { accion: 'Penalti provocado', detalle: 'Sufre la falta dentro del área (outcome 1 con qualifier 9)', pts: '+1' },
-            { accion: 'Penalti cometido', detalle: 'Comete la falta dentro del área (outcome 0 con qualifier 9)', pts: '-1' },
-            { accion: 'Penalti fallado', detalle: 'Disparo desviado o atajado (outcome 0 con qualifier 9)', pts: '-2' },
-            { accion: 'Penalti parado', detalle: 'Parada directa del portero (con qualifier 187)', pts: '+5' },
+            { accion: 'Gol en contra (propia puerta)', detalle: 'Todas las posiciones', pts: formatPts(rates.own_goal) },
+            { accion: 'Penalti provocado', detalle: 'Sufre la falta dentro del área', pts: formatPts(rates.penalty_won) },
+            { accion: 'Penalti cometido', detalle: 'Comete la falta dentro del área', pts: formatPts(rates.penalty_conceded) },
+            { accion: 'Penalti fallado', detalle: 'Disparo desviado o atajado', pts: formatPts(rates.penalty_missed) },
+            { accion: 'Penalti parado', detalle: 'Parada directa del portero', pts: formatPts(rates.penalty_save) },
           ]}
         />
       </Section>
@@ -138,14 +151,14 @@ export default function PuntuacionPage() {
         description="Acciones defensivas y colectivas para la contención del rival."
       >
         <p className="mb-2 text-sm font-semibold text-slate-700">
-          Portería a cero (habiendo jugado &gt; 60 minutos con 0 goles recibidos)
+          Portería a cero (habiendo jugado &gt; {rates.participation.minutes_threshold} minutos con 0 goles recibidos)
         </p>
         <PointsTable
           rows={[
-            { accion: 'Portero (POR)', pts: '+4' },
-            { accion: 'Defensa (DEF)', pts: '+3' },
-            { accion: 'Mediocentro (MED)', pts: '+2' },
-            { accion: 'Delantero (DEL)', pts: '+1' },
+            { accion: 'Portero (POR)', pts: formatPts(rates.clean_sheet.POR) },
+            { accion: 'Defensa (DEF)', pts: formatPts(rates.clean_sheet.DEF) },
+            { accion: 'Mediocentro (MED)', pts: formatPts(rates.clean_sheet.MED) },
+            { accion: 'Delantero (DEL)', pts: formatPts(rates.clean_sheet.DEL) },
           ]}
         />
         <p className="mb-2 mt-5 text-sm font-semibold text-slate-700">
@@ -153,8 +166,10 @@ export default function PuntuacionPage() {
         </p>
         <PointsTable
           rows={[
-            { accion: 'Portero y Defensa', detalle: 'por cada gol encajado', pts: '-2' },
-            { accion: 'Mediocentro y Delantero', detalle: 'por cada gol encajado', pts: '-1' },
+            { accion: 'Portero (POR)', detalle: 'por cada gol encajado', pts: formatPts(rates.goal_conceded.POR) },
+            { accion: 'Defensa (DEF)', detalle: 'por cada gol encajado', pts: formatPts(rates.goal_conceded.DEF) },
+            { accion: 'Mediocentro (MED)', detalle: 'por cada gol encajado', pts: formatPts(rates.goal_conceded.MED) },
+            { accion: 'Delantero (DEL)', detalle: 'por cada gol encajado', pts: formatPts(rates.goal_conceded.DEL) },
           ]}
         />
       </Section>
@@ -167,9 +182,9 @@ export default function PuntuacionPage() {
       >
         <PointsTable
           rows={[
-            { accion: 'Tarjeta amarilla', pts: '-1' },
-            { accion: 'Doble tarjeta amarilla', pts: '-1' },
-            { accion: 'Tarjeta roja directa', pts: '-3' },
+            { accion: 'Tarjeta amarilla', pts: formatPts(rates.yellow_card) },
+            { accion: 'Doble tarjeta amarilla', pts: formatPts(rates.second_yellow_card) },
+            { accion: 'Tarjeta roja directa', pts: formatPts(rates.red_card) },
           ]}
         />
       </Section>
@@ -179,24 +194,26 @@ export default function PuntuacionPage() {
         icon={Sparkles}
         number={5}
         title="Bonos Acumulativos"
-        description="Puntos extra automáticos al alcanzar cierto número de registros durante el partido."
+        description="Puntos extra automáticos por cada acción individual."
       >
         <PointsTable
           rows={[
-            { accion: 'Paradas del portero', detalle: 'por cada 2 paradas', pts: '+1' },
-            { accion: 'Remates a puerta', detalle: 'por cada 2 remates a portería', pts: '+1' },
-            { accion: 'Regates completados', detalle: 'por cada 2 regates con éxito', pts: '+1' },
-            { accion: 'Pases al área exitosos', detalle: 'por cada 2 pases completados en el área rival', pts: '+1' },
-            { accion: 'Balones recuperados', detalle: 'por cada 5 recuperaciones', pts: '+1' },
-            { accion: 'Despejes', detalle: 'por cada 3 despejes', pts: '+1' },
-            { accion: 'Pases completados', detalle: 'por cada 10 pases con éxito', pts: '+1' },
-            { accion: 'Pases hacia adelante completados', detalle: 'por cada 10 pases donde la coordenada X final (qualifier 140) es mayor que la inicial', pts: '+1' },
-            { accion: 'Lanzamiento de falta o córner', detalle: 'por cada 5 envíos (qualifier 5 o 6)', pts: '+1' },
-            { accion: 'Centros buenos', detalle: 'por cada 3 centros con éxito (pase completado con qualifier 2)', pts: '+1' },
-            { accion: 'Pase largo completado', detalle: 'por cada pase largo exitoso (typeId 1, outcome 1, qualifier 1 presente)', pts: '+0.5' },
-            { accion: 'Balón recuperado (zona alta)', detalle: 'recuperación con x > 66.6', pts: '+0.3' },
-            { accion: 'Balón recuperado (zona media)', detalle: 'recuperación con 33.3 ≤ x ≤ 66.6', pts: '+0.2' },
-            { accion: 'Balón recuperado (zona baja)', detalle: 'recuperación con x < 33.3', pts: '+0.1' },
+            { accion: 'Paradas del portero', detalle: 'por parada', pts: formatPts(rates.per_unit.saves) },
+            { accion: 'Remates a puerta', detalle: 'por remate a portería', pts: formatPts(rates.per_unit.shots_on_target) },
+            { accion: 'Regates completados', detalle: 'por regate con éxito', pts: formatPts(rates.per_unit.takeons_won) },
+            { accion: 'Pases al área exitosos', detalle: 'por pase completado en el área rival', pts: formatPts(rates.per_unit.box_entries) },
+            { accion: 'Balón recuperado (zona alta)', detalle: 'campo rival', pts: formatPts(rates.per_unit.recoveries_high) },
+            { accion: 'Balón recuperado (zona media)', detalle: 'centro', pts: formatPts(rates.per_unit.recoveries_med) },
+            { accion: 'Balón recuperado (zona baja)', detalle: 'campo propio', pts: formatPts(rates.per_unit.recoveries_low) },
+            { accion: 'Interceptación (zona alta)', detalle: 'campo rival', pts: formatPts(rates.per_unit.interceptions_high) },
+            { accion: 'Interceptación (zona media)', detalle: 'centro', pts: formatPts(rates.per_unit.interceptions_med) },
+            { accion: 'Interceptación (zona baja)', detalle: 'campo propio', pts: formatPts(rates.per_unit.interceptions_low) },
+            { accion: 'Despejes', detalle: 'por despeje', pts: formatPts(rates.per_unit.clearances) },
+            { accion: 'Pases completados', detalle: 'por pase con éxito', pts: formatPts(rates.per_unit.passes_completed) },
+            { accion: 'Pases hacia adelante completados', detalle: 'por pase', pts: formatPts(rates.per_unit.forward_passes) },
+            { accion: 'Pase largo completado', detalle: 'por pase', pts: formatPts(rates.per_unit.long_balls_completed) },
+            { accion: 'Lanzamiento de falta o córner', detalle: 'por envío', pts: formatPts(rates.per_unit.set_pieces_taken) },
+            { accion: 'Centros buenos', detalle: 'por centro con éxito', pts: formatPts(rates.per_unit.successful_crosses) },
           ]}
         />
       </Section>
@@ -206,14 +223,14 @@ export default function PuntuacionPage() {
         icon={Ban}
         number={6}
         title="Penalización por Pérdidas de Balón"
-        description="Por regate fallado o mal control, según la responsabilidad defensiva de cada posición."
+        description="Por pérdida de balón, según la responsabilidad defensiva de cada posición."
       >
         <PointsTable
           rows={[
-            { accion: 'Portero (POR)', detalle: 'por cada 8 pérdidas', pts: '-1' },
-            { accion: 'Defensa (DEF)', detalle: 'por cada 8 pérdidas', pts: '-1' },
-            { accion: 'Mediocentro (MED)', detalle: 'por cada 10 pérdidas', pts: '-1' },
-            { accion: 'Delantero (DEL)', detalle: 'por cada 12 pérdidas', pts: '-1' },
+            { accion: 'Portero (POR)', detalle: 'por cada pérdida', pts: formatPts(rates.lost_balls.POR) },
+            { accion: 'Defensa (DEF)', detalle: 'por cada pérdida', pts: formatPts(rates.lost_balls.DEF) },
+            { accion: 'Mediocentro (MED)', detalle: 'por cada pérdida', pts: formatPts(rates.lost_balls.MED) },
+            { accion: 'Delantero (DEL)', detalle: 'por cada pérdida', pts: formatPts(rates.lost_balls.DEL) },
           ]}
         />
       </Section>
@@ -230,69 +247,51 @@ export default function PuntuacionPage() {
             <p className="text-sm font-semibold text-slate-800">1. Participación en el juego</p>
             <ul className="mt-1 space-y-1 text-sm text-slate-600">
               <li className="flex items-start gap-2">
-                <Pts value="+1" />
-                <span>por cada 5% del total de eventos de su equipo realizados por el jugador.</span>
+                <Pts value={formatPts(rates.relevo_rules.participation_points_per_step)} />
+                <span>por cada {rates.relevo_rules.participation_step_percent}% del total de eventos de su equipo realizados por el jugador.</span>
               </li>
             </ul>
           </li>
           <li>
             <p className="text-sm font-semibold text-slate-800">
-              2. Precisión en la distribución <span className="font-normal text-slate-500">(mín. 10 pases intentados)</span>
+              2. Precisión en la distribución <span className="font-normal text-slate-500">(mín. {rates.relevo_rules.min_passes} pases intentados)</span>
             </p>
             <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2"><Pts value="+2" /><span>efectividad de pase ≥ 92%.</span></li>
-              <li className="flex items-start gap-2"><Pts value="+1" /><span>efectividad entre 85% y 91,9%.</span></li>
-              <li className="flex items-start gap-2"><Pts value="-1" /><span>efectividad por debajo del 65%.</span></li>
+              <li className="flex items-start gap-2"><Pts value="+2" /><span>efectividad de pase ≥ {rates.relevo_rules.pass_accuracy_excel}%.</span></li>
+              <li className="flex items-start gap-2"><Pts value="+1" /><span>efectividad entre {rates.relevo_rules.pass_accuracy_high}% y {(rates.relevo_rules.pass_accuracy_excel - 0.1).toFixed(1)}%.</span></li>
+              <li className="flex items-start gap-2"><Pts value="-1" /><span>efectividad por debajo del {rates.relevo_rules.pass_accuracy_low}%.</span></li>
             </ul>
           </li>
           <li>
             <p className="text-sm font-semibold text-slate-800">
-              3. Distribución en campo rival <span className="font-normal text-slate-500">(mín. 10 pases en campo contrario)</span>
+              3. Distribución en campo rival <span className="font-normal text-slate-500">(mín. {rates.relevo_rules.min_opp_half_passes} pases en campo contrario)</span>
             </p>
             <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2"><Pts value="+1" /><span>acierto en territorio rival ≥ 75%.</span></li>
+              <li className="flex items-start gap-2"><Pts value="+1" /><span>acierto en territorio rival ≥ {rates.relevo_rules.opp_half_accuracy_high}%.</span></li>
             </ul>
           </li>
           <li>
             <p className="text-sm font-semibold text-slate-800">
-              4. Efectividad de tiro <span className="font-normal text-slate-500">(mín. 2 disparos)</span>
+              4. Efectividad de tiro <span className="font-normal text-slate-500">(mín. {rates.relevo_rules.min_shots} disparos)</span>
             </p>
             <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2"><Pts value="+1" /><span>50% o más de sus tiros (incluidos goles) van a puerta.</span></li>
+              <li className="flex items-start gap-2"><Pts value="+1" /><span>{rates.relevo_rules.shot_accuracy_high}% o más de sus tiros (incluidos goles) van a puerta.</span></li>
               <li className="flex items-start gap-2"><Pts value="-1" /><span>dispara pero ninguno va a portería (0%).</span></li>
             </ul>
           </li>
           <li>
             <p className="text-sm font-semibold text-slate-800">
-              5. Duelos terrestres <span className="font-normal text-slate-500">(entradas ganadas + regates + faltas recibidas, mín. 5)</span>
+              5. Duelos <span className="font-normal text-slate-500">(mín. {rates.relevo_rules.min_duels})</span>
             </p>
             <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2"><Pts value="+1" /><span>gana el 60% o más de sus duelos.</span></li>
-              <li className="flex items-start gap-2"><Pts value="-1" /><span>gana menos del 30%.</span></li>
-            </ul>
-          </li>
-          <li>
-            <p className="text-sm font-semibold text-slate-800">
-              6. Duelos aéreos <span className="font-normal text-slate-500">(mín. 3 disputados)</span>
-            </p>
-            <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2"><Pts value="+1" /><span>gana el 60% o más por alto.</span></li>
-              <li className="flex items-start gap-2"><Pts value="-1" /><span>gana menos del 30%.</span></li>
-            </ul>
-          </li>
-          <li>
-            <p className="text-sm font-semibold text-slate-800">
-              7. Regates intentados
-            </p>
-            <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2"><Pts value="+1" /><span>más del 50% de los regates intentados son exitosos.</span></li>
+              <li className="flex items-start gap-2"><Pts value={formatPts(rates.relevo_rules.duels_points_per_step)} /><span>por cada {rates.relevo_rules.duels_step_percent}% de duelos ganados.</span></li>
             </ul>
           </li>
         </ol>
         <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
           <p className="font-semibold">Resultado final</p>
           <p className="mt-1">
-            Se suman las valoraciones 1 a 6. Si el total es menor que 0 se asignan{' '}
+            Se suman las valoraciones. Si el total es menor que 0 se asignan{' '}
             <strong>0 puntos</strong>; si supera 4 se asignan <strong>4 puntos</strong>.
           </p>
         </div>

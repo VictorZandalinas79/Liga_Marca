@@ -138,6 +138,7 @@ export default function DashboardPage() {
   const [basePlayers, setBasePlayers] = useState<string[]>([])
   const [changeHistory, setChangeHistory] = useState<Array<{outId: string, inId: string, index: number}>>([])
   const [formation, setFormation] = useState<Formation>(FORMATIONS[1])
+  const [userDivision, setUserDivision] = useState<number | null>(null)
   const [cancelConfirmUniqueKey, setCancelConfirmUniqueKey] = useState<string | null>(null)
   const [userTeamId, setUserTeamId] = useState<string | null>(null)
   const [isRegistered, setIsRegistered] = useState<boolean>(false)
@@ -902,6 +903,7 @@ export default function DashboardPage() {
           .eq('id', user.id)
           .maybeSingle();
         const myDivision = (myProfile?.division as number | null) ?? null;
+        setUserDivision(myDivision);
         const { standings } = await getStandings(supabase, myDivision);
         if (!standings || standings.length === 0) {
           setLoadingRanks(false);
@@ -1628,11 +1630,13 @@ export default function DashboardPage() {
           {isUnlockWindowOpen ? (
             <div className="flex flex-col lg:flex-row gap-4 items-start">
               {/* Pitch */}
-              <div className="relative w-full lg:flex-1 max-w-md mx-auto bg-[#43a047] border-2 border-white rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]" style={{
-                backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
+              <div className="relative w-full lg:flex-1 max-w-md mx-auto border-2 border-white rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]" style={{
+                backgroundImage: userDivision === 1 ? 'url(/pitches/pitch_div1.png)' : userDivision === 2 ? 'url(/pitches/pitch_div2.png)' : userDivision === 3 ? 'url(/pitches/pitch_div3.png)' : 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
+                backgroundSize: userDivision ? '100% 100%' : 'auto',
+                backgroundColor: userDivision ? 'transparent' : '#43a047',
               }}>
               {/* Soccer field markings */}
-              <div className="absolute inset-0 border-2 border-white/40 m-4 pointer-events-none rounded-sm">
+              <div className={`absolute inset-0 border-2 border-white/40 m-4 pointer-events-none rounded-sm ${userDivision ? 'hidden' : ''}`}>
                 {/* Center Line */}
                 <div className="absolute top-1/2 left-0 right-0 h-[2px] bg-white/40 -translate-y-1/2"></div>
                 {/* Center Circle */}

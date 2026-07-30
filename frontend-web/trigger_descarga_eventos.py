@@ -14,6 +14,8 @@ import sys
 import json
 import time
 import requests
+import difflib
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from supabase import create_client, Client
@@ -141,6 +143,18 @@ def load_scoring_rules():
     }
 
 
+def normalize_name(name):
+    """Nombre comparable: sin acentos, sin puntuación, en minúsculas."""
+    if not name:
+        return ""
+    sin_acentos = "".join(
+        c for c in unicodedata.normalize("NFD", str(name))
+        if unicodedata.category(c) != "Mn"
+    )
+    limpio = "".join(c if c.isalnum() or c.isspace() else " " for c in sin_acentos.lower())
+    return " ".join(limpio.split())
+
+
 class MatchEventDownloader:
     def __init__(self, fixture_id: str, match_id: str):
         self.fixture_id = fixture_id
@@ -163,6 +177,7 @@ class MatchEventDownloader:
         self.stats = {}
         self.team_total_events = {} # NUEVO: Para calcular el % de participación
         self.processed_events = set()
+        self.provisional_players = {} # team_id -> [prov_players]
         self.team_goals_conceded = {}
         self.team_goals_scored = {}
         self.player_positions_map = {}
@@ -306,6 +321,16 @@ class MatchEventDownloader:
                 self.away_team_id = response.data['away_team_id']
                 self.matchday = response.data.get('matchday')
                 print(f"   ✅ Equipos cargados: Local={self.home_team_id}, Visitante={self.away_team_id} (jornada {self.matchday})")
+                
+                # Cargar jugadores provisionales de ambos equipos
+                self.provisional_players = {self.home_team_id: [], self.away_team_id: []}
+                for t_id in [self.home_team_id, self.away_team_id]:
+                    if t_id:
+                        prov_res = self.supabase.table('players').select('id, short_name, first_name, last_name, team_id').eq('team_id', t_id).like('id', 'prov_%').execute()
+                        if prov_res.data:
+                            self.provisional_players[t_id] = prov_res.data
+                            print(f"   ℹ️  Encontrados {len(prov_res.data)} jugadores provisionales en equipo {t_id}")
+
             else:
                 print(f"   ⚠️ No se encontraron equipos para el fixture {self.fixture_id}")
         except Exception as e:
@@ -996,9 +1021,68 @@ class MatchEventDownloader:
         if response_direct.data:
             return api_player_id
 
+        # Si llegamos aquí, el jugador no está en la BD. 
+        # Intentamos buscar si es un jugador provisional del equipo
+        if team_id in self.provisional_players and self.provisional_players[team_id]:
+            norm_name = normalize_name(player_name)
+            best_match = None
+            best_score = 0.0
+            
+            for prov in self.provisional_players[team_id]:
+                prov_display = prov.get('short_name') or f"{prov.get('first_name') or ''} {prov.get('last_name') or ''}".strip()
+                score = difflib.SequenceMatcher(None, norm_name, normalize_name(prov_display)).ratio()
+                if score > best_score:
+                    best_score = score
+                    best_match = prov
+            
+            if best_match and best_score > 0.85:
+                prov_id = best_match['id']
+                prov_display = best_match.get('short_name') or f"{best_match.get('first_name') or ''} {best_match.get('last_name') or ''}".strip()
+                print(f"   🔄 Promoviendo provisional '{prov_display}' ({prov_id}) -> '{player_name}' ({api_player_id}) con {best_score:.2f} similitud")
+                self.promote_provisional_player(best_match, api_player_id)
+                
+                # Lo quitamos de la lista para no volver a emparejarlo
+                self.provisional_players[team_id] = [p for p in self.provisional_players[team_id] if p['id'] != prov_id]
+                return api_player_id
+
         # No encontrado por ID — omitir este jugador
         print(f"      ⚠️ Jugador no encontrado en BD por ID: {api_player_id} ({player_name})")
         return api_player_id
+
+    def promote_provisional_player(self, prov_player, real_id):
+        """Duplica la fila del jugador con el ID real, actualiza dependencias y borra el provisional."""
+        prov_id = prov_player['id']
+        try:
+            # 1. Obtener la fila completa
+            res = self.supabase.table('players').select('*').eq('id', prov_id).execute()
+            if not res.data:
+                return
+            row = res.data[0]
+            row['id'] = real_id
+            
+            # 2. Insertar nueva fila con el real_id
+            self.supabase.table('players').upsert(row).execute()
+            
+            # 3. Mover referencias en team_players, player_scores, match_events
+            for table in ["team_players", "player_scores", "match_events"]:
+                try:
+                    filas = self.supabase.table(table).select('*').eq('player_id', prov_id).execute().data or []
+                    for f in filas:
+                        if table == "team_players":
+                            # En team_players tenemos UNIQUE(team_id, player_id)
+                            ya = self.supabase.table(table).select('id').eq('team_id', f['team_id']).eq('player_id', real_id).execute().data
+                            if ya:
+                                self.supabase.table(table).delete().eq('id', f['id']).execute()
+                                continue
+                        self.supabase.table(table).update({'player_id': real_id}).eq('id', f['id']).execute()
+                except Exception as e:
+                    print(f"      ⚠️ Error moviendo referencias en {table}: {e}")
+            
+            # 4. Borrar el provisional
+            self.supabase.table('players').delete().eq('id', prov_id).execute()
+            print(f"      ✅ Jugador provisional {prov_id} promovido a {real_id} exitosamente.")
+        except Exception as e:
+            print(f"      ❌ Fallo promocionando {prov_id} a {real_id}: {e}")
 
     def update_match_score(self, match_ended=False, current_minute=0):
         """Actualiza el marcador del partido en la tabla fixtures.
