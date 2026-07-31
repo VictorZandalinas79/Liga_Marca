@@ -39,7 +39,24 @@ export async function GET() {
   console.log(`[API NOTIFICATIONS] Query error:`, notifError)
   if (notifError) return NextResponse.json({ error: notifError.message }, { status: 500 })
 
-  const visibleStandard = standardNotifications || []
+  let visibleStandard = standardNotifications || []
+
+  // Fetch player photos for notifications that reference a player
+  const playerIds = visibleStandard.map(n => n.player_id).filter(Boolean)
+  if (playerIds.length > 0) {
+    const { data: playersInfo } = await supabase
+      .from('players')
+      .select('id, photo')
+      .in('id', playerIds)
+    
+    if (playersInfo) {
+      const photosMap = Object.fromEntries(playersInfo.map(p => [p.id, p.photo]))
+      visibleStandard = visibleStandard.map(n => ({
+        ...n,
+        player_photo: n.player_id ? photosMap[n.player_id] : null
+      }))
+    }
+  }
 
   // 3. Obtener la jornada en marcha para mostrar sus multas
   const currentMatchday = await getCurrentMatchday(supabase)

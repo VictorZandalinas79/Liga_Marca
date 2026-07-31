@@ -26,6 +26,7 @@ interface Notification {
   body: string
   created_at: string
   read_at: string | null
+  player_photo?: string | null
 }
 
 /**
@@ -49,19 +50,90 @@ export function NotificationBell() {
     setMounted(true)
   }, [])
 
-  function handleCopy(e: React.MouseEvent, text: string, id: string) {
+  async function handleCopy(e: React.MouseEvent, text: string, id: string, photoUrl?: string | null) {
     e.stopPropagation()
-    navigator.clipboard.writeText(text)
+    const plainText = photoUrl ? `${text}\n${photoUrl}` : text
+    
+    try {
+      if (photoUrl && navigator.clipboard && window.isSecureContext && typeof window.ClipboardItem !== 'undefined') {
+        const htmlText = `<p>${text.replace(/\n/g, '<br>')}</p><br><img src="${photoUrl}" alt="Photo" />`
+        const clipboardItem = new ClipboardItem({
+          "text/html": new Blob([htmlText], { type: "text/html" }),
+          "text/plain": new Blob([plainText], { type: "text/plain" }),
+        })
+        await navigator.clipboard.write([clipboardItem])
+      } else {
+        await fallbackCopyTextToClipboard(plainText)
+      }
+    } catch (err) {
+      console.error('Failed to copy: ', err)
+      await fallbackCopyTextToClipboard(plainText)
+    }
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2000)
   }
 
-  function handleCopyAll() {
+  async function handleCopyAll() {
     if (notifications.length === 0) return
-    const text = notifications.map(n => `📢 *${n.title}*\n${n.body}`).join('\n\n')
-    navigator.clipboard.writeText(text)
+    
+    const plainText = notifications.map(n => {
+      let msg = `📢 *${n.title}*\n${n.body}`
+      if (n.player_photo) msg += `\n${n.player_photo}`
+      return msg
+    }).join('\n\n')
+    
+    const hasAnyPhoto = notifications.some(n => n.player_photo)
+    
+    try {
+      if (hasAnyPhoto && navigator.clipboard && window.isSecureContext && typeof window.ClipboardItem !== 'undefined') {
+        const htmlParts = notifications.map(n => {
+          let part = `<p>📢 <strong>${n.title}</strong><br>${n.body}</p>`
+          if (n.player_photo) {
+            part += `<br><img src="${n.player_photo}" alt="Photo" />`
+          }
+          return part
+        })
+        const htmlText = htmlParts.join('<hr>')
+        
+        const clipboardItem = new ClipboardItem({
+          "text/html": new Blob([htmlText], { type: "text/html" }),
+          "text/plain": new Blob([plainText], { type: "text/plain" }),
+        })
+        await navigator.clipboard.write([clipboardItem])
+      } else {
+        await fallbackCopyTextToClipboard(plainText)
+      }
+    } catch (err) {
+      console.error('Failed to copy all: ', err)
+      await fallbackCopyTextToClipboard(plainText)
+    }
     setCopiedAll(true)
     setTimeout(() => setCopiedAll(false), 2000)
+  }
+
+  async function fallbackCopyTextToClipboard(text: string) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text)
+        return
+      } catch (err) {
+        // Fallthrough
+      }
+    }
+    const textArea = document.createElement("textarea")
+    textArea.value = text
+    textArea.style.position = "fixed"
+    textArea.style.left = "-999999px"
+    textArea.style.top = "-999999px"
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+    try {
+      document.execCommand('copy')
+    } catch (err) {
+      console.error('Fallback execCommand failed', err)
+    }
+    textArea.remove()
   }
 
   const unreadCount = notifications.filter(n => !n.read_at).length
@@ -72,7 +144,8 @@ export function NotificationBell() {
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const modal = document.getElementById('notification-modal')
+      if (ref.current && !ref.current.contains(e.target as Node) && !(modal && modal.contains(e.target as Node))) {
         setOpen(false)
       }
     }
@@ -208,7 +281,7 @@ export function NotificationBell() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
           
           {/* Contenedor principal del modal */}
-          <div className="relative w-full max-w-2xl bg-white border border-slate-300 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div id="notification-modal" className="relative w-full max-w-2xl bg-white border border-slate-300 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Cabecera del modal */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-800 shrink-0">
@@ -258,26 +331,30 @@ export function NotificationBell() {
                         }`}
                         title={!n.read_at ? 'Hacer clic para marcar como leído' : undefined}
                       >
-                        <div className="flex items-start gap-4 relative">
-                          <span className="text-2xl shrink-0 drop-shadow-sm">{typeIcon[n.type] ?? '🔔'}</span>
-                          <div className="flex-1 min-w-0 pr-8">
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className={`font-bold truncate ${isWarning ? 'text-red-900' : 'text-slate-900'}`}>{n.title}</p>
-                              {!n.read_at && (
-                                <span className={`h-2.5 w-2.5 rounded-full shrink-0 shadow-sm ${isWarning ? 'bg-red-500' : 'bg-blue-500'}`} />
-                              )}
+                          <div className="flex items-start gap-4 relative">
+                            {n.player_photo ? (
+                              <img src={n.player_photo} alt="Player" className="w-10 h-10 rounded-full object-cover shrink-0 shadow-sm border border-slate-200" />
+                            ) : (
+                              <span className="text-2xl shrink-0 drop-shadow-sm">{typeIcon[n.type] ?? '🔔'}</span>
+                            )}
+                            <div className="flex-1 min-w-0 pr-8">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className={`font-bold truncate ${isWarning ? 'text-red-900' : 'text-slate-900'}`}>{n.title}</p>
+                                {!n.read_at && (
+                                  <span className={`h-2.5 w-2.5 rounded-full shrink-0 shadow-sm ${isWarning ? 'bg-red-500' : 'bg-blue-500'}`} />
+                                )}
+                              </div>
+                              <p className={`text-sm mt-1 leading-snug ${isWarning ? 'text-red-800' : 'text-slate-700'}`}>{n.body}</p>
+                              <p className="text-xs text-slate-500 mt-2 font-medium">{formatDate(n.created_at)}</p>
                             </div>
-                            <p className={`text-sm mt-1 leading-snug ${isWarning ? 'text-red-800' : 'text-slate-700'}`}>{n.body}</p>
-                            <p className="text-xs text-slate-500 mt-2 font-medium">{formatDate(n.created_at)}</p>
+                            <button
+                              onClick={(e) => handleCopy(e, `📢 *${n.title}*\n${n.body}`, n.id, n.player_photo)}
+                              className="absolute top-0 right-0 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 rounded-md transition-all z-10"
+                              title="Copiar para WhatsApp"
+                            >
+                              {copiedId === n.id ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                            </button>
                           </div>
-                          <button
-                            onClick={(e) => handleCopy(e, `📢 *${n.title}*\n${n.body}`, n.id)}
-                            className="absolute top-0 right-0 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 rounded-md transition-all z-10"
-                            title="Copiar para WhatsApp"
-                          >
-                            {copiedId === n.id ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                          </button>
-                        </div>
                       </div>
                     )
                   })}
