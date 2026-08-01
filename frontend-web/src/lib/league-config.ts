@@ -18,6 +18,16 @@ export interface LeagueConfig {
   div2_lose_percent: number
   div3_win_percent: number
   div3_lose_percent: number
+  entry_fee: number
+  prize_div1_1st: number
+  prize_div1_2nd: number
+  prize_div1_3rd: number
+  prize_div2_1st: number
+  prize_div2_2nd: number
+  prize_div2_3rd: number
+  prize_div3_1st: number
+  prize_div3_2nd: number
+  prize_div3_3rd: number
 }
 
 export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
@@ -37,6 +47,16 @@ export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
   div2_lose_percent: 25,
   div3_win_percent: 25,
   div3_lose_percent: 25,
+  entry_fee: 50,
+  prize_div1_1st: 25,
+  prize_div1_2nd: 16,
+  prize_div1_3rd: 11,
+  prize_div2_1st: 14,
+  prize_div2_2nd: 10,
+  prize_div2_3rd: 8,
+  prize_div3_1st: 8,
+  prize_div3_2nd: 5,
+  prize_div3_3rd: 3,
 }
 
 export interface ParsedFormation {

@@ -8,6 +8,7 @@ import {
 import { LeagueConfigPanel } from './LeagueConfigPanel'
 import { ScoringConfigPanel } from './ScoringConfigPanel'
 import { UnmatchedPlayersPanel } from './UnmatchedPlayersPanel'
+import { PrizesPanel } from './PrizesPanel'
 
 type AdminUser = {
   id: string
@@ -388,6 +389,9 @@ export default function AdminPage() {
 
       {/* Configuración de las reglas del juego */}
       <LeagueConfigPanel />
+
+      {/* Configuración del sistema de premios */}
+      <PrizesPanel />
 
       {/* Configuración del sistema de puntuación */}
       <ScoringConfigPanel />
