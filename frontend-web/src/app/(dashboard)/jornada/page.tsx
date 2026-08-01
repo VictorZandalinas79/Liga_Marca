@@ -863,6 +863,47 @@ export default function JornadaPage() {
     link.click()
   }
 
+  const exportToPdf = async () => {
+    const element = document.getElementById('pdf-content')
+    if (!element) return
+
+    // Hacemos el elemento visible temporalmente para renderizarlo fuera de pantalla
+    const originalClasses = element.className
+    element.className = "absolute left-[-9999px] top-0 bg-white w-[297mm] h-[210mm] overflow-hidden"
+
+    try {
+      // Importamos dinámicamente para que Next.js no falle en SSR
+      const html2canvas = (await import('html2canvas-pro')).default
+      const { jsPDF } = await import('jspdf')
+      
+      // Pequeña espera para asegurar que el navegador pinta el elemento oculto
+      await new Promise(r => setTimeout(r, 150))
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      })
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.98)
+
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      })
+      
+      pdf.addImage(dataUrl, 'JPEG', 0, 0, 297, 210)
+      pdf.save(`Alineaciones_Jornada_${selectedMatchday}.pdf`)
+    } catch (e: any) {
+      console.error('Error generando PDF', e)
+      alert('Hubo un problema descargando el PDF de forma directa. Contacta con el administrador.')
+    } finally {
+      element.className = originalClasses
+    }
+  }
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando jornada...</div>
   }
@@ -999,7 +1040,7 @@ export default function JornadaPage() {
           <span className="hidden sm:inline">Exportar Excel</span>
         </button>
         <button
-          onClick={() => window.print()}
+          onClick={() => exportToPdf()}
           disabled={!showEquipos || userTeams.length === 0}
           className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           title="Exportar PDF"
