@@ -624,14 +624,16 @@ export default function JornadaPage() {
     // Determinar ganadores y perdedores visualmente para el reparto de pagos por división
     let qWinners = 0
     let qLosers = 0
-    const winPerc = (config.winners_percentage || 25) / 100.0
-    if (selectedDivision === 1 || selectedDivision === 2) {
-      qWinners = Math.max(1, Math.round(teams.length * winPerc))
-      qLosers = qWinners
+    
+    if (selectedDivision === 1) {
+      qWinners = Math.max(1, Math.round(teams.length * ((config.div1_win_percent ?? 25) / 100.0)))
+      qLosers = Math.max(1, Math.round(teams.length * ((config.div1_lose_percent ?? 25) / 100.0)))
+    } else if (selectedDivision === 2) {
+      qWinners = Math.max(1, Math.round(teams.length * ((config.div2_win_percent ?? 25) / 100.0)))
+      qLosers = Math.max(1, Math.round(teams.length * ((config.div2_lose_percent ?? 25) / 100.0)))
     } else if (selectedDivision === 3) {
-      const div2Count = (profiles ?? []).filter(p => (p as any).division === 2).length
-      qWinners = Math.max(1, Math.round(div2Count * winPerc))
-      qLosers = Math.max(1, Math.round(teams.length * winPerc))
+      qWinners = Math.max(1, Math.round(teams.length * ((config.div3_win_percent ?? 25) / 100.0)))
+      qLosers = Math.max(1, Math.round(teams.length * ((config.div3_lose_percent ?? 25) / 100.0)))
     }
     const wSet = new Set<string>()
     const lSet = new Set<string>()

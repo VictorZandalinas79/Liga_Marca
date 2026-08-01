@@ -496,41 +496,41 @@ def run_matchday(sb, matchday):
     winners = set()
     losers = set()
     
-    win_perc = float(cfg.get("winners_percentage", 25)) / 100.0
-    
-    def get_quarter(n):
-        return max(1, round(n * win_perc)) if n > 0 else 0
+    def get_count(n, perc):
+        return max(1, round(n * (float(perc) / 100.0))) if n > 0 else 0
 
     # 1ª División
     r1 = div_results[1]
     n1 = len(r1)
-    q1 = get_quarter(n1)
-    for i in range(q1):
+    q1_win = get_count(n1, cfg.get("div1_win_percent", 25))
+    q1_lose = get_count(n1, cfg.get("div1_lose_percent", 25))
+    for i in range(q1_win):
         if i < n1: winners.add(r1[i][0])
-    for i in range(q1):
+    for i in range(q1_lose):
         idx = n1 - 1 - i
-        if idx >= q1: losers.add(r1[idx][0])
+        if idx >= q1_win: losers.add(r1[idx][0])
 
     # 2ª División
     r2 = div_results[2]
     n2 = len(r2)
-    q2 = get_quarter(n2)
-    for i in range(q2):
+    q2_win = get_count(n2, cfg.get("div2_win_percent", 25))
+    q2_lose = get_count(n2, cfg.get("div2_lose_percent", 25))
+    for i in range(q2_win):
         if i < n2: winners.add(r2[i][0])
-    for i in range(q2):
+    for i in range(q2_lose):
         idx = n2 - 1 - i
-        if idx >= q2: losers.add(r2[idx][0])
+        if idx >= q2_win: losers.add(r2[idx][0])
 
     # 3ª División
     r3 = div_results[3]
     n3 = len(r3)
-    q3_losers = get_quarter(n3)
-    q3_winners = q2  # Igual al número de perdedores en Segunda
-    for i in range(q3_winners):
+    q3_win = get_count(n3, cfg.get("div3_win_percent", 25))
+    q3_lose = get_count(n3, cfg.get("div3_lose_percent", 25))
+    for i in range(q3_win):
         if i < n3: winners.add(r3[i][0])
-    for i in range(q3_losers):
+    for i in range(q3_lose):
         idx = n3 - 1 - i
-        if idx >= q3_winners: losers.add(r3[idx][0])
+        if idx >= q3_win: losers.add(r3[idx][0])
 
     # El ranking general lo mantenemos para guardarlo en la base de datos
     ranked = sorted(results, key=lambda r: r[4], reverse=True)
