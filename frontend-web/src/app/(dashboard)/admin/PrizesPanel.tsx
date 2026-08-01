@@ -165,6 +165,7 @@ export function PrizesPanel({ users }: { users?: { id: string, full_name: string
                 </tr>
               </thead>
               <tbody>
+                <tr>
                   <td className="py-3 font-semibold text-slate-700">1º Clasificado{topUsers[1]?.[0] ? ` (${topUsers[1][0]})` : ''}</td>
                   <td className="py-3 text-right font-bold text-emerald-600">{calcPrize(configValues.prize_div1_1st)}€</td>
                   <td className="py-2 pl-4"><input type="number" className="w-full text-right bg-slate-50 border rounded px-2 py-1 text-xs outline-none focus:border-amber-500" value={configValues.prize_div1_1st} onChange={e => setNum('prize_div1_1st', Number(e.target.value))} /></td>
