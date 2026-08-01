@@ -854,7 +854,8 @@ export default function JornadaPage() {
   }
 
   return (
-    <div className="flex flex-col gap-3 max-w-screen-2xl mx-auto w-full pb-4">
+    <>
+    <div className="print:hidden flex flex-col gap-3 max-w-screen-2xl mx-auto w-full pb-4">
       {/* Cabecera con selector de jornada por flechas */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -960,17 +961,28 @@ export default function JornadaPage() {
         </Card>
       )}
 
-      {/* Botón para desplegar/ocultar los equipos */}
-      <button
-        onClick={() => setShowEquipos(v => !v)}
-        className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors mt-2 text-sm"
-      >
-        <span className="flex items-center gap-2">
-          <Users className="w-4 h-4 text-emerald-400" />
-          Equipos
-        </span>
-        {showEquipos ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-      </button>
+      {/* Botones de Equipos e Imprimir */}
+      <div className="flex gap-2 mt-2">
+        <button
+          onClick={() => setShowEquipos(v => !v)}
+          className="flex-1 flex items-center justify-between px-3 py-2 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors text-sm"
+        >
+          <span className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-emerald-400" />
+            Equipos
+          </span>
+          {showEquipos ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        <button
+          onClick={() => window.print()}
+          disabled={!showEquipos || userTeams.length === 0}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Imprimir PDF"
+        >
+          <Printer className="w-4 h-4" />
+          <span className="hidden sm:inline">Imprimir PDF</span>
+        </button>
+      </div>
 
       {/* Buscador tipo Ctrl+F */}
       {showEquipos && userTeams.length > 0 && (
