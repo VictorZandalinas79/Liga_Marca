@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle, Printer } from 'lucide-react'
+import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle, Printer, FileSpreadsheet } from 'lucide-react'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { useLeagueConfig } from '@/lib/league-config'
@@ -849,6 +849,20 @@ export default function JornadaPage() {
     }
   }, [searchQuery])
 
+  const exportToExcel = () => {
+    let csv = '\uFEFFUsuario,Jugador,Posicion,Puntos,Sancion\n'
+    userTeams.forEach(t => {
+      t.jugadores.forEach(p => {
+        csv += `"${t.user_name}","${p.short_name || p.first_name}","${getPositionLabel(p.position)}",${p.puntos || 0},"${p.sanctionReason || ''}"\n`
+      })
+    })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `Alineaciones_Jornada_${selectedMatchday}.csv`
+    link.click()
+  }
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando jornada...</div>
   }
@@ -962,25 +976,36 @@ export default function JornadaPage() {
       )}
 
       {/* Botones de Equipos e Imprimir */}
-      <div className="flex gap-2 mt-2">
+      <div className="flex flex-wrap gap-2 mt-2">
         <button
           onClick={() => setShowEquipos(v => !v)}
-          className="flex-1 flex items-center justify-between px-3 py-2 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors text-sm"
+          className="flex-1 flex items-center justify-center sm:justify-between px-3 py-2 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors text-sm"
         >
           <span className="flex items-center gap-2">
             <Users className="w-4 h-4 text-emerald-400" />
-            Equipos
+            <span className="hidden sm:inline">Equipos</span>
           </span>
-          {showEquipos ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <span className="hidden sm:inline">
+            {showEquipos ? <ChevronUp className="w-4 h-4 ml-2" /> : <ChevronDown className="w-4 h-4 ml-2" />}
+          </span>
+        </button>
+        <button
+          onClick={() => exportToExcel()}
+          disabled={!showEquipos || userTeams.length === 0}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold hover:bg-emerald-100 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Exportar a Excel (CSV)"
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span className="hidden sm:inline">Exportar Excel</span>
         </button>
         <button
           onClick={() => window.print()}
           disabled={!showEquipos || userTeams.length === 0}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Imprimir PDF"
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Exportar PDF"
         >
           <Printer className="w-4 h-4" />
-          <span className="hidden sm:inline">Imprimir PDF</span>
+          <span className="hidden sm:inline">Exportar PDF</span>
         </button>
       </div>
 

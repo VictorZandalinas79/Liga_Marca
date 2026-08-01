@@ -89,14 +89,14 @@ export function PrintView({ teams, matchday, division }: { teams: UserTeam[], ma
             </div>
 
             {/* Players List */}
-            <div className="p-0.5 space-y-[1px]">
+            <div className="p-[1px] space-y-0">
               {t.jugadores.slice(0, 11).map((player, idx) => {
                 const isPenalized = !!player.sanctionReason
 
                 return (
-                  <div key={player.id} className="flex items-center gap-1 p-[1px] rounded bg-slate-50 border border-slate-100/50">
+                  <div key={player.id} className="flex items-center gap-[2px] p-0 rounded-none bg-white border-b border-slate-100/30 last:border-0 overflow-hidden">
                     {/* Dorsal */}
-                    <div className="w-2.5 flex justify-center shrink-0">
+                    <div className="w-2 flex justify-center shrink-0">
                       <span className="text-[5px] font-black text-slate-400">{player.shirt_number || '-'}</span>
                     </div>
 
