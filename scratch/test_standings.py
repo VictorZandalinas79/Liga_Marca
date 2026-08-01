@@ -1,0 +1,1 @@
+import os; from supabase import create_client; sb = create_client(os.environ["NEXT_PUBLIC_SUPABASE_URL"], os.environ["NEXT_PUBLIC_SUPABASE_ANON_KEY"]); print(sb.table("matchday_payments").select("user_id, net_points, profiles(full_name, division)").execute())

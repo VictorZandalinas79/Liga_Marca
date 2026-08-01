@@ -22,10 +22,11 @@ function NumberField({ label, value, onChange, step = "1", min = "0" }: { label:
   )
 }
 
-export function PrizesPanel({ users }: { users?: { entry_fee_paid: number, amount_paid: number, infraction_penalties: number }[] }) {
+export function PrizesPanel({ users }: { users?: { id: string, full_name: string, division: number | null, entry_fee_paid: number, amount_paid: number, infraction_penalties: number }[] }) {
   const [saving, setSaving] = useState(false)
   const [totalPot, setTotalPot] = useState(0)
   const [configValues, setConfigValues] = useState<Record<string, number>>({})
+  const [topUsers, setTopUsers] = useState<Record<number, string[]>>({ 1: [], 2: [], 3: [] })
   const [err, setErr] = useState('')
 
   // Usamos el hook, pero queremos tener estado local para poder guardar cambios sin recargar
@@ -56,6 +57,36 @@ export function PrizesPanel({ users }: { users?: { entry_fee_paid: number, amoun
       }
     }
     setTotalPot(total)
+
+    // Calculate top users per division
+    if (users && users.length > 0) {
+      const fetchTopUsers = async () => {
+        const supabase = createClient()
+        const { data: payments } = await supabase.from('matchday_payments').select('user_id, net_points')
+        
+        const pointsByUser = new Map<string, number>()
+        if (payments) {
+          for (const p of payments) {
+            if (p.user_id) {
+              pointsByUser.set(p.user_id, (pointsByUser.get(p.user_id) || 0) + (Number(p.net_points) || 0))
+            }
+          }
+        }
+
+        const newTopUsers: Record<number, string[]> = { 1: [], 2: [], 3: [] }
+        for (const div of [1, 2, 3]) {
+          const divUsers = users.filter(u => u.division === div)
+          divUsers.sort((a, b) => {
+            const ptsA = pointsByUser.get(a.id) || 0
+            const ptsB = pointsByUser.get(b.id) || 0
+            return ptsB - ptsA
+          })
+          newTopUsers[div] = divUsers.map(u => u.full_name || 'Usuario sin nombre')
+        }
+        setTopUsers(newTopUsers)
+      }
+      fetchTopUsers()
+    }
   }, [users])
 
   const saveConfig = async () => {
@@ -135,17 +166,17 @@ export function PrizesPanel({ users }: { users?: { entry_fee_paid: number, amoun
               </thead>
               <tbody>
                 <tr>
-                  <td className="py-3 font-semibold text-slate-700">1º Clasificado</td>
+                  <td className="py-3 font-semibold text-slate-700">{topUsers[1]?.[0] || '1º Clasificado'}</td>
                   <td className="py-3 text-right font-bold text-emerald-600">{calcPrize(configValues.prize_div1_1st)}€</td>
                   <td className="py-2 pl-4"><input type="number" className="w-full text-right bg-slate-50 border rounded px-2 py-1 text-xs outline-none focus:border-amber-500" value={configValues.prize_div1_1st} onChange={e => setNum('prize_div1_1st', Number(e.target.value))} /></td>
                 </tr>
                 <tr>
-                  <td className="py-3 font-semibold text-slate-700">2º Clasificado</td>
+                  <td className="py-3 font-semibold text-slate-700">{topUsers[1]?.[1] || '2º Clasificado'}</td>
                   <td className="py-3 text-right font-bold text-emerald-600">{calcPrize(configValues.prize_div1_2nd)}€</td>
                   <td className="py-2 pl-4"><input type="number" className="w-full text-right bg-slate-50 border rounded px-2 py-1 text-xs outline-none focus:border-amber-500" value={configValues.prize_div1_2nd} onChange={e => setNum('prize_div1_2nd', Number(e.target.value))} /></td>
                 </tr>
                 <tr>
-                  <td className="py-3 font-semibold text-slate-700">3º Clasificado</td>
+                  <td className="py-3 font-semibold text-slate-700">{topUsers[1]?.[2] || '3º Clasificado'}</td>
                   <td className="py-3 text-right font-bold text-emerald-600">{calcPrize(configValues.prize_div1_3rd)}€</td>
                   <td className="py-2 pl-4"><input type="number" className="w-full text-right bg-slate-50 border rounded px-2 py-1 text-xs outline-none focus:border-amber-500" value={configValues.prize_div1_3rd} onChange={e => setNum('prize_div1_3rd', Number(e.target.value))} /></td>
                 </tr>
@@ -166,17 +197,17 @@ export function PrizesPanel({ users }: { users?: { entry_fee_paid: number, amoun
               </thead>
               <tbody>
                 <tr>
-                  <td className="py-3 font-semibold text-slate-700">1º Clasificado</td>
+                  <td className="py-3 font-semibold text-slate-700">{topUsers[2]?.[0] || '1º Clasificado'}</td>
                   <td className="py-3 text-right font-bold text-emerald-600">{calcPrize(configValues.prize_div2_1st)}€</td>
                   <td className="py-2 pl-4"><input type="number" className="w-full text-right bg-slate-50 border rounded px-2 py-1 text-xs outline-none focus:border-amber-500" value={configValues.prize_div2_1st} onChange={e => setNum('prize_div2_1st', Number(e.target.value))} /></td>
                 </tr>
                 <tr>
-                  <td className="py-3 font-semibold text-slate-700">2º Clasificado</td>
+                  <td className="py-3 font-semibold text-slate-700">{topUsers[2]?.[1] || '2º Clasificado'}</td>
                   <td className="py-3 text-right font-bold text-emerald-600">{calcPrize(configValues.prize_div2_2nd)}€</td>
                   <td className="py-2 pl-4"><input type="number" className="w-full text-right bg-slate-50 border rounded px-2 py-1 text-xs outline-none focus:border-amber-500" value={configValues.prize_div2_2nd} onChange={e => setNum('prize_div2_2nd', Number(e.target.value))} /></td>
                 </tr>
                 <tr>
-                  <td className="py-3 font-semibold text-slate-700">3º Clasificado</td>
+                  <td className="py-3 font-semibold text-slate-700">{topUsers[2]?.[2] || '3º Clasificado'}</td>
                   <td className="py-3 text-right font-bold text-emerald-600">{calcPrize(configValues.prize_div2_3rd)}€</td>
                   <td className="py-2 pl-4"><input type="number" className="w-full text-right bg-slate-50 border rounded px-2 py-1 text-xs outline-none focus:border-amber-500" value={configValues.prize_div2_3rd} onChange={e => setNum('prize_div2_3rd', Number(e.target.value))} /></td>
                 </tr>
@@ -197,17 +228,17 @@ export function PrizesPanel({ users }: { users?: { entry_fee_paid: number, amoun
               </thead>
               <tbody>
                 <tr>
-                  <td className="py-3 font-semibold text-slate-700">1º Clasificado</td>
+                  <td className="py-3 font-semibold text-slate-700">{topUsers[3]?.[0] || '1º Clasificado'}</td>
                   <td className="py-3 text-right font-bold text-emerald-600">{calcPrize(configValues.prize_div3_1st)}€</td>
                   <td className="py-2 pl-4"><input type="number" className="w-full text-right bg-slate-50 border rounded px-2 py-1 text-xs outline-none focus:border-amber-500" value={configValues.prize_div3_1st} onChange={e => setNum('prize_div3_1st', Number(e.target.value))} /></td>
                 </tr>
                 <tr>
-                  <td className="py-3 font-semibold text-slate-700">2º Clasificado</td>
+                  <td className="py-3 font-semibold text-slate-700">{topUsers[3]?.[1] || '2º Clasificado'}</td>
                   <td className="py-3 text-right font-bold text-emerald-600">{calcPrize(configValues.prize_div3_2nd)}€</td>
                   <td className="py-2 pl-4"><input type="number" className="w-full text-right bg-slate-50 border rounded px-2 py-1 text-xs outline-none focus:border-amber-500" value={configValues.prize_div3_2nd} onChange={e => setNum('prize_div3_2nd', Number(e.target.value))} /></td>
                 </tr>
                 <tr>
-                  <td className="py-3 font-semibold text-slate-700">3º Clasificado</td>
+                  <td className="py-3 font-semibold text-slate-700">{topUsers[3]?.[2] || '3º Clasificado'}</td>
                   <td className="py-3 text-right font-bold text-emerald-600">{calcPrize(configValues.prize_div3_3rd)}€</td>
                   <td className="py-2 pl-4"><input type="number" className="w-full text-right bg-slate-50 border rounded px-2 py-1 text-xs outline-none focus:border-amber-500" value={configValues.prize_div3_3rd} onChange={e => setNum('prize_div3_3rd', Number(e.target.value))} /></td>
                 </tr>
