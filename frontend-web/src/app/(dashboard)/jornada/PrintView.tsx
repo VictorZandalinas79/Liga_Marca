@@ -62,7 +62,7 @@ export function PrintView({ teams, matchday, division }: { teams: UserTeam[], ma
   }
 
   return (
-    <div className="hidden print:block bg-slate-50 w-full min-h-screen">
+    <div id="pdf-content" className="hidden print:block bg-white w-[297mm] h-[210mm] overflow-hidden">
       {/* Header compactado */}
       <div className="flex items-center justify-between border-b-2 border-slate-900 pb-1 mb-2 pt-2 px-4">
         <div>

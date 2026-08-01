@@ -863,6 +863,35 @@ export default function JornadaPage() {
     link.click()
   }
 
+  const exportToPdf = async () => {
+    const element = document.getElementById('pdf-content')
+    if (!element) return
+
+    // Hacemos el elemento visible temporalmente para que html2canvas pueda renderizarlo
+    // Lo posicionamos fuera de la pantalla para que no cause saltos visuales
+    const originalClasses = element.className
+    element.className = "absolute left-[-9999px] top-0 bg-white w-[297mm] h-[210mm] overflow-hidden"
+
+    try {
+      // @ts-ignore
+      const html2pdf = (await import('html2pdf.js')).default
+      
+      const opt = {
+        margin:       4,
+        filename:     `Alineaciones_Jornada_${selectedMatchday}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+      }
+
+      await html2pdf().set(opt).from(element).save()
+    } catch (e) {
+      console.error('Error generando PDF', e)
+    } finally {
+      element.className = originalClasses
+    }
+  }
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando jornada...</div>
   }
@@ -999,7 +1028,7 @@ export default function JornadaPage() {
           <span className="hidden sm:inline">Exportar Excel</span>
         </button>
         <button
-          onClick={() => window.print()}
+          onClick={() => exportToPdf()}
           disabled={!showEquipos || userTeams.length === 0}
           className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           title="Exportar PDF"
