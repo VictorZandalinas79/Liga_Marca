@@ -3,8 +3,7 @@ import dotenv from 'dotenv'
 dotenv.config({ path: '../.env' })
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 async function test() {
-  const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
-  const { data, error } = await supabase.from('sync_notifications').delete().lt('created_at', cutoff)
-  console.log(error || 'Deleted', data)
+  const { data } = await supabase.from('sync_notifications').select('id', { count: 'exact' })
+  console.log("Remaining rows:", data.length)
 }
 test()

@@ -479,30 +479,17 @@ def purge_previous_notifications():
     """Borra los avisos de sincronizaciones anteriores a la actual.
 
     La campana enseña las novedades de la ejecución en curso, no un histórico.
-    Normalmente esto no encuentra nada que borrar porque API Core ya vació la
-    tabla al arrancar la cadena; hace falta para cuando el workflow de Biwenger
-    se lanza suelto (workflow_dispatch), que entonces es él quien empieza la
-    ejecución.
-
-    El corte es el último 'sync_complete': lo escribe este script al terminar,
-    así que todo lo que sea igual o anterior pertenece a la cadena previa, y lo
-    posterior son los avisos que acaba de emitir API Core en esta misma cadena.
+    Si este script se lanza suelto (workflow_dispatch) limpiamos la tabla para
+    que no se acumulen notificaciones (incluso las de runs fallidos).
+    
+    Usamos un margen de 2 horas para NO borrar los avisos que haya emitido API
+    Core (si es que se acaba de ejecutar en cadena justo antes que nosotros).
     """
     try:
-        ultimo = supabase.table("sync_notifications").select("created_at") \
-            .eq("type", "sync_complete").order("created_at", desc=True).limit(1).execute().data
-    except Exception as e:
-        print(f"-> Aviso: no se pudo leer el último resumen ({e}). No se limpia nada.")
-        return
-
-    if not ultimo:
-        # Sin resumen previo: o es la primera vez, o API Core ya ha vaciado.
-        return
-
-    corte = ultimo[0]["created_at"]
-    try:
-        res = supabase.table("sync_notifications").delete().lte("created_at", corte).execute()
-        print(f"-> Campana vaciada: {len(res.data or [])} aviso(s) de la ejecución anterior eliminados.")
+        from datetime import datetime, timedelta, timezone
+        corte = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        res = supabase.table("sync_notifications").delete().lt("created_at", corte).execute()
+        print(f"-> Campana vaciada: notificaciones antiguas eliminadas.")
     except Exception as e:
         print(f"-> Aviso: no se pudieron borrar las notificaciones anteriores ({e}).")
 
