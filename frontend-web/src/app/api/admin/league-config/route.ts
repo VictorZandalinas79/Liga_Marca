@@ -14,6 +14,8 @@ const NUMERIC_FIELDS = [
   'matchday_end_hours_after',
   'fantasy_starting_matchday',
   'max_changes_per_matchday',
+  'starting_balance',
+  'infraction_penalty_cost',
 ] as const
 
 export async function GET() {

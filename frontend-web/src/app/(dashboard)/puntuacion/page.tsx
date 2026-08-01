@@ -10,6 +10,8 @@ import {
 import { Card } from '@/components/ui/card'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { resolveRates, type ScoringRules } from '@/lib/scoring-config'
+import { DEFAULT_LEAGUE_CONFIG } from '@/lib/league-config-types'
+import { Coins } from 'lucide-react'
 
 export const metadata = {
   title: 'Sistema de Puntuación',
@@ -89,6 +91,9 @@ export default async function PuntuacionPage() {
   const { data } = await supabase.from('scoring_config').select('rules').eq('id', 1).maybeSingle()
   const rules = (data?.rules as ScoringRules) || null
   const rates = resolveRates(rules)
+  
+  const { data: configData } = await supabase.from('league_config').select('*').eq('id', 1).maybeSingle()
+  const leagueConfig = { ...DEFAULT_LEAGUE_CONFIG, ...(configData || {}) }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -295,6 +300,58 @@ export default async function PuntuacionPage() {
             <strong>0 puntos</strong>; si supera 4 se asignan <strong>4 puntos</strong>.
           </p>
         </div>
+      </Section>
+
+      {/* 8. Reglas Económicas */}
+      <Section
+        icon={Coins}
+        number={8}
+        title="Reglas Económicas y Premios"
+        description="Cuotas de la liga, multas, pagos por jornada y premios a final de temporada."
+      >
+        <p className="mb-2 text-sm font-semibold text-slate-700">Cuotas y Sanciones</p>
+        <PointsTable
+          rows={[
+            { accion: 'Cuota inicial (Deuda base)', detalle: 'A pagar para la próxima temporada', pts: `-${leagueConfig.starting_balance}€` },
+            { accion: 'Multa por infracción', detalle: 'Alineación indebida, no respetar tácticas...', pts: `-${leagueConfig.infraction_penalty_cost}€` },
+          ]}
+        />
+        
+        <p className="mb-2 mt-5 text-sm font-semibold text-slate-700">Pagos de Jornada</p>
+        <PointsTable
+          rows={[
+            { accion: 'Ganador de la Jornada', pts: leagueConfig.pay_winner > 0 ? `+${leagueConfig.pay_winner}€` : `${leagueConfig.pay_winner}€` },
+            { accion: 'Resto de participantes', pts: `-${leagueConfig.pay_rest}€` },
+            { accion: 'Perdedor de la Jornada (Colista)', pts: `-${leagueConfig.pay_loser}€` },
+          ]}
+        />
+
+        <p className="mb-2 mt-5 text-sm font-semibold text-slate-700">Premios Finales - 1ª División</p>
+        <PointsTable
+          rows={[
+            { accion: '1º Clasificado', pts: `+${leagueConfig.prize_div1_1st}€` },
+            { accion: '2º Clasificado', pts: `+${leagueConfig.prize_div1_2nd}€` },
+            { accion: '3º Clasificado', pts: `+${leagueConfig.prize_div1_3rd}€` },
+          ]}
+        />
+
+        <p className="mb-2 mt-5 text-sm font-semibold text-slate-700">Premios Finales - 2ª División</p>
+        <PointsTable
+          rows={[
+            { accion: '1º Clasificado', pts: `+${leagueConfig.prize_div2_1st}€` },
+            { accion: '2º Clasificado', pts: `+${leagueConfig.prize_div2_2nd}€` },
+            { accion: '3º Clasificado', pts: `+${leagueConfig.prize_div2_3rd}€` },
+          ]}
+        />
+
+        <p className="mb-2 mt-5 text-sm font-semibold text-slate-700">Premios Finales - 3ª División</p>
+        <PointsTable
+          rows={[
+            { accion: '1º Clasificado', pts: `+${leagueConfig.prize_div3_1st}€` },
+            { accion: '2º Clasificado', pts: `+${leagueConfig.prize_div3_2nd}€` },
+            { accion: '3º Clasificado', pts: `+${leagueConfig.prize_div3_3rd}€` },
+          ]}
+        />
       </Section>
     </div>
   )
