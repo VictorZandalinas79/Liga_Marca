@@ -346,10 +346,14 @@ def run_matchday(sb, matchday):
     user_teams = fetch_all(sb, "user_teams", "id,user_id")
     team_to_user = {t["id"]: t["user_id"] for t in user_teams}
 
-    # Perfiles de usuario para obtener nombres
-    profiles = fetch_all(sb, "profiles", "id,full_name,email")
+    # Perfiles de usuario para obtener nombres y división
+    profiles = fetch_all(sb, "profiles", "id,full_name,email,division")
     user_names = {
         p["id"]: p.get("full_name") or (p.get("email") or "").split("@")[0] or "otro usuario"
+        for p in profiles
+    }
+    user_divisions = {
+        p["id"]: p.get("division")
         for p in profiles
     }
     team_to_username = {
@@ -476,10 +480,58 @@ def run_matchday(sb, matchday):
         sb.table("penalties").insert(penalty_rows).execute()
     log(f"⚖️  {len(penalty_rows)} sanción(es) registrada(s) en la jornada {matchday}")
 
-    # Reparto de pagos: top 3 = ganador, bottom 3 = perdedor, resto = resto
+    # Agrupar resultados por división para el reparto de pagos (1/4 ganan, 1/4 pierden)
+    div_results = {1: [], 2: [], 3: [], None: []}
+    for r in results:
+        team_id, user_id, raw, pen, net = r
+        div = user_divisions.get(user_id)
+        if div in (1, 2, 3):
+            div_results[div].append(r)
+        else:
+            div_results[None].append(r)
+
+    for div in div_results:
+        div_results[div].sort(key=lambda x: x[4], reverse=True)
+    
+    winners = set()
+    losers = set()
+    
+    def get_quarter(n):
+        return max(1, round(n / 4.0)) if n > 0 else 0
+
+    # 1ª División
+    r1 = div_results[1]
+    n1 = len(r1)
+    q1 = get_quarter(n1)
+    for i in range(q1):
+        if i < n1: winners.add(r1[i][0])
+    for i in range(q1):
+        idx = n1 - 1 - i
+        if idx >= q1: losers.add(r1[idx][0])
+
+    # 2ª División
+    r2 = div_results[2]
+    n2 = len(r2)
+    q2 = get_quarter(n2)
+    for i in range(q2):
+        if i < n2: winners.add(r2[i][0])
+    for i in range(q2):
+        idx = n2 - 1 - i
+        if idx >= q2: losers.add(r2[idx][0])
+
+    # 3ª División
+    r3 = div_results[3]
+    n3 = len(r3)
+    q3_losers = get_quarter(n3)
+    q3_winners = q2  # Igual al número de perdedores en Segunda
+    for i in range(q3_winners):
+        if i < n3: winners.add(r3[i][0])
+    for i in range(q3_losers):
+        idx = n3 - 1 - i
+        if idx >= q3_winners: losers.add(r3[idx][0])
+
+    # El ranking general lo mantenemos para guardarlo en la base de datos
     ranked = sorted(results, key=lambda r: r[4], reverse=True)
-    winners = {r[0] for r in ranked[:3]}
-    losers = {r[0] for r in ranked[-3:] if r[0] not in winners}
 
     for rank, (team_id, user_id, raw, pen, net) in enumerate(ranked, start=1):
         if team_id in winners:
