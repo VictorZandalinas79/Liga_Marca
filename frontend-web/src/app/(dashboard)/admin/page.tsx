@@ -417,7 +417,7 @@ export default function AdminPage() {
       <LeagueConfigPanel />
 
       {/* Configuración del sistema de premios */}
-      <PrizesPanel />
+      <PrizesPanel users={users} />
 
       {/* Configuración del sistema de puntuación */}
       <ScoringConfigPanel />

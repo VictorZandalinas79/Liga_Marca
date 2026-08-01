@@ -22,8 +22,7 @@ function NumberField({ label, value, onChange, step = "1", min = "0" }: { label:
   )
 }
 
-export function PrizesPanel() {
-  const [loading, setLoading] = useState(true)
+export function PrizesPanel({ users }: { users?: { entry_fee_paid: number, amount_paid: number, infraction_penalties: number }[] }) {
   const [saving, setSaving] = useState(false)
   const [totalPot, setTotalPot] = useState(0)
   const [configValues, setConfigValues] = useState<Record<string, number>>({})
@@ -50,26 +49,14 @@ export function PrizesPanel() {
   }, [baseConfig, configValues])
 
   useEffect(() => {
-    const fetchPot = async () => {
-      const supabase = createClient()
-      const { data: users, error } = await supabase.from('profiles').select('id, amount_paid, entry_fee_paid, infraction_penalties')
-      if (error) {
-        console.error("Error fetching users for pot", error)
-        return
+    let total = 0
+    if (users) {
+      for (const u of users) {
+        total += (u.entry_fee_paid || 0) + (u.amount_paid || 0) + (u.infraction_penalties || 0)
       }
-
-      if (users) {
-        let total = 0
-        for (const u of users) {
-          total += (u.entry_fee_paid || 0) + (u.amount_paid || 0) + (u.infraction_penalties || 0)
-        }
-        setTotalPot(total)
-      }
-      setLoading(false)
     }
-
-    fetchPot()
-  }, [])
+    setTotalPot(total)
+  }, [users])
 
   const saveConfig = async () => {
     setSaving(true)
@@ -93,7 +80,7 @@ export function PrizesPanel() {
     return (totalPot * (percent / 100)).toFixed(2)
   }
 
-  if (loading || Object.keys(configValues).length === 0) {
+  if (Object.keys(configValues).length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-6 flex justify-center">
         <RefreshCw className="w-6 h-6 text-slate-400 animate-spin" />
