@@ -90,9 +90,10 @@ export default function JornadaPage() {
   const [searchActiveIndex, setSearchActiveIndex] = useState(0)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [matchdayInfractions, setMatchdayInfractions] = useState<any[]>([])
-  // División seleccionada (pestaña). Jornadas y sanciones independientes por división.
   const [selectedDivision, setSelectedDivision] = useState<number | null>(null)
   const [currentUserDivision, setCurrentUserDivision] = useState<number | null>(null)
+  const [matchdayWinners, setMatchdayWinners] = useState<Set<string>>(new Set())
+  const [matchdayLosers, setMatchdayLosers] = useState<Set<string>>(new Set())
   const supabase = createClient()
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const playerRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -170,8 +171,9 @@ export default function JornadaPage() {
     const toInfo = (g: ReturnType<typeof matchdaysMap.get> & object, displayNumber: number): MatchdayInfo => {
       const first = Math.min(...g.starts)
       const last = Math.max(...g.starts)
-      // Visible desde 1h antes del primer partido (cuando se bloquean los cambios)
-      const started = now >= first - LOCK_LEAD_MS
+      // Visible cuando se bloquean los cambios (según configuración de liga)
+      const lockLeadMs = (config.matchday_start_hours_before || 1) * 60 * 60 * 1000
+      const started = now >= first - lockLeadMs
       // "En directo" solo desde que arranca de verdad el primer partido
       const live = now >= first && now <= last + MATCH_DURATION_MS
       return {
@@ -507,14 +509,15 @@ export default function JornadaPage() {
       })
 
       const sanctionResult = applySanctionsToTeam(
-        starters, 
-        prevMine, 
-        heldByOthersPrev, 
-        config, 
+        starters,
+        prevMine,
+        heldByOthersPrev,
+        config,
         isLiveMatchday,
         prevTeamPenalties,
         lineupPrevSet,
-        zeroedPrevSet
+        zeroedPrevSet,
+        matchday === Math.max(1, config.fantasy_starting_matchday)
       )
 
       // 4. Update points and set sanctionReason
@@ -618,6 +621,29 @@ export default function JornadaPage() {
     teams.sort((a, b) => b.puntos_totales - a.puntos_totales)
     teams.forEach((team, index) => { team.posicion = index + 1 })
 
+    // Determinar ganadores y perdedores visualmente para el reparto de pagos por división
+    let qWinners = 0
+    let qLosers = 0
+    if (selectedDivision === 1 || selectedDivision === 2) {
+      qWinners = Math.max(1, Math.round(teams.length / 4))
+      qLosers = qWinners
+    } else if (selectedDivision === 3) {
+      const div2Count = (profiles ?? []).filter(p => (p as any).division === 2).length
+      qWinners = Math.max(1, Math.round(div2Count / 4))
+      qLosers = Math.max(1, Math.round(teams.length / 4))
+    }
+    const wSet = new Set<string>()
+    const lSet = new Set<string>()
+    for (let i = 0; i < qWinners; i++) {
+      if (i < teams.length) wSet.add(teams[i].team_id)
+    }
+    for (let i = 0; i < qLosers; i++) {
+      const idx = teams.length - 1 - i
+      if (idx >= qWinners) lSet.add(teams[idx].team_id)
+    }
+    setMatchdayWinners(wSet)
+    setMatchdayLosers(lSet)
+
     setUserTeams(teams)
     setLoading(false)
   }
@@ -639,7 +665,7 @@ export default function JornadaPage() {
       }
     }
     getCurrentUser()
-  }, [])
+  }, [config.matchday_start_hours_before])
 
   useEffect(() => {
     if (selectedMatchday > 0 && selectedDivision != null) {
@@ -1031,11 +1057,15 @@ export default function JornadaPage() {
                     const total = team.jugadores.length
                     const promedio = getPromedio(team)
                     const isCurrentUser = currentUserId === team.user_id
+                    const isWinner = matchdayWinners.has(team.team_id)
+                    const isLoser = matchdayLosers.has(team.team_id)
                     return (
                     <tr
                       key={team.team_id}
-                      className={`border-b border-slate-700 transition-colors cursor-pointer ${
-                        isCurrentUser ? 'bg-emerald-900/30 animate-pulse' : 'hover:bg-slate-700/50'
+                      className={`border-b transition-colors cursor-pointer ${
+                        isWinner ? 'bg-emerald-900/40 border-emerald-700 hover:bg-emerald-800/60' :
+                        isLoser ? 'bg-red-900/40 border-red-700 hover:bg-red-800/60' :
+                        isCurrentUser ? 'bg-emerald-900/30 animate-pulse border-slate-700' : 'border-slate-700 hover:bg-slate-700/50'
                       }`}
                       onClick={() => {
                         teamRefs.current[team.team_id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -1045,7 +1075,7 @@ export default function JornadaPage() {
                         {getPositionMedal(pos, isLast)}
                       </td>
                       <td className="py-1 px-1 max-w-[120px] sm:max-w-none">
-                        <span className="font-semibold text-white text-[11px] uppercase">{team.team_name}</span>
+                        <span className="font-semibold text-white text-[11px] uppercase">{team.user_name}</span>
                         <span className="block text-[10px] text-slate-400">
                           {jugaron} / {total} jugaron
                         </span>
@@ -1081,44 +1111,53 @@ export default function JornadaPage() {
           {sortedTeams.map((team, index) => {
             const displayPos = index + 1
             const isCurrentUser = currentUserId === team.user_id
+            const isWinner = matchdayWinners.has(team.team_id)
+            const isLoser = matchdayLosers.has(team.team_id)
             return (
             <Card
               key={team.team_id}
               ref={(el) => { teamRefs.current[team.team_id] = el; }}
               className={`!border-slate-300 shadow-md scroll-mt-20 overflow-hidden min-w-0 flex flex-col ${
                 isCurrentUser ? '!border-emerald-500 ring-2 ring-emerald-500/50' : ''
-              }`}
+              } ${isWinner ? 'bg-emerald-50' : isLoser ? 'bg-red-50' : ''}`}
             >
               <CardContent className="p-0">
                 {/* Cabecera del equipo */}
-                <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-4 py-3 border-b border-slate-600">
-                  {/* Fila 1: posición + nombre usuario */}
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                      displayPos === 1 ? 'bg-yellow-500' :
-                      displayPos === 2 ? 'bg-gray-400' :
-                      displayPos === 3 ? 'bg-amber-600' :
-                      'bg-emerald-600'
-                    }`}>
-                      <span className="text-white text-sm font-bold">{displayPos}º</span>
-                    </div>
-                    <h3 className="font-bold text-white text-base uppercase leading-tight whitespace-normal break-words">{team.user_name}</h3>
+                <div className={`px-3 py-2 border-b flex items-center gap-3 ${
+                  isWinner ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 border-emerald-800' :
+                  isLoser ? 'bg-gradient-to-r from-red-600 to-red-700 border-red-800' :
+                  'bg-gradient-to-r from-slate-700 to-slate-800 border-slate-600'
+                }`}>
+                  {/* Posición */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                    displayPos === 1 ? 'bg-yellow-500' :
+                    displayPos === 2 ? 'bg-gray-400' :
+                    displayPos === 3 ? 'bg-amber-600' :
+                    'bg-emerald-600'
+                  }`}>
+                    <span className="text-white text-sm font-bold">{displayPos}º</span>
                   </div>
-                  {/* Fila 2: Sistema · Valor · Puntos centrados */}
-                  <div className="flex items-center justify-center gap-2 sm:gap-4">
-                    <div className="text-center">
-                      <p className="text-xs text-slate-400">Sistema</p>
-                      <p className={`text-sm font-mono font-bold whitespace-nowrap ${team.hasTacticsWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{getFormacion(team.jugadores)}</p>
+                  
+                  {/* Info: Nombre arriba, stats abajo */}
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <h3 className="font-bold text-white text-[11px] sm:text-xs uppercase leading-tight tracking-tighter truncate">{team.user_name}</h3>
+                      <div className="flex items-baseline gap-1 shrink-0 ml-auto">
+                        <p className="text-[10px] text-slate-400 leading-none">Valor</p>
+                        <p className={`text-[11px] font-bold leading-none ${team.hasBudgetWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{fmtValor(team.valor_total)}</p>
+                      </div>
                     </div>
-                    <div className="w-px h-8 bg-slate-600" />
-                    <div className="text-center">
-                      <p className="text-xs text-slate-400">Valor</p>
-                      <p className={`text-base font-bold ${team.hasBudgetWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{fmtValor(team.valor_total)}</p>
-                    </div>
-                    <div className="w-px h-8 bg-slate-600" />
-                    <div className="text-center">
-                      <p className="text-xs text-slate-400">Puntos</p>
-                      <p className="text-xl font-bold text-emerald-400">{Math.round(team.puntos_totales * 10) / 10}</p>
+                    
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-1">
+                        <p className="text-[10px] text-slate-400 leading-none">Sist</p>
+                        <p className={`text-[11px] font-mono font-bold leading-none ${team.hasTacticsWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{getFormacion(team.jugadores)}</p>
+                      </div>
+                      <div className="w-px h-3 bg-slate-500" />
+                      <div className="flex items-center gap-1">
+                        <p className="text-[10px] text-slate-400 leading-none">Pts</p>
+                        <p className="text-[12px] font-bold text-emerald-400 leading-none">{Math.round(team.puntos_totales * 10) / 10}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1133,8 +1172,10 @@ export default function JornadaPage() {
                       if (jugadoresGrupo.length === 0) return null
                       return (
                         <div key={grupo}>
-                          <p className="text-xs font-semibold text-slate-500 uppercase mb-2">{grupo}</p>
-                          <div className="grid gap-1">
+                          {grupo !== 'Titulares' && (
+                            <p className="text-xs font-semibold text-slate-500 uppercase mb-2 mt-2">{grupo}</p>
+                          )}
+                          <div className="flex flex-col gap-0">
                             {jugadoresGrupo.map((player, idx) => {
                               const matchKey = `${team.team_id}-${player.id}`
                               const isMatch = matchSet.has(matchKey)
@@ -1173,7 +1214,7 @@ export default function JornadaPage() {
                                 key={player.id}
                                 ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
                                 onClick={() => openPlayerStats(player.id, finalSanctionReason)}
-                                className={`flex items-center justify-between px-1 py-1 h-[52px] rounded-lg transition-all gap-1 cursor-pointer ${
+                                className={`flex items-center justify-between px-1 py-0.5 min-h-[38px] rounded-lg transition-all gap-1 cursor-pointer ${
                                   isActive
                                     ? 'ring-2 ring-orange-500 ring-offset-1 shadow-md relative z-10 scale-[1.02]'
                                     : isMatch
@@ -1182,8 +1223,6 @@ export default function JornadaPage() {
                                 } ${
                                   isPenalized
                                     ? 'bg-red-50 border border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-sm'
-                                    : (player.hasSubstitutionWarning || player.hasMaxTeamWarning)
-                                    ? 'bg-red-100/50 border border-red-400 text-red-900 hover:bg-red-100'
                                     : isActive
                                     ? 'bg-orange-200 hover:bg-orange-300'
                                     : isMatch
@@ -1193,11 +1232,30 @@ export default function JornadaPage() {
                                     : 'bg-slate-50 hover:bg-slate-100'
                                 }`}
                               >
+                                {/* Photo Leftmost */}
+                                <div className="shrink-0 mr-1.5 flex items-center justify-center">
+                                  {player.photo ? (
+                                    <img
+                                      src={player.photo}
+                                      alt=""
+                                      className={`w-8 h-8 rounded-full object-cover border ${
+                                        isPenalized ? 'border-red-500' : player.hasPlayed ? 'border-slate-400 opacity-70' : 'border-slate-300'
+                                      }`}
+                                    />
+                                  ) : (
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border ${
+                                      isPenalized ? 'border-red-500 bg-red-100 text-red-700' : player.hasPlayed ? 'border-slate-400 bg-slate-400 text-slate-700' : 'border-slate-400 bg-slate-200 text-slate-600'
+                                    }`}>
+                                      {player.shirt_number || '?'}
+                                    </div>
+                                  )}
+                                </div>
+
                                 {/* Left Side: Stacked Name + Info */}
                                 <div className="flex flex-col min-w-0 flex-1 justify-center gap-0.5">
                                   {/* Row 1: Name and badges */}
                                   <div className="flex items-center gap-1.5 min-w-0 w-full">
-                                    <span className={`font-semibold truncate block shrink ${
+                                    <span className={`font-semibold whitespace-normal break-words ${
                                       (player.short_name || player.first_name || '').length > 15
                                         ? 'text-[10px]'
                                         : 'text-xs'
@@ -1226,31 +1284,12 @@ export default function JornadaPage() {
                                       <span className="font-black text-slate-600 shrink-0">{player.shirt_number}</span>
                                     )}
                                     
-                                    {player.photo ? (
-                                      <img
-                                        src={player.photo}
-                                        alt=""
-                                        className={`w-4 h-4 rounded-full object-cover shrink-0 border ${
-                                          isPenalized ? 'border-red-500' : player.hasPlayed ? 'border-slate-400 opacity-70' : 'border-slate-300'
-                                        }`}
-                                      />
-                                    ) : (
-                                      <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0 border ${
-                                        isPenalized ? 'border-red-500 bg-red-100 text-red-700' : player.hasPlayed ? 'border-slate-400 bg-slate-400 text-slate-700' : 'border-slate-400 bg-slate-200 text-slate-600'
-                                      }`}>
-                                        {player.shirt_number || '?'}
-                                      </div>
-                                    )}
-                                    
+
                                     {player.team?.logo_url && (
                                       <img src={player.team.logo_url} alt="" className="w-3 h-3 object-contain shrink-0" title={player.team?.name} />
                                     )}
                                     
-                                    {!player.replacedPlayer && (
-                                      <span className="truncate max-w-[50px] shrink">{player.team?.name}</span>
-                                    )}
-                                    
-                                    <span className="shrink-0">· {fmtValor(player.valor || 0)}</span>
+                                    <span className="shrink-0 text-[10px] text-slate-400 font-medium">{fmtValor(player.valor || 0)}</span>
                                   </div>
                                 </div>
 
