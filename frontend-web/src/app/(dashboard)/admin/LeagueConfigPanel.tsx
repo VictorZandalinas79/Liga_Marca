@@ -129,11 +129,19 @@ export function LeagueConfigPanel() {
 
           {/* Pagos por jornada */}
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-2">Pagos por jornada (€)</p>
+            <p className="text-sm font-semibold text-slate-700 mb-2">Pagos por jornada y Ganadores</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <NumberField 
+                label="Porcentaje de ganadores por división (%)" 
+                value={config.winners_percentage} 
+                onChange={(v) => setNum('winners_percentage', v)} 
+                step="1" 
+              />
+            </div>
             <div className="grid grid-cols-3 gap-4">
-              <NumberField label="Ganador" value={config.pay_winner} onChange={(v) => setNum('pay_winner', v)} step="0.5" />
-              <NumberField label="Perdedor" value={config.pay_loser} onChange={(v) => setNum('pay_loser', v)} step="0.5" />
-              <NumberField label="El resto" value={config.pay_rest} onChange={(v) => setNum('pay_rest', v)} step="0.5" />
+              <NumberField label="Ganador (€)" value={config.pay_winner} onChange={(v) => setNum('pay_winner', v)} step="0.5" />
+              <NumberField label="Perdedor (€)" value={config.pay_loser} onChange={(v) => setNum('pay_loser', v)} step="0.5" />
+              <NumberField label="El resto (€)" value={config.pay_rest} onChange={(v) => setNum('pay_rest', v)} step="0.5" />
             </div>
           </div>
 

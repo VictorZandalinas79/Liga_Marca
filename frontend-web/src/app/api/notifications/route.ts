@@ -26,13 +26,18 @@ export async function GET() {
 
   // 2. Notificaciones estándar. Los errores de sincronización ('unmatched') son
   // ruido para el jugador de a pie y tienen su propio panel en Admin: se
-  // descartan en la propia consulta para que no consuman el límite de 50 y
-  // acaben tapando las notificaciones que sí le interesan.
+  // descartan en la propia consulta.
+  //
+  // El límite era 50 y se quedaba corto: la tabla solo guarda las novedades de
+  // la última sincronización (los scripts la vacían al empezar), pero una
+  // pasada normal emite entre 60 y 150 avisos y el corte los truncaba a ciegas.
+  // Como todas las filas de un lote comparten created_at, el recorte era
+  // arbitrario: fichajes y resumen desaparecían bajo la tanda de altas.
   let standardQuery = supabase
     .from('sync_notifications')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(500)
   if (!isAdmin) standardQuery = standardQuery.neq('type', 'unmatched')
 
   const { data: standardNotifications, error: notifError } = await standardQuery

@@ -181,7 +181,8 @@ export default function ClasificacionPage() {
         formations: configData?.formations ?? ['3-5-2', '3-4-3', '4-4-2', '4-3-3', '4-5-1', '5-4-1', '5-3-2'],
         // Nunca por debajo de 1: una jornada 0 o negativa dejaría pasar los
         // registros sin jornada asignada.
-        fantasy_starting_matchday: Math.max(1, configData?.fantasy_starting_matchday ?? 1)
+        fantasy_starting_matchday: Math.max(1, configData?.fantasy_starting_matchday ?? 1),
+        matchday_start_hours_before: configData?.matchday_start_hours_before ?? 1
       }
 
       const { data: fixturesData } = await supabase
@@ -437,7 +438,17 @@ export default function ClasificacionPage() {
             }
 
             const isMatchdayFinished = true; // Clasificacion is for past matchdays
-            const sanctionResult = applySanctionsToTeam(startersList, prevMine, teamHeldByOthersPrev, leagueConfig, !isMatchdayFinished)
+            const sanctionResult = applySanctionsToTeam(
+              startersList, 
+              prevMine, 
+              teamHeldByOthersPrev, 
+              leagueConfig, 
+              !isMatchdayFinished,
+              undefined,
+              undefined,
+              undefined,
+              md === leagueConfig.fantasy_starting_matchday
+            )
 
             // Poner a 0 los puntos de los sancionados
             startersList.forEach(s => {
@@ -672,10 +683,18 @@ export default function ClasificacionPage() {
         }
       })
 
-      // Fetch user_sessions
-      const { data: sessionsData } = await supabase
-        .from('user_sessions')
-        .select('user_id')
+      // Fetch user_sessions (solo desde el bloqueo de la primera jornada jugable)
+      let lockTime: Date | null = null
+      const firstDeadline = matchdayToDeadline.get(leagueConfig.fantasy_starting_matchday)
+      if (firstDeadline) {
+        lockTime = new Date(firstDeadline.getTime() - (leagueConfig.matchday_start_hours_before) * 60 * 60 * 1000)
+      }
+
+      let sessionsQuery = supabase.from('user_sessions').select('user_id')
+      if (lockTime) {
+        sessionsQuery = sessionsQuery.gte('created_at', lockTime.toISOString())
+      }
+      const { data: sessionsData } = await sessionsQuery
       
       const sessionCounts = new Map<string, number>()
       if (sessionsData) {
@@ -917,7 +936,17 @@ export default function ClasificacionPage() {
     const isMatchdayFinished = fixturesForMatchday ? fixturesForMatchday.every((f: any) => f.status === 'finished') : true;
     const prevMine = new Set<string>(prevMatchday >= 1 ? (prevSquadByTeam.get(teamId) || []) : [])
     const starters = jugadores.filter(j => j.is_starter)
-    const sanctionResult = applySanctionsToTeam(starters, prevMine, heldByOthersPrev, config, !isMatchdayFinished)
+    const sanctionResult = applySanctionsToTeam(
+      starters, 
+      prevMine, 
+      heldByOthersPrev, 
+      config, 
+      !isMatchdayFinished,
+      undefined,
+      undefined,
+      undefined,
+      actualMatchday === Math.max(1, config.fantasy_starting_matchday)
+    )
 
     jugadores.forEach(j => {
       if (j.is_starter && sanctionResult.zeroedPlayers.has(j.id)) {

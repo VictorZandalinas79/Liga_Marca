@@ -79,6 +79,27 @@ def save_notifications(notifications: list):
         print(f"🔔 {ok}/{len(notifications)} notificación(es) guardada(s)")
 
 
+def purge_previous_notifications():
+    """Vacía la campana antes de escribir las novedades de esta ejecución.
+
+    La campana enseña lo que ha cambiado en la sincronización en curso, no un
+    histórico: acumular semanas hacía que el límite de la API se llenara de
+    avisos repetidos y dejara fuera lo importante (un fichaje quedaba enterrado
+    bajo 50 'nuevo jugador' de la pasada anterior).
+
+    Se limpia aquí, al arrancar API Core, porque el workflow de Biwenger se
+    encadena a este: así los avisos de los dos scripts son los de la misma
+    cadena. Si Biwenger se lanza suelto, merge_players_data.py hace su propia
+    limpieza contra el último resumen.
+    """
+    try:
+        ahora = datetime.now().astimezone().isoformat()
+        res = supabase.table("sync_notifications").delete().lt("created_at", ahora).execute()
+        print(f"🧹 Campana vaciada: {len(res.data or [])} aviso(s) de ejecuciones anteriores eliminados.")
+    except Exception as e:
+        print(f"⚠️ No se pudieron borrar las notificaciones anteriores: {e}")
+
+
 def send_sync_summary_emails():
     """Consolida las notificaciones acumuladas durante la sincronización y envía un email resumen."""
     global accumulated_notifications
@@ -932,8 +953,20 @@ def sync_players_with_csv(squads_data):
         try:
             # Detectar jugadores nuevos o traspasados para las notificaciones
             try:
-                existing_ids_resp = supabase.table("players").select("id, team_id, precio, photo").execute()
-                existing_player_map = {r['id']: r for r in (existing_ids_resp.data or [])}
+                # Paginado: sin el .range() PostgREST corta en 1000 filas y los
+                # jugadores de más allá parecerían altas nuevas en cada pasada.
+                existing_rows = []
+                page, size = 0, 1000
+                while True:
+                    r = supabase.table("players").select("id, team_id, precio, photo, position") \
+                        .range(page * size, (page + 1) * size - 1).execute()
+                    if not r.data:
+                        break
+                    existing_rows.extend(r.data)
+                    page += 1
+                    if len(r.data) < size:
+                        break
+                existing_player_map = {r['id']: r for r in existing_rows}
                 existing_player_ids = set(existing_player_map.keys())
             except Exception:
                 existing_player_map = {}
@@ -946,6 +979,7 @@ def sync_players_with_csv(squads_data):
             # los viera como "sin precio" y emitiera un 'new_player' para casi
             # toda la liga.
             preserved = 0
+            respetados_biwenger = 0
             for p in players_payload:
                 prev = existing_player_map.get(p.get('id'))
                 if not prev:
@@ -955,8 +989,26 @@ def sync_players_with_csv(squads_data):
                     preserved += 1
                 if not p.get('photo') and prev.get('photo'):
                     p['photo'] = prev['photo']
+
+                # Biwenger manda en posición y equipo para los jugadores que él
+                # cubre (los que ya tienen precio suyo). Opta y Biwenger discrepan
+                # de forma permanente en unos 50 jugadores —cedidos que Opta sigue
+                # colgando del club dueño, extremos que uno llama delantero y el
+                # otro centrocampista—, y como merge_players_data.py vuelve a
+                # escribir el dato de Biwenger justo después, pisarlo aquí solo
+                # producía un pimpón: cada sincronización anunciaba el mismo
+                # 'traspaso' y el mismo 'cambio de posición' en sentido contrario.
+                # Los jugadores que Biwenger no lista (sin precio) sí siguen a Opta.
+                if prev.get('precio') is not None:
+                    if prev.get('position'):
+                        p['position'] = prev['position']
+                    if prev.get('team_id') and p.get('team_id') != prev['team_id']:
+                        p['team_id'] = prev['team_id']
+                        respetados_biwenger += 1
             if preserved:
                 print(f"   ♻️  Precio conservado de la BD para {preserved} jugadores sin match en el CSV.")
+            if respetados_biwenger:
+                print(f"   ♻️  Equipo de Biwenger respetado para {respetados_biwenger} jugadores (Opta discrepa).")
 
             # IMPORTANTE: ignore_duplicates=False para que actualice fotos y precios
             # a jugadores que ya existían pero se les acaba de agregar data en el CSV.
@@ -1038,6 +1090,10 @@ def main():
 
     # 3: Subir Todo a Supabase
     
+    # La campana solo muestra lo de esta cadena de sincronización: se vacía
+    # antes de emitir el primer aviso (los de horarios salen ya en los fixtures).
+    purge_previous_notifications()
+
     # PRIMERO: Subimos los equipos (para que existan en la BD)
     if squads_ok:
         upload_teams_to_supabase(squads_data)

@@ -12,6 +12,7 @@ export interface LeagueConfig {
   matchday_end_hours_after: number
   fantasy_starting_matchday: number
   max_changes_per_matchday: number
+  winners_percentage: number
 }
 
 export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
@@ -25,6 +26,7 @@ export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
   matchday_end_hours_after: 2,
   fantasy_starting_matchday: 1,
   max_changes_per_matchday: 3,
+  winners_percentage: 25,
 }
 
 export interface ParsedFormation {

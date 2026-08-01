@@ -137,7 +137,7 @@ export default function DashboardLayout({
             </span>
             {timeUntilLock && (
               <span className="text-amber-800 text-xs ml-2">
-                (cierra en {timeUntilLock})
+                (finaliza en {timeUntilLock})
               </span>
             )}
           </div>
@@ -216,7 +216,7 @@ export default function DashboardLayout({
         </div>
       </nav>
 
-      <main className="px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-8 max-w-7xl mx-auto">
+      <main className="px-4 sm:px-6 lg:px-8 pt-3 pb-24 md:pb-8 max-w-7xl mx-auto">
         {children}
       </main>
     </div>

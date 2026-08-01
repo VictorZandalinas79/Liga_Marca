@@ -1351,7 +1351,8 @@ export default function DashboardPage() {
     isUnlockWindowOpen,
     prevPenaltiesForSanctions,
     lineupPrevSet,
-    zeroedPrevSet
+    zeroedPrevSet,
+    activeMatchday === Math.max(1, config.fantasy_starting_matchday)
   )
 
   // Calcular estadísticas del equipo (solo visibles durante el tramo de jornada)
@@ -1592,7 +1593,7 @@ export default function DashboardPage() {
                 {timeUntilLock && timeUntilLock !== 'Finalizada' && (
                   <div className="bg-amber-100 px-3 py-1 rounded-lg ml-auto">
                     <p className="text-sm font-bold text-amber-900">
-                      Cierra en: <span className="text-base">{timeUntilLock}</span>
+                      Finaliza en: <span className="text-base">{timeUntilLock}</span>
                     </p>
                   </div>
                 )}

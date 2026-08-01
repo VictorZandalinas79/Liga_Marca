@@ -125,7 +125,8 @@ export async function getStandings(supabase: any, division?: number | null): Pro
         budget_limit: configData?.budget_limit ?? 275,
         max_players_per_team: configData?.max_players_per_team ?? 4,
         formations: configData?.formations ?? ['3-5-2', '3-4-3', '4-4-2', '4-3-3', '4-5-1', '5-4-1', '5-3-2'],
-        fantasy_starting_matchday: configData?.fantasy_starting_matchday ?? 1
+        fantasy_starting_matchday: configData?.fantasy_starting_matchday ?? 1,
+        matchday_start_hours_before: configData?.matchday_start_hours_before ?? 1
       }
 
       // Jornada en la que arranca el juego (Admin → Reglas del Juego). Los
@@ -389,7 +390,17 @@ export async function getStandings(supabase: any, division?: number | null): Pro
             }
 
             const isMatchdayFinished = true; // Clasificacion is for past matchdays
-            const sanctionResult = applySanctionsToTeam(startersList, prevMine, teamHeldByOthersPrev, leagueConfig, !isMatchdayFinished)
+            const sanctionResult = applySanctionsToTeam(
+              startersList, 
+              prevMine, 
+              teamHeldByOthersPrev, 
+              leagueConfig, 
+              !isMatchdayFinished,
+              undefined,
+              undefined,
+              undefined,
+              md === leagueConfig.fantasy_starting_matchday
+            )
 
             // Poner a 0 los puntos de los sancionados
             startersList.forEach(s => {
@@ -624,10 +635,18 @@ export async function getStandings(supabase: any, division?: number | null): Pro
         }
       })
 
-      // Fetch user_sessions
-      const { data: sessionsData } = await supabase
-        .from('user_sessions')
-        .select('user_id')
+      // Fetch user_sessions (solo desde el bloqueo de la primera jornada jugable)
+      let lockTime: Date | null = null
+      const firstDeadline = matchdayToDeadline.get(fantasyStart)
+      if (firstDeadline) {
+        lockTime = new Date(firstDeadline.getTime() - (leagueConfig.matchday_start_hours_before) * 60 * 60 * 1000)
+      }
+
+      let sessionsQuery = supabase.from('user_sessions').select('user_id')
+      if (lockTime) {
+        sessionsQuery = sessionsQuery.gte('created_at', lockTime.toISOString())
+      }
+      const { data: sessionsData } = await sessionsQuery
       
       const sessionCounts = new Map<string, number>()
       if (sessionsData) {

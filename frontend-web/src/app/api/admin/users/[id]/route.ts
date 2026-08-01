@@ -31,6 +31,8 @@ export async function PATCH(
       ...(cur?.user?.user_metadata ?? {}),
       full_name: String(body.full_name ?? ''),
     }
+    update.full_name = String(body.full_name ?? '')
+    touchProfile = true
   }
   if (Object.keys(authUpdate).length > 0) {
     const { error } = await admin.auth.admin.updateUserById(id, authUpdate)

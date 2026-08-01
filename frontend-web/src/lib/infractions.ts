@@ -134,8 +134,17 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
   const config = {
     budget_limit: configData?.budget_limit ?? 300,
     max_players_per_team: configData?.max_players_per_team ?? 4,
-    formations: configData?.formations ?? ["3-5-2", "3-4-3", "4-4-2", "4-3-3", "4-5-1", "5-4-1", "5-3-2"]
+    formations: configData?.formations ?? ["3-5-2", "3-4-3", "4-4-2", "4-3-3", "4-5-1", "5-4-1", "5-3-2"],
+    max_changes_per_matchday: configData?.max_changes_per_matchday ?? 3
   }
+
+  // Jornada en la que arranca el juego (Admin → Reglas del Juego). No tiene por
+  // qué ser la J1 de la liga real, así que el histórico de sanciones se
+  // construye desde ella: lo que los usuarios guardaran en jornadas anteriores
+  // no es una alineación "oficial" y no puede generar multas ni contar como
+  // plantilla previa.
+  const fantasyStart = Math.max(1, configData?.fantasy_starting_matchday ?? 1)
+  if (matchday < fantasyStart) return []
 
   // Función helper para paginación
   async function fetchAll<T>(table: string, select: string, matchdayFilter?: number): Promise<T[]> {
@@ -202,18 +211,20 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
   const zeroedHistory: { [m: number]: { [teamId: string]: Set<string> } } = {}
   const penaltiesHistory: { [m: number]: { [teamId: string]: any[] } } = {}
 
+  // El estado "anterior" a la primera jornada del juego está vacío a propósito:
+  // nadie arrastra plantilla, ni multas, ni exclusividad sobre ningún jugador.
   const teamIds = teams.map(t => t.id)
-  lineupHistory[0] = {}
-  zeroedHistory[0] = {}
-  penaltiesHistory[0] = {}
+  lineupHistory[fantasyStart - 1] = {}
+  zeroedHistory[fantasyStart - 1] = {}
+  penaltiesHistory[fantasyStart - 1] = {}
   teamIds.forEach(tid => {
-    lineupHistory[0][tid] = new Set()
-    zeroedHistory[0][tid] = new Set()
-    penaltiesHistory[0][tid] = []
+    lineupHistory[fantasyStart - 1][tid] = new Set()
+    zeroedHistory[fantasyStart - 1][tid] = new Set()
+    penaltiesHistory[fantasyStart - 1][tid] = []
   })
 
-  // 6. Calcular secuencialmente desde J1 hasta la jornada actual
-  for (let m = 1; m <= matchday; m++) {
+  // 6. Calcular secuencialmente desde el arranque del juego hasta la jornada actual
+  for (let m = fantasyStart; m <= matchday; m++) {
     lineupHistory[m] = {}
     zeroedHistory[m] = {}
     penaltiesHistory[m] = {}
@@ -273,7 +284,8 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
         false, // no es en vivo para el cálculo de historial intermedio
         prevPenalties,
         lineupPrev,
-        zeroedPrev
+        zeroedPrev,
+        m === fantasyStart
       )
 
       zeroedHistory[m][tid] = new Set(result.zeroedPlayers.keys())
@@ -319,12 +331,29 @@ export function applySanctionsToTeam(
   starters: any[],
   prevMine: Set<string>,
   heldByOthersPrev: Map<string, string[]>,
-  config: { budget_limit: number; max_players_per_team: number; formations: string[] },
+  config: { budget_limit: number; max_players_per_team: number; formations: string[]; max_changes_per_matchday?: number },
   isLive: boolean = false,
   prevPenalties?: any[],
   lineupPrev?: Set<string>,
-  zeroedPrev?: Set<string>
+  zeroedPrev?: Set<string>,
+  isFirstMatchday: boolean = false
 ): PlayerSanctionResult {
+  // La jornada en la que arranca el juego (Admin → Reglas del Juego) no tiene
+  // jornada anterior a efectos de sanciones, aunque la liga real lleve ya 20
+  // jornadas jugadas: se sale de cero. Eso significa cambios libres y libertad
+  // para alinear a cualquiera, porque nadie tenía todavía plantilla que
+  // respetar; lo que hubiera guardado en jornadas previas no cuenta.
+  //
+  // Las sanciones que no miran al pasado —presupuesto, táctica, máximo por
+  // equipo real y jugadores duplicados— sí se aplican con normalidad.
+  if (isFirstMatchday) {
+    prevMine = new Set()
+    heldByOthersPrev = new Map()
+    prevPenalties = undefined
+    lineupPrev = undefined
+    zeroedPrev = undefined
+  }
+
   const zeroedPlayers = new Map<string, string>()
 
   const points = new Map<string, number>()
@@ -651,16 +680,19 @@ export function applySanctionsToTeam(
     }
   }
 
-  // 5) Exceso de cambios (máx. 3 cambios, salvo J1 y excepción de multas previas)
+  // 5) Exceso de cambios (salvo la primera jornada del juego y excepción de
+  //    multas previas). El máximo lo fija el admin; antes estaba fijo en 3 aquí
+  //    y el script de Python sí leía la configuración, así que la vista en vivo
+  //    y las multas persistidas podían no coincidir.
   if (lineupPrev && lineupPrev.size > 0) {
     const newPlayers = starters.filter(s => !lineupPrev.has(s.id))
     const numChanges = newPlayers.length
-    
+
     const penalizedPrev = zeroedPrev || new Set<string>()
     const replacedPenalized = [...penalizedPrev].filter(pid => !starters.some(s => s.id === pid))
     const replacedPenalizedCount = replacedPenalized.length
-    
-    const allowedChanges = 3 + replacedPenalizedCount
+
+    const allowedChanges = (config.max_changes_per_matchday ?? 3) + replacedPenalizedCount
     if (numChanges > allowedChanges) {
       const excess = numChanges - allowedChanges
       const newPlayersSorted = [...newPlayers].sort((a, b) => (b.puntos ?? 0) - (a.puntos ?? 0))

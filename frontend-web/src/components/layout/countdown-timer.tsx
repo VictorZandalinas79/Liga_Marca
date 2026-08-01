@@ -11,7 +11,7 @@ export function CountdownTimer() {
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-400/20 border border-amber-400/50">
         <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
         <span className="text-xs font-bold text-amber-600">
-          Cierra en: <span className="text-sm font-mono">{timeUntilLock}</span>
+          Finaliza en: <span className="text-sm font-mono">{timeUntilLock}</span>
         </span>
       </div>
     )

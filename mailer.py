@@ -74,15 +74,15 @@ def build_summary_html(notifications: list, stats: dict | None = None) -> str:
         ("Altas provisionales (solo Biwenger)", stats.get("provisional")),
         ("Promovidos a ficha oficial", stats.get("promoted")),
         ("Sin resolver", stats.get("unmatched")),
-        ("Eliminados por sobrantes", stats.get("deleted")),
-        ("Sobrantes conservados (están fichados)", stats.get("protected")),
+        ("En la API pero no en Biwenger (se conservan)", stats.get("sobrantes")),
+        ("Fichados que ya no están en Biwenger", stats.get("protected")),
     ]
     parts.append("<h3 style='color:#1e293b;margin:0 0 12px;'>📊 Resumen</h3>")
     parts.append("<table style='width:100%;border-collapse:collapse;font-size:14px;'>")
     for label, value in rows:
         if value is None:
             continue
-        alerta = label.startswith(("Sin resolver", "Sobrantes conservados"))
+        alerta = label.startswith(("Sin resolver", "Fichados que ya no"))
         color = "#b91c1c" if value and alerta else "#1e293b"
         parts.append(
             f"<tr><td style='padding:6px 0;color:#4b5563;'>{label}</td>"

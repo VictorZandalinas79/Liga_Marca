@@ -175,15 +175,11 @@ export function NotificationBell() {
           return n
         })
 
-        // Filtrar notificaciones para mostrar solo las de los últimos 5 días
-        const fiveDaysAgo = new Date()
-        fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5)
-        
-        const recentNotifications = processed.filter((n: Notification) => {
-          return new Date(n.created_at) >= fiveDaysAgo
-        })
-
-        setNotifications(recentNotifications)
+        // Sin filtro por fecha: la tabla solo contiene ya las novedades de la
+        // última sincronización, porque los scripts la vacían al empezar. El
+        // corte de 5 días que había aquí solo servía para dejar la campana en
+        // blanco si el workflow se retrasaba.
+        setNotifications(processed)
       }
     } catch {}
   }

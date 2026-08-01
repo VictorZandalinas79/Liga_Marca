@@ -496,8 +496,10 @@ def run_matchday(sb, matchday):
     winners = set()
     losers = set()
     
+    win_perc = float(cfg.get("winners_percentage", 25)) / 100.0
+    
     def get_quarter(n):
-        return max(1, round(n / 4.0)) if n > 0 else 0
+        return max(1, round(n * win_perc)) if n > 0 else 0
 
     # 1ª División
     r1 = div_results[1]

@@ -387,17 +387,22 @@ def find_transfer(bw_name, bw_date, team_id, all_api_players, matched_api_ids):
     if not candidatos:
         return None, 0.0
 
-    mejor, score = best_by_name(bw_name, candidatos)
-    if not mejor:
-        return None, 0.0
+    # 1. Primero la fecha, y el nombre solo para confirmar (>= 0.60).
+    #    El orden importa: buscar antes el mejor nombre de toda la liga y
+    #    comprobarle la fecha después perdía fichajes reales, porque Opta usa el
+    #    apodo donde Biwenger pone el nombre largo ('Yuri' / 'Yuri Berchiche',
+    #    0.44) y ganaba cualquier desconocido con más parecido. El jugador se
+    #    daba de alta como provisional y su ficha buena se quedaba huérfana.
+    if bw_date:
+        por_fecha = [p for p in candidatos if p.get('date_of_birth') == bw_date]
+        if por_fecha:
+            mejor, score = best_by_name(bw_name, por_fecha)
+            if mejor and score >= TRANSFER_NAME_MIN:
+                return mejor, score
 
-    # 1. Coincide la fecha de nacimiento (exigimos nombre >= 0.60)
-    if bw_date and mejor.get('date_of_birth') == bw_date:
-        if score >= TRANSFER_NAME_MIN:
-            return mejor, score
-            
-    # 2. No coincide la fecha (o no hay), pero el nombre es idéntico (>= 0.90)
-    if score >= NAME_ONLY_MIN:
+    # 2. No coincide la fecha (o no hay), pero el nombre es idéntico (>= 0.90).
+    mejor, score = best_by_name(bw_name, candidatos)
+    if mejor and score >= NAME_ONLY_MIN:
         return mejor, score
 
     return None, score
@@ -470,6 +475,38 @@ def save_notifications(notifications, chunk_size=100):
     return saved, failed
 
 
+def purge_previous_notifications():
+    """Borra los avisos de sincronizaciones anteriores a la actual.
+
+    La campana enseña las novedades de la ejecución en curso, no un histórico.
+    Normalmente esto no encuentra nada que borrar porque API Core ya vació la
+    tabla al arrancar la cadena; hace falta para cuando el workflow de Biwenger
+    se lanza suelto (workflow_dispatch), que entonces es él quien empieza la
+    ejecución.
+
+    El corte es el último 'sync_complete': lo escribe este script al terminar,
+    así que todo lo que sea igual o anterior pertenece a la cadena previa, y lo
+    posterior son los avisos que acaba de emitir API Core en esta misma cadena.
+    """
+    try:
+        ultimo = supabase.table("sync_notifications").select("created_at") \
+            .eq("type", "sync_complete").order("created_at", desc=True).limit(1).execute().data
+    except Exception as e:
+        print(f"-> Aviso: no se pudo leer el último resumen ({e}). No se limpia nada.")
+        return
+
+    if not ultimo:
+        # Sin resumen previo: o es la primera vez, o API Core ya ha vaciado.
+        return
+
+    corte = ultimo[0]["created_at"]
+    try:
+        res = supabase.table("sync_notifications").delete().lte("created_at", corte).execute()
+        print(f"-> Campana vaciada: {len(res.data or [])} aviso(s) de la ejecución anterior eliminados.")
+    except Exception as e:
+        print(f"-> Aviso: no se pudieron borrar las notificaciones anteriores ({e}).")
+
+
 def build_sync_summary(notifications, stats, cold_start=False):
     """Notificación única con el balance del sync, para la campana.
 
@@ -508,9 +545,10 @@ def build_sync_summary(notifications, stats, cold_start=False):
         ("new_player", "jugador nuevo", "jugadores nuevos"),
         ("provisional_player", "alta provisional", "altas provisionales"),
         ("player_promoted", "ficha confirmada", "fichas confirmadas"),
-        # 'team_changed' ya no lo emite este script: los traspasos los detecta
-        # API Core contra los squads de Opta (squad_changed) y aquí un jugador
-        # solo se empareja dentro del equipo que dice Biwenger.
+        # Los fichajes que detecta la pasada 3 (Biwenger le pone en un equipo
+        # distinto del que le tiene la API). Faltaban en este recuento, así que
+        # ni el resumen —la línea que siempre encabeza la campana— los mencionaba.
+        ("team_changed", "fichaje", "fichajes"),
         ("position_changed", "cambio de posición", "cambios de posición"),
         ("photo_changed", "foto nueva", "fotos nuevas"),
     ]:
@@ -524,10 +562,8 @@ def build_sync_summary(notifications, stats, cold_start=False):
     sin_match = stats.get("unmatched", 0)
     if sin_match:
         body += f" {sin_match} jugadores de Biwenger no se han podido dar de alta."
-    if stats.get("deleted"):
-        body += f" {stats['deleted']} eliminados por sobrantes."
     if stats.get("protected"):
-        body += f" {stats['protected']} sobrantes conservados por estar fichados."
+        body += f" {stats['protected']} jugadores fichados ya no están en Biwenger."
 
     return {
         "type": "sync_complete",
@@ -541,7 +577,7 @@ def build_sync_summary(notifications, stats, cold_start=False):
             f"Biwenger: {stats['biwenger_total']} | BD: {stats['api_total']} | "
             f"Emparejados: {stats['matched']} | Provisionales: {stats.get('provisional', 0)} | "
             f"Promovidos: {stats.get('promoted', 0)} | Sin dar de alta: {sin_match} | "
-            f"Eliminados: {stats.get('deleted', 0)} | Protegidos: {stats.get('protected', 0)}"
+            f"Fuera de Biwenger: {stats.get('sobrantes', 0)} | Fichados fuera: {stats.get('protected', 0)}"
         ),
     }
 
@@ -576,8 +612,8 @@ def main():
         if len(resp.data) < size:
             break
             
-    print("-> Limpiando notificaciones de jugadores no encontrados anteriores...")
-    supabase.table("sync_notifications").delete().eq("type", "unmatched").execute()
+    print("-> Limpiando la campana de la ejecución anterior...")
+    purge_previous_notifications()
 
     # Columnas opcionales que solo existen si la migración 013 está aplicada.
     extra_columns = set(all_api_players[0].keys()) if all_api_players else set()
@@ -878,29 +914,36 @@ def main():
                         print(f"   No se pudo dar de alta a {row.get('short_name')}: {e2}")
         print(f"-> {provisionals_saved} provisionales en la BD.")
 
-    # 5. Culling (Deleting non-Biwenger players)
-    print("5. Eliminando jugadores sobrantes de la API...")
-    to_delete_ids = [p['id'] for p in all_api_players if p['id'] not in matched_api_ids]
+    # 5. Jugadores de la API que Biwenger no lista
+    #
+    # Ya NO se borran. Biwenger publica ~530 jugadores y Opta ~590: la
+    # diferencia son reservas y canteranos que existen de verdad. Borrarlos
+    # aquí y que API Core los volviera a crear en la siguiente pasada era un
+    # ciclo perpetuo: cada sincronización anunciaba a los mismos ~50 como
+    # 'nuevo jugador' (47 de los 56 del 1 de agosto eran repetidos del día
+    # anterior), llenaba la campana y de paso les borraba el historial. Se
+    # quedan en la BD sin precio de Biwenger.
+    print("5. Revisando jugadores de la API que no están en Biwenger...")
+    sobrantes_ids = [p['id'] for p in all_api_players if p['id'] not in matched_api_ids]
+    print(f"-> {len(sobrantes_ids)} jugadores de la API fuera de Biwenger. Se conservan.")
 
-    # team_players.player_id no es ON DELETE CASCADE: borrar un jugador que
-    # alguien tiene fichado reventaría el sync entero. Se deja en la BD y se
-    # avisa al admin para que decida.
-    protegidos = set()
-    if to_delete_ids:
-        for i in range(0, len(to_delete_ids), 100):
-            lote = to_delete_ids[i:i+100]
+    # Lo único que sigue mereciendo un aviso es que alguien tenga fichado a un
+    # jugador que ha desaparecido del mercado: eso hay que mirarlo a mano.
+    fichados_fuera = set()
+    if sobrantes_ids:
+        for i in range(0, len(sobrantes_ids), 100):
+            lote = sobrantes_ids[i:i+100]
             try:
                 filas = supabase.table("team_players").select("player_id").in_("player_id", lote).execute().data or []
-                protegidos.update(f["player_id"] for f in filas)
+                fichados_fuera.update(f["player_id"] for f in filas)
             except Exception as e:
-                print(f"-> Aviso: no se pudo comprobar team_players ({e}). No se borra nada por precaución.")
-                protegidos.update(to_delete_ids)
+                print(f"-> Aviso: no se pudo comprobar team_players ({e}).")
                 break
 
-    if protegidos:
+    if fichados_fuera:
         nombres_por_id = {p["id"]: api_display_name(p) for p in all_api_players}
-        print(f"-> {len(protegidos)} sobrantes NO se borran porque están en alguna plantilla:")
-        for pid in sorted(protegidos):
+        print(f"-> {len(fichados_fuera)} de ellos están en alguna plantilla:")
+        for pid in sorted(fichados_fuera):
             nombre = nombres_por_id.get(pid, pid)
             print(f"   · {nombre} ({pid})")
             notifications.append({
@@ -911,17 +954,24 @@ def main():
                 "player_name": nombre,
                 "team_id": None,
                 "team_name": None,
-                "message": "No se ha borrado para no romper las plantillas. Revisar a mano.",
+                "message": "Se conserva en la BD sin precio de Biwenger. Revisar a mano.",
             })
 
-    borrables = [pid for pid in to_delete_ids if pid not in protegidos]
-    if borrables:
-        print(f"-> Se van a eliminar {len(borrables)} jugadores sobrantes.")
-        for i in range(0, len(borrables), 100):
-            batch_ids = borrables[i:i+100]
-            supabase.table("players").delete().in_("id", batch_ids).execute()
-    else:
-        print("-> No hay jugadores sobrantes que eliminar.")
+    # La excepción son los provisionales huérfanos: filas 'bw-' que creó una
+    # pasada anterior y que Biwenger ya no lista. No tienen ficha en Opta ni
+    # historial que perder, y API Core no las recrea nunca (sus ids no existen
+    # en la API), así que borrarlas no reabre el ciclo de altas repetidas.
+    prov_huerfanos = [
+        p['id'] for p in all_api_players
+        if p['id'] in set(sobrantes_ids) and is_provisional(p) and p['id'] not in fichados_fuera
+    ]
+    if prov_huerfanos:
+        print(f"-> Borrando {len(prov_huerfanos)} provisionales que ya no están en Biwenger.")
+        for i in range(0, len(prov_huerfanos), 100):
+            try:
+                supabase.table("players").delete().in_("id", prov_huerfanos[i:i+100]).execute()
+            except Exception as e:
+                print(f"   Aviso: no se pudieron borrar ({e}).")
 
     # 6. Notifications
     stats = {
@@ -933,8 +983,8 @@ def main():
         # Lo único que queda fuera de la BD es una fila cuyo equipo no está en
         # TEAM_MAPPING; el resto de no-emparejados entran como provisionales.
         "unmatched": len(not_found) - len(new_provisionals),
-        "deleted": len(borrables),
-        "protected": len(protegidos),
+        "sobrantes": len(sobrantes_ids),
+        "protected": len(fichados_fuera),
     }
 
     summary = build_sync_summary(notifications, stats, cold_start=cold_start)
@@ -949,15 +999,8 @@ def main():
     failed += failed_summary
     print(f"-> {saved} notificaciones guardadas, {failed} descartadas.")
 
-    print("6.5 Limpiando notificaciones antiguas...")
-    try:
-        from datetime import timedelta
-        cutoff_date = (datetime.now() - timedelta(days=7)).isoformat()
-        res = supabase.table("sync_notifications").delete().lt("created_at", cutoff_date).execute()
-        deleted_count = len(res.data) if res.data else 0
-        print(f"-> Se eliminaron {deleted_count} notificaciones con más de 7 días de antigüedad.")
-    except Exception as e:
-        print(f"-> Error al limpiar notificaciones antiguas: {e}")
+    # La purga de 7 días ya no hace falta: la campana se vacía al empezar cada
+    # ejecución, así que nunca quedan avisos de sincronizaciones pasadas.
 
     print("7. Enviando email resumen...")
     destinatarios = admin_emails()
