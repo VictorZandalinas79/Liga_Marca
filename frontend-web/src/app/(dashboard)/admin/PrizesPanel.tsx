@@ -52,25 +52,24 @@ export function PrizesPanel() {
   useEffect(() => {
     const fetchPot = async () => {
       const supabase = createClient()
-      const { data: users, error } = await supabase.from('profiles').select('id, amount_paid')
+      const { data: users, error } = await supabase.from('profiles').select('id, amount_paid, entry_fee_paid, infraction_penalties')
       if (error) {
         console.error("Error fetching users for pot", error)
         return
       }
 
       if (users) {
-        const totalUsers = users.length
-        const totalAmountPaid = users.reduce((acc, u) => acc + (u.amount_paid || 0), 0)
-        const fee = configValues.entry_fee ?? baseConfig.entry_fee ?? 50
-        setTotalPot((totalUsers * fee) + totalAmountPaid)
+        let total = 0
+        for (const u of users) {
+          total += (u.entry_fee_paid || 0) + (u.amount_paid || 0) + (u.infraction_penalties || 0)
+        }
+        setTotalPot(total)
       }
       setLoading(false)
     }
 
-    if (configValues.entry_fee !== undefined) {
-      fetchPot()
-    }
-  }, [configValues.entry_fee, baseConfig.entry_fee])
+    fetchPot()
+  }, [])
 
   const saveConfig = async () => {
     setSaving(true)
@@ -132,11 +131,7 @@ export function PrizesPanel() {
           <div className="text-4xl font-black text-amber-600 tracking-tight">
             {totalPot.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
           </div>
-          <p className="text-xs text-amber-700/70 mt-2 font-medium">Bote base (Usuarios × Cuota) + Penalizaciones de jornadas</p>
-        </div>
-
-        <div className="mb-8 max-w-sm">
-          <NumberField label="Cuota de Inscripción por Usuario (€)" value={configValues.entry_fee} onChange={(v) => setNum('entry_fee', v)} step="1" />
+          <p className="text-xs text-amber-700/70 mt-2 font-medium">Bote = Suma de todas las cuotas iniciales + todas las sanciones/multas</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

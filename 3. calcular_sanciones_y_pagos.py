@@ -451,6 +451,15 @@ def run_matchday(sb, matchday):
             zeroed_history[m][tid] = zeroed
             penalties_history[m][tid] = sanctions
 
+    # Contar sanciones previas por usuario para aplicar delta económico
+    old_pen_res = sb.table("penalties").select("user_id").eq("matchday", matchday).execute()
+    old_pen_counts = {}
+    if old_pen_res.data:
+        for row in old_pen_res.data:
+            uid = row.get("user_id")
+            if uid:
+                old_pen_counts[uid] = old_pen_counts.get(uid, 0) + 1
+
     # Limpia sanciones previas de esta jornada (idempotencia)
     try:
         sb.table("penalties").delete().eq("matchday", matchday).execute()
@@ -474,6 +483,19 @@ def run_matchday(sb, matchday):
                 "team_id": team_id, "user_id": user_id,
                 "matchday": matchday, "description": desc, "points": pts,
             })
+        
+        # Calcular diferencia de multas para este usuario
+        if user_id:
+            old_count = old_pen_counts.get(user_id, 0)
+            new_count = len(sanctions)
+            infraction_cost = cfg.get("infraction_penalty_cost", 3)
+            delta_infraction = float(new_count - old_count) * float(infraction_cost)
+            
+            if delta_infraction != 0:
+                prof = sb.table("profiles").select("infraction_penalties").eq("id", user_id).limit(1).execute()
+                base_inf = float(prof.data[0]["infraction_penalties"] or 0) if prof.data else 0
+                sb.table("profiles").update({"infraction_penalties": base_inf + delta_infraction}).eq("id", user_id).execute()
+
         results.append((team_id, user_id, raw, penalty_total, raw - penalty_total))
 
     if penalty_rows:

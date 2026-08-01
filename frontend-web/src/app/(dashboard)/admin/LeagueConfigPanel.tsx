@@ -162,10 +162,26 @@ export function LeagueConfigPanel() {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
               <NumberField label="Ganador (€)" value={config.pay_winner} onChange={(v) => setNum('pay_winner', v)} step="0.5" />
               <NumberField label="Perdedor (€)" value={config.pay_loser} onChange={(v) => setNum('pay_loser', v)} step="0.5" />
               <NumberField label="El resto (€)" value={config.pay_rest} onChange={(v) => setNum('pay_rest', v)} step="0.5" />
+            </div>
+            
+            <p className="text-sm font-semibold text-slate-700 mt-6 mb-2">Sanciones e Infracciones</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <NumberField 
+                label="Saldo Inicial (Virtual)" 
+                value={config.starting_balance} 
+                onChange={(v) => setNum('starting_balance', v)} 
+                step="1" 
+              />
+              <NumberField 
+                label="Penalización por infracción (Alineación, Táctica...)" 
+                value={config.infraction_penalty_cost} 
+                onChange={(v) => setNum('infraction_penalty_cost', v)} 
+                step="0.5" 
+              />
             </div>
           </div>
 

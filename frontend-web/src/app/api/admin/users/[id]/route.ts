@@ -62,7 +62,12 @@ export async function PATCH(
   }
   if ('amount_paid' in body) {
     const n = Number(body.amount_paid)
-    update.amount_paid = Number.isFinite(n) && n >= 0 ? n : 0
+    update.amount_paid = Number.isFinite(n) ? n : 0
+    touchProfile = true
+  }
+  if ('entry_fee_paid' in body) {
+    const n = Number(body.entry_fee_paid)
+    update.entry_fee_paid = Number.isFinite(n) && n >= 0 ? n : 0
     touchProfile = true
   }
   if ('division' in body) {

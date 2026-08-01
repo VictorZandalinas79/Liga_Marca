@@ -28,6 +28,8 @@ export interface LeagueConfig {
   prize_div3_1st: number
   prize_div3_2nd: number
   prize_div3_3rd: number
+  starting_balance: number
+  infraction_penalty_cost: number
 }
 
 export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
@@ -57,6 +59,8 @@ export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
   prize_div3_1st: 8,
   prize_div3_2nd: 5,
   prize_div3_3rd: 3,
+  starting_balance: 40,
+  infraction_penalty_cost: 3,
 }
 
 export interface ParsedFormation {

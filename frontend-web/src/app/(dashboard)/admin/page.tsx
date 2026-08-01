@@ -9,6 +9,7 @@ import { LeagueConfigPanel } from './LeagueConfigPanel'
 import { ScoringConfigPanel } from './ScoringConfigPanel'
 import { UnmatchedPlayersPanel } from './UnmatchedPlayersPanel'
 import { PrizesPanel } from './PrizesPanel'
+import { useLeagueConfig } from '@/lib/league-config'
 
 type AdminUser = {
   id: string
@@ -19,6 +20,8 @@ type AdminUser = {
   paid_at: string | null
   amount_paid: number
   division: number | null
+  entry_fee_paid: number
+  infraction_penalties: number
   created_at: string
 }
 
@@ -39,6 +42,7 @@ function formatEuro(n: number): string {
 }
 
 export default function AdminPage() {
+  const config = useLeagueConfig()
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -135,17 +139,21 @@ export default function AdminPage() {
   }, [users])
 
   const exportCsv = () => {
-    const headers = ['Nombre', 'Email', 'Teléfono', 'División', 'Ha pagado', 'Importe (€)', 'Fecha de pago', 'Fecha de registro']
+    const headers = ['Nombre', 'Email', 'Teléfono', 'División', 'Ha pagado', 'Cuota Inicial (€)', 'Sanciones (€)', 'Dinero Actual (€)', 'Fecha de pago', 'Fecha de registro']
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
-    const rows = filtered.map((u) =>
-      [
+    const rows = filtered.map((u) => {
+      const sanciones = (u.amount_paid || 0) + (u.infraction_penalties || 0)
+      const dineroActual = (config.starting_balance ?? 40) - sanciones
+      return [
         u.full_name, u.email, u.phone,
         divisionLabel(u.division),
         u.has_paid ? 'Sí' : 'No',
-        (u.amount_paid || 0).toFixed(2).replace('.', ','),
+        (u.entry_fee_paid || 0).toFixed(2).replace('.', ','),
+        sanciones.toFixed(2).replace('.', ','),
+        dineroActual.toFixed(2).replace('.', ','),
         formatDate(u.paid_at), formatDate(u.created_at),
       ].map((v) => escape(String(v ?? ''))).join(',')
-    )
+    })
     const csv = '﻿' + [headers.map(escape).join(','), ...rows].join('\r\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -269,7 +277,9 @@ export default function AdminPage() {
                 <th className="px-4 py-3 font-semibold">Teléfono</th>
                 <th className="px-4 py-3 font-semibold">Registro</th>
                 <th className="px-4 py-3 font-semibold">División</th>
-                <th className="px-4 py-3 font-semibold">Importe (€)</th>
+                <th className="px-4 py-3 font-semibold">Cuota Inicial</th>
+                <th className="px-4 py-3 font-semibold">Sanciones</th>
+                <th className="px-4 py-3 font-semibold">Dinero Actual</th>
                 <th className="px-4 py-3 font-semibold">Fecha de pago</th>
                 <th className="px-4 py-3 font-semibold text-center">Estado</th>
                 <th className="px-4 py-3 font-semibold text-center">Acciones</th>
@@ -308,21 +318,36 @@ export default function AdminPage() {
                       </select>
                     </td>
 
-                    {/* Importe editable */}
+                    {/* Cuota inicial editable */}
                     <td className="px-4 py-3">
                       <div className="relative w-28">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">€</span>
                         <input
                           type="number" min="0" step="0.5"
-                          defaultValue={u.amount_paid || ''}
+                          defaultValue={u.entry_fee_paid || ''}
                           disabled={savingId === u.id}
                           onBlur={(e) => {
                             const val = e.target.value === '' ? 0 : Number(e.target.value)
-                            if (val !== (u.amount_paid || 0)) saveUser(u.id, { amount_paid: val }).catch(() => {})
+                            if (val !== (u.entry_fee_paid || 0)) saveUser(u.id, { entry_fee_paid: val }).catch(() => {})
                           }}
                           placeholder="0"
                           className="w-full pl-6 pr-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm"
                         />
+                      </div>
+                    </td>
+
+                    {/* Sanciones (readonly) */}
+                    <td className="px-4 py-3">
+                      <div className="text-red-600 font-semibold">
+                        -{((u.amount_paid || 0) + (u.infraction_penalties || 0)).toFixed(2)}€
+                      </div>
+                    </td>
+
+                    {/* Dinero Actual (readonly) */}
+                    <td className="px-4 py-3">
+                      <div className={`font-bold ${((config.starting_balance ?? 40) - (u.amount_paid || 0) - (u.infraction_penalties || 0)) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {(((config.starting_balance ?? 40) - (u.amount_paid || 0) - (u.infraction_penalties || 0)) >= 0 ? '+' : '')}
+                        {((config.starting_balance ?? 40) - (u.amount_paid || 0) - (u.infraction_penalties || 0)).toFixed(2)}€
                       </div>
                     </td>
 
