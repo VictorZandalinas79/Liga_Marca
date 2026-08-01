@@ -70,6 +70,13 @@ export default function ClasificacionPage() {
   const [currentUserDivision, setCurrentUserDivision] = useState<number | null>(null)
   const supabase = createClient()
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  // Cada fetch lleva un id. Si mientras está en vuelo arranca otro (cambio de
+  // división, de orden o el refresco automático), el viejo se descarta al volver
+  // para que una respuesta lenta no pise datos más nuevos.
+  const fetchIdRef = useRef(0)
+  // Filtros con los que se pintó la tabla por última vez. Si no han cambiado, el
+  // fetch viene del refresco automático y se actualiza en silencio, sin loader.
+  const lastFetchKeyRef = useRef<string | null>(null)
 
   const fetchMatchdays = async () => {
     const { data: statusData } = await supabase
@@ -86,8 +93,19 @@ export default function ClasificacionPage() {
 
   useEffect(() => {
     if (selectedDivision == null) return
+
+    // El loader a pantalla completa solo se muestra cuando el fetch lo provoca el
+    // usuario (primera carga, cambio de división o de orden). El refresco de cada
+    // 30 s reemplaza los datos en silencio para que la tabla no parpadee.
+    const fetchKey = `${sortField}|${sortOrder}|${selectedDivision}`
+    const isBackgroundRefresh = lastFetchKeyRef.current === fetchKey
+    lastFetchKeyRef.current = fetchKey
+
+    const fetchId = ++fetchIdRef.current
+    const isStale = () => fetchIdRef.current !== fetchId
+
     const fetchStandings = async () => {
-      setLoading(true)
+      if (!isBackgroundRefresh) setLoading(true)
       await fetchMatchdays()
 
       // Si selectedDivision es 0 (Conjunta), traemos a todos los usuarios que tengan división asignada
@@ -97,12 +115,23 @@ export default function ClasificacionPage() {
       } else {
         divQuery = divQuery.not('division', 'is', null)
       }
-      const { data: divProfiles } = await divQuery
+      const { data: divProfiles, error: divError } = await divQuery
       const divisionUserIds = new Set((divProfiles ?? []).map((p: any) => p.id as string))
 
-      const { data: userTeamsRaw } = await supabase
+      const { data: userTeamsRaw, error: userTeamsError } = await supabase
         .from('user_teams')
         .select('id, user_id, name')
+
+      if (isStale()) return
+
+      // Si una de las dos consultas falla durante un refresco automático, salimos
+      // sin tocar nada: vaciar la tabla por un fallo puntual de red la haría
+      // desaparecer sola.
+      if (divError || userTeamsError) {
+        console.error('[CLASIFICACION] Error cargando usuarios de la división:', divError ?? userTeamsError)
+        if (!isBackgroundRefresh) setLoading(false)
+        return
+      }
 
       const userTeamsData = (userTeamsRaw ?? []).filter((ut: any) => divisionUserIds.has(ut.user_id))
 
@@ -136,6 +165,7 @@ export default function ClasificacionPage() {
       }
 
       const teamPlayers: { team_id: string; player_id: string; is_starter: boolean; is_captain: boolean; matchday: number; created_at?: string }[] = []
+      let teamPlayersIncompleto = false
       {
         const pageSize = 1000
         let from = 0
@@ -147,6 +177,7 @@ export default function ClasificacionPage() {
             .range(from, from + pageSize - 1)
           if (error) {
             console.error('[CLASIFICACION] Error cargando team_players:', error)
+            teamPlayersIncompleto = true
             break
           }
           if (!page || page.length === 0) break
@@ -154,6 +185,15 @@ export default function ClasificacionPage() {
           if (page.length < pageSize) break
           from += pageSize
         }
+      }
+
+      if (isStale()) return
+
+      // Con las plantillas a medias saldrían puntuaciones más bajas de las reales.
+      // Preferimos mantener la tabla anterior hasta el siguiente refresco.
+      if (teamPlayersIncompleto) {
+        if (!isBackgroundRefresh) setLoading(false)
+        return
       }
 
       if (teamPlayers.length === 0) {
@@ -209,6 +249,7 @@ export default function ClasificacionPage() {
       })
 
       const allScores: { player_id: string; total_points: number; fixture_id?: string; matchday?: number }[] = []
+      let allScoresIncompleto = false
       {
         const pageSize = 1000
         let from = 0
@@ -220,6 +261,7 @@ export default function ClasificacionPage() {
             .range(from, from + pageSize - 1)
           if (error) {
             console.error('[CLASIFICACION] Error cargando player_scores:', error)
+            allScoresIncompleto = true
             break
           }
           if (!page || page.length === 0) break
@@ -227,6 +269,14 @@ export default function ClasificacionPage() {
           if (page.length < pageSize) break
           from += pageSize
         }
+      }
+
+      if (isStale()) return
+
+      // Igual que con team_players: mejor no pintar puntuaciones parciales.
+      if (allScoresIncompleto) {
+        if (!isBackgroundRefresh) setLoading(false)
+        return
       }
 
       const playerPointsByMatchday = new Map<string, Map<number, number>>()
@@ -694,14 +744,17 @@ export default function ClasificacionPage() {
 
       // Fetch user_sessions (solo desde el bloqueo de la primera jornada jugable)
       let lockTime: Date | null = null
-      const firstDeadline = matchdayToDeadline.get(leagueConfig.fantasy_starting_matchday)
-      if (firstDeadline) {
+      const fantasyStartNum = Number(leagueConfig.fantasy_starting_matchday)
+      const firstDeadline = matchdayToDeadline.get(fantasyStartNum)
+      if (firstDeadline && !isNaN(firstDeadline.getTime())) {
         lockTime = new Date(firstDeadline.getTime() - (leagueConfig.matchday_start_hours_before) * 60 * 60 * 1000)
+      } else {
+        lockTime = new Date('2026-08-14T00:00:00.000Z')
       }
 
       let sessionsQuery = supabase.from('user_sessions').select('user_id')
       if (lockTime) {
-        sessionsQuery = sessionsQuery.gte('created_at', lockTime.toISOString())
+        sessionsQuery = sessionsQuery.gte('started_at', lockTime.toISOString())
       }
       const { data: sessionsData } = await sessionsQuery
       
@@ -730,11 +783,17 @@ export default function ClasificacionPage() {
         standing.current_position = index + 1
       })
 
+      if (isStale()) return
+
       setStandings(standingsData)
       setLoading(false)
     }
 
     fetchStandings()
+
+    // Al desmontar (o al relanzar el efecto) invalidamos el fetch en vuelo para
+    // que no intente pintar sobre un componente que ya no está.
+    return () => { fetchIdRef.current++ }
   }, [sortField, sortOrder, tick, selectedDivision])
 
   useEffect(() => {

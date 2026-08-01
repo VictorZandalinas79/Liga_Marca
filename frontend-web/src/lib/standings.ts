@@ -637,14 +637,18 @@ export async function getStandings(supabase: any, division?: number | null): Pro
 
       // Fetch user_sessions (solo desde el bloqueo de la primera jornada jugable)
       let lockTime: Date | null = null
-      const firstDeadline = matchdayToDeadline.get(fantasyStart)
-      if (firstDeadline) {
+      const fantasyStartNum = Number(fantasyStart)
+      const firstDeadline = matchdayToDeadline.get(fantasyStartNum)
+      if (firstDeadline && !isNaN(firstDeadline.getTime())) {
         lockTime = new Date(firstDeadline.getTime() - (leagueConfig.matchday_start_hours_before) * 60 * 60 * 1000)
+      } else {
+        // Fallback robusto para evitar contar todas las sesiones históricas si falla el deadline
+        lockTime = new Date('2026-08-14T00:00:00.000Z')
       }
 
       let sessionsQuery = supabase.from('user_sessions').select('user_id')
       if (lockTime) {
-        sessionsQuery = sessionsQuery.gte('created_at', lockTime.toISOString())
+        sessionsQuery = sessionsQuery.gte('started_at', lockTime.toISOString())
       }
       const { data: sessionsData } = await sessionsQuery
       

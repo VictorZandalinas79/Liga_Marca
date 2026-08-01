@@ -1632,13 +1632,13 @@ export default function DashboardPage() {
             <div className="flex flex-col lg:flex-row gap-4 items-start">
               {/* Pitch */}
               <div className="relative w-full lg:flex-1 max-w-md mx-auto border-2 border-white rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]" style={{
-                backgroundImage: userDivision === 1 ? 'url(/pitches/pitch_div1.png)' : userDivision === 2 ? 'url(/pitches/pitch_div2.png)' : userDivision === 3 ? 'url(/pitches/dirt.png)' : 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
-                backgroundSize: userDivision === 1 || userDivision === 2 ? '100% 100%' : 'auto',
+                backgroundImage: userDivision === 1 ? 'url(/pitches/pitch_div1.png)' : userDivision === 2 ? 'url(/pitches/pitch_div2.png)' : userDivision === 3 ? 'url(/pitches/pitch_div3_large.png)' : 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
+                backgroundSize: userDivision === 1 || userDivision === 2 || userDivision === 3 ? '100% 100%' : 'auto',
                 backgroundColor: userDivision === 1 ? 'transparent' : userDivision === 2 ? '#dfd6a7' : userDivision === 3 ? '#8B5A2B' : '#43a047',
-                backgroundBlendMode: (userDivision === 2 || userDivision === 3) ? 'multiply' : 'normal',
+                backgroundBlendMode: userDivision === 2 ? 'multiply' : 'normal',
               }}>
               {/* Soccer field markings */}
-              <div className={`absolute inset-0 border-2 border-white/40 m-4 pointer-events-none rounded-sm ${userDivision === 1 || userDivision === 2 ? 'hidden' : ''}`}>
+              <div className={`absolute inset-0 border-2 border-white/40 m-4 pointer-events-none rounded-sm ${userDivision === 1 || userDivision === 2 || userDivision === 3 ? 'hidden' : ''}`}>
                 {/* Center Line */}
                 <div className="absolute top-1/2 left-0 right-0 h-[2px] bg-white/40 -translate-y-1/2"></div>
                 {/* Center Circle */}
