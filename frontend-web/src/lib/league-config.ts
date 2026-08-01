@@ -28,7 +28,7 @@ export function useLeagueConfig(): LeagueConfig {
     // Suscribirse a cambios en la tabla
     const supabase = createClient()
     const channel = supabase
-      .channel('league_config_changes')
+      .channel(`league_config_changes_${Math.random()}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'league_config' },
