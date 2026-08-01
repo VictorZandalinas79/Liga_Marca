@@ -21,6 +21,10 @@ export async function PATCH(
 
   // 1. Datos en auth.users (email y nombre completo en metadata)
   const authUpdate: { email?: string; email_confirm?: boolean; user_metadata?: Record<string, unknown> } = {}
+  
+  // 2. Datos en profiles (teléfono + pago + nombre completo)
+  const update: Record<string, unknown> = { id }
+  let touchProfile = false
   if ('email' in body && body.email) {
     authUpdate.email = String(body.email).trim().toLowerCase()
     authUpdate.email_confirm = true // confirmar directamente, sin email de verificación
@@ -41,9 +45,7 @@ export async function PATCH(
     }
   }
 
-  // 2. Datos en profiles (teléfono + pago)
-  const update: Record<string, unknown> = { id }
-  let touchProfile = false
+
 
   if ('phone' in body) {
     update.phone = body.phone ? String(body.phone) : null

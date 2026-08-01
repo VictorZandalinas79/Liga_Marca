@@ -40,6 +40,7 @@ interface UserStanding {
   sanctioned_matchdays: number
   kamikaze_score?: number
   app_opens?: number
+  deuda?: number
 }
 
 interface MatchdayStatus {
@@ -47,7 +48,7 @@ interface MatchdayStatus {
   is_open: boolean
 }
 
-type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_avg' | 'best_change_score' | 'change_impact_points' | 'podium_finishes' | 'bottom_finishes' | 'sanctioned_matchdays'
+type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_avg' | 'best_change_score' | 'change_impact_points' | 'podium_finishes' | 'bottom_finishes' | 'sanctioned_matchdays' | 'deuda'
 type SortOrder = 'asc' | 'desc'
 
 export default function ClasificacionPage() {
@@ -89,12 +90,14 @@ export default function ClasificacionPage() {
       setLoading(true)
       await fetchMatchdays()
 
-      // Solo los usuarios de la división seleccionada (sanciones y clasificación
-      // independientes por división).
-      const { data: divProfiles } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('division', selectedDivision)
+      // Si selectedDivision es 0 (Conjunta), traemos a todos los usuarios que tengan división asignada
+      let divQuery = supabase.from('profiles').select('id')
+      if (selectedDivision !== 0) {
+        divQuery = divQuery.eq('division', selectedDivision)
+      } else {
+        divQuery = divQuery.not('division', 'is', null)
+      }
+      const { data: divProfiles } = await divQuery
       const divisionUserIds = new Set((divProfiles ?? []).map((p: any) => p.id as string))
 
       const { data: userTeamsRaw } = await supabase
@@ -120,7 +123,7 @@ export default function ClasificacionPage() {
       const userIds = Array.from(userTeamsMap.keys())
       const { data: usersData } = await supabase
         .from('profiles')
-        .select('id, full_name, email')
+        .select('id, full_name, email, amount_paid, infraction_penalties')
         .in('id', userIds)
 
       const usersMap = new Map(usersData?.map(u => [u.id, u]) || [])
@@ -182,7 +185,8 @@ export default function ClasificacionPage() {
         // Nunca por debajo de 1: una jornada 0 o negativa dejaría pasar los
         // registros sin jornada asignada.
         fantasy_starting_matchday: Math.max(1, configData?.fantasy_starting_matchday ?? 1),
-        matchday_start_hours_before: configData?.matchday_start_hours_before ?? 1
+        matchday_start_hours_before: configData?.matchday_start_hours_before ?? 1,
+        starting_balance: configData?.starting_balance ?? 40
       }
 
       const { data: fixturesData } = await supabase
@@ -657,6 +661,10 @@ export default function ClasificacionPage() {
             if (m < minMinutes) minMinutes = m;
         }
 
+        // Calcular Deuda: Cuota inicial + Sanciones (mostrado en negativo como pidió el usuario)
+        const sanciones = (user?.amount_paid || 0) + (user?.infraction_penalties || 0)
+        const deuda = -(leagueConfig.starting_balance + sanciones)
+
         return {
           user_id: userId,
           user_name: user?.full_name || user?.email?.split('@')[0] || 'Usuario',
@@ -680,6 +688,7 @@ export default function ClasificacionPage() {
           sanctioned_matchdays: sanctionedMatchdays,
           kamikaze_score: minMinutes === Infinity ? 999999 : minMinutes,
           app_opens: 0, // se llenará luego
+          deuda: deuda
         }
       })
 
@@ -708,10 +717,12 @@ export default function ClasificacionPage() {
       })
 
       standingsData.sort((a, b) => {
+        const valA = (a[sortField] as number) ?? 0
+        const valB = (b[sortField] as number) ?? 0
         if (sortOrder === 'desc') {
-          return b[sortField] - a[sortField]
+          return valB - valA
         } else {
-          return a[sortField] - b[sortField]
+          return valA - valB
         }
       })
 
@@ -1069,18 +1080,18 @@ export default function ClasificacionPage() {
         </div>
       </div>
 
-      {/* Pestañas de división: cada una tiene su clasificación independiente */}
-      <div className="flex gap-1.5 bg-slate-100 rounded-xl p-1">
-        {([1, 2, 3] as const).map((d) => (
+      {/* Pestañas de división: cada una tiene su clasificación independiente o conjunta */}
+      <div className="flex gap-1.5 bg-slate-100 rounded-xl p-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
+        {([1, 2, 3, 0] as const).map((d) => (
           <button
             key={d}
             onClick={() => setSelectedDivision(d)}
-            className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            className={`flex-1 min-w-fit px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
               selectedDivision === d ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            {d}ª División
-            {currentUserDivision === d && (
+            {d === 0 ? 'Conjunta' : `${d}ª División`}
+            {currentUserDivision === d && d !== 0 && (
               <span className="ml-1.5 text-[10px] font-bold text-emerald-600">(la tuya)</span>
             )}
           </button>
@@ -1195,6 +1206,16 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
+                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    onClick={() => handleSort('deuda')}
+                    title="Dinero a pagar para la próxima temporada (Cuota + Sanciones)"
+                  >
+                    <div className="flex items-center justify-end gap-1 text-emerald-400">
+                      Deuda
+                      <SortIcon field="deuda" />
+                    </div>
+                  </th>
+                  <th
                     className="text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('podium_finishes')}
                     title="Veces entre los 3 primeros de una jornada"
@@ -1282,6 +1303,11 @@ export default function ClasificacionPage() {
                         <span className="text-[9px] text-slate-500">{standing.total_changes} cambios</span>
                       </div>
                     </td>
+                    <td className="px-1 py-1 text-right whitespace-nowrap">
+                      <span className={`font-bold text-sm ${((standing.deuda || 0) < 0) ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {standing.deuda?.toFixed(2)}€
+                      </span>
+                    </td>
                     <td className="px-1 py-1 text-center whitespace-nowrap">
                       <span className="text-[11px] font-bold text-yellow-500">{standing.podium_finishes}</span>
                     </td>
@@ -1292,7 +1318,7 @@ export default function ClasificacionPage() {
                   {/* Equipo desplegable */}
                   {isExpanded && userTeamData[standing.user_id] && (
                     <tr>
-                      <td colSpan={10} className="p-0">
+                      <td colSpan={11} className="p-0">
                         <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 px-3 py-2.5">
                           {/* Cabecera equipo — ancho máximo para no estirarse con la tabla */}
                           <div className="max-w-xs flex items-center gap-2 mb-2 flex-wrap">
