@@ -4,10 +4,11 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle } from 'lucide-react'
+import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle, Printer } from 'lucide-react'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { useLeagueConfig } from '@/lib/league-config'
+import { PrintView } from './PrintView'
 
 interface Player {
   id: string
@@ -1454,5 +1455,8 @@ export default function JornadaPage() {
         </div>
       )}
     </div>
+    
+    <PrintView teams={userTeams} matchday={selectedMatchday} division={selectedDivision} />
+    </>
   )
 }
