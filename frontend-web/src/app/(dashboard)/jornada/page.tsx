@@ -867,24 +867,34 @@ export default function JornadaPage() {
     const element = document.getElementById('pdf-content')
     if (!element) return
 
-    // Hacemos el elemento visible temporalmente para que html2canvas pueda renderizarlo
-    // Lo posicionamos fuera de la pantalla para que no cause saltos visuales
+    // Hacemos el elemento visible temporalmente para renderizarlo
     const originalClasses = element.className
     element.className = "absolute left-[-9999px] top-0 bg-white w-[297mm] h-[210mm] overflow-hidden"
 
     try {
-      // @ts-ignore
-      const html2pdf = (await import('html2pdf.js')).default
+      const { toPng } = await import('html-to-image')
+      const { jsPDF } = await import('jspdf')
       
-      const opt = {
-        margin:       4,
-        filename:     `Alineaciones_Jornada_${selectedMatchday}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
-      }
+      // Pequeña espera para que el navegador procese el CSS/imágenes
+      await new Promise(r => setTimeout(r, 100))
 
-      await html2pdf().set(opt).from(element).save()
+      const dataUrl = await toPng(element, { 
+        quality: 1,
+        pixelRatio: 2,
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left'
+        }
+      })
+
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      })
+      
+      pdf.addImage(dataUrl, 'PNG', 0, 0, 297, 210)
+      pdf.save(`Alineaciones_Jornada_${selectedMatchday}.pdf`)
     } catch (e) {
       console.error('Error generando PDF', e)
     } finally {
