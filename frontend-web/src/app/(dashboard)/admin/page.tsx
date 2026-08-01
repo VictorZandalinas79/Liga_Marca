@@ -134,7 +134,7 @@ export default function AdminPage() {
 
   const stats = useMemo(() => {
     const paid = users.filter((u) => u.has_paid).length
-    const collected = users.reduce((sum, u) => sum + (u.amount_paid || 0), 0)
+    const collected = users.reduce((sum, u) => sum + (u.has_paid ? (u.entry_fee_paid || 0) : 0), 0)
     return { total: users.length, paid, unpaid: users.length - paid, collected }
   }, [users])
 
@@ -142,8 +142,8 @@ export default function AdminPage() {
     const headers = ['Nombre', 'Email', 'Teléfono', 'División', 'Ha pagado', 'Cuota Inicial (€)', 'Sanciones (€)', 'Dinero Actual (€)', 'Fecha de pago', 'Fecha de registro']
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
     const rows = filtered.map((u) => {
-      const sanciones = (u.amount_paid || 0) + (u.infraction_penalties || 0)
-      const dineroActual = (config.starting_balance ?? 40) - sanciones
+      const sanciones = -((u.amount_paid || 0) + (u.infraction_penalties || 0))
+      const dineroActual = -(config.starting_balance ?? 40) + sanciones
       return [
         u.full_name, u.email, u.phone,
         divisionLabel(u.division),
@@ -338,16 +338,17 @@ export default function AdminPage() {
 
                     {/* Sanciones (readonly) */}
                     <td className="px-4 py-3">
-                      <div className="text-red-600 font-semibold">
-                        -{((u.amount_paid || 0) + (u.infraction_penalties || 0)).toFixed(2)}€
+                      <div className={`font-semibold ${-((u.amount_paid || 0) + (u.infraction_penalties || 0)) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {-((u.amount_paid || 0) + (u.infraction_penalties || 0)) < 0 ? '' : '+'}
+                        {-((u.amount_paid || 0) + (u.infraction_penalties || 0)).toFixed(2)}€
                       </div>
                     </td>
 
                     {/* Dinero Actual (readonly) */}
                     <td className="px-4 py-3">
-                      <div className={`font-bold ${((config.starting_balance ?? 40) - (u.amount_paid || 0) - (u.infraction_penalties || 0)) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {(((config.starting_balance ?? 40) - (u.amount_paid || 0) - (u.infraction_penalties || 0)) >= 0 ? '+' : '')}
-                        {((config.starting_balance ?? 40) - (u.amount_paid || 0) - (u.infraction_penalties || 0)).toFixed(2)}€
+                      <div className={`font-bold ${(-(config.starting_balance ?? 40) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {(-(config.starting_balance ?? 40) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))) < 0 ? '' : '+'}
+                        {(-(config.starting_balance ?? 40) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))).toFixed(2)}€
                       </div>
                     </td>
 
