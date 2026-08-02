@@ -627,14 +627,14 @@ export default function JornadaPage() {
     let qLosers = 0
     
     if (selectedDivision === 1) {
-      qWinners = Math.max(1, Math.round(teams.length * ((config.div1_win_percent ?? 25) / 100.0)))
-      qLosers = Math.max(1, Math.round(teams.length * ((config.div1_lose_percent ?? 25) / 100.0)))
+      qWinners = config.div1_win_percent ?? 3
+      qLosers = config.div1_lose_percent ?? 3
     } else if (selectedDivision === 2) {
-      qWinners = Math.max(1, Math.round(teams.length * ((config.div2_win_percent ?? 25) / 100.0)))
-      qLosers = Math.max(1, Math.round(teams.length * ((config.div2_lose_percent ?? 25) / 100.0)))
+      qWinners = config.div2_win_percent ?? 3
+      qLosers = config.div2_lose_percent ?? 3
     } else if (selectedDivision === 3) {
-      qWinners = Math.max(1, Math.round(teams.length * ((config.div3_win_percent ?? 25) / 100.0)))
-      qLosers = Math.max(1, Math.round(teams.length * ((config.div3_lose_percent ?? 25) / 100.0)))
+      qWinners = config.div3_win_percent ?? 3
+      qLosers = config.div3_lose_percent ?? 3
     }
     const wSet = new Set<string>()
     const lSet = new Set<string>()
@@ -1109,8 +1109,9 @@ export default function JornadaPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700">
-                    <th className="text-left py-1 px-1 text-xs sm:text-sm font-semibold text-slate-300">Pos</th>
+                    <th className="text-left py-1 px-1 text-xs sm:text-sm font-semibold text-slate-300 w-8">Pos</th>
                     <th className="text-left py-1 px-1 text-xs sm:text-sm font-semibold text-slate-300">Equipo</th>
+                    <th className="text-center py-1 px-1 text-xs sm:text-sm font-semibold text-slate-300">Jug.</th>
                     <th
                       onClick={() => setSortBy('valor')}
                       className={`text-right py-1 px-1 text-xs sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'valor' ? 'text-emerald-400' : 'text-slate-300'}`}
@@ -1145,7 +1146,7 @@ export default function JornadaPage() {
                     <tr
                       key={team.team_id}
                       className={`border-b transition-colors cursor-pointer ${
-                        isWinner ? 'bg-emerald-900/40 border-emerald-700 hover:bg-emerald-800/60' :
+                        isWinner ? 'bg-emerald-600/40 border-emerald-500 hover:bg-emerald-500/50' :
                         isLoser ? 'bg-red-900/40 border-red-700 hover:bg-red-800/60' :
                         isCurrentUser ? 'bg-emerald-900/30 animate-pulse border-slate-700' : 'border-slate-700 hover:bg-slate-700/50'
                       }`}
@@ -1153,25 +1154,27 @@ export default function JornadaPage() {
                         teamRefs.current[team.team_id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                       }}
                     >
-                      <td className="py-1 px-1">
+                      <td className="py-0.5 px-1">
                         {getPositionMedal(pos, isLast)}
                       </td>
-                      <td className="py-1 px-1 max-w-[120px] sm:max-w-none">
-                        <span className="font-semibold text-white text-[11px] uppercase">{team.user_name}</span>
-                        <span className="block text-[10px] text-slate-400">
-                          {jugaron} / {total} jugaron
+                      <td className="py-0.5 px-1 max-w-[140px] sm:max-w-none truncate">
+                        <span className="font-bold text-white text-[13px] sm:text-[15px] uppercase">{team.user_name}</span>
+                      </td>
+                      <td className="py-0.5 px-1 text-center whitespace-nowrap">
+                        <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
+                          {jugaron}/{total}
                         </span>
                       </td>
-                      <td className="py-1 px-1 text-right">
+                      <td className="py-0.5 px-1 text-right">
                         <span className="text-[11px] sm:text-xs font-semibold text-slate-200">{fmtValor(team.valor_total)}</span>
                       </td>
-                      <td className="py-1 px-1 text-right whitespace-nowrap">
+                      <td className="py-0.5 px-1 text-right whitespace-nowrap">
                         <span className="text-sm font-bold text-emerald-400">
                           {Math.round(team.puntos_totales * 10) / 10}
                         </span>
                         <span className="text-[10px] text-slate-400 ml-0.5">pts</span>
                       </td>
-                      <td className="py-1 px-1 text-right whitespace-nowrap">
+                      <td className="py-0.5 px-1 text-right whitespace-nowrap">
                         <span className="text-xs font-semibold text-slate-200">
                           {jugaron > 0 ? Math.round(promedio * 10) / 10 : '—'}
                         </span>

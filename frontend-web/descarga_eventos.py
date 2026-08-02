@@ -617,9 +617,14 @@ class FantasyEngine:
         if conceding_team:
             self.team_goals_conceded[conceding_team] = \
                 self.team_goals_conceded.get(conceding_team, 0) + 1
-            for p_on in list(self.on_pitch):
+            for p_on in self.on_pitch:
                 if self.players_team.get(p_on) == conceding_team:
-                    self.apply_points(p_on, 'GOAL_CONCEDED')
+                    goals_count = self.team_goals_conceded[conceding_team]
+                    if goals_count == 2:
+                        self.apply_points(p_on, 'GOAL_CONCEDED')
+                        self.apply_points(p_on, 'GOAL_CONCEDED')
+                    elif goals_count > 2:
+                        self.apply_points(p_on, 'GOAL_CONCEDED')
 
     # ================== TARJETAS ==================
     def _handle_card(self, event):

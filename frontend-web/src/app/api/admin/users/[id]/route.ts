@@ -83,6 +83,10 @@ export async function PATCH(
     }
     touchProfile = true
   }
+  if ('collected_by' in body) {
+    update.collected_by = body.collected_by ? String(body.collected_by).trim() : null
+    touchProfile = true
+  }
 
   if (touchProfile) {
     const { error } = await admin.from('profiles').update(update).eq('id', id)

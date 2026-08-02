@@ -16,6 +16,12 @@ const NUMERIC_FIELDS = [
   'max_changes_per_matchday',
   'starting_balance',
   'infraction_penalty_cost',
+  'div1_win_percent',
+  'div1_lose_percent',
+  'div2_win_percent',
+  'div2_lose_percent',
+  'div3_win_percent',
+  'div3_lose_percent',
 ] as const
 
 export async function GET() {

@@ -22,6 +22,7 @@ type AdminUser = {
   division: number | null
   entry_fee_paid: number
   infraction_penalties: number
+  collected_by: string | null
   created_at: string
 }
 
@@ -139,11 +140,11 @@ export default function AdminPage() {
   }, [users])
 
   const exportCsv = () => {
-    const headers = ['Nombre', 'Email', 'Teléfono', 'División', 'Ha pagado', 'Cuota Inicial (€)', 'Sanciones (€)', 'Dinero Actual (€)', 'Fecha de pago', 'Fecha de registro']
+    const headers = ['Nombre', 'Email', 'Teléfono', 'División', 'Ha pagado', 'Cuota Inicial (€)', 'Sanciones (€)', 'Dinero Actual (€)', 'Fecha de pago', 'Cobrado por', 'Fecha de registro']
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
     const rows = filtered.map((u) => {
       const sanciones = -((u.amount_paid || 0) + (u.infraction_penalties || 0))
-      const dineroActual = -(config.starting_balance ?? 40) + sanciones
+      const dineroActual = (u.entry_fee_paid || 0) - (config.starting_balance ?? 45) + sanciones
       return [
         u.full_name, u.email, u.phone,
         divisionLabel(u.division),
@@ -151,7 +152,9 @@ export default function AdminPage() {
         (u.entry_fee_paid || 0).toFixed(2).replace('.', ','),
         sanciones.toFixed(2).replace('.', ','),
         dineroActual.toFixed(2).replace('.', ','),
-        formatDate(u.paid_at), formatDate(u.created_at),
+        formatDate(u.paid_at),
+        u.collected_by || '',
+        formatDate(u.created_at),
       ].map((v) => escape(String(v ?? ''))).join(',')
     })
     const csv = '﻿' + [headers.map(escape).join(','), ...rows].join('\r\n')
@@ -281,6 +284,7 @@ export default function AdminPage() {
                 <th className="px-4 py-3 font-semibold">Sanciones</th>
                 <th className="px-4 py-3 font-semibold">Dinero Actual</th>
                 <th className="px-4 py-3 font-semibold">Fecha de pago</th>
+                <th className="px-4 py-3 font-semibold">Cobrado por</th>
                 <th className="px-4 py-3 font-semibold text-center">Estado</th>
                 <th className="px-4 py-3 font-semibold text-center">Acciones</th>
               </tr>
@@ -346,9 +350,9 @@ export default function AdminPage() {
 
                     {/* Dinero Actual (readonly) */}
                     <td className="px-4 py-3">
-                      <div className={`font-bold ${(-(config.starting_balance ?? 40) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {(-(config.starting_balance ?? 40) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))) < 0 ? '' : '+'}
-                        {(-(config.starting_balance ?? 40) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))).toFixed(2)}€
+                      <div className={`font-bold ${((u.entry_fee_paid || 0) - (config.starting_balance ?? 45) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {((u.entry_fee_paid || 0) - (config.starting_balance ?? 45) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))) < 0 ? '' : '+'}
+                        {((u.entry_fee_paid || 0) - (config.starting_balance ?? 45) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))).toFixed(2)}€
                       </div>
                     </td>
 
@@ -363,6 +367,23 @@ export default function AdminPage() {
                           saveUser(u.id, { paid_at: v || null, ...(v ? { has_paid: true } : {}) }).catch(() => {})
                         }}
                         className="px-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm text-slate-600"
+                      />
+                    </td>
+
+                    {/* Cobrado por editable */}
+                    <td className="px-4 py-3">
+                      <input
+                        type="text"
+                        defaultValue={u.collected_by || ''}
+                        disabled={savingId === u.id}
+                        onBlur={(e) => {
+                          const val = e.target.value.trim()
+                          if (val !== (u.collected_by || '')) {
+                            saveUser(u.id, { collected_by: val || null }).catch(() => {})
+                          }
+                        }}
+                        placeholder="Nombre..."
+                        className="w-28 px-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm"
                       />
                     </td>
 

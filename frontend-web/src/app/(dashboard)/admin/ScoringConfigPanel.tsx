@@ -8,7 +8,6 @@ import {
   POSITION_LABELS,
   EDITABLE_EVENTS,
   BONUS_LABELS,
-  PENALTY_LABELS,
   num,
 } from '@/lib/scoring-config'
 
@@ -123,7 +122,6 @@ export function ScoringConfigPanel() {
 
   const events = (rules?.events ?? {}) as Record<string, Record<string, unknown>>
   const bonuses = (rules?.bonuses_per_X ?? {}) as Record<string, Record<string, unknown>>
-  const lostBalls = ((rules?.penalties_per_X as Record<string, unknown>)?.lost_balls ?? {}) as Record<string, Record<string, unknown>>
   const relevo = (rules?.relevo_rules ?? {}) as Record<string, unknown>
 
   return (
@@ -195,7 +193,6 @@ export function ScoringConfigPanel() {
               ))}
             </div>
           </section>
-
           {/* Bonus por métrica */}
           <section className="space-y-3">
             <p className="text-sm font-semibold text-slate-700">Bonus por métrica (puntos por unidad)</p>
@@ -212,21 +209,6 @@ export function ScoringConfigPanel() {
             </div>
           </section>
 
-          {/* Penalizaciones por métrica */}
-          <section className="space-y-3">
-            <p className="text-sm font-semibold text-slate-700">{PENALTY_LABELS.lost_balls ?? 'Penalizaciones'}</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {POSITIONS.map((p) => (
-                <LabeledInput
-                  key={p}
-                  label={POSITION_LABELS[p]}
-                  value={num(lostBalls[p], 'points')}
-                  onChange={(v) => setPenaltyValue('lost_balls', p, v)}
-                  step="0.05"
-                />
-              ))}
-            </div>
-          </section>
 
           {/* RELEVO Rules */}
           <section className="space-y-3">

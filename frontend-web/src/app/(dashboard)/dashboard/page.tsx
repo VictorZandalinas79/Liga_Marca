@@ -100,32 +100,35 @@ function PitchPlayerCard({
         )}
 
         {/* Precio (a la derecha) */}
-        <div className="absolute top-1/2 -right-3 sm:-right-4 md:-right-5 lg:-right-5 -translate-y-1/2 bg-white/95 text-emerald-700 font-extrabold text-[8px] sm:text-[9px] md:text-[9px] lg:text-[10px] flex items-center justify-center rounded-full w-[20px] h-[20px] sm:w-[24px] sm:h-[24px] md:w-[26px] md:h-[26px] lg:w-[28px] lg:h-[28px] shadow-md border border-emerald-200 transition-all duration-300">
+        <div className="absolute top-1/2 -right-3 sm:-right-4 md:-right-5 lg:-right-5 -translate-y-1/2 bg-emerald-600 text-white font-black text-[10px] sm:text-[11px] md:text-[12px] lg:text-[13px] flex items-center justify-center rounded-full w-[24px] h-[24px] sm:w-[28px] sm:h-[28px] md:w-[32px] md:h-[32px] lg:w-[36px] lg:h-[36px] shadow-xl border-2 border-white transition-all duration-300 z-20">
           {player.precio ? `${player.precio}M` : '-'}
         </div>
       </div>
 
       {/* Nombre del jugador */}
-      <div className="flex flex-col items-center w-[120%] -mt-1 md:-mt-2">
-        <p className="font-extrabold text-white text-[10px] sm:text-[11px] md:text-[11px] lg:text-[12px] leading-tight truncate drop-shadow-md relative z-10 w-full text-center transition-all duration-300">
+      <div className="flex flex-col items-center w-[150%] -mt-1 md:-mt-1.5 z-30">
+        <p className="font-extrabold text-white text-[9.5px] sm:text-[11px] md:text-[12px] lg:text-[13px] leading-[1.1] drop-shadow-md relative w-full text-center transition-all duration-300 line-clamp-2 break-words"
+           style={{ textShadow: '1px 1px 3px rgba(0,0,0,1)' }}>
           {player.short_name || player.first_name}
         </p>
-        {player.shirt_number && (
-          <p 
-            className="font-black text-white/95 text-[16px] sm:text-xl md:text-2xl lg:text-2xl leading-none -mt-0.5 md:-mt-1 lg:-mt-1 relative z-0 transition-all duration-300"
-            style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
-          >
-            {player.shirt_number}
-          </p>
-        )}
       </div>
       {isPenalized && sanctionReason ? (
-        <p className="text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] text-red-300 font-bold leading-tight w-[130%] drop-shadow-md mt-0.5 lg:mt-1 truncate bg-red-950/80 rounded px-1 py-0.5 transition-all duration-300" title={sanctionReason}>
+        <p className="text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] text-red-300 font-bold leading-tight w-[130%] drop-shadow-md mt-0.5 lg:mt-1 truncate bg-red-950/80 rounded px-1 py-0.5 transition-all duration-300 z-30" title={sanctionReason}>
           {sanctionReason}
         </p>
       ) : null}
     </div>
   )
+}
+
+function getStagger(len: number, idx: number) {
+  if (len >= 5) {
+    return idx % 2 === 0 ? '-translate-y-3 sm:-translate-y-5 lg:-translate-y-7' : 'translate-y-3 sm:translate-y-5 lg:translate-y-7'
+  }
+  if (len === 4) {
+    return (idx === 1 || idx === 2) ? 'translate-y-2 sm:translate-y-4 lg:translate-y-5' : '-translate-y-2 sm:-translate-y-4 lg:-translate-y-5'
+  }
+  return ''
 }
 
 export default function DashboardPage() {
@@ -1661,7 +1664,7 @@ export default function DashboardPage() {
 
               {/* Player rows (top-down: Delanteros -> Mediocampistas -> Defensas -> Porteros) */}
               <div 
-                className={`relative z-10 flex flex-col justify-between h-full ${
+                className={`relative z-10 flex flex-col justify-between h-full -translate-x-2 sm:-translate-x-3 md:-translate-x-4 lg:-translate-x-5 ${
                   userDivision === 1 
                     ? 'pt-[18%] pb-[18%] px-0 scale-[0.85] origin-bottom' 
                     : 'px-6 pt-24 pb-12 sm:px-2 sm:pt-20 sm:pb-4 md:px-0 md:pt-24 md:pb-6 lg:pt-28 lg:pb-8'
@@ -1671,7 +1674,7 @@ export default function DashboardPage() {
                 {/* Delanteros */}
                 <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-[15%]' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map((player, idx, arr) => (
-                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
+                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                     </div>
                   ))}
@@ -1683,7 +1686,7 @@ export default function DashboardPage() {
                 {/* Mediocampistas */}
                 <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-[4%]' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map((player, idx, arr) => (
-                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
+                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                     </div>
                   ))}
@@ -1695,7 +1698,7 @@ export default function DashboardPage() {
                 {/* Defensas */}
                 <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-0' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map((player, idx, arr) => (
-                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${arr.length === 5 && idx === 2 ? '-translate-y-6 sm:-translate-y-8 md:-translate-y-10 lg:-translate-y-12' : ''}`}>
+                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                     </div>
                   ))}
@@ -1962,10 +1965,10 @@ export default function DashboardPage() {
                         <div className="w-full bg-black/95 rounded-lg py-[2cqw] px-[2cqw] flex flex-col items-center shadow-2xl">
                           <p className={`font-black text-amber-50 uppercase text-center w-full leading-tight line-clamp-2 tracking-tight drop-shadow-lg ${
                               (player.short_name || player.first_name || '').length > 14
-                                ? 'text-[7cqw]'
+                                ? 'text-[9cqw]'
                                 : (player.short_name || player.first_name || '').length > 10
-                                ? 'text-[8.5cqw]'
-                                : 'text-[10cqw]'
+                                ? 'text-[11cqw]'
+                                : 'text-[13cqw]'
                             }`}
                             style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
                           >
@@ -1977,14 +1980,8 @@ export default function DashboardPage() {
                           <div className="w-full flex justify-between items-center px-[1cqw]">
                             {/* Valor */}
                             <div className="flex-1 flex justify-start">
-                              <span className="font-black text-emerald-400 text-[9cqw] drop-shadow-md">
+                              <span className="font-black text-emerald-400 text-[10cqw] drop-shadow-md">
                                 {player.precio ? `${player.precio}M` : '-'}
-                              </span>
-                            </div>
-                            {/* Dorsal */}
-                            <div className="flex-1 flex justify-center">
-                              <span className="font-black text-white text-[16cqw] leading-none drop-shadow-md">
-                                {player.shirt_number || '-'}
                               </span>
                             </div>
                             {/* Escudo */}

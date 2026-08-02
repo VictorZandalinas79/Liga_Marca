@@ -140,10 +140,10 @@ export default async function PuntuacionPage() {
               pts: formatPts(rates.assist_no_goal),
             },
             { accion: 'Gol en contra (propia puerta)', detalle: 'Todas las posiciones', pts: formatPts(rates.own_goal) },
-            { accion: 'Penalti provocado', detalle: 'Sufre la falta dentro del área', pts: formatPts(rates.penalty_won) },
-            { accion: 'Penalti cometido', detalle: 'Comete la falta dentro del área', pts: formatPts(rates.penalty_conceded) },
+            { accion: 'Penalti provocado', detalle: 'Sufre la falta dentro del área', pts: formatPts(rates.penalty_won.MED) },
+            { accion: 'Penalti cometido', detalle: 'Comete la falta dentro del área', pts: formatPts(rates.penalty_conceded.MED) },
             { accion: 'Penalti fallado', detalle: 'Disparo desviado o atajado', pts: formatPts(rates.penalty_missed) },
-            { accion: 'Penalti parado', detalle: 'Parada directa del portero', pts: formatPts(rates.penalty_save) },
+            { accion: 'Penalti parado', detalle: 'Parada directa del portero', pts: formatPts(rates.penalty_save.POR) },
           ]}
         />
       </Section>
@@ -171,10 +171,10 @@ export default async function PuntuacionPage() {
         </p>
         <PointsTable
           rows={[
-            { accion: 'Portero (POR)', detalle: 'por cada gol encajado', pts: formatPts(rates.goal_conceded.POR) },
-            { accion: 'Defensa (DEF)', detalle: 'por cada gol encajado', pts: formatPts(rates.goal_conceded.DEF) },
-            { accion: 'Mediocentro (MED)', detalle: 'por cada gol encajado', pts: formatPts(rates.goal_conceded.MED) },
-            { accion: 'Delantero (DEL)', detalle: 'por cada gol encajado', pts: formatPts(rates.goal_conceded.DEL) },
+            { accion: 'Portero (POR)', detalle: 'por cada gol encajado (si recibe 2 o más)', pts: formatPts(rates.goal_conceded.POR) },
+            { accion: 'Defensa (DEF)', detalle: 'por cada gol encajado (si recibe 2 o más)', pts: formatPts(rates.goal_conceded.DEF) },
+            { accion: 'Mediocentro (MED)', detalle: 'por cada gol encajado (si recibe 2 o más)', pts: formatPts(rates.goal_conceded.MED) },
+            { accion: 'Delantero (DEL)', detalle: 'por cada gol encajado (si recibe 2 o más)', pts: formatPts(rates.goal_conceded.DEL) },
           ]}
         />
       </Section>
@@ -194,56 +194,24 @@ export default async function PuntuacionPage() {
         />
       </Section>
 
-      {/* 5. Bonos acumulativos */}
-      <Section
-        icon={Sparkles}
-        number={5}
-        title="Bonos Acumulativos"
-        description="Puntos extra automáticos por cada acción individual."
-      >
-        <PointsTable
-          rows={[
-            { accion: 'Paradas del portero', detalle: 'por parada', pts: formatPts(rates.per_unit.saves) },
-            { accion: 'Remates a puerta', detalle: 'por remate a portería', pts: formatPts(rates.per_unit.shots_on_target) },
-            { accion: 'Regates completados', detalle: 'por regate con éxito', pts: formatPts(rates.per_unit.takeons_won) },
-            { accion: 'Pases al área exitosos', detalle: 'por pase completado en el área rival', pts: formatPts(rates.per_unit.box_entries) },
-            { accion: 'Balón recuperado (zona alta)', detalle: 'campo rival', pts: formatPts(rates.per_unit.recoveries_high) },
-            { accion: 'Balón recuperado (zona media)', detalle: 'centro', pts: formatPts(rates.per_unit.recoveries_med) },
-            { accion: 'Balón recuperado (zona baja)', detalle: 'campo propio', pts: formatPts(rates.per_unit.recoveries_low) },
-            { accion: 'Interceptación (zona alta)', detalle: 'campo rival', pts: formatPts(rates.per_unit.interceptions_high) },
-            { accion: 'Interceptación (zona media)', detalle: 'centro', pts: formatPts(rates.per_unit.interceptions_med) },
-            { accion: 'Interceptación (zona baja)', detalle: 'campo propio', pts: formatPts(rates.per_unit.interceptions_low) },
-            { accion: 'Despejes', detalle: 'por despeje', pts: formatPts(rates.per_unit.clearances) },
-            { accion: 'Pases completados', detalle: 'por pase con éxito', pts: formatPts(rates.per_unit.passes_completed) },
-            { accion: 'Pases hacia adelante completados', detalle: 'por pase', pts: formatPts(rates.per_unit.forward_passes) },
-            { accion: 'Pase largo completado', detalle: 'por pase', pts: formatPts(rates.per_unit.long_balls_completed) },
-            { accion: 'Lanzamiento de falta o córner', detalle: 'por envío', pts: formatPts(rates.per_unit.set_pieces_taken) },
-            { accion: 'Centros buenos', detalle: 'por centro con éxito', pts: formatPts(rates.per_unit.successful_crosses) },
-          ]}
-        />
-      </Section>
-
       {/* 6. Pérdidas de balón */}
       <Section
         icon={Ban}
         number={6}
         title="Penalización por Pérdidas de Balón"
-        description="Por pérdida de balón, según la responsabilidad defensiva de cada posición."
+        description="Por pérdida de balón, afecta por igual a todas las posiciones."
       >
         <PointsTable
           rows={[
-            { accion: 'Portero (POR)', detalle: 'por cada pérdida', pts: formatPts(rates.lost_balls.POR) },
-            { accion: 'Defensa (DEF)', detalle: 'por cada pérdida', pts: formatPts(rates.lost_balls.DEF) },
-            { accion: 'Mediocentro (MED)', detalle: 'por cada pérdida', pts: formatPts(rates.lost_balls.MED) },
-            { accion: 'Delantero (DEL)', detalle: 'por cada pérdida', pts: formatPts(rates.lost_balls.DEL) },
+            { accion: 'Por pérdida de balón', detalle: 'Aplica a cualquier jugador', pts: formatPts(rates.lost_balls) },
           ]}
         />
       </Section>
 
-      {/* 7. Puntos RELEVO */}
+      {/* 6. Puntos RELEVO */}
       <Section
         icon={Gauge}
-        number={7}
+        number={6}
         title="Puntos RELEVO (Algoritmo de Influencia)"
         description="Indicador puramente estadístico. Evalúa el rendimiento en 6 categorías; el resultado se acota entre 0 y 4 puntos de bonificación."
       >
@@ -302,10 +270,10 @@ export default async function PuntuacionPage() {
         </div>
       </Section>
 
-      {/* 8. Reglas Económicas */}
+      {/* 7. Reglas Económicas */}
       <Section
         icon={Coins}
-        number={8}
+        number={7}
         title="Reglas Económicas y Premios"
         description="Cuotas de la liga, multas, pagos por jornada y premios a final de temporada."
       >

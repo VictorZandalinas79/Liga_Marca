@@ -131,15 +131,15 @@ export function LeagueConfigPanel() {
           <div>
             <p className="text-sm font-semibold text-slate-700 mb-2">Pagos por jornada y Ganadores</p>
             <div className="space-y-3 mb-6">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Porcentajes de Ganadores y Perdedores (%)</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cantidad de Ganadores y Perdedores (Posiciones)</p>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 1ª División */}
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <p className="text-sm font-bold text-slate-700 mb-2">1ª División</p>
                   <div className="space-y-2">
-                    <NumberField label="Ganan (%)" value={config.div1_win_percent} onChange={(v) => setNum('div1_win_percent', v)} step="1" />
-                    <NumberField label="Pierden (%)" value={config.div1_lose_percent} onChange={(v) => setNum('div1_lose_percent', v)} step="1" />
+                    <NumberField label="Ganan (Nº Primeros)" value={config.div1_win_percent} onChange={(v) => setNum('div1_win_percent', v)} step="1" />
+                    <NumberField label="Pierden (Nº Últimos)" value={config.div1_lose_percent} onChange={(v) => setNum('div1_lose_percent', v)} step="1" />
                   </div>
                 </div>
 
@@ -147,8 +147,8 @@ export function LeagueConfigPanel() {
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <p className="text-sm font-bold text-slate-700 mb-2">2ª División</p>
                   <div className="space-y-2">
-                    <NumberField label="Ganan (%)" value={config.div2_win_percent} onChange={(v) => setNum('div2_win_percent', v)} step="1" />
-                    <NumberField label="Pierden (%)" value={config.div2_lose_percent} onChange={(v) => setNum('div2_lose_percent', v)} step="1" />
+                    <NumberField label="Ganan (Nº Primeros)" value={config.div2_win_percent} onChange={(v) => setNum('div2_win_percent', v)} step="1" />
+                    <NumberField label="Pierden (Nº Últimos)" value={config.div2_lose_percent} onChange={(v) => setNum('div2_lose_percent', v)} step="1" />
                   </div>
                 </div>
 
@@ -156,8 +156,8 @@ export function LeagueConfigPanel() {
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <p className="text-sm font-bold text-slate-700 mb-2">3ª División</p>
                   <div className="space-y-2">
-                    <NumberField label="Ganan (%)" value={config.div3_win_percent} onChange={(v) => setNum('div3_win_percent', v)} step="1" />
-                    <NumberField label="Pierden (%)" value={config.div3_lose_percent} onChange={(v) => setNum('div3_lose_percent', v)} step="1" />
+                    <NumberField label="Ganan (Nº Primeros)" value={config.div3_win_percent} onChange={(v) => setNum('div3_win_percent', v)} step="1" />
+                    <NumberField label="Pierden (Nº Últimos)" value={config.div3_lose_percent} onChange={(v) => setNum('div3_lose_percent', v)} step="1" />
                   </div>
                 </div>
               </div>

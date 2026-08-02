@@ -98,9 +98,6 @@ interface PlayerScore {
   blocked_shots: number
   blocked_passes: number
   ball_recoveries: number
-  recoveries_high: number
-  recoveries_med: number
-  recoveries_low: number
   offsides_provoked: number
   challenges_lost: number
 
@@ -447,9 +444,6 @@ export default function JugadorDetallePage() {
       blocked_shots: acc.blocked_shots + n(s.blocked_shots),
       blocked_passes: acc.blocked_passes + n(s.blocked_passes),
       ball_recoveries: acc.ball_recoveries + n(s.ball_recoveries),
-      recoveries_high: acc.recoveries_high + n(s.recoveries_high),
-      recoveries_med: acc.recoveries_med + n(s.recoveries_med),
-      recoveries_low: acc.recoveries_low + n(s.recoveries_low),
       offsides_provoked: acc.offsides_provoked + n(s.offsides_provoked),
       challenges_lost: acc.challenges_lost + n(s.challenges_lost),
       errors_leading_to_shot: acc.errors_leading_to_shot + n(s.errors_leading_to_shot),
@@ -532,9 +526,6 @@ export default function JugadorDetallePage() {
     blocked_shots: 0,
     blocked_passes: 0,
     ball_recoveries: 0,
-    recoveries_high: 0,
-    recoveries_med: 0,
-    recoveries_low: 0,
     offsides_provoked: 0,
     challenges_lost: 0,
     errors_leading_to_shot: 0,
@@ -569,7 +560,7 @@ export default function JugadorDetallePage() {
     second_yellow_cards: 0,
     red_cards: 0,
     relevo_points: 0,
-  })
+  } as any)
 
   const matchesPlayed = scores.length
   const avgPoints = matchesPlayed > 0 ? Math.round((totalStats.total_points / matchesPlayed) * 10) / 10 : 0
@@ -621,14 +612,14 @@ export default function JugadorDetallePage() {
     // BLOQUE 3: Defensa y Portería a Cero
     const b3: ScoreRow[] = []
     if (score.clean_sheet) b3.push({ label: `Portería a cero · +60 min (${pos})`, count: 0, unit: 0, points: SR.clean_sheet[pos], flat: true })
-    if (score.goals_conceded > 0) b3.push(u(score.goals_conceded, SR.goal_conceded[pos], `Gol encajado (${pos})`))
+    if (score.goals_conceded > 1) b3.push(u(score.goals_conceded, SR.goal_conceded[pos], `Gol encajado (${pos})`))
 
     // BLOQUE 4: Penaltis
     const b4: ScoreRow[] = []
-    if (score.penalties_won > 0) b4.push(u(score.penalties_won, SR.penalty_won, 'Penalti provocado'))
-    if (score.penalties_conceded > 0) b4.push(u(score.penalties_conceded, SR.penalty_conceded, 'Penalti cometido'))
+    if (score.penalties_won > 0) b4.push(u(score.penalties_won, SR.penalty_won[pos], 'Penalti provocado'))
+    if (score.penalties_conceded > 0) b4.push(u(score.penalties_conceded, SR.penalty_conceded[pos], 'Penalti cometido'))
     if (score.penalties_missed > 0) b4.push(u(score.penalties_missed, SR.penalty_missed, 'Penalti fallado'))
-    if (score.penalty_saves > 0) b4.push(u(score.penalty_saves, SR.penalty_save, 'Penalti parado'))
+    if (score.penalty_saves > 0) b4.push(u(score.penalty_saves, SR.penalty_save[pos], 'Penalti parado'))
 
     // BLOQUE 5: Tarjetas
     const b5: ScoreRow[] = []
@@ -636,36 +627,29 @@ export default function JugadorDetallePage() {
     if (score.second_yellow_cards > 0) b5.push(u(score.second_yellow_cards, SR.second_yellow_card, 'Doble amarilla'))
     if (score.red_cards > 0) b5.push(u(score.red_cards, SR.red_card, 'Roja directa'))
 
-    // BLOQUE 6: Acciones de Portero
+    // BLOQUE 6: Bonus Ataque y Pase
     const b6: ScoreRow[] = []
-    if (score.saves > 0) b6.push(u(score.saves, SR.per_unit.saves, 'Parada'))
-    if (g('punches_ok') > 0) b6.push(u(g('punches_ok'), SR.per_unit.punches_ok, 'Despeje de puños'))
-    if (g('punches_fail') > 0) b6.push(u(g('punches_fail'), SR.per_unit.punches_fail, 'Despeje de puños fallido'))
-    if (g('claims_ok') > 0) b6.push(u(g('claims_ok'), SR.per_unit.claims, 'Blocaje'))
-    if (g('sweepers_ok') > 0) b6.push(u(g('sweepers_ok'), SR.per_unit.sweepers, 'Salida del área'))
+    if (score.passes_completed > 0) b6.push(u(score.passes_completed, SR.per_unit.passes_completed, 'Pases completados'))
+    if (g('forward_passes') > 0) b6.push(u(g('forward_passes'), SR.per_unit.forward_passes, 'Pases hacia adelante'))
+    if (g('box_entries') > 0) b6.push(u(g('box_entries'), SR.per_unit.box_entries, 'Pases al área exitosos'))
+    if (g('successful_crosses') > 0) b6.push(u(g('successful_crosses'), SR.per_unit.successful_crosses, 'Centros exitosos'))
+    if (g('set_pieces_taken') > 0) b6.push(u(g('set_pieces_taken'), SR.per_unit.set_pieces_taken, 'Balón parado'))
 
-    // BLOQUE 7: Bonus en Juego
+    // BLOQUE 7: Bonus Defensa y Acción
     const b7: ScoreRow[] = []
-    if (score.passes_completed > 0) b7.push(u(score.passes_completed, SR.per_unit.passes_completed, 'Pases completados'))
-    if (g('forward_passes') > 0) b7.push(u(g('forward_passes'), SR.per_unit.forward_passes, 'Pases hacia adelante'))
-    if (g('box_entries') > 0) b7.push(u(g('box_entries'), SR.per_unit.box_entries, 'Pases al área exitosos'))
-    if (g('successful_crosses') > 0) b7.push(u(g('successful_crosses'), SR.per_unit.successful_crosses, 'Centros exitosos'))
-    if (g('set_pieces_taken') > 0) b7.push(u(g('set_pieces_taken'), SR.per_unit.set_pieces_taken, 'Balón parado'))
     if (score.takeons_won > 0) b7.push(u(score.takeons_won, SR.per_unit.takeons_won, 'Regates ganados'))
     if (g('long_balls_completed') > 0) b7.push(u(g('long_balls_completed'), SR.per_unit.long_balls_completed, 'Pases largos completados'))
     if (score.shots_on_target > 0) b7.push(u(score.shots_on_target, SR.per_unit.shots_on_target, 'Tiros a puerta'))
-    if (g('recoveries_high') > 0) b7.push(u(g('recoveries_high'), SR.per_unit.recoveries_high, 'Recuperación alta'))
-    if (g('recoveries_med') > 0) b7.push(u(g('recoveries_med'), SR.per_unit.recoveries_med, 'Recuperación media'))
-    if (g('recoveries_low') > 0) b7.push(u(g('recoveries_low'), SR.per_unit.recoveries_low, 'Recuperación baja'))
+    if (g('ball_recoveries') > 0) b7.push(u(g('ball_recoveries'), SR.per_unit.ball_recoveries, 'Balón recuperado'))
     if (g('interceptions_high') > 0) b7.push(u(g('interceptions_high'), SR.per_unit.interceptions_high, 'Interceptación alta'))
     if (g('interceptions_med') > 0) b7.push(u(g('interceptions_med'), SR.per_unit.interceptions_med, 'Interceptación media'))
     if (g('interceptions_low') > 0) b7.push(u(g('interceptions_low'), SR.per_unit.interceptions_low, 'Interceptación baja'))
     if (score.clearances > 0) b7.push(u(score.clearances, SR.per_unit.clearances, 'Despejes'))
 
-    // BLOQUE 8: Penalizaciones
+    // BLOQUE 8: Pérdidas
     const b8: ScoreRow[] = []
     const lostBalls = (score.dispossessed || 0) + (score.bad_touches || 0)
-    if (lostBalls > 0) b8.push(u(lostBalls, SR.lost_balls[pos], 'Balón perdido'))
+    if (lostBalls > 0) b8.push(u(lostBalls, SR.lost_balls, 'Balón perdido'))
 
     // BLOQUE 9: Puntos RELEVO
     const b9: ScoreRow[] = []
@@ -833,7 +817,7 @@ export default function JugadorDetallePage() {
       takeons_won += n(s.takeons_won)
       clean_sheets += s.clean_sheet ? 1 : 0
       interceptions += n(s.interceptions_high) + n(s.interceptions_med) + n(s.interceptions_low) || n(s.interceptions)
-      ball_recoveries += n(s.recoveries_high) + n(s.recoveries_med) + n(s.recoveries_low) || n(s.ball_recoveries)
+      ball_recoveries += n(s.ball_recoveries)
       clearances += n(s.clearances)
       saves += n(s.saves)
       penalty_saves += n(s.penalty_saves)
@@ -1142,12 +1126,7 @@ export default function JugadorDetallePage() {
         { label: 'Entradas fallidas', value: totalStats.tackles_lost, valNum: totalStats.tackles_lost },
         { label: 'Interceptaciones', value: totalStats.interceptions, valNum: totalStats.interceptions },
         { label: 'Interceptaciones (Zona alta)', value: totalStats.interceptions_high, valNum: totalStats.interceptions_high },
-        { label: 'Interceptaciones (Zona media)', value: totalStats.interceptions_med, valNum: totalStats.interceptions_med },
-        { label: 'Interceptaciones (Zona baja)', value: totalStats.interceptions_low, valNum: totalStats.interceptions_low },
         { label: 'Recuperaciones de balón', value: totalStats.ball_recoveries, valNum: totalStats.ball_recoveries },
-        { label: 'Recuperaciones (Zona alta)', value: totalStats.recoveries_high, valNum: totalStats.recoveries_high },
-        { label: 'Recuperaciones (Zona media)', value: totalStats.recoveries_med, valNum: totalStats.recoveries_med },
-        { label: 'Recuperaciones (Zona baja)', value: totalStats.recoveries_low, valNum: totalStats.recoveries_low },
         { label: 'Despejes', value: totalStats.clearances, valNum: totalStats.clearances },
         { label: 'Despejes en última línea', value: totalStats.clearances_last_line, valNum: totalStats.clearances_last_line },
         { label: 'Tiros bloqueados', value: totalStats.blocked_shots, valNum: totalStats.blocked_shots },
@@ -1237,7 +1216,7 @@ export default function JugadorDetallePage() {
       case 'despejes':
         return n(score.clearances)
       case 'recuperaciones':
-        return n(score.recoveries_high) + n(score.recoveries_med) + n(score.recoveries_low) || n(score.ball_recoveries)
+        return n(score.ball_recoveries)
       case 'interceptaciones':
         return n(score.interceptions_high) + n(score.interceptions_med) + n(score.interceptions_low) || n(score.interceptions)
       case 'paradas':

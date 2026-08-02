@@ -518,14 +518,17 @@ def run_matchday(sb, matchday):
     winners = set()
     losers = set()
     
-    def get_count(n, perc):
-        return max(1, round(n * (float(perc) / 100.0))) if n > 0 else 0
+    def get_count(perc):
+        try:
+            return max(0, int(perc))
+        except (ValueError, TypeError):
+            return 3
 
     # 1ª División
     r1 = div_results[1]
     n1 = len(r1)
-    q1_win = get_count(n1, cfg.get("div1_win_percent", 25))
-    q1_lose = get_count(n1, cfg.get("div1_lose_percent", 25))
+    q1_win = get_count(cfg.get("div1_win_percent", 3))
+    q1_lose = get_count(cfg.get("div1_lose_percent", 3))
     for i in range(q1_win):
         if i < n1: winners.add(r1[i][0])
     for i in range(q1_lose):
@@ -535,8 +538,8 @@ def run_matchday(sb, matchday):
     # 2ª División
     r2 = div_results[2]
     n2 = len(r2)
-    q2_win = get_count(n2, cfg.get("div2_win_percent", 25))
-    q2_lose = get_count(n2, cfg.get("div2_lose_percent", 25))
+    q2_win = get_count(cfg.get("div2_win_percent", 3))
+    q2_lose = get_count(cfg.get("div2_lose_percent", 3))
     for i in range(q2_win):
         if i < n2: winners.add(r2[i][0])
     for i in range(q2_lose):
@@ -546,8 +549,8 @@ def run_matchday(sb, matchday):
     # 3ª División
     r3 = div_results[3]
     n3 = len(r3)
-    q3_win = get_count(n3, cfg.get("div3_win_percent", 25))
-    q3_lose = get_count(n3, cfg.get("div3_lose_percent", 25))
+    q3_win = get_count(cfg.get("div3_win_percent", 3))
+    q3_lose = get_count(cfg.get("div3_lose_percent", 3))
     for i in range(q3_win):
         if i < n3: winners.add(r3[i][0])
     for i in range(q3_lose):

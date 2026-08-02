@@ -519,7 +519,7 @@ class MatchEventDownloader:
             breakdown['relevo_takeons_pts'] = 1.0
             relevo += 1
 
-        breakdown['total'] = max(0.0, relevo) # Podemos quitar el max(4) si queremos que escale o dejarlo. Mejor dejar max(0) mínimo.
+        breakdown['total'] = max(-1.0, min(4.0, relevo))
         return breakdown
 
     def recalculate_player_points(self, player_id, current_min):
@@ -570,7 +570,7 @@ class MatchEventDownloader:
             points += self.get_position_points('clean_sheet', pos)
 
         # --- GOLES RECIBIDOS (por gol) ---
-        if goals_conc > 0:
+        if goals_conc > 1:
             gc_rule = self.get_position_points('goal_conceded', pos)
             points += goals_conc * gc_rule
 
@@ -627,9 +627,7 @@ class MatchEventDownloader:
         points += apply_bonus('shots_on_target', bonuses.get('shots_on_target', {}))
         points += apply_bonus('takeons_won', bonuses.get('takeons_won', {}))
         points += apply_bonus('box_entries', bonuses.get('box_entries', {}))
-        points += apply_bonus('recoveries_high', bonuses.get('recoveries_high', {}))
-        points += apply_bonus('recoveries_med', bonuses.get('recoveries_med', {}))
-        points += apply_bonus('recoveries_low', bonuses.get('recoveries_low', {}))
+        points += apply_bonus('ball_recoveries', bonuses.get('ball_recoveries', {}))
         points += apply_bonus('interceptions_high', bonuses.get('interceptions_high', {}))
         points += apply_bonus('interceptions_med', bonuses.get('interceptions_med', {}))
         points += apply_bonus('interceptions_low', bonuses.get('interceptions_low', {}))
@@ -640,13 +638,10 @@ class MatchEventDownloader:
         points += apply_bonus('long_balls_completed', bonuses.get('long_balls_completed', {}))
 
         # ============================================
-        # === PENALIZACIONES POSICIONALES ===
+        # === PENALIZACIONES ===
         # ============================================
         lost_balls = stats.get('dispossessed', 0) + stats.get('bad_touches', 0)
-        penalties_rules = self.scoring_rules.get('penalties_per_X', {}).get('lost_balls', {})
-        
-        rule_pos = penalties_rules.get(pos, {"points": -0.2})
-        points += lost_balls * rule_pos.get('points', -0.2)
+        points += lost_balls * self.get_position_points('lost_balls', pos)
 
         # ============================================
         # === APLICAR PUNTOS RELEVO AL TOTAL ===
@@ -769,17 +764,6 @@ class MatchEventDownloader:
 
     def _handle_recovery(self, event, current_min):
         pid = event.get('playerId')
-        x_coord = event.get('x', 0)
-        
-        # Lógica de zonas para recuperaciones
-        if x_coord > 66.6:
-            self.apply_points(pid, 'recoveries_high', 1, current_min)
-        elif 33.3 <= x_coord <= 66.6:
-            self.apply_points(pid, 'recoveries_med', 1, current_min)
-        else:
-            self.apply_points(pid, 'recoveries_low', 1, current_min)
-        
-        # Sumamos también al contador general por si hace falta para otras cosas
         self.apply_points(pid, 'ball_recoveries', 1, current_min)
 
     def _handle_pass(self, event, current_min):
@@ -886,17 +870,6 @@ class MatchEventDownloader:
 
     def _handle_recovery(self, event, current_min):
         pid = event.get('playerId')
-        x_coord = event.get('x', 0)
-        
-        # Lógica de zonas para recuperaciones
-        if x_coord > 66.6:
-            self.apply_points(pid, 'recoveries_high', 1, current_min)
-        elif 33.3 <= x_coord <= 66.6:
-            self.apply_points(pid, 'recoveries_med', 1, current_min)
-        else:
-            self.apply_points(pid, 'recoveries_low', 1, current_min)
-        
-        # Sumamos también al contador general por si hace falta para otras cosas
         self.apply_points(pid, 'ball_recoveries', 1, current_min)
 
 

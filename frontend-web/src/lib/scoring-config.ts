@@ -43,9 +43,10 @@ export const EDITABLE_EVENTS: EditableEvent[] = [
   { key: 'punch_fail', label: 'Despeje de puños (fallido)', kind: 'single' },
   { key: 'claim', label: 'Blocaje', kind: 'single' },
   { key: 'sweeper', label: 'Salida del área', kind: 'single' },
-  { key: 'yellow_card', label: 'Tarjeta amarilla', kind: 'single' },
-  { key: 'second_yellow_card', label: 'Segunda amarilla', kind: 'single' },
-  { key: 'red_card', label: 'Tarjeta roja', kind: 'single' },
+  { key: 'yellow_card', label: 'Tarjeta amarilla', kind: 'positional' },
+  { key: 'second_yellow_card', label: 'Segunda amarilla (roja)', kind: 'positional' },
+  { key: 'red_card', label: 'Tarjeta roja directa', kind: 'positional' },
+  { key: 'lost_balls', label: 'Balón perdido (por pérdida)', kind: 'single' },
 ]
 
 // Etiquetas en español para los bonus por métrica (claves de `bonuses_per_X`).
@@ -55,9 +56,7 @@ export const BONUS_LABELS: Record<string, string> = {
   shots_on_target: 'Tiro a puerta',
   takeons_won: 'Regate completado',
   box_entries: 'Pases al área exitosos',
-  recoveries_high: 'Recuperación (campo rival)',
-  recoveries_med: 'Recuperación (centro)',
-  recoveries_low: 'Recuperación (campo propio)',
+  ball_recoveries: 'Balón recuperado',
   interceptions_high: 'Interceptación (campo rival)',
   interceptions_med: 'Interceptación (centro)',
   interceptions_low: 'Interceptación (campo propio)',
@@ -67,10 +66,7 @@ export const BONUS_LABELS: Record<string, string> = {
   long_balls_completed: 'Pase largo bueno',
 }
 
-// Etiqueta para cada penalización por métrica (claves de `penalties_per_X`).
-export const PENALTY_LABELS: Record<string, string> = {
-  lost_balls: 'Balón perdido (por pérdida)',
-}
+
 
 /** Devuelve un número de forma segura desde un objeto de reglas, o 0. */
 export function num(obj: unknown, key: string): number {
@@ -98,13 +94,14 @@ export interface ScoringRates {
   assist_no_goal: number
   clean_sheet: Record<Position, number>
   goal_conceded: Record<Position, number>
-  penalty_save: number
+  penalty_save: Record<Position, number>
   penalty_missed: number
-  penalty_won: number
-  penalty_conceded: number
+  penalty_won: Record<Position, number>
+  penalty_conceded: Record<Position, number>
   yellow_card: number
   second_yellow_card: number
   red_card: number
+
   per_unit: {
     saves: number
     punches_ok: number
@@ -119,15 +116,13 @@ export interface ScoringRates {
     forward_passes: number
     set_pieces_taken: number
     successful_crosses: number
-    recoveries_high: number
-    recoveries_med: number
-    recoveries_low: number
+    ball_recoveries: number
     interceptions_high: number
     interceptions_med: number
     interceptions_low: number
     long_balls_completed: number
   }
-  lost_balls: Record<Position, number>
+  lost_balls: number
   relevo_rules: {
     participation_step_percent: number
     participation_points_per_step: number
@@ -159,10 +154,10 @@ export const DEFAULT_RATES: ScoringRates = {
   assist_no_goal: 1,
   clean_sheet: { POR: 4, DEF: 3, MED: 2, DEL: 1 },
   goal_conceded: { POR: -2, DEF: -2, MED: -1, DEL: -1 },
-  penalty_save: 5,
+  penalty_save: { POR: 3, DEF: 3, MED: 3, DEL: 3 },
   penalty_missed: -2,
-  penalty_won: 2,
-  penalty_conceded: -2,
+  penalty_won: { POR: 2, DEF: 2, MED: 2, DEL: 2 },
+  penalty_conceded: { POR: -1, DEF: -1, MED: -1, DEL: -1 },
   yellow_card: -1,
   second_yellow_card: -1,
   red_card: -3,
@@ -170,11 +165,11 @@ export const DEFAULT_RATES: ScoringRates = {
     saves: 0.5, punches_ok: 0.2, punches_fail: 0.1, claims: 0.1, sweepers: 0.1,
     shots_on_target: 0.3, takeons_won: 0.5, box_entries: 0.1, clearances: 0.5,
     passes_completed: 0.05, forward_passes: 0.2, set_pieces_taken: 0.2, successful_crosses: 0.3,
-    recoveries_high: 0.3, recoveries_med: 0.2, recoveries_low: 0.1,
+    ball_recoveries: 0.2,
     interceptions_high: 0.3, interceptions_med: 0.2, interceptions_low: 0.1,
     long_balls_completed: 0.5,
   },
-  lost_balls: { POR: -0.1, DEF: -0.1, MED: -0.1, DEL: -0.1 },
+  lost_balls: -0.1,
   relevo_rules: {
     participation_step_percent: 10,
     participation_points_per_step: 1,
@@ -214,21 +209,18 @@ function bonusVal(rules: ScoringRules | null, key: string, fallback: number): nu
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
 }
 
-function lostBallVal(rules: ScoringRules | null, pos: Position, fallback: number): number {
-  const lb = (rules?.penalties_per_X as Record<string, Record<string, Record<string, unknown>>> | undefined)?.lost_balls
-  const v = lb?.[pos]?.points
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback
-}
+
 
 /** Construye las tarifas de desglose desde las reglas de scoring_config. */
 export function resolveRates(rules: ScoringRules | null): ScoringRates {
   if (!rules) return DEFAULT_RATES
   const part = rules.participation as Record<string, unknown> | undefined
+  const events = (rules.events as Record<string, Record<string, unknown>>) ?? {}
   const pn = (k: string, fb: number) => {
     const v = part?.[k]
     return typeof v === 'number' && Number.isFinite(v) ? v : fb
   }
-  const byPos = (key: string, d: ScoringRates['goal']): Record<Position, number> => ({
+  const byPos = (key: string, d: Record<Position, number>): Record<Position, number> => ({
     POR: eventVal(rules, key, 'POR', d.POR),
     DEF: eventVal(rules, key, 'DEF', d.DEF),
     MED: eventVal(rules, key, 'MED', d.MED),
@@ -247,10 +239,10 @@ export function resolveRates(rules: ScoringRules | null): ScoringRates {
     assist_no_goal: eventVal(rules, 'assist_no_goal', 'MED', d.assist_no_goal),
     clean_sheet: byPos('clean_sheet', d.clean_sheet),
     goal_conceded: byPos('goal_conceded', d.goal_conceded),
-    penalty_save: eventVal(rules, 'penalty_save', 'MED', d.penalty_save),
+    penalty_save: byPos('penalty_save', d.penalty_save),
     penalty_missed: eventVal(rules, 'penalty_missed', 'MED', d.penalty_missed),
-    penalty_won: eventVal(rules, 'penalty_won', 'MED', d.penalty_won),
-    penalty_conceded: eventVal(rules, 'penalty_conceded', 'MED', d.penalty_conceded),
+    penalty_won: byPos('penalty_won', d.penalty_won),
+    penalty_conceded: byPos('penalty_conceded', d.penalty_conceded),
     yellow_card: eventVal(rules, 'yellow_card', 'MED', d.yellow_card),
     second_yellow_card: eventVal(rules, 'second_yellow_card', 'MED', d.second_yellow_card),
     red_card: eventVal(rules, 'red_card', 'MED', d.red_card),
@@ -268,22 +260,13 @@ export function resolveRates(rules: ScoringRules | null): ScoringRates {
       forward_passes: bonusVal(rules, 'forward_passes', d.per_unit.forward_passes),
       set_pieces_taken: bonusVal(rules, 'set_pieces_taken', d.per_unit.set_pieces_taken),
       successful_crosses: bonusVal(rules, 'successful_crosses', d.per_unit.successful_crosses),
-      recoveries_high: bonusVal(rules, 'recoveries_high', d.per_unit.recoveries_high),
-      recoveries_med: bonusVal(rules, 'recoveries_med', d.per_unit.recoveries_med),
-      recoveries_low: bonusVal(rules, 'recoveries_low', d.per_unit.recoveries_low),
+      ball_recoveries: bonusVal(rules, 'ball_recoveries', d.per_unit.ball_recoveries),
       interceptions_high: bonusVal(rules, 'interceptions_high', d.per_unit.interceptions_high),
       interceptions_med: bonusVal(rules, 'interceptions_med', d.per_unit.interceptions_med),
       interceptions_low: bonusVal(rules, 'interceptions_low', d.per_unit.interceptions_low),
       long_balls_completed: bonusVal(rules, 'long_balls_completed', d.per_unit.long_balls_completed),
     },
-    lost_balls: {
-      POR: lostBallVal(rules, 'POR', d.lost_balls.POR),
-      DEF: lostBallVal(rules, 'DEF', d.lost_balls.DEF),
-      MED: lostBallVal(rules, 'MED', d.lost_balls.MED),
-      DEL: lostBallVal(rules, 'DEL', d.lost_balls.DEL),
-    },
+    lost_balls: num(events.lost_balls, 'all') || d.lost_balls,
     relevo_rules: (rules.relevo_rules as ScoringRates['relevo_rules']) ?? d.relevo_rules,
   }
 }
-
-

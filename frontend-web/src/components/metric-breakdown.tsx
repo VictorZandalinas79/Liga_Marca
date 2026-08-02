@@ -54,14 +54,14 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   const b3: Row[] = []
   const cs = player.clean_sheet === true || player.clean_sheet === 1 || player.clean_sheet === 'true'
   if (cs) b3.push({ label: `Portería a cero · +60 min (${pos})`, count: 0, unit: 0, points: CLEAN_SHEET[pos], flat: true })
-  if (n(player.goals_conceded) > 0) b3.push(u(n(player.goals_conceded), GOAL_CONCEDED[pos], `Gol encajado (${pos})`))
+  if (n(player.goals_conceded) > 1) b3.push(u(n(player.goals_conceded), GOAL_CONCEDED[pos], `Gol encajado (${pos})`))
 
   // B4: Penaltis
   const b4: Row[] = []
-  if (n(player.penalties_won) > 0)      b4.push(u(n(player.penalties_won), R.penalty_won, 'Penalti provocado'))
-  if (n(player.penalties_conceded) > 0) b4.push(u(n(player.penalties_conceded), R.penalty_conceded, 'Penalti cometido'))
+  if (n(player.penalties_won) > 0)      b4.push(u(n(player.penalties_won), R.penalty_won[pos], 'Penalti provocado'))
+  if (n(player.penalties_conceded) > 0) b4.push(u(n(player.penalties_conceded), R.penalty_conceded[pos], 'Penalti cometido'))
   if (n(player.penalties_missed) > 0)   b4.push(u(n(player.penalties_missed), R.penalty_missed, 'Penalti fallado'))
-  if (n(player.penalty_saves) > 0)      b4.push(u(n(player.penalty_saves), R.penalty_save, 'Penalti parado'))
+  if (n(player.penalty_saves) > 0)      b4.push(u(n(player.penalty_saves), R.penalty_save[pos], 'Penalti parado'))
 
   // B5: Tarjetas
   const b5: Row[] = []
@@ -73,7 +73,7 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   const b6: Row[] = []
   if (n(player.saves) > 0)       b6.push(u(n(player.saves), R.per_unit.saves, 'Parada'))
   if (n(player.punches_ok) > 0)  b6.push(u(n(player.punches_ok), R.per_unit.punches_ok, 'Despeje de puños'))
-  if (n(player.punches_fail) > 0) b6.push(u(n(player.punches_fail), R.per_unit.punches_fail, 'Despeje de puños fallido'))
+  if (n(player.punches_fail) > 0) b6.push(u(n(player.punches_fail), R.per_unit.punches_fail, 'Despeje fallido'))
   if (n(player.claims_ok) > 0)   b6.push(u(n(player.claims_ok), R.per_unit.claims, 'Blocaje'))
   if (n(player.sweepers_ok) > 0) b6.push(u(n(player.sweepers_ok), R.per_unit.sweepers, 'Salida del área'))
 
@@ -87,23 +87,16 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   if (n(player.takeons_won) > 0)        b7.push(u(n(player.takeons_won), R.per_unit.takeons_won, 'Regates ganados'))
   if (n(player.long_balls_completed) > 0) b7.push(u(n(player.long_balls_completed), R.per_unit.long_balls_completed, 'Pases largos completados'))
   if (n(player.shots_on_target) > 0)    b7.push(u(n(player.shots_on_target), R.per_unit.shots_on_target, 'Tiros a puerta'))
+  if (n(player.clearances) > 0)         b7.push(u(n(player.clearances), R.per_unit.clearances, 'Despejes'))
   if (n(player.interceptions_high) > 0) b7.push(u(n(player.interceptions_high), R.per_unit.interceptions_high, 'Interceptación zona alta'))
   if (n(player.interceptions_med) > 0)  b7.push(u(n(player.interceptions_med), R.per_unit.interceptions_med, 'Interceptación zona media'))
   if (n(player.interceptions_low) > 0)  b7.push(u(n(player.interceptions_low), R.per_unit.interceptions_low, 'Interceptación zona baja'))
-  const hasZoneRecoveries = n(player.recoveries_high) + n(player.recoveries_med) + n(player.recoveries_low) > 0
-  if (hasZoneRecoveries) {
-    if (n(player.recoveries_high) > 0)  b7.push(u(n(player.recoveries_high), R.per_unit.recoveries_high, 'Recuperación zona alta'))
-    if (n(player.recoveries_med) > 0)   b7.push(u(n(player.recoveries_med), R.per_unit.recoveries_med, 'Recuperación zona media'))
-    if (n(player.recoveries_low) > 0)   b7.push(u(n(player.recoveries_low), R.per_unit.recoveries_low, 'Recuperación zona baja'))
-  } else if (n(player.ball_recoveries) > 0) {
-    b7.push(u(n(player.ball_recoveries), BALL_RECOVERY[pos], `Recuperaciones (${pos})`))
-  }
-  if (n(player.clearances) > 0)         b7.push(u(n(player.clearances), R.per_unit.clearances, 'Despejes'))
+  if (n(player.ball_recoveries) > 0)    b7.push(u(n(player.ball_recoveries), R.per_unit.ball_recoveries, 'Balón recuperado'))
 
   // B8: Penalizaciones
   const b8: Row[] = []
   const lostBalls = n(player.dispossessed) + n(player.bad_touches)
-  if (lostBalls > 0) b8.push(u(lostBalls, R.lost_balls[pos], 'Balón perdido'))
+  if (lostBalls > 0) b8.push(u(lostBalls, R.lost_balls, `Pérdida de balón (${pos})`))
 
   // B9: Puntos RELEVO
   const totalRelevo = n(player.relevo_points)
