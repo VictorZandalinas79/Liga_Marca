@@ -178,6 +178,8 @@ class MatchEventDownloader:
         self.team_total_events = {} # NUEVO: Para calcular el % de participación
         self.processed_events = set()
         self.provisional_players = {} # team_id -> [prov_players]
+        self.recent_shots = [] # Para tracking de Calidad Parada (Relevo)
+        self.player_calidad_parada = {} # player_id -> valor acumulado (Relevo)
         self.team_goals_conceded = {}
         self.team_goals_scored = {}
         self.player_positions_map = {}
@@ -430,96 +432,122 @@ class MatchEventDownloader:
             
         self.recalculate_player_points(player_id, current_min)
 
-    def calculate_relevo_points(self, player_id):
-        """Calcula los Puntos RELEVO (0 a 4) basados en estadísticas y porcentajes"""
+    def calculate_relevo_points(self, player_id, mins_played, pos):
+        """Calcula los Puntos RELEVO (-1 a 4) basados en las reglas estáticas (v3.0)"""
         stats = self.stats[player_id]
         team_id = self.players_team.get(player_id)
-        if not team_id: return 0
-        
-        rules = self.scoring_rules.get('relevo_rules', {})
-        # Evitamos dividir por cero. Asegurar al menos 1
-        team_events = max(1, self.team_total_events.get(team_id, 1))
-        player_events = stats.get('total_events', 0)
-        
-        relevo = 0.0
-        breakdown = {
-            'relevo_participation_pts': 0.0,
-            'relevo_passes_pts': 0.0,
-            'relevo_opp_half_pts': 0.0,
-            'relevo_shots_pts': 0.0,
-            'relevo_duels_pts': 0.0,
-            'relevo_aerials_pts': 0.0,
-            'relevo_takeons_pts': 0.0
-        }
-        
-        # 1. PARTICIPACIÓN (% de eventos del equipo)
-        pct_participacion = (player_events / team_events) * 100
-        step = rules.get('participation_step_percent', 10)
-        p_pts = int(pct_participacion // step) * rules.get('participation_points_per_step', 1)
-        breakdown['relevo_participation_pts'] = float(p_pts)
-        relevo += p_pts
-        
-        # 2. PASES (% de acierto global)
-        passes_att = stats.get('passes_attempted', 0)
-        if passes_att >= rules.get('min_passes', 10):
-            pass_acc = (stats.get('passes_completed', 0) / passes_att) * 100
-            pts = 0
-            if pass_acc >= rules.get('pass_accuracy_excel', 92): pts = 2
-            elif pass_acc >= rules.get('pass_accuracy_high', 85): pts = 1
-            elif pass_acc < rules.get('pass_accuracy_low', 65): pts = -1
-            breakdown['relevo_passes_pts'] = float(pts)
-            relevo += pts
-            
-        # 3. PASES CAMPO RIVAL (% de acierto)
-        opp_att = stats.get('pass_opp_half_attempted', 0)
-        if opp_att >= rules.get('min_opp_half_passes', 10):
-            opp_acc = (stats.get('pass_opp_half_completed', 0) / opp_att) * 100
-            if opp_acc >= rules.get('opp_half_accuracy_high', 75):
-                breakdown['relevo_opp_half_pts'] = 1.0
-                relevo += 1
-            
-        # 4. TIROS (% a puerta)
-        total_shots = stats.get('shots_total', 0)
-        if total_shots >= rules.get('min_shots', 2):
-            on_target_total = stats.get('shots_on_target', 0) + stats.get('goals', 0)
-            shot_acc = (on_target_total / total_shots) * 100
-            pts = 0
-            if shot_acc >= rules.get('shot_accuracy_high', 50): pts = 1
-            elif shot_acc == 0: pts = -1
-            breakdown['relevo_shots_pts'] = float(pts)
-            relevo += pts
-            
-        # 5. DUELOS (Ganados vs Perdidos)
-        duels_won = stats.get('tackles_won', 0) + stats.get('takeons_won', 0) + stats.get('fouls_won', 0)
-        duels_lost = stats.get('tackles_lost', 0) + stats.get('takeons_lost', 0) + stats.get('fouls_committed', 0) + stats.get('dispossessed', 0) + stats.get('challenges_lost', 0)
-        total_duels = duels_won + duels_lost
-        if total_duels >= rules.get('min_duels', 5):
-            duel_acc = (duels_won / total_duels) * 100
-            d_step = rules.get('duels_step_percent', 10)
-            d_pts_per_step = rules.get('duels_points_per_step', 0.2)
-            pts = float(int(duel_acc // d_step) * d_pts_per_step)
-            breakdown['relevo_duels_pts'] = pts
-            relevo += pts
-            
-        # 6. DUELOS AÉREOS
-        aerials_total = stats.get('aerials_won', 0) + stats.get('aerials_lost', 0)
-        if aerials_total >= rules.get('min_aerials', 3):
-            aer_acc = (stats.get('aerials_won', 0) / aerials_total) * 100
-            pts = 0
-            if aer_acc >= rules.get('aerials_won_high', 60): pts = 1
-            elif aer_acc < rules.get('aerials_won_low', 30): pts = -1
-            breakdown['relevo_aerials_pts'] = float(pts)
-            relevo += pts
+        breakdown = {'block_1_pts': 0.0, 'block_2_pts': 0.0, 'block_3_pts': 0.0, 'block_4_pts': 0.0}
+        if not team_id or mins_played <= 0:
+            breakdown['total'] = 0.0
+            return breakdown
 
-        # 7. REGATES INTENTADOS (>50% de éxito)
-        takeons_won = stats.get('takeons_won', 0)
-        takeons_lost = stats.get('takeons_lost', 0)
-        takeons_total = takeons_won + takeons_lost
-        if takeons_total > 0 and (takeons_won / takeons_total) > 0.5:
-            breakdown['relevo_takeons_pts'] = 1.0
-            relevo += 1
+        completed_blocks = 0
 
-        breakdown['total'] = max(-1.0, min(4.0, relevo))
+        # Mínimo exigido para una métrica acumulativa: la tasa configurada
+        # (por minuto jugado) escalada a los minutos que ha jugado.
+        def req(rate):
+            return (rate * mins_played) / 90.0
+
+        rules = self.scoring_rules.get('relevo_limits', {}).get(pos, {})
+
+        if pos == 'POR':
+            if stats.get('saves', 0) >= req(rules.get('saves_per_min', 0.06) * 90):
+                completed_blocks += 1; breakdown['block_1_pts'] = 1.0
+            
+            calidad = self.player_calidad_parada.get(player_id, 0.0)
+            saves = stats.get('saves', 0)
+            if saves > 0 and (calidad / mins_played) > (rules.get('calidad_parada_multiplier', 0.5) * (saves / mins_played)):
+                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
+                
+            long_passes = stats.get('long_balls_completed', 0)
+            passes_completed = stats.get('passes_completed', 0)
+            passes_attempted = stats.get('passes_attempted', 0)
+            p_pct = (passes_completed / passes_attempted * 100) if passes_attempted > 0 else 0
+            if (long_passes >= req(rules.get('long_passes_per_min', 0.05) * 90)) or (p_pct > rules.get('pass_pct', 65) and passes_attempted >= req(rules.get('pass_att_per_min', 0.3) * 90)):
+                completed_blocks += 1; breakdown['block_3_pts'] = 1.0
+                
+            claims = stats.get('claims', 0)
+            punches = stats.get('punches_ok', 0) + stats.get('punches_fail', 0)
+            if (claims >= req(rules.get('claims_per_min', 0.02) * 90)) or (punches >= req(rules.get('punches_per_min', 0.03) * 90)):
+                completed_blocks += 1; breakdown['block_4_pts'] = 1.0
+
+        elif pos == 'DEF':
+            last_man = stats.get('relevo_def_action_last_man', 0)
+            if last_man >= req(rules.get('last_man_per_min', 0.02) * 90):
+                completed_blocks += 1; breakdown['block_1_pts'] = 1.0
+                
+            long_passes = stats.get('long_balls_completed', 0)
+            forward_passes = stats.get('forward_passes', 0)
+            if (long_passes >= req(rules.get('long_passes_per_min', 0.05) * 90)) or (forward_passes >= req(rules.get('forward_passes_per_min', 0.05) * 90)):
+                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
+                
+            a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
+            a_pct = (a_won / (a_won + a_lost) * 100) if (a_won + a_lost) > 0 else 0
+            g_won = stats.get('relevo_ground_duels_won', 0); g_tot = stats.get('relevo_ground_duels_total', 0)
+            g_pct = (g_won / g_tot * 100) if g_tot > 0 else 0
+            if (a_pct > rules.get('aerials_pct', 60)) or (g_pct > rules.get('ground_duels_pct', 60)):
+                completed_blocks += 1; breakdown['block_3_pts'] = 1.0
+                
+            abp_remates = stats.get('relevo_abp_remates', 0)
+            crosses = stats.get('successful_crosses', 0)
+            if (abp_remates >= req(rules.get('abp_remates_per_min', 0.01) * 90)) or (crosses >= req(rules.get('crosses_per_min', 0.02) * 90)):
+                completed_blocks += 1; breakdown['block_4_pts'] = 1.0
+
+        elif pos == 'MED':
+            p_opp = stats.get('pass_opp_half_completed', 0)
+            p_opp_att = stats.get('pass_opp_half_attempted', 0)
+            p_opp_pct = (p_opp / p_opp_att * 100) if p_opp_att > 0 else 0
+            if p_opp_pct > rules.get('pass_opp_pct', 50):
+                completed_blocks += 1; breakdown['block_1_pts'] = 1.0
+                
+            a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
+            a_pct = (a_won / (a_won + a_lost) * 100) if (a_won + a_lost) > 0 else 0
+            g_won = stats.get('relevo_ground_duels_won', 0); g_tot = stats.get('relevo_ground_duels_total', 0)
+            g_pct = (g_won / g_tot * 100) if g_tot > 0 else 0
+            if (a_pct > rules.get('aerials_pct', 60)) or (g_pct > rules.get('ground_duels_pct', 60)):
+                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
+                
+            shots_on = stats.get('shots_on_target', 0); shots_tot = stats.get('shots_total', 0)
+            s_pct = (shots_on / shots_tot * 100) if shots_tot > 0 else 0
+            t_won = stats.get('takeons_won', 0); t_lost = stats.get('takeons_lost', 0); t_over = stats.get('takeons_overrun', 0)
+            t_tot = t_won + t_lost + t_over
+            t_pct = (t_won / t_tot * 100) if t_tot > 0 else 0
+            if (s_pct > rules.get('shots_on_pct', 50)) or (t_pct > rules.get('takeons_pct', 35)):
+                completed_blocks += 1; breakdown['block_3_pts'] = 1.0
+                
+            assists = stats.get('assists', 0)
+            crosses = stats.get('successful_crosses', 0)
+            if (assists >= req(rules.get('assists_per_min', 0.03) * 90)) or (crosses >= req(rules.get('crosses_per_min', 0.02) * 90)):
+                completed_blocks += 1; breakdown['block_4_pts'] = 1.0
+
+        elif pos == 'DEL':
+            p_opp = stats.get('pass_opp_half_completed', 0)
+            p_opp_att = stats.get('pass_opp_half_attempted', 0)
+            p_opp_pct = (p_opp / p_opp_att * 100) if p_opp_att > 0 else 0
+            if p_opp_pct > rules.get('pass_opp_pct', 50):
+                completed_blocks += 1; breakdown['block_1_pts'] = 1.0
+                
+            a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
+            a_pct = (a_won / (a_won + a_lost) * 100) if (a_won + a_lost) > 0 else 0
+            rec_opp = stats.get('relevo_recup_campo_rival', 0)
+            if (a_pct > rules.get('aerials_pct', 40)) or (rec_opp >= req(rules.get('recup_opp_per_min', 0.3) * 90)):
+                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
+                
+            shots_on = stats.get('shots_on_target', 0); shots_tot = stats.get('shots_total', 0)
+            s_pct = (shots_on / shots_tot * 100) if shots_tot > 0 else 0
+            head_shots = stats.get('relevo_remates_cabeza', 0)
+            if (s_pct > rules.get('shots_on_pct', 60)) or (head_shots >= req(rules.get('head_shots_per_min', 0.02) * 90)):
+                completed_blocks += 1; breakdown['block_3_pts'] = 1.0
+                
+            assists = stats.get('assists', 0)
+            t_won = stats.get('takeons_won', 0); t_lost = stats.get('takeons_lost', 0); t_over = stats.get('takeons_overrun', 0)
+            t_tot = t_won + t_lost + t_over
+            t_pct = (t_won / t_tot * 100) if t_tot > 0 else 0
+            if (assists >= req(rules.get('assists_per_min', 0.03) * 90)) or (t_pct > rules.get('takeons_pct', 35)):
+                completed_blocks += 1; breakdown['block_4_pts'] = 1.0
+
+        total_pts = -1 if completed_blocks == 0 else completed_blocks
+        breakdown['total'] = float(total_pts)
         return breakdown
 
     def recalculate_player_points(self, player_id, current_min):
@@ -608,34 +636,10 @@ class MatchEventDownloader:
         saves = stats.get('saves', 0)
         points += saves * self.get_position_points('save', pos)
         
-        points += stats.get('punches_ok', 0) * self.get_position_points('punch_ok', pos)
-        points += stats.get('punches_fail', 0) * self.get_position_points('punch_fail', pos)
-        points += stats.get('claims', 0) * self.get_position_points('claim', pos)
-        points += stats.get('sweepers', 0) * self.get_position_points('sweeper', pos)
-
-        # ============================================
-        # === BONUS ATAQUE y DEFENSIVOS (Desde JSON) ===
-        # ============================================
-        bonuses = self.scoring_rules.get('bonuses_per_X', {})
-        
-        def apply_bonus(stat_name, bonus_config):
-            val = stats.get(stat_name, 0)
-            # Como ahora req es 1, multiplicamos directo por los puntos decimales
-            return val * bonus_config.get('points', 0.0)
-
-        points += apply_bonus('passes_completed', bonuses.get('passes_completed', {}))
-        points += apply_bonus('shots_on_target', bonuses.get('shots_on_target', {}))
-        points += apply_bonus('takeons_won', bonuses.get('takeons_won', {}))
-        points += apply_bonus('box_entries', bonuses.get('box_entries', {}))
-        points += apply_bonus('ball_recoveries', bonuses.get('ball_recoveries', {}))
-        points += apply_bonus('interceptions_high', bonuses.get('interceptions_high', {}))
-        points += apply_bonus('interceptions_med', bonuses.get('interceptions_med', {}))
-        points += apply_bonus('interceptions_low', bonuses.get('interceptions_low', {}))
-        points += apply_bonus('clearances', bonuses.get('clearances', {}))
-        points += apply_bonus('forward_passes', bonuses.get('forward_passes', {}))
-        points += apply_bonus('set_pieces_taken', bonuses.get('set_pieces_taken', {}))
-        points += apply_bonus('successful_crosses', bonuses.get('successful_crosses', {}))
-        points += apply_bonus('long_balls_completed', bonuses.get('long_balls_completed', {}))
+        points += stats.get('clearances', 0) * self.get_position_points('clearances', pos)
+        points += stats.get('shots_on_target', 0) * self.get_position_points('shots_on_target', pos)
+        points += stats.get('takeons_won', 0) * self.get_position_points('takeons_won', pos)
+        points += stats.get('box_entries', 0) * self.get_position_points('box_entries', pos)
 
         # ============================================
         # === PENALIZACIONES ===
@@ -646,7 +650,7 @@ class MatchEventDownloader:
         # ============================================
         # === APLICAR PUNTOS RELEVO AL TOTAL ===
         # ============================================
-        relevo_breakdown = self.calculate_relevo_points(player_id)
+        relevo_breakdown = self.calculate_relevo_points(player_id, mins_played, pos)
         relevo_points = relevo_breakdown['total']
         # Guardamos en stats para subirlo opcionalmente a base de datos
         self.stats[player_id]['relevo_points'] = relevo_points 
@@ -710,6 +714,26 @@ class MatchEventDownloader:
         if team_id:
             self.team_total_events[team_id] = self.team_total_events.get(team_id, 0) + 1
         # ---------------------------------------------------------
+
+        # --- RELEVO Generic Tracking ---
+        if self.has_qualifier(event, 14):
+            self.apply_points(player_id, 'relevo_def_action_last_man', 1, current_min)
+
+        if type_id in [3, 4, 7, 54]: # Duelos por el suelo
+            self.apply_points(player_id, 'relevo_ground_duels_total', 1, current_min)
+            if event.get('outcome') == 1:
+                self.apply_points(player_id, 'relevo_ground_duels_won', 1, current_min)
+                
+        if type_id in [13, 14, 15, 16]:
+            if self.has_qualifier(event, 24) or self.has_qualifier(event, 25): # Remate ABP
+                self.apply_points(player_id, 'relevo_abp_remates', 1, current_min)
+                
+        if type_id in [13, 14, 15, 16, 24] and self.has_qualifier(event, 15): # Remates de cabeza
+            self.apply_points(player_id, 'relevo_remates_cabeza', 1, current_min)
+            
+        if type_id == 49 and event.get('x', 0) > 50: # Recuperación campo rival
+            self.apply_points(player_id, 'relevo_recup_campo_rival', 1, current_min)
+        # -------------------------------
 
         handlers = {
             1: self._handle_pass,
@@ -794,8 +818,8 @@ class MatchEventDownloader:
             end_y = self.get_qualifier_float(event, Q_PASS_END_Y)
 
             if end_x is not None and end_y is not None:
-                # Pase hacia adelante: End_x es 10 unidades mayor que X, y la desviación de Y es entre -10 y 10
-                if end_x >= (x_coord + 10) and -10 <= (end_y - y_coord) <= 10:
+                # Pase hacia adelante: distance X > 20, distance Y entre -35 y 35
+                if (end_x - x_coord) > 20 and -35 <= (end_y - y_coord) <= 35:
                     self.apply_points(pid, 'forward_passes', 1, current_min)
 
                 if end_x >= 50:
@@ -886,8 +910,32 @@ class MatchEventDownloader:
 
     def _handle_save(self, event, current_min):
         if not self.has_qualifier(event, Q_DEF_BLOCK):
-            self.apply_points(event.get('playerId'), 'saves', 1, current_min)
-    
+            player_id = event.get('playerId')
+            self.apply_points(player_id, 'saves', 1, current_min)
+            
+            # Lógica Calidad Parada (Relevo)
+            total_sec = event.get('timeMin', 0) * 60 + event.get('timeSec', 0)
+            closest_shot = None
+            min_diff = 9999
+            for shot_sec, sx, sy in self.recent_shots:
+                diff = total_sec - shot_sec
+                if 0 <= diff <= 6: # Margen de 6s para la reacción
+                    if diff < min_diff:
+                        min_diff = diff
+                        closest_shot = (sx, sy)
+            
+            if closest_shot:
+                sx, sy = closest_shot
+                val = 0.1
+                if sx >= 94.2 and 36.8 <= sy <= 63.2: val = 0.9
+                elif 83 <= sx < 94.2 and 36.8 <= sy <= 63.2: val = 0.7
+                elif sx < 83: val = 0.2
+                elif sx >= 83 and ((21.1 <= sy < 36.8) or (63.2 < sy <= 78.9)): val = 0.4
+                self.player_calidad_parada[player_id] = self.player_calidad_parada.get(player_id, 0.0) + val
+                # Espejo en stats para poder subirlo a player_scores.
+                self.stats[player_id]['calidad_parada'] = self.player_calidad_parada[player_id]
+
+
     def _handle_claim(self, event, current_min):
         self.apply_points(event.get('playerId'), 'claims', 1, current_min)
 
@@ -907,6 +955,13 @@ class MatchEventDownloader:
     def _handle_shot_target(self, event, current_min):
         self.apply_points(event.get('playerId'), 'shots_total', 1, current_min)
         self.apply_points(event.get('playerId'), 'shots_on_target', 1, current_min)
+        
+        total_sec = event.get('timeMin', 0) * 60 + event.get('timeSec', 0)
+        x = event.get('x', 50.0)
+        y = event.get('y', 50.0)
+        self.recent_shots.append((total_sec, x, y))
+        self.recent_shots = self.recent_shots[-10:]
+        
         # typeId 15 = "Attempt Saved": si es un penalti a puerta (no gol), lo ha
         # parado el portero -> cuenta como penalti fallado para el lanzador.
         if self.has_qualifier(event, Q_PENALTY):
@@ -1174,14 +1229,14 @@ class MatchEventDownloader:
                 # Portero
                 'saves': stats.get('saves', 0),
                 'penalty_saves': stats.get('penalties_saved', 0),
-                'claims_ok': stats.get('claims_ok', 0),
+                'claims_ok': stats.get('claims', 0),
                 'claims_fail': stats.get('claims_fail', 0),
                 'fumbles': stats.get('fumbles', 0),
                 'crosses_not_claimed': stats.get('crosses_not_claimed', 0),
                 'punches_ok': stats.get('punches_ok', 0),
                 'punches_fail': stats.get('punches_fail', 0),
                 'smothers': stats.get('smothers', 0),
-                'sweepers_ok': stats.get('sweepers_ok', 0),
+                'sweepers_ok': stats.get('sweepers', 0),
                 'sweepers_fail': stats.get('sweepers_fail', 0),
                 'parries_safe': stats.get('parries_safe', 0),
                 'parries_danger': stats.get('parries_danger', 0),
@@ -1248,15 +1303,24 @@ class MatchEventDownloader:
                 'second_yellow_cards': stats.get('second_yellow_cards', 0),
                 'red_cards': stats.get('red_cards', 0),
                 
-                # RELEVO Points
+                # RELEVO: total y punto obtenido en cada uno de los 4 bloques.
                 'relevo_points': stats.get('relevo_points', 0),
-                'relevo_participation_pts': stats.get('relevo_participation_pts', 0.0),
-                'relevo_passes_pts': stats.get('relevo_passes_pts', 0.0),
-                'relevo_opp_half_pts': stats.get('relevo_opp_half_pts', 0.0),
-                'relevo_shots_pts': stats.get('relevo_shots_pts', 0.0),
-                'relevo_duels_pts': stats.get('relevo_duels_pts', 0.0),
-                'relevo_aerials_pts': stats.get('relevo_aerials_pts', 0.0),
-                'relevo_takeons_pts': stats.get('relevo_takeons_pts', 0.0),
+                'relevo_block_1_pts': stats.get('block_1_pts', 0.0),
+                'relevo_block_2_pts': stats.get('block_2_pts', 0.0),
+                'relevo_block_3_pts': stats.get('block_3_pts', 0.0),
+                'relevo_block_4_pts': stats.get('block_4_pts', 0.0),
+
+                # RELEVO: métricas crudas que alimentan los bloques.
+                'calidad_parada': round(stats.get('calidad_parada', 0.0), 2),
+                'pass_opp_half_attempted': stats.get('pass_opp_half_attempted', 0),
+                'pass_opp_half_completed': stats.get('pass_opp_half_completed', 0),
+                'ground_duels_won': stats.get('relevo_ground_duels_won', 0),
+                'ground_duels_total': stats.get('relevo_ground_duels_total', 0),
+                'def_actions_last_man': stats.get('relevo_def_action_last_man', 0),
+                'set_piece_shots': stats.get('relevo_abp_remates', 0),
+                'header_shots': stats.get('relevo_remates_cabeza', 0),
+                'recoveries_opp_half': stats.get('relevo_recup_campo_rival', 0),
+                'shots_total': stats.get('shots_total', 0),
             }
 
             try:

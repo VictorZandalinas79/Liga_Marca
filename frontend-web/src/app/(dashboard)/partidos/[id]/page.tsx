@@ -298,6 +298,22 @@ export default function PartidoDetallePage() {
           // Portería
           clean_sheet: score?.clean_sheet || false,
           goals_conceded: score?.goals_conceded || 0,
+          // RELEVO: punto de cada bloque y métricas que los alimentan.
+          relevo_block_1_pts: score?.relevo_block_1_pts ?? null,
+          relevo_block_2_pts: score?.relevo_block_2_pts ?? null,
+          relevo_block_3_pts: score?.relevo_block_3_pts ?? null,
+          relevo_block_4_pts: score?.relevo_block_4_pts ?? null,
+          calidad_parada: score?.calidad_parada || 0,
+          pass_opp_half_attempted: score?.pass_opp_half_attempted || 0,
+          pass_opp_half_completed: score?.pass_opp_half_completed || 0,
+          ground_duels_won: score?.ground_duels_won || 0,
+          ground_duels_total: score?.ground_duels_total || 0,
+          def_actions_last_man: score?.def_actions_last_man || 0,
+          set_piece_shots: score?.set_piece_shots || 0,
+          header_shots: score?.header_shots || 0,
+          recoveries_opp_half: score?.recoveries_opp_half || 0,
+          shots_total: score?.shots_total || 0,
+          takeons_overrun: score?.takeons_overrun || 0,
         }
       })
 

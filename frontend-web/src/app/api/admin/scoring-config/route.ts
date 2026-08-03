@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-admin'
 import { createAdminSupabase } from '@/lib/supabase/admin'
+import { POSITIONS } from '@/lib/scoring-config'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +32,7 @@ export async function PATCH(request: NextRequest) {
   const admin = createAdminSupabase()
 
   // Partimos de las reglas almacenadas para no perder metadatos ni secciones
-  // no editables (participation, relevo_rules, mappings, version…).
+  // no editables (participation, mappings, version…).
   const { data: current, error: readErr } = await admin
     .from('scoring_config')
     .select('rules')
@@ -64,21 +65,6 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  // --- bonuses_per_X[key].points ---
-  if (body.bonuses_per_X && typeof body.bonuses_per_X === 'object') {
-    const bonuses = (rules.bonuses_per_X ??= {}) as Record<string, Record<string, unknown>>
-    for (const [key, patch] of Object.entries(body.bonuses_per_X as Record<string, unknown>)) {
-      const val = (patch as Record<string, unknown>)?.points
-      if (val === undefined) continue
-      if (!isNum(val)) {
-        return NextResponse.json({ error: `Valor inválido en bonuses_per_X.${key}.points` }, { status: 400 })
-      }
-      const target = (bonuses[key] ??= { required: 1 })
-      target.points = val
-      changed = true
-    }
-  }
-
   // --- penalties_per_X[group][POS].points ---
   if (body.penalties_per_X && typeof body.penalties_per_X === 'object') {
     const penalties = (rules.penalties_per_X ??= {}) as Record<string, Record<string, Record<string, unknown>>>
@@ -98,16 +84,21 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  // --- relevo_rules ---
-  if (body.relevo_rules && typeof body.relevo_rules === 'object') {
-    const relevoRules = (rules.relevo_rules ??= {}) as Record<string, unknown>
-    for (const [key, val] of Object.entries(body.relevo_rules as Record<string, unknown>)) {
-      if (val === undefined) continue
-      if (!isNum(val)) {
-        return NextResponse.json({ error: `Valor inválido en relevo_rules.${key}` }, { status: 400 })
+  // --- relevo_limits[POS][key] : umbrales de los 4 bloques por posición ---
+  if (body.relevo_limits && typeof body.relevo_limits === 'object') {
+    const limits = (rules.relevo_limits ??= {}) as Record<string, Record<string, unknown>>
+    for (const [pos, byKey] of Object.entries(body.relevo_limits as Record<string, unknown>)) {
+      if (!POSITIONS.includes(pos as (typeof POSITIONS)[number])) continue
+      if (!byKey || typeof byKey !== 'object') continue
+      const target = (limits[pos] ??= {})
+      for (const [key, val] of Object.entries(byKey as Record<string, unknown>)) {
+        if (val === undefined) continue
+        if (!isNum(val)) {
+          return NextResponse.json({ error: `Valor inválido en relevo_limits.${pos}.${key}` }, { status: 400 })
+        }
+        target[key] = val
+        changed = true
       }
-      relevoRules[key] = val
-      changed = true
     }
   }
 

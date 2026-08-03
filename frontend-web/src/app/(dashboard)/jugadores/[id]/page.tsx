@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, TrendingUp, Goal, Ticket, X, Calendar, MapPin, Clock } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
-import { resolveRates } from '@/lib/scoring-config'
+import { evaluateRelevoBlocks, resolveRates } from '@/lib/scoring-config'
 import { useScoringRules } from '@/hooks/use-scoring-rules'
 
 interface Player {
@@ -627,56 +627,45 @@ export default function JugadorDetallePage() {
     if (score.second_yellow_cards > 0) b5.push(u(score.second_yellow_cards, SR.second_yellow_card, 'Doble amarilla'))
     if (score.red_cards > 0) b5.push(u(score.red_cards, SR.red_card, 'Roja directa'))
 
-    // BLOQUE 6: Bonus Ataque y Pase
+    // BLOQUE 6: Acciones de portero (sólo la parada puntúa por unidad en v4).
     const b6: ScoreRow[] = []
-    if (score.passes_completed > 0) b6.push(u(score.passes_completed, SR.per_unit.passes_completed, 'Pases completados'))
-    if (g('forward_passes') > 0) b6.push(u(g('forward_passes'), SR.per_unit.forward_passes, 'Pases hacia adelante'))
-    if (g('box_entries') > 0) b6.push(u(g('box_entries'), SR.per_unit.box_entries, 'Pases al área exitosos'))
-    if (g('successful_crosses') > 0) b6.push(u(g('successful_crosses'), SR.per_unit.successful_crosses, 'Centros exitosos'))
-    if (g('set_pieces_taken') > 0) b6.push(u(g('set_pieces_taken'), SR.per_unit.set_pieces_taken, 'Balón parado'))
+    if (g('saves') > 0) b6.push(u(g('saves'), SR.per_unit.saves, 'Paradas'))
 
-    // BLOQUE 7: Bonus Defensa y Acción
+    // BLOQUE 7: las cuatro métricas que puntúan por unidad en el sistema v4.
     const b7: ScoreRow[] = []
-    if (score.takeons_won > 0) b7.push(u(score.takeons_won, SR.per_unit.takeons_won, 'Regates ganados'))
-    if (g('long_balls_completed') > 0) b7.push(u(g('long_balls_completed'), SR.per_unit.long_balls_completed, 'Pases largos completados'))
-    if (score.shots_on_target > 0) b7.push(u(score.shots_on_target, SR.per_unit.shots_on_target, 'Tiros a puerta'))
-    if (g('ball_recoveries') > 0) b7.push(u(g('ball_recoveries'), SR.per_unit.ball_recoveries, 'Balón recuperado'))
-    if (g('interceptions_high') > 0) b7.push(u(g('interceptions_high'), SR.per_unit.interceptions_high, 'Interceptación alta'))
-    if (g('interceptions_med') > 0) b7.push(u(g('interceptions_med'), SR.per_unit.interceptions_med, 'Interceptación media'))
-    if (g('interceptions_low') > 0) b7.push(u(g('interceptions_low'), SR.per_unit.interceptions_low, 'Interceptación baja'))
     if (score.clearances > 0) b7.push(u(score.clearances, SR.per_unit.clearances, 'Despejes'))
+    if (score.shots_on_target > 0) b7.push(u(score.shots_on_target, SR.per_unit.shots_on_target, 'Tiros a puerta'))
+    if (score.takeons_won > 0) b7.push(u(score.takeons_won, SR.per_unit.takeons_won, 'Regates completados'))
+    if (g('box_entries') > 0) b7.push(u(g('box_entries'), SR.per_unit.box_entries, 'Balones al área'))
 
     // BLOQUE 8: Pérdidas
     const b8: ScoreRow[] = []
     const lostBalls = (score.dispossessed || 0) + (score.bad_touches || 0)
     if (lostBalls > 0) b8.push(u(lostBalls, SR.lost_balls, 'Balón perdido'))
 
-    // BLOQUE 9: Puntos RELEVO
+    // BLOQUE 9: Puntos RELEVO. Un bloque superado = 1 punto; ninguno = -1.
+    // Cada fila detalla qué métrica del bloque se cumplió (o la que más cerca quedó).
     const b9: ScoreRow[] = []
-    if (score.relevo_points) {
-      if ('relevo_participation_pts' in score && score.relevo_participation_pts !== undefined && score.relevo_participation_pts !== null) {
-        // Nueva versión explícita
-        const addRelevoRow = (label: string, val: number | undefined) => {
-          const v = Number(val) || 0
-          if (v !== 0) b9.push({ label, count: 0, unit: 0, points: v, flat: true })
-        }
-        addRelevoRow('Participación', score.relevo_participation_pts)
-        addRelevoRow('Precisión de pase', score.relevo_passes_pts)
-        addRelevoRow('Pases campo rival', score.relevo_opp_half_pts)
-        addRelevoRow('Eficacia tiro', score.relevo_shots_pts)
-        addRelevoRow('Duelos terrestres', score.relevo_duels_pts)
-        addRelevoRow('Duelos aéreos', score.relevo_aerials_pts)
-        addRelevoRow('Regates completados', score.relevo_takeons_pts)
-      } else {
-        // Versión antigua agrupada
-        const takeonTotal = g('takeons_won') + g('takeons_lost')
-        const takeonBonus = takeonTotal > 0 && (g('takeons_won') / takeonTotal) > 0.5 ? 1 : 0
-        const baseRelevo = score.relevo_points - takeonBonus
-        if (baseRelevo > 0) b9.push({ label: 'Bonus RELEVO (participación, pases, duelos, tiros)', count: 0, unit: 0, points: baseRelevo, flat: true })
-        if (takeonBonus > 0) {
-          const takeonAcc = Math.round((g('takeons_won') / takeonTotal) * 100)
-          b9.push({ label: `Regates ${takeonAcc}% éxito (${g('takeons_won')}/${takeonTotal})`, count: 0, unit: 0, points: 1, flat: true })
-        }
+    if (g('minutes_played') > 0) {
+      const relevoBlocks = evaluateRelevoBlocks(score as unknown as Record<string, unknown>, pos, SR.relevo_limits)
+      for (const blk of relevoBlocks) {
+        const hit = blk.metrics.find((m) => m.met)
+        const shown = hit ?? blk.metrics[0]
+        const fmtVal = (v: number, unit: 'count' | 'pct') =>
+          unit === 'pct' ? `${v.toFixed(0)}%` : String(parseFloat(v.toFixed(2)))
+        const detail = shown
+          ? `${shown.label} ${fmtVal(shown.value, shown.unit)} (mín. ${fmtVal(shown.target, shown.unit)})`
+          : ''
+        b9.push({
+          label: `Bloque ${blk.id} · ${blk.title}${detail ? ` — ${detail}` : ''}`,
+          count: 0,
+          unit: 0,
+          points: blk.points,
+          flat: true,
+        })
+      }
+      if (relevoBlocks.every((blk) => blk.points <= 0)) {
+        b9.push({ label: 'Ningún bloque superado', count: 0, unit: 0, points: -1, flat: true })
       }
     }
 

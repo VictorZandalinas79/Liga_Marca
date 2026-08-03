@@ -39,33 +39,15 @@ export const EDITABLE_EVENTS: EditableEvent[] = [
   { key: 'penalty_save', label: 'Penalti parado', kind: 'single' },
   { key: 'penalty_missed', label: 'Penalti fallado', kind: 'single' },
   { key: 'save', label: 'Parada', kind: 'single' },
-  { key: 'punch_ok', label: 'Despeje de puños (ok)', kind: 'single' },
-  { key: 'punch_fail', label: 'Despeje de puños (fallido)', kind: 'single' },
-  { key: 'claim', label: 'Blocaje', kind: 'single' },
-  { key: 'sweeper', label: 'Salida del área', kind: 'single' },
   { key: 'yellow_card', label: 'Tarjeta amarilla', kind: 'positional' },
   { key: 'second_yellow_card', label: 'Segunda amarilla (roja)', kind: 'positional' },
   { key: 'red_card', label: 'Tarjeta roja directa', kind: 'positional' },
   { key: 'lost_balls', label: 'Balón perdido (por pérdida)', kind: 'single' },
+  { key: 'clearances', label: 'Despeje', kind: 'single' },
+  { key: 'shots_on_target', label: 'Tiro a puerta', kind: 'single' },
+  { key: 'takeons_won', label: 'Regate completado', kind: 'single' },
+  { key: 'box_entries', label: 'Balones al área', kind: 'single' },
 ]
-
-// Etiquetas en español para los bonus por métrica (claves de `bonuses_per_X`).
-export const BONUS_LABELS: Record<string, string> = {
-  passes_completed: 'Pase completado',
-  forward_passes: 'Pase hacia adelante',
-  shots_on_target: 'Tiro a puerta',
-  takeons_won: 'Regate completado',
-  box_entries: 'Pases al área exitosos',
-  ball_recoveries: 'Balón recuperado',
-  interceptions_high: 'Interceptación (campo rival)',
-  interceptions_med: 'Interceptación (centro)',
-  interceptions_low: 'Interceptación (campo propio)',
-  clearances: 'Despeje',
-  set_pieces_taken: 'Balón parado lanzado',
-  successful_crosses: 'Centro bueno',
-  long_balls_completed: 'Pase largo bueno',
-}
-
 
 
 /** Devuelve un número de forma segura desde un objeto de reglas, o 0. */
@@ -86,6 +68,412 @@ export function num(obj: unknown, key: string): number {
 // carga en cliente. Así el "× 0.05" junto a cada métrica refleja lo editado.
 // ============================================================================
 
+// ---------------------------------------------------------------------------
+// Puntos RELEVO: 4 bloques por posición, 1 punto por bloque superado y -1 si no
+// se supera ninguno. Los umbrales viven en `relevo_limits` (editables en Admin)
+// y el motor es trigger_descarga_eventos.py::calculate_relevo_points.
+// ---------------------------------------------------------------------------
+
+/** Umbrales por posición. Claves `*_per_min` se escalan por minutos jugados; `*_pct` son porcentajes. */
+export type RelevoLimits = Record<Position, Record<string, number>>
+
+export const DEFAULT_RELEVO_LIMITS: RelevoLimits = {
+  POR: {
+    saves_per_min: 0.06,
+    calidad_parada_multiplier: 0.5,
+    long_passes_per_min: 0.05,
+    pass_pct: 65,
+    pass_att_per_min: 0.3,
+    claims_per_min: 0.02,
+    punches_per_min: 0.03,
+  },
+  DEF: {
+    last_man_per_min: 0.02,
+    long_passes_per_min: 0.05,
+    forward_passes_per_min: 0.05,
+    aerials_pct: 60,
+    ground_duels_pct: 60,
+    abp_remates_per_min: 0.01,
+    crosses_per_min: 0.02,
+  },
+  MED: {
+    pass_opp_pct: 50,
+    aerials_pct: 60,
+    ground_duels_pct: 60,
+    shots_on_pct: 50,
+    takeons_pct: 35,
+    assists_per_min: 0.03,
+    crosses_per_min: 0.02,
+  },
+  DEL: {
+    pass_opp_pct: 50,
+    aerials_pct: 40,
+    recup_opp_per_min: 0.3,
+    shots_on_pct: 60,
+    head_shots_per_min: 0.02,
+    assists_per_min: 0.03,
+    takeons_pct: 35,
+  },
+}
+
+/** Fila de player_scores (o cualquier objeto con esas columnas). */
+type ScoreRow = Record<string, unknown>
+
+export interface RelevoMetricSpec {
+  label: string
+  /** 'count' → unidades acumuladas ; 'pct' → porcentaje */
+  unit: 'count' | 'pct'
+  /** Valor logrado por el jugador. */
+  value: (s: ScoreRow) => number
+  /** Mínimo exigido, dados los umbrales de su posición y los minutos jugados. */
+  target: (lim: Record<string, number>, mins: number) => number
+  /** El motor usa `>=` en los acumulados y `>` estricto en los porcentajes. */
+  cmp: 'gte' | 'gt'
+  /** Detalle opcional para el desglose, p. ej. "8/14". */
+  detail?: (s: ScoreRow) => string
+  /** Descripción del umbral para la página de Puntuación. */
+  describe: (lim: Record<string, number>) => string
+}
+
+export interface RelevoOptionSpec {
+  /** Si es true hay que cumplir TODAS las métricas; si no, basta con una. */
+  requireAll?: boolean
+  metrics: RelevoMetricSpec[]
+}
+
+export interface RelevoBlockSpec {
+  id: 1 | 2 | 3 | 4
+  title: string
+  note?: string
+  /** Basta con superar UNA de las opciones para llevarse el punto. */
+  options: RelevoOptionSpec[]
+}
+
+const n = (s: ScoreRow, k: string): number => Number(s?.[k]) || 0
+const pct = (won: number, total: number): number => (total > 0 ? (won / total) * 100 : 0)
+
+/** Mínimo de una métrica acumulativa: la tasa por minuto escalada a los minutos jugados. */
+const perMin = (key: string, fallback: number) => (lim: Record<string, number>, mins: number) =>
+  (lim?.[key] ?? fallback) * mins
+
+const flat = (key: string, fallback: number) => (lim: Record<string, number>) => lim?.[key] ?? fallback
+
+const aerialsPct = (fallback: number): RelevoMetricSpec => ({
+  label: 'Duelos aéreos ganados',
+  unit: 'pct',
+  value: (s) => pct(n(s, 'aerials_won'), n(s, 'aerials_won') + n(s, 'aerials_lost')),
+  target: flat('aerials_pct', fallback),
+  cmp: 'gt',
+  detail: (s) => `${n(s, 'aerials_won')}/${n(s, 'aerials_won') + n(s, 'aerials_lost')}`,
+  describe: (lim) => `más del ${lim?.aerials_pct ?? fallback}% de duelos aéreos ganados`,
+})
+
+const groundDuelsPct = (fallback: number): RelevoMetricSpec => ({
+  label: 'Duelos por el suelo ganados',
+  unit: 'pct',
+  value: (s) => pct(n(s, 'ground_duels_won'), n(s, 'ground_duels_total')),
+  target: flat('ground_duels_pct', fallback),
+  cmp: 'gt',
+  detail: (s) => `${n(s, 'ground_duels_won')}/${n(s, 'ground_duels_total')}`,
+  describe: (lim) => `más del ${lim?.ground_duels_pct ?? fallback}% de duelos por el suelo ganados`,
+})
+
+const shotsOnPct = (fallback: number): RelevoMetricSpec => ({
+  label: 'Remates a puerta',
+  unit: 'pct',
+  value: (s) => pct(n(s, 'shots_on_target'), n(s, 'shots_total')),
+  target: flat('shots_on_pct', fallback),
+  cmp: 'gt',
+  detail: (s) => `${n(s, 'shots_on_target')}/${n(s, 'shots_total')}`,
+  describe: (lim) => `más del ${lim?.shots_on_pct ?? fallback}% de sus remates a puerta`,
+})
+
+const takeonsPct = (fallback: number): RelevoMetricSpec => ({
+  label: 'Regates completados',
+  unit: 'pct',
+  value: (s) => pct(n(s, 'takeons_won'), n(s, 'takeons_won') + n(s, 'takeons_lost') + n(s, 'takeons_overrun')),
+  target: flat('takeons_pct', fallback),
+  cmp: 'gt',
+  detail: (s) => `${n(s, 'takeons_won')}/${n(s, 'takeons_won') + n(s, 'takeons_lost') + n(s, 'takeons_overrun')}`,
+  describe: (lim) => `más del ${lim?.takeons_pct ?? fallback}% de regates completados`,
+})
+
+const passOppPct = (fallback: number): RelevoMetricSpec => ({
+  label: 'Pases buenos en campo rival',
+  unit: 'pct',
+  value: (s) => pct(n(s, 'pass_opp_half_completed'), n(s, 'pass_opp_half_attempted')),
+  target: flat('pass_opp_pct', fallback),
+  cmp: 'gt',
+  detail: (s) => `${n(s, 'pass_opp_half_completed')}/${n(s, 'pass_opp_half_attempted')}`,
+  describe: (lim) => `más del ${lim?.pass_opp_pct ?? fallback}% de acierto en el pase en campo rival`,
+})
+
+const longPasses = (fallback: number): RelevoMetricSpec => ({
+  label: 'Pases largos completados',
+  unit: 'count',
+  value: (s) => n(s, 'long_balls_completed'),
+  target: perMin('long_passes_per_min', fallback),
+  cmp: 'gte',
+  describe: (lim) => `${lim?.long_passes_per_min ?? fallback} pases largos completados por minuto jugado`,
+})
+
+const crosses = (fallback: number): RelevoMetricSpec => ({
+  label: 'Centros buenos',
+  unit: 'count',
+  value: (s) => n(s, 'successful_crosses'),
+  target: perMin('crosses_per_min', fallback),
+  cmp: 'gte',
+  describe: (lim) => `${lim?.crosses_per_min ?? fallback} centros buenos por minuto jugado`,
+})
+
+const assists = (fallback: number): RelevoMetricSpec => ({
+  label: 'Asistencias',
+  unit: 'count',
+  value: (s) => n(s, 'assists'),
+  target: perMin('assists_per_min', fallback),
+  cmp: 'gte',
+  describe: (lim) => `${lim?.assists_per_min ?? fallback} asistencias por minuto jugado`,
+})
+
+/** Espejo exacto de calculate_relevo_points en trigger_descarga_eventos.py. */
+export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
+  POR: [
+    {
+      id: 1,
+      title: 'Paradas',
+      options: [{ metrics: [{
+        label: 'Paradas',
+        unit: 'count',
+        value: (s) => n(s, 'saves'),
+        target: perMin('saves_per_min', 0.06),
+        cmp: 'gte',
+        describe: (lim) => `${lim?.saves_per_min ?? 0.06} paradas por minuto jugado`,
+      }] }],
+    },
+    {
+      id: 2,
+      title: 'Calidad de parada',
+      note: 'Cada parada suma un valor según la zona desde la que se remató; el total debe superar una fracción de sus paradas.',
+      options: [{ metrics: [{
+        label: 'Valor de calidad acumulado',
+        unit: 'count',
+        value: (s) => n(s, 'calidad_parada'),
+        // El umbral real depende de sus propias paradas y lo calcula
+        // evaluateRelevoBlocks: (calidad/min) > mult × (paradas/min).
+        target: () => 0,
+        cmp: 'gt',
+        describe: (lim) => `valor de calidad superior al ${((lim?.calidad_parada_multiplier ?? 0.5) * 100).toFixed(0)}% de sus paradas`,
+      }] }],
+    },
+    {
+      id: 3,
+      title: 'Distribución',
+      note: 'Basta con la opción A, o cumplir las dos métricas de la opción B.',
+      options: [
+        { metrics: [longPasses(0.05)] },
+        {
+          requireAll: true,
+          metrics: [
+            {
+              label: 'Acierto en el pase',
+              unit: 'pct',
+              value: (s) => pct(n(s, 'passes_completed'), n(s, 'passes_attempted')),
+              target: flat('pass_pct', 65),
+              cmp: 'gt',
+              detail: (s) => `${n(s, 'passes_completed')}/${n(s, 'passes_attempted')}`,
+              describe: (lim) => `más del ${lim?.pass_pct ?? 65}% de acierto en el pase`,
+            },
+            {
+              label: 'Pases intentados',
+              unit: 'count',
+              value: (s) => n(s, 'passes_attempted'),
+              target: perMin('pass_att_per_min', 0.3),
+              cmp: 'gte',
+              describe: (lim) => `${lim?.pass_att_per_min ?? 0.3} pases intentados por minuto jugado`,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 4,
+      title: 'Juego aéreo del portero',
+      options: [{ metrics: [
+        {
+          label: 'Blocajes',
+          unit: 'count',
+          value: (s) => n(s, 'claims_ok'),
+          target: perMin('claims_per_min', 0.02),
+          cmp: 'gte',
+          describe: (lim) => `${lim?.claims_per_min ?? 0.02} blocajes por minuto jugado`,
+        },
+        {
+          label: 'Despejes de puños',
+          unit: 'count',
+          value: (s) => n(s, 'punches_ok') + n(s, 'punches_fail'),
+          target: perMin('punches_per_min', 0.03),
+          cmp: 'gte',
+          describe: (lim) => `${lim?.punches_per_min ?? 0.03} despejes de puños por minuto jugado`,
+        },
+      ] }],
+    },
+  ],
+  DEF: [
+    {
+      id: 1,
+      title: 'Acciones de último hombre',
+      options: [{ metrics: [{
+        label: 'Acciones de último hombre',
+        unit: 'count',
+        value: (s) => n(s, 'def_actions_last_man'),
+        target: perMin('last_man_per_min', 0.02),
+        cmp: 'gte',
+        describe: (lim) => `${lim?.last_man_per_min ?? 0.02} acciones de último hombre por minuto jugado`,
+      }] }],
+    },
+    {
+      id: 2,
+      title: 'Salida de balón',
+      options: [{ metrics: [
+        longPasses(0.05),
+        {
+          label: 'Pases hacia adelante',
+          unit: 'count',
+          value: (s) => n(s, 'forward_passes'),
+          target: perMin('forward_passes_per_min', 0.05),
+          cmp: 'gte',
+          describe: (lim) => `${lim?.forward_passes_per_min ?? 0.05} pases hacia adelante por minuto jugado`,
+        },
+      ] }],
+    },
+    { id: 3, title: 'Duelos', options: [{ metrics: [aerialsPct(60), groundDuelsPct(60)] }] },
+    {
+      id: 4,
+      title: 'Aportación ofensiva',
+      options: [{ metrics: [
+        {
+          label: 'Remates a balón parado',
+          unit: 'count',
+          value: (s) => n(s, 'set_piece_shots'),
+          target: perMin('abp_remates_per_min', 0.01),
+          cmp: 'gte',
+          describe: (lim) => `${lim?.abp_remates_per_min ?? 0.01} remates a balón parado por minuto jugado`,
+        },
+        crosses(0.02),
+      ] }],
+    },
+  ],
+  MED: [
+    { id: 1, title: 'Distribución en campo rival', options: [{ metrics: [passOppPct(50)] }] },
+    { id: 2, title: 'Duelos', options: [{ metrics: [aerialsPct(60), groundDuelsPct(60)] }] },
+    { id: 3, title: 'Desequilibrio', options: [{ metrics: [shotsOnPct(50), takeonsPct(35)] }] },
+    { id: 4, title: 'Generación de juego', options: [{ metrics: [assists(0.03), crosses(0.02)] }] },
+  ],
+  DEL: [
+    { id: 1, title: 'Distribución en campo rival', options: [{ metrics: [passOppPct(50)] }] },
+    {
+      id: 2,
+      title: 'Presión y juego aéreo',
+      options: [{ metrics: [
+        aerialsPct(40),
+        {
+          label: 'Recuperaciones en campo rival',
+          unit: 'count',
+          value: (s) => n(s, 'recoveries_opp_half'),
+          target: perMin('recup_opp_per_min', 0.3),
+          cmp: 'gte',
+          describe: (lim) => `${lim?.recup_opp_per_min ?? 0.3} recuperaciones en campo rival por minuto jugado`,
+        },
+      ] }],
+    },
+    {
+      id: 3,
+      title: 'Definición',
+      options: [{ metrics: [
+        shotsOnPct(60),
+        {
+          label: 'Remates de cabeza',
+          unit: 'count',
+          value: (s) => n(s, 'header_shots'),
+          target: perMin('head_shots_per_min', 0.02),
+          cmp: 'gte',
+          describe: (lim) => `${lim?.head_shots_per_min ?? 0.02} remates de cabeza por minuto jugado`,
+        },
+      ] }],
+    },
+    { id: 4, title: 'Aportación al ataque', options: [{ metrics: [assists(0.03), takeonsPct(35)] }] },
+  ],
+}
+
+export interface RelevoMetricResult {
+  label: string
+  unit: 'count' | 'pct'
+  value: number
+  target: number
+  met: boolean
+  detail?: string
+}
+
+export interface RelevoBlockResult {
+  id: number
+  title: string
+  note?: string
+  points: number
+  metrics: RelevoMetricResult[]
+}
+
+/**
+ * Evalúa los 4 bloques de un jugador en un partido. Reproduce el motor Python
+ * para poder mostrar CADA métrica (logrado vs. exigido) junto al punto del
+ * bloque, que se toma de la BD (`relevo_block_N_pts`) cuando está disponible.
+ */
+export function evaluateRelevoBlocks(
+  score: ScoreRow,
+  pos: Position,
+  limits: RelevoLimits,
+): RelevoBlockResult[] {
+  const lim = limits?.[pos] ?? DEFAULT_RELEVO_LIMITS[pos]
+  const mins = Number(score?.minutes_played) || 0
+
+  return RELEVO_BLOCKS[pos].map((block) => {
+    const metrics: RelevoMetricResult[] = []
+    let met = false
+
+    for (const option of block.options) {
+      const results = option.metrics.map((m) => {
+        // El bloque 2 del portero compara contra sus propias paradas, no contra
+        // un umbral fijo: calidad > multiplicador × paradas (y al menos 1 parada).
+        const target =
+          pos === 'POR' && block.id === 2
+            ? (lim?.calidad_parada_multiplier ?? 0.5) * (Number(score?.saves) || 0)
+            : m.target(lim, mins)
+        const value = m.value(score)
+        const passes = m.cmp === 'gte' ? value >= target : value > target
+        return {
+          label: m.label,
+          unit: m.unit,
+          value,
+          target,
+          met: passes,
+          detail: m.detail?.(score),
+        }
+      })
+      metrics.push(...results)
+      const optionMet = option.requireAll ? results.every((r) => r.met) : results.some((r) => r.met)
+      if (optionMet) met = true
+    }
+
+    // El bloque 2 del portero exige además haber hecho al menos una parada.
+    if (pos === 'POR' && block.id === 2 && (Number(score?.saves) || 0) <= 0) met = false
+
+    // El punto real lo manda la BD si el partido ya se sincronizó con el motor v4.
+    const stored = score?.[`relevo_block_${block.id}_pts`]
+    const points = stored === undefined || stored === null ? (met ? 1 : 0) : Number(stored) || 0
+
+    return { id: block.id, title: block.title, note: block.note, points, metrics }
+  })
+}
+
 export interface ScoringRates {
   participation: { starter_bonus: number; substitute_bonus: number; minutes_threshold: number }
   goal: Record<Position, number>
@@ -102,47 +490,18 @@ export interface ScoringRates {
   second_yellow_card: number
   red_card: number
 
+  // Métricas que puntúan por unidad. Desde el sistema v4 sólo son estas cinco:
+  // el resto (pases, recuperaciones, interceptaciones, centros…) dejó de dar
+  // puntos sueltos y ahora sólo influye a través de los bloques RELEVO.
   per_unit: {
     saves: number
-    punches_ok: number
-    punches_fail: number
-    claims: number
-    sweepers: number
+    clearances: number
     shots_on_target: number
     takeons_won: number
     box_entries: number
-    clearances: number
-    passes_completed: number
-    forward_passes: number
-    set_pieces_taken: number
-    successful_crosses: number
-    ball_recoveries: number
-    interceptions_high: number
-    interceptions_med: number
-    interceptions_low: number
-    long_balls_completed: number
   }
   lost_balls: number
-  relevo_rules: {
-    participation_step_percent: number
-    participation_points_per_step: number
-    min_passes: number
-    pass_accuracy_high: number
-    pass_accuracy_excel: number
-    pass_accuracy_low: number
-    min_opp_half_passes: number
-    opp_half_accuracy_high: number
-    min_shots: number
-    shot_accuracy_high: number
-    min_duels: number
-    duels_step_percent: number
-    duels_points_per_step: number
-    duels_won_high: number
-    duels_won_low: number
-    min_aerials: number
-    aerials_won_high: number
-    aerials_won_low: number
-  }
+  relevo_limits: RelevoLimits
 }
 
 // Valores por defecto (espejo de scoring_rules.json) usados como fallback.
@@ -162,34 +521,10 @@ export const DEFAULT_RATES: ScoringRates = {
   second_yellow_card: -1,
   red_card: -3,
   per_unit: {
-    saves: 0.5, punches_ok: 0.2, punches_fail: 0.1, claims: 0.1, sweepers: 0.1,
-    shots_on_target: 0.3, takeons_won: 0.5, box_entries: 0.1, clearances: 0.5,
-    passes_completed: 0.05, forward_passes: 0.2, set_pieces_taken: 0.2, successful_crosses: 0.3,
-    ball_recoveries: 0.2,
-    interceptions_high: 0.3, interceptions_med: 0.2, interceptions_low: 0.1,
-    long_balls_completed: 0.5,
+    saves: 0.5, clearances: 0.5, shots_on_target: 0.3, takeons_won: 0.5, box_entries: 0.1,
   },
   lost_balls: -0.1,
-  relevo_rules: {
-    participation_step_percent: 10,
-    participation_points_per_step: 1,
-    min_passes: 10,
-    pass_accuracy_high: 85,
-    pass_accuracy_excel: 92,
-    pass_accuracy_low: 65,
-    min_opp_half_passes: 10,
-    opp_half_accuracy_high: 75,
-    min_shots: 2,
-    shot_accuracy_high: 50,
-    min_duels: 5,
-    duels_step_percent: 10,
-    duels_points_per_step: 0.2,
-    duels_won_high: 60,
-    duels_won_low: 30,
-    min_aerials: 3,
-    aerials_won_high: 60,
-    aerials_won_low: 30
-  }
+  relevo_limits: DEFAULT_RELEVO_LIMITS,
 }
 
 // Lee un valor de evento por posición (cae a 'all' y luego al fallback).
@@ -203,12 +538,22 @@ function eventVal(rules: ScoringRules | null, key: string, pos: Position, fallba
   return fallback
 }
 
-function bonusVal(rules: ScoringRules | null, key: string, fallback: number): number {
-  const bonuses = rules?.bonuses_per_X as Record<string, Record<string, unknown>> | undefined
-  const v = bonuses?.[key]?.points
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback
+/** Umbrales RELEVO desde las reglas, completando con los defaults lo que falte. */
+function resolveRelevoLimits(rules: ScoringRules | null): RelevoLimits {
+  const stored = rules?.relevo_limits as Record<string, unknown> | undefined
+  const out = {} as RelevoLimits
+  for (const pos of POSITIONS) {
+    const posLimits = stored?.[pos]
+    const merged: Record<string, number> = { ...DEFAULT_RELEVO_LIMITS[pos] }
+    if (posLimits && typeof posLimits === 'object') {
+      for (const [k, v] of Object.entries(posLimits as Record<string, unknown>)) {
+        if (typeof v === 'number' && Number.isFinite(v)) merged[k] = v
+      }
+    }
+    out[pos] = merged
+  }
+  return out
 }
-
 
 
 /** Construye las tarifas de desglose desde las reglas de scoring_config. */
@@ -248,25 +593,13 @@ export function resolveRates(rules: ScoringRules | null): ScoringRates {
     red_card: eventVal(rules, 'red_card', 'MED', d.red_card),
     per_unit: {
       saves: eventVal(rules, 'save', 'MED', d.per_unit.saves),
-      punches_ok: eventVal(rules, 'punch_ok', 'MED', d.per_unit.punches_ok),
-      punches_fail: eventVal(rules, 'punch_fail', 'MED', d.per_unit.punches_fail),
-      claims: eventVal(rules, 'claim', 'MED', d.per_unit.claims),
-      sweepers: eventVal(rules, 'sweeper', 'MED', d.per_unit.sweepers),
-      shots_on_target: bonusVal(rules, 'shots_on_target', d.per_unit.shots_on_target),
-      takeons_won: bonusVal(rules, 'takeons_won', d.per_unit.takeons_won),
-      box_entries: bonusVal(rules, 'box_entries', d.per_unit.box_entries),
-      clearances: bonusVal(rules, 'clearances', d.per_unit.clearances),
-      passes_completed: bonusVal(rules, 'passes_completed', d.per_unit.passes_completed),
-      forward_passes: bonusVal(rules, 'forward_passes', d.per_unit.forward_passes),
-      set_pieces_taken: bonusVal(rules, 'set_pieces_taken', d.per_unit.set_pieces_taken),
-      successful_crosses: bonusVal(rules, 'successful_crosses', d.per_unit.successful_crosses),
-      ball_recoveries: bonusVal(rules, 'ball_recoveries', d.per_unit.ball_recoveries),
-      interceptions_high: bonusVal(rules, 'interceptions_high', d.per_unit.interceptions_high),
-      interceptions_med: bonusVal(rules, 'interceptions_med', d.per_unit.interceptions_med),
-      interceptions_low: bonusVal(rules, 'interceptions_low', d.per_unit.interceptions_low),
-      long_balls_completed: bonusVal(rules, 'long_balls_completed', d.per_unit.long_balls_completed),
+      clearances: eventVal(rules, 'clearances', 'MED', d.per_unit.clearances),
+      shots_on_target: eventVal(rules, 'shots_on_target', 'MED', d.per_unit.shots_on_target),
+      takeons_won: eventVal(rules, 'takeons_won', 'MED', d.per_unit.takeons_won),
+      box_entries: eventVal(rules, 'box_entries', 'MED', d.per_unit.box_entries),
     },
     lost_balls: num(events.lost_balls, 'all') || d.lost_balls,
-    relevo_rules: (rules.relevo_rules as ScoringRates['relevo_rules']) ?? d.relevo_rules,
+    relevo_limits: resolveRelevoLimits(rules),
   }
 }
+

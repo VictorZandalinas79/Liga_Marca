@@ -11,7 +11,8 @@ import { Card } from '@/components/ui/card'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { resolveRates, type ScoringRules } from '@/lib/scoring-config'
 import { DEFAULT_LEAGUE_CONFIG } from '@/lib/league-config-types'
-import { Coins } from 'lucide-react'
+import { Coins, Activity } from 'lucide-react'
+import { num } from '@/lib/scoring-config'
 
 export const metadata = {
   title: 'Sistema de Puntuación',
@@ -194,6 +195,24 @@ export default async function PuntuacionPage() {
         />
       </Section>
 
+      {/* 5. Acciones de Campo Adicionales */}
+      <Section
+        icon={Activity}
+        number={5}
+        title="Otras Acciones de Campo"
+        description="Métricas adicionales configurables por el administrador."
+      >
+        <PointsTable
+          rows={[
+            { accion: 'Parada', detalle: 'Por cada parada del portero', pts: formatPts(rates.per_unit.saves) },
+            { accion: 'Tiro a puerta', pts: formatPts(rates.per_unit.shots_on_target) },
+            { accion: 'Regate completado', pts: formatPts(rates.per_unit.takeons_won) },
+            { accion: 'Balón al área', pts: formatPts(rates.per_unit.box_entries) },
+            { accion: 'Despeje', pts: formatPts(rates.per_unit.clearances) },
+          ]}
+        />
+      </Section>
+
       {/* 6. Pérdidas de balón */}
       <Section
         icon={Ban}
@@ -208,72 +227,74 @@ export default async function PuntuacionPage() {
         />
       </Section>
 
-      {/* 6. Puntos RELEVO */}
+      {/* 7. Puntos RELEVO */}
       <Section
         icon={Gauge}
-        number={6}
-        title="Puntos RELEVO (Algoritmo de Influencia)"
-        description="Indicador puramente estadístico. Evalúa el rendimiento en 6 categorías; el resultado se acota entre 0 y 4 puntos de bonificación."
+        number={7}
+        title="Puntos RELEVO (Bloques por Posición)"
+        description="Sistema avanzado de 4 bloques específicos para cada posición (POR, DEF, MED, DEL)."
       >
-        <ol className="space-y-4">
-          <li>
-            <p className="text-sm font-semibold text-slate-800">1. Participación en el juego</p>
-            <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2">
-                <Pts value={formatPts(rates.relevo_rules.participation_points_per_step)} />
-                <span>por cada {rates.relevo_rules.participation_step_percent}% del total de eventos de su equipo realizados por el jugador.</span>
-              </li>
-            </ul>
-          </li>
-          <li>
-            <p className="text-sm font-semibold text-slate-800">
-              2. Precisión en la distribución <span className="font-normal text-slate-500">(mín. {rates.relevo_rules.min_passes} pases intentados)</span>
-            </p>
-            <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2"><Pts value="+2" /><span>efectividad de pase ≥ {rates.relevo_rules.pass_accuracy_excel}%.</span></li>
-              <li className="flex items-start gap-2"><Pts value="+1" /><span>efectividad entre {rates.relevo_rules.pass_accuracy_high}% y {(rates.relevo_rules.pass_accuracy_excel - 0.1).toFixed(1)}%.</span></li>
-              <li className="flex items-start gap-2"><Pts value="-1" /><span>efectividad por debajo del {rates.relevo_rules.pass_accuracy_low}%.</span></li>
-            </ul>
-          </li>
-          <li>
-            <p className="text-sm font-semibold text-slate-800">
-              3. Distribución en campo rival <span className="font-normal text-slate-500">(mín. {rates.relevo_rules.min_opp_half_passes} pases en campo contrario)</span>
-            </p>
-            <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2"><Pts value="+1" /><span>acierto en territorio rival ≥ {rates.relevo_rules.opp_half_accuracy_high}%.</span></li>
-            </ul>
-          </li>
-          <li>
-            <p className="text-sm font-semibold text-slate-800">
-              4. Efectividad de tiro <span className="font-normal text-slate-500">(mín. {rates.relevo_rules.min_shots} disparos)</span>
-            </p>
-            <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2"><Pts value="+1" /><span>{rates.relevo_rules.shot_accuracy_high}% o más de sus tiros (incluidos goles) van a puerta.</span></li>
-              <li className="flex items-start gap-2"><Pts value="-1" /><span>dispara pero ninguno va a portería (0%).</span></li>
-            </ul>
-          </li>
-          <li>
-            <p className="text-sm font-semibold text-slate-800">
-              5. Duelos <span className="font-normal text-slate-500">(mín. {rates.relevo_rules.min_duels})</span>
-            </p>
-            <ul className="mt-1 space-y-1 text-sm text-slate-600">
-              <li className="flex items-start gap-2"><Pts value={formatPts(rates.relevo_rules.duels_points_per_step)} /><span>por cada {rates.relevo_rules.duels_step_percent}% de duelos ganados.</span></li>
-            </ul>
-          </li>
-        </ol>
-        <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-          <p className="font-semibold">Resultado final</p>
-          <p className="mt-1">
-            Se suman las valoraciones. Si el total es menor que 0 se asignan{' '}
-            <strong>0 puntos</strong>; si supera 4 se asignan <strong>4 puntos</strong>.
-          </p>
+        <p className="mb-4 text-sm text-slate-600">
+          En lugar de métricas globales, el algoritmo evalúa a cada jugador según su rol. Cada posición tiene <strong>4 bloques estadísticos</strong> adaptados a su posición.
+        </p>
+        <ul className="space-y-2 text-sm text-slate-600 mb-6 list-disc pl-5">
+          <li>Por cada bloque superado, el jugador suma <strong>1 punto</strong>.</li>
+          <li>Si no supera <strong>ningún bloque</strong>, su puntuación de Relevo será <strong>-1 punto</strong>.</li>
+          <li>La puntuación final oscila entre <strong>-1 y 4 puntos</strong>.</li>
+        </ul>
+
+        {/* PORTERO */}
+        <div className="mb-6">
+          <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Portero (POR)</h3>
+          <ul className="text-sm text-slate-600 space-y-2 pl-2">
+            <li><span className="font-semibold">Bloque 1:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'saves_per_min') || 0.06} paradas por min. jugado.</li>
+            <li><span className="font-semibold">Bloque 2:</span> Ratio de Calidad de Parada supera el multiplicador de {num((rules?.relevo_limits as any)?.POR, 'calidad_parada_multiplier') || 0.5} respecto a sus paradas/min.</li>
+            <li>
+              <span className="font-semibold">Bloque 3:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'long_passes_per_min') || 0.05} pases largos/min, O BIEN (≥ {num((rules?.relevo_limits as any)?.POR, 'pass_pct') || 65}% acierto de pase Y ≥ {num((rules?.relevo_limits as any)?.POR, 'pass_att_per_min') || 0.3} pases/min).
+            </li>
+            <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'claims_per_min') || 0.02} blocajes/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.POR, 'punches_per_min') || 0.03} despejes puños/min.</li>
+          </ul>
         </div>
+
+        {/* DEFENSA */}
+        <div className="mb-6">
+          <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Defensa (DEF)</h3>
+          <ul className="text-sm text-slate-600 space-y-2 pl-2">
+            <li><span className="font-semibold">Bloque 1:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'last_man_per_min') || 0.02} acciones de último hombre/min.</li>
+            <li><span className="font-semibold">Bloque 2:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'long_passes_per_min') || 0.05} pases largos/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEF, 'forward_passes_per_min') || 0.05} pases hacia adelante/min.</li>
+            <li><span className="font-semibold">Bloque 3:</span> &gt; {num((rules?.relevo_limits as any)?.DEF, 'aerials_pct') || 60}% duelos aéreos ganados, O BIEN &gt; {num((rules?.relevo_limits as any)?.DEF, 'ground_duels_pct') || 60}% duelos suelo ganados.</li>
+            <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'abp_remates_per_min') || 0.01} remates a balón parado/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEF, 'crosses_per_min') || 0.02} centros buenos/min.</li>
+          </ul>
+        </div>
+
+        {/* MEDIO */}
+        <div className="mb-6">
+          <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Medio (MED)</h3>
+          <ul className="text-sm text-slate-600 space-y-2 pl-2">
+            <li><span className="font-semibold">Bloque 1:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'pass_opp_pct') || 50}% pases en campo rival.</li>
+            <li><span className="font-semibold">Bloque 2:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'aerials_pct') || 60}% duelos aéreos ganados, O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'ground_duels_pct') || 60}% duelos suelo ganados.</li>
+            <li><span className="font-semibold">Bloque 3:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'shots_on_pct') || 50}% remates a puerta, O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'takeons_pct') || 35}% regates completados.</li>
+            <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.MED, 'assists_per_min') || 0.03} asistencias/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.MED, 'crosses_per_min') || 0.02} centros buenos/min.</li>
+          </ul>
+        </div>
+
+        {/* DELANTERO */}
+        <div>
+          <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Delantero (DEL)</h3>
+          <ul className="text-sm text-slate-600 space-y-2 pl-2">
+            <li><span className="font-semibold">Bloque 1:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'pass_opp_pct') || 50}% pases en campo rival.</li>
+            <li><span className="font-semibold">Bloque 2:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'aerials_pct') || 40}% duelos aéreos ganados, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'recup_opp_per_min') || 0.3} recuperaciones campo rival/min.</li>
+            <li><span className="font-semibold">Bloque 3:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'shots_on_pct') || 60}% remates a puerta, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'head_shots_per_min') || 0.02} remates de cabeza/min.</li>
+            <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.DEL, 'assists_per_min') || 0.03} asistencias/min, O BIEN &gt; {num((rules?.relevo_limits as any)?.DEL, 'takeons_pct') || 35}% regates completados.</li>
+          </ul>
+        </div>
+
       </Section>
 
-      {/* 7. Reglas Económicas */}
+      {/* 8. Reglas Económicas */}
       <Section
         icon={Coins}
-        number={7}
+        number={8}
         title="Reglas Económicas y Premios"
         description="Cuotas de la liga, multas, pagos por jornada y premios a final de temporada."
       >

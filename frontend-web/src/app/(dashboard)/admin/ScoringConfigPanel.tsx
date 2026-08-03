@@ -7,8 +7,8 @@ import {
   POSITIONS,
   POSITION_LABELS,
   EDITABLE_EVENTS,
-  BONUS_LABELS,
   num,
+  type Position
 } from '@/lib/scoring-config'
 
 export function ScoringConfigPanel() {
@@ -17,6 +17,7 @@ export function ScoringConfigPanel() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState<Position>('POR')
 
   useEffect(() => {
     const load = async () => {
@@ -39,43 +40,33 @@ export function ScoringConfigPanel() {
     load()
   }, [])
 
-  // Actualiza un valor anidado del clon de reglas (events / bonuses_per_X / penalties_per_X).
+  // Actualiza un valor anidado del clon de reglas (events / penalties_per_X).
   const setEventValue = (key: string, valueKey: string, raw: string) => {
     const value = raw === '' || raw === '-' ? 0 : Number(raw)
     setRules((r) => {
       if (!r) return r
       const next = JSON.parse(JSON.stringify(r)) as ScoringRules
       const events = (next.events ??= {}) as Record<string, Record<string, unknown>>
-      const target = (events[key] ??= {})
-      target[valueKey] = value
+      events[key] ??= {}
+      events[key][valueKey] = value
       return next
     })
   }
 
-  const setBonusValue = (key: string, raw: string) => {
+  // Actualiza un límite de Relevo (relevo_limits -> pos -> key).
+  const setRelevoLimit = (pos: Position, key: string, raw: string) => {
     const value = raw === '' || raw === '-' ? 0 : Number(raw)
     setRules((r) => {
       if (!r) return r
       const next = JSON.parse(JSON.stringify(r)) as ScoringRules
-      const bonuses = (next.bonuses_per_X ??= {}) as Record<string, Record<string, unknown>>
-      const target = (bonuses[key] ??= { required: 1 })
-      target.points = value
+      const limits = (next.relevo_limits ??= {}) as Record<string, Record<string, unknown>>
+      const posLimits = (limits[pos] ??= {}) as Record<string, unknown>
+      posLimits[key] = value
       return next
     })
   }
 
-  const setRelevoValue = (key: string, raw: string) => {
-    const value = raw === '' || raw === '-' ? 0 : Number(raw)
-    setRules((r) => {
-      if (!r) return r
-      const next = JSON.parse(JSON.stringify(r)) as ScoringRules
-      const relevoRules = (next.relevo_rules ??= {}) as Record<string, unknown>
-      relevoRules[key] = value
-      return next
-    })
-  }
-
-  const setPenaltyValue = (group: string, pos: string, raw: string) => {
+  const setPenaltyValue =(group: string, pos: string, raw: string) => {
     const value = raw === '' || raw === '-' ? 0 : Number(raw)
     setRules((r) => {
       if (!r) return r
@@ -100,9 +91,8 @@ export function ScoringConfigPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           events: rules.events,
-          bonuses_per_X: rules.bonuses_per_X,
           penalties_per_X: rules.penalties_per_X,
-          relevo_rules: rules.relevo_rules,
+          relevo_limits: rules.relevo_limits,
         }),
       })
       if (!res.ok) {
@@ -121,8 +111,6 @@ export function ScoringConfigPanel() {
   }
 
   const events = (rules?.events ?? {}) as Record<string, Record<string, unknown>>
-  const bonuses = (rules?.bonuses_per_X ?? {}) as Record<string, Record<string, unknown>>
-  const relevo = (rules?.relevo_rules ?? {}) as Record<string, unknown>
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-6">
@@ -193,38 +181,179 @@ export function ScoringConfigPanel() {
               ))}
             </div>
           </section>
-          {/* Bonus por métrica */}
-          <section className="space-y-3">
-            <p className="text-sm font-semibold text-slate-700">Bonus por métrica (puntos por unidad)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {Object.keys(BONUS_LABELS).map((key) => (
-                <LabeledInput
-                  key={key}
-                  label={BONUS_LABELS[key] ?? key}
-                  value={num(bonuses[key], 'points')}
-                  onChange={(v) => setBonusValue(key, v)}
-                  step="0.05"
-                />
-              ))}
-            </div>
-          </section>
-
 
           {/* RELEVO Rules */}
-          <section className="space-y-3">
-            <p className="text-sm font-semibold text-slate-700">Reglas Puntos RELEVO (Algoritmo)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 bg-violet-50 p-4 rounded-xl border border-violet-100">
-              <LabeledInput label="Duelos % cada paso" value={Number(relevo.duels_step_percent ?? 10)} onChange={(v) => setRelevoValue('duels_step_percent', v)} step="1" />
-              <LabeledInput label="Duelos ptos por paso" value={Number(relevo.duels_points_per_step ?? 0.2)} onChange={(v) => setRelevoValue('duels_points_per_step', v)} step="0.1" />
-              
-              <LabeledInput label="Participación % paso" value={Number(relevo.participation_step_percent ?? 10)} onChange={(v) => setRelevoValue('participation_step_percent', v)} step="1" />
-              <LabeledInput label="Participación ptos por paso" value={Number(relevo.participation_points_per_step ?? 1)} onChange={(v) => setRelevoValue('participation_points_per_step', v)} step="1" />
-              
-              <LabeledInput label="Pases mín int." value={Number(relevo.min_passes ?? 10)} onChange={(v) => setRelevoValue('min_passes', v)} step="1" />
-              <LabeledInput label="Pases % Excel (>X)" value={Number(relevo.pass_accuracy_excel ?? 92)} onChange={(v) => setRelevoValue('pass_accuracy_excel', v)} step="1" />
-              
-              <LabeledInput label="Pases C. Rival mín int." value={Number(relevo.min_opp_half_passes ?? 10)} onChange={(v) => setRelevoValue('min_opp_half_passes', v)} step="1" />
-              <LabeledInput label="Pases C. Rival % Alto (>X)" value={Number(relevo.opp_half_accuracy_high ?? 75)} onChange={(v) => setRelevoValue('opp_half_accuracy_high', v)} step="1" />
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-700">Puntos RELEVO (Límites por posición)</p>
+            </div>
+            
+            <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
+              {POSITIONS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setActiveTab(p)}
+                  className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
+                    activeTab === p ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {POSITION_LABELS[p]}
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+              {activeTab === 'POR' && (
+                <div className="space-y-6">
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto)</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="Paradas / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'saves_per_min') || 0.06} onChange={(v) => setRelevoLimit('POR', 'saves_per_min', v)} step="0.01" />
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 2 (1 punto) - Calidad de Parada</h4>
+                    <p className="text-xs text-slate-500 mb-3">
+                      Se busca un tiro rival en los 5 segundos previos a cada parada. Ese tiro recibe un <strong>Valor de Importancia</strong> según su zona (ver mapa). 
+                      Se suman todos los valores y se dividen por los minutos jugados. Si este ratio supera una fracción (multiplicador) de las paradas por minuto, gana 1 punto.
+                    </p>
+                    <div className="flex flex-col lg:flex-row gap-5 items-start">
+                      <div className="flex-1 w-full max-w-sm border border-slate-200 rounded-lg overflow-hidden bg-slate-100">
+                        <img src="/calidad_parada.png" alt="Mapa de puntos por Calidad de Parada" className="w-full h-auto object-cover" />
+                      </div>
+                      <div className="flex-1 w-full grid grid-cols-1 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <LabeledInput label="Multiplicador (ej. 0.5 es 'la mitad')" value={num((rules.relevo_limits as any)?.POR || {}, 'calidad_parada_multiplier') || 0.5} onChange={(v) => setRelevoLimit('POR', 'calidad_parada_multiplier', v)} step="0.1" />
+                        <div className="text-xs text-slate-600 mt-2 p-2 bg-white border border-slate-200 rounded">
+                          <strong>Ejemplo de la regla:</strong>
+                          <br />
+                          El portero promedia <strong>0,06 paradas</strong> por minuto jugado.
+                          <br />
+                          En sus paradas ha acumulado un "valor de calidad" que equivale a <strong>0,04 por minuto jugado</strong>.
+                          <br />
+                          Como la calidad (0,04) es mayor que la <strong>mitad de sus paradas</strong> (0,06 x 0.5 = 0,03), entonces <strong>supera la métrica y suma 1 punto</strong>.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 3 (1 punto)</h4>
+                    <p className="text-xs text-slate-500 mb-3">Suma el punto si cumple la Opción A o si cumple ambas métricas de la Opción B.</p>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <p className="text-xs font-semibold text-slate-700 mb-2">Opción A: Pases Largos</p>
+                        <LabeledInput label="Pases largos / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'long_passes_per_min') || 0.05} onChange={(v) => setRelevoLimit('POR', 'long_passes_per_min', v)} step="0.01" />
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <p className="text-xs font-semibold text-slate-700 mb-2">Opción B: Pases Totales (deben cumplirse ambas)</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <LabeledInput label="% Pases buenos" value={num((rules.relevo_limits as any)?.POR || {}, 'pass_pct') || 65} onChange={(v) => setRelevoLimit('POR', 'pass_pct', v)} step="1" />
+                          <LabeledInput label="Mínimo intentados / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'pass_att_per_min') || 0.3} onChange={(v) => setRelevoLimit('POR', 'pass_att_per_min', v)} step="0.1" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 4 (1 punto) - Condición OR</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="Blocajes aéreos / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'claims_per_min') || 0.02} onChange={(v) => setRelevoLimit('POR', 'claims_per_min', v)} step="0.01" />
+                      <LabeledInput label="Despejes de puños / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'punches_per_min') || 0.03} onChange={(v) => setRelevoLimit('POR', 'punches_per_min', v)} step="0.01" />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === 'DEF' && (
+                <div className="space-y-6">
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto)</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="Acción último hombre / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'last_man_per_min') || 0.02} onChange={(v) => setRelevoLimit('DEF', 'last_man_per_min', v)} step="0.01" />
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 2 (1 punto) - Condición OR</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="Pases largos / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'long_passes_per_min') || 0.05} onChange={(v) => setRelevoLimit('DEF', 'long_passes_per_min', v)} step="0.01" />
+                      <LabeledInput label="Pases hacia adelante / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'forward_passes_per_min') || 0.05} onChange={(v) => setRelevoLimit('DEF', 'forward_passes_per_min', v)} step="0.01" />
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 3 (1 punto) - Condición OR</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="% Duelos aéreos ganados" value={num((rules.relevo_limits as any)?.DEF || {}, 'aerials_pct') || 60} onChange={(v) => setRelevoLimit('DEF', 'aerials_pct', v)} step="1" />
+                      <LabeledInput label="% Duelos suelo ganados" value={num((rules.relevo_limits as any)?.DEF || {}, 'ground_duels_pct') || 60} onChange={(v) => setRelevoLimit('DEF', 'ground_duels_pct', v)} step="1" />
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 4 (1 punto) - Condición OR</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="Remate ABP / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'abp_remates_per_min') || 0.01} onChange={(v) => setRelevoLimit('DEF', 'abp_remates_per_min', v)} step="0.01" />
+                      <LabeledInput label="Centros buenos / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'crosses_per_min') || 0.02} onChange={(v) => setRelevoLimit('DEF', 'crosses_per_min', v)} step="0.01" />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === 'MED' && (
+                <div className="space-y-6">
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto)</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="% Pases en campo rival" value={num((rules.relevo_limits as any)?.MED || {}, 'pass_opp_pct') || 50} onChange={(v) => setRelevoLimit('MED', 'pass_opp_pct', v)} step="1" />
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 2 (1 punto) - Condición OR</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="% Duelos aéreos ganados" value={num((rules.relevo_limits as any)?.MED || {}, 'aerials_pct') || 60} onChange={(v) => setRelevoLimit('MED', 'aerials_pct', v)} step="1" />
+                      <LabeledInput label="% Duelos suelo ganados" value={num((rules.relevo_limits as any)?.MED || {}, 'ground_duels_pct') || 60} onChange={(v) => setRelevoLimit('MED', 'ground_duels_pct', v)} step="1" />
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 3 (1 punto) - Condición OR</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="% Remates a puerta" value={num((rules.relevo_limits as any)?.MED || {}, 'shots_on_pct') || 50} onChange={(v) => setRelevoLimit('MED', 'shots_on_pct', v)} step="1" />
+                      <LabeledInput label="% Regates completados" value={num((rules.relevo_limits as any)?.MED || {}, 'takeons_pct') || 35} onChange={(v) => setRelevoLimit('MED', 'takeons_pct', v)} step="1" />
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 4 (1 punto) - Condición OR</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="Asistencias / min jugados" value={num((rules.relevo_limits as any)?.MED || {}, 'assists_per_min') || 0.03} onChange={(v) => setRelevoLimit('MED', 'assists_per_min', v)} step="0.01" />
+                      <LabeledInput label="Centros buenos / min jugados" value={num((rules.relevo_limits as any)?.MED || {}, 'crosses_per_min') || 0.02} onChange={(v) => setRelevoLimit('MED', 'crosses_per_min', v)} step="0.01" />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === 'DEL' && (
+                <div className="space-y-6">
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto)</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="% Pases en campo rival" value={num((rules.relevo_limits as any)?.DEL || {}, 'pass_opp_pct') || 50} onChange={(v) => setRelevoLimit('DEL', 'pass_opp_pct', v)} step="1" />
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 2 (1 punto) - Condición OR</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="% Duelos aéreos ganados" value={num((rules.relevo_limits as any)?.DEL || {}, 'aerials_pct') || 40} onChange={(v) => setRelevoLimit('DEL', 'aerials_pct', v)} step="1" />
+                      <LabeledInput label="Recup campo rival / min jugados" value={num((rules.relevo_limits as any)?.DEL || {}, 'recup_opp_per_min') || 0.3} onChange={(v) => setRelevoLimit('DEL', 'recup_opp_per_min', v)} step="0.1" />
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 3 (1 punto) - Condición OR</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="% Remates a puerta" value={num((rules.relevo_limits as any)?.DEL || {}, 'shots_on_pct') || 60} onChange={(v) => setRelevoLimit('DEL', 'shots_on_pct', v)} step="1" />
+                      <LabeledInput label="Remates cabeza / min jugados" value={num((rules.relevo_limits as any)?.DEL || {}, 'head_shots_per_min') || 0.02} onChange={(v) => setRelevoLimit('DEL', 'head_shots_per_min', v)} step="0.01" />
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 4 (1 punto) - Condición OR</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="Asistencias / min jugados" value={num((rules.relevo_limits as any)?.DEL || {}, 'assists_per_min') || 0.03} onChange={(v) => setRelevoLimit('DEL', 'assists_per_min', v)} step="0.01" />
+                      <LabeledInput label="% Regates completados" value={num((rules.relevo_limits as any)?.DEL || {}, 'takeons_pct') || 35} onChange={(v) => setRelevoLimit('DEL', 'takeons_pct', v)} step="1" />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 

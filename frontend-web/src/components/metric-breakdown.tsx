@@ -1,14 +1,14 @@
 'use client'
 
-import { TrendingUp } from 'lucide-react'
-import { resolveRates } from '@/lib/scoring-config'
+import { TrendingUp, Check, X } from 'lucide-react'
+import { evaluateRelevoBlocks, resolveRates, type Position, type RelevoLimits } from '@/lib/scoring-config'
 import { useScoringRules } from '@/hooks/use-scoring-rules'
 
 // Acepta cualquier objeto con campos de player_scores (los lee con Number(v)||0)
 export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   // Tarifas desde scoring_config (editables en Admin); fallback a los defaults.
   const R = resolveRates(useScoringRules())
-  const normPos = (p?: string): 'POR' | 'DEF' | 'MED' | 'DEL' => {
+  const normPos = (p?: string): Position => {
     const s = (p || '').toLowerCase()
     if (s.includes('goalkeeper') || s === 'gk' || s === 'por') return 'POR'
     if (s.includes('defender') || s === 'def') return 'DEF'
@@ -26,8 +26,6 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   const GOAL          = R.goal
   const CLEAN_SHEET   = R.clean_sheet
   const GOAL_CONCEDED = R.goal_conceded
-  // Fallback posicional para datos antiguos sin desglose por zona (solo display).
-  const BALL_RECOVERY = { POR: 0.1, DEF: 0.2, MED: 0.2, DEL: 0.1 } as const
 
   interface Row  { label: string; count: number; unit: number; points: number; flat?: boolean }
   interface Block { id: string; emoji: string; title: string; accent: string; chip: string; rows: Row[] }
@@ -69,152 +67,22 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   if (n(player.second_yellow_cards) > 0) b5.push(u(n(player.second_yellow_cards), R.second_yellow_card, 'Doble amarilla'))
   if (n(player.red_cards) > 0)           b5.push(u(n(player.red_cards), R.red_card, 'Roja directa'))
 
-  // B6: Portero
+  // B6: Portero. Desde el sistema v4 sólo la parada puntúa por unidad; blocajes,
+  // despejes de puños y salidas ya sólo cuentan dentro del bloque 4 de RELEVO.
   const b6: Row[] = []
-  if (n(player.saves) > 0)       b6.push(u(n(player.saves), R.per_unit.saves, 'Parada'))
-  if (n(player.punches_ok) > 0)  b6.push(u(n(player.punches_ok), R.per_unit.punches_ok, 'Despeje de puños'))
-  if (n(player.punches_fail) > 0) b6.push(u(n(player.punches_fail), R.per_unit.punches_fail, 'Despeje fallido'))
-  if (n(player.claims_ok) > 0)   b6.push(u(n(player.claims_ok), R.per_unit.claims, 'Blocaje'))
-  if (n(player.sweepers_ok) > 0) b6.push(u(n(player.sweepers_ok), R.per_unit.sweepers, 'Salida del área'))
+  if (n(player.saves) > 0) b6.push(u(n(player.saves), R.per_unit.saves, 'Parada'))
 
-  // B7: Bonus en Juego
+  // B7: las cuatro métricas que puntúan por unidad en el sistema v4.
   const b7: Row[] = []
-  if (n(player.passes_completed) > 0)   b7.push(u(n(player.passes_completed), R.per_unit.passes_completed, 'Pases completados'))
-  if (n(player.forward_passes) > 0)     b7.push(u(n(player.forward_passes), R.per_unit.forward_passes, 'Pases hacia adelante'))
-  if (n(player.box_entries) > 0)        b7.push(u(n(player.box_entries), R.per_unit.box_entries, 'Pases al área exitosos'))
-  if (n(player.successful_crosses) > 0) b7.push(u(n(player.successful_crosses), R.per_unit.successful_crosses, 'Centros exitosos'))
-  if (n(player.set_pieces_taken) > 0)   b7.push(u(n(player.set_pieces_taken), R.per_unit.set_pieces_taken, 'Balón parado'))
-  if (n(player.takeons_won) > 0)        b7.push(u(n(player.takeons_won), R.per_unit.takeons_won, 'Regates ganados'))
-  if (n(player.long_balls_completed) > 0) b7.push(u(n(player.long_balls_completed), R.per_unit.long_balls_completed, 'Pases largos completados'))
-  if (n(player.shots_on_target) > 0)    b7.push(u(n(player.shots_on_target), R.per_unit.shots_on_target, 'Tiros a puerta'))
-  if (n(player.clearances) > 0)         b7.push(u(n(player.clearances), R.per_unit.clearances, 'Despejes'))
-  if (n(player.interceptions_high) > 0) b7.push(u(n(player.interceptions_high), R.per_unit.interceptions_high, 'Interceptación zona alta'))
-  if (n(player.interceptions_med) > 0)  b7.push(u(n(player.interceptions_med), R.per_unit.interceptions_med, 'Interceptación zona media'))
-  if (n(player.interceptions_low) > 0)  b7.push(u(n(player.interceptions_low), R.per_unit.interceptions_low, 'Interceptación zona baja'))
-  if (n(player.ball_recoveries) > 0)    b7.push(u(n(player.ball_recoveries), R.per_unit.ball_recoveries, 'Balón recuperado'))
+  if (n(player.clearances) > 0)      b7.push(u(n(player.clearances), R.per_unit.clearances, 'Despejes'))
+  if (n(player.shots_on_target) > 0) b7.push(u(n(player.shots_on_target), R.per_unit.shots_on_target, 'Tiros a puerta'))
+  if (n(player.takeons_won) > 0)     b7.push(u(n(player.takeons_won), R.per_unit.takeons_won, 'Regates completados'))
+  if (n(player.box_entries) > 0)     b7.push(u(n(player.box_entries), R.per_unit.box_entries, 'Balones al área'))
 
   // B8: Penalizaciones
   const b8: Row[] = []
   const lostBalls = n(player.dispossessed) + n(player.bad_touches)
   if (lostBalls > 0) b8.push(u(lostBalls, R.lost_balls, `Pérdida de balón (${pos})`))
-
-  // B9: Puntos RELEVO
-  const totalRelevo = n(player.relevo_points)
-  const b9: Row[] = []
-  if (totalRelevo > 0) {
-    if ('relevo_participation_pts' in player && player.relevo_participation_pts !== undefined && player.relevo_participation_pts !== null) {
-      // Usar columnas explícitas (nueva versión)
-      const r_part = Number(player.relevo_participation_pts)
-      const r_passes = Number(player.relevo_passes_pts)
-      const r_opp = Number(player.relevo_opp_half_pts)
-      const r_shots = Number(player.relevo_shots_pts)
-      const r_duels = Number(player.relevo_duels_pts)
-      const r_aerials = Number(player.relevo_aerials_pts)
-      const r_takeons = Number(player.relevo_takeons_pts)
-
-      if (r_part !== 0) b9.push({ label: 'Participación', count: 0, unit: 0, points: r_part, flat: true })
-      
-      const passesAtt = n(player.passes_attempted)
-      const passAcc = n(player.pass_accuracy)
-      if (r_passes !== 0) {
-        const suffix = passAcc >= 92 ? ' ≥92%' : passAcc >= 85 ? ' ≥85%' : passAcc < 65 ? ' <65%' : ''
-        b9.push({ label: `Precisión pase ${passAcc.toFixed(0)}%${suffix} (${passesAtt} int.)`, count: 0, unit: 0, points: r_passes, flat: true })
-      }
-      
-      const oppAtt = n(player.pass_opp_half_attempted) // Aunque no lo tengamos aquí, mostramos el título.
-      if (r_opp !== 0) b9.push({ label: 'Pases campo rival', count: 0, unit: 0, points: r_opp, flat: true })
-      
-      const shotsTotal = n(player.goals) + n(player.shots_on_target) + n(player.shots_off_target) + n(player.shots_hit_woodwork)
-      if (r_shots !== 0) {
-        const onTarget = n(player.shots_on_target) + n(player.goals)
-        const shotAcc  = Math.round((onTarget / (shotsTotal || 1)) * 100)
-        b9.push({ label: `Eficacia tiro ${shotAcc}% (${onTarget}/${shotsTotal})`, count: 0, unit: 0, points: r_shots, flat: true })
-      }
-      
-      const duelsWon   = n(player.tackles_won) + n(player.takeons_won) + n(player.fouls_won)
-      const duelsLost  = n(player.tackles_lost) + n(player.takeons_lost) + n(player.fouls_committed) + n(player.dispossessed) + n(player.challenges_lost)
-      const totalDuels = duelsWon + duelsLost
-      if (r_duels !== 0) {
-        const duelAcc = Math.round((duelsWon / (totalDuels || 1)) * 100)
-        b9.push({ label: `Duelos ${duelAcc}% (${duelsWon}/${totalDuels})`, count: 0, unit: 0, points: r_duels, flat: true })
-      }
-      
-      const aerialsTotal = n(player.aerials_won) + n(player.aerials_lost)
-      if (r_aerials !== 0) {
-        const aerAcc = Math.round((n(player.aerials_won) / (aerialsTotal || 1)) * 100)
-        b9.push({ label: `Aéreos ${aerAcc}% (${n(player.aerials_won)}/${aerialsTotal})`, count: 0, unit: 0, points: r_aerials, flat: true })
-      }
-      
-      const takeonTotal = n(player.takeons_won) + n(player.takeons_lost)
-      if (r_takeons !== 0) {
-        const takeonAcc = Math.round((n(player.takeons_won) / (takeonTotal || 1)) * 100)
-        b9.push({ label: `Regates ${takeonAcc}% éxito (${n(player.takeons_won)}/${takeonTotal})`, count: 0, unit: 0, points: r_takeons, flat: true })
-      }
-
-    } else {
-      // Fallback para partidos antiguos no resincronizados
-      let knownSum = 0
-
-      const passesAtt = n(player.passes_attempted)
-      const passAcc   = n(player.pass_accuracy)
-      if (passesAtt >= 10) {
-        let pts = 0
-        if (passAcc >= 92) pts = 2
-        else if (passAcc >= 85) pts = 1
-        else if (passAcc < 65) pts = -1
-        const suffix = passAcc >= 92 ? ' ≥92%' : passAcc >= 85 ? ' ≥85%' : passAcc < 65 ? ' <65%' : ''
-        b9.push({ label: `Precisión pase ${passAcc.toFixed(0)}%${suffix} (${passesAtt} int.)`, count: 0, unit: 0, points: pts, flat: true })
-        knownSum += pts
-      }
-
-      const shotsTotal = n(player.goals) + n(player.shots_on_target) + n(player.shots_off_target) + n(player.shots_hit_woodwork)
-      if (shotsTotal >= 2) {
-        const onTarget = n(player.shots_on_target) + n(player.goals)
-        const shotAcc  = Math.round((onTarget / shotsTotal) * 100)
-        let pts = 0
-        if (shotAcc >= 50) pts = 1
-        else if (shotAcc === 0) pts = -1
-        b9.push({ label: `Eficacia tiro ${shotAcc}% (${onTarget}/${shotsTotal})`, count: 0, unit: 0, points: pts, flat: true })
-        knownSum += pts
-      }
-
-      const duelsWon   = n(player.tackles_won) + n(player.takeons_won) + n(player.fouls_won)
-      const duelsLost  = n(player.tackles_lost) + n(player.takeons_lost) + n(player.fouls_committed) + n(player.dispossessed) + n(player.challenges_lost)
-      const totalDuels = duelsWon + duelsLost
-      if (totalDuels >= 5) {
-        const duelAcc = Math.round((duelsWon / totalDuels) * 100)
-        let pts = 0
-        if (duelAcc >= 60) pts = 1
-        else if (duelAcc < 30) pts = -1
-        b9.push({ label: `Duelos ${duelAcc}% (${duelsWon}/${totalDuels})`, count: 0, unit: 0, points: pts, flat: true })
-        knownSum += pts
-      }
-
-      const aerialsTotal = n(player.aerials_won) + n(player.aerials_lost)
-      if (aerialsTotal >= 3) {
-        const aerAcc = Math.round((n(player.aerials_won) / aerialsTotal) * 100)
-        let pts = 0
-        if (aerAcc >= 60) pts = 1
-        else if (aerAcc < 30) pts = -1
-        b9.push({ label: `Aéreos ${aerAcc}% (${n(player.aerials_won)}/${aerialsTotal})`, count: 0, unit: 0, points: pts, flat: true })
-        knownSum += pts
-      }
-
-      const takeonTotal = n(player.takeons_won) + n(player.takeons_lost)
-      if (takeonTotal > 0) {
-        const takeonAcc = Math.round((n(player.takeons_won) / takeonTotal) * 100)
-        if (takeonAcc > 50) {
-          b9.push({ label: `Regates ${takeonAcc}% éxito (${n(player.takeons_won)}/${takeonTotal})`, count: 0, unit: 0, points: 1, flat: true })
-          knownSum += 1
-        }
-      }
-
-      const residuo = r2(totalRelevo - Math.max(0, knownSum))
-      if (residuo > 0) {
-        b9.push({ label: 'Participación y pases campo rival', count: 0, unit: 0, points: residuo, flat: true })
-      }
-    }
-  }
 
   const blocks: Block[] = [
     { id: 'b1', emoji: '⏱️', title: 'Participación',             accent: 'text-slate-600',   chip: 'bg-slate-100 text-slate-700',   rows: b1 },
@@ -225,7 +93,6 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
     { id: 'b6', emoji: '🧤', title: 'Acciones de Portero',       accent: 'text-cyan-600',    chip: 'bg-cyan-50 text-cyan-700',      rows: b6 },
     { id: 'b7', emoji: '📈', title: 'Bonus en Juego',            accent: 'text-emerald-600', chip: 'bg-emerald-50 text-emerald-700', rows: b7 },
     { id: 'b8', emoji: '📉', title: 'Penalizaciones',            accent: 'text-rose-600',    chip: 'bg-rose-50 text-rose-700',      rows: b8 },
-    { id: 'b9', emoji: '⭐', title: 'Puntos RELEVO',             accent: 'text-violet-600',  chip: 'bg-violet-50 text-violet-700',  rows: b9 },
   ]
 
   const total = n(player.total_points)
@@ -238,7 +105,7 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
         Puntos por bloques
       </h3>
 
-      {visibleBlocks.length === 0 && (
+      {visibleBlocks.length === 0 && min === 0 && (
         <p className="text-slate-500 text-center py-4">Sin métricas puntuables en este partido.</p>
       )}
 
@@ -276,9 +143,98 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
         )
       })}
 
+      {min > 0 && <RelevoBreakdown player={player} pos={pos} limits={R.relevo_limits} />}
+
       <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 flex items-center justify-between shadow-md">
         <span className="text-white font-bold text-lg">Puntos totales</span>
         <span className="text-white font-extrabold text-3xl tabular-nums">{fmtPts(total)}</span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Puntos RELEVO: los 4 bloques de la posición del jugador y, dentro de cada uno,
+ * qué lleva de cada métrica frente al mínimo exigido (ajustado a sus minutos).
+ * Basta con superar una métrica del bloque para llevarse su punto; si no supera
+ * ninguno de los 4, RELEVO resta 1.
+ */
+function RelevoBreakdown({
+  player,
+  pos,
+  limits,
+}: {
+  player: Record<string, any>
+  pos: Position
+  limits: RelevoLimits
+}) {
+  const results = evaluateRelevoBlocks(player, pos, limits)
+  const totalRelevo = Number(player.relevo_points) || 0
+  const blocksWon = results.filter((b) => b.points > 0).length
+
+  const fmt = (v: number, unit: 'count' | 'pct') =>
+    unit === 'pct' ? `${v.toFixed(0)}%` : String(parseFloat(v.toFixed(2)))
+
+  return (
+    <div className="rounded-2xl border border-violet-200 bg-white overflow-hidden shadow-sm">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-violet-100 bg-violet-50/50">
+        <div className="flex items-center gap-2">
+          <span className="text-lg leading-none">⭐</span>
+          <div>
+            <h4 className="font-bold text-sm text-violet-700">Puntos RELEVO</h4>
+            <p className="text-[11px] text-violet-500">
+              {blocksWon === 0 ? 'Ningún bloque superado · −1' : `${blocksWon} de 4 bloques superados`}
+            </p>
+          </div>
+        </div>
+        <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${totalRelevo >= 0 ? 'bg-violet-50 text-violet-700' : 'bg-red-50 text-red-700'}`}>
+          {totalRelevo >= 0 ? '+' : ''}{parseFloat(totalRelevo.toFixed(2))}
+        </span>
+      </div>
+
+      <div className="divide-y divide-slate-100">
+        {results.map((block) => (
+          <div key={block.id} className="px-4 py-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-sm font-semibold text-slate-800">
+                Bloque {block.id} · {block.title}
+              </p>
+              <span
+                className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${
+                  block.points > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                }`}
+              >
+                {block.points > 0 ? '+1' : '0'}
+              </span>
+            </div>
+
+            {block.note && <p className="text-[11px] text-slate-400 mb-2">{block.note}</p>}
+
+            <div className="space-y-1">
+              {block.metrics.map((m, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {m.met ? (
+                      <Check className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                    ) : (
+                      <X className="w-3.5 h-3.5 shrink-0 text-slate-300" />
+                    )}
+                    <span className={`truncate ${m.met ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>
+                      {m.label}
+                    </span>
+                  </div>
+                  <span className="shrink-0 tabular-nums text-slate-500">
+                    <span className={m.met ? 'text-emerald-600 font-bold' : 'text-slate-700 font-semibold'}>
+                      {fmt(m.value, m.unit)}
+                    </span>
+                    {m.detail && <span className="text-slate-400"> ({m.detail})</span>}
+                    <span className="text-slate-400"> · mín. {fmt(m.target, m.unit)}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

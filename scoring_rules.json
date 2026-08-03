@@ -71,21 +71,21 @@
       "all": 0.5,
       "description": "Por cada parada (typeId 10)"
     },
-    "punch_ok": {
-      "all": 0.2,
-      "description": "Despeje de puños exitoso (typeId 41, outcome 1)"
+    "clearances": {
+      "all": 0.5,
+      "description": "Por cada despeje (typeId 12)"
     },
-    "punch_fail": {
-      "all": 0.1,
-      "description": "Despeje de puños fallido (typeId 41, outcome 0)"
+    "shots_on_target": {
+      "all": 0.3,
+      "description": "Por cada tiro a puerta (typeId 15)"
     },
-    "claim": {
-      "all": 0.1,
-      "description": "Blocaje de portero (typeId 11)"
+    "takeons_won": {
+      "all": 0.5,
+      "description": "Por cada regate completado (typeId 3, outcome 1)"
     },
-    "sweeper": {
+    "box_entries": {
       "all": 0.1,
-      "description": "Salida del área (typeId 59)"
+      "description": "Por cada pase que acaba en el área (end_x > 83 y end_y entre 21.1 y 78.9)"
     },
     "penalty_save": {
       "all": 5
@@ -101,80 +101,6 @@
     },
     "red_card": {
       "all": -3
-    }
-  },
-  "bonuses_per_X": {
-    "passes_completed": {
-      "required": 1,
-      "points": 0.05,
-      "description": "0.05 puntos por cada pase completado"
-    },
-    "forward_passes": {
-      "required": 1,
-      "points": 0.2,
-      "description": "0.2 por cada pase hacia adelante (end_x >= x + 10, y_desviación entre -10 y 10)"
-    },
-    "shots_on_target": {
-      "required": 1,
-      "points": 0.3
-    },
-    "takeons_won": {
-      "required": 1,
-      "points": 0.5
-    },
-    "box_entries": {
-      "required": 1,
-      "points": 0.1,
-      "description": "Pases que acaban en el área (end_x > 83 y end_y entre 21.1 y 78.9)"
-    },
-    "recoveries_high": {
-      "required": 1,
-      "points": 0.3,
-      "description": "Recuperaciones donde X > 66.6"
-    },
-    "recoveries_med": {
-      "required": 1,
-      "points": 0.2,
-      "description": "Recuperaciones donde X está entre 33.3 y 66.6"
-    },
-    "recoveries_low": {
-      "required": 1,
-      "points": 0.1,
-      "description": "Recuperaciones donde X < 33.3"
-    },
-    "interceptions_high": {
-      "required": 1,
-      "points": 0.3,
-      "description": "Interceptaciones donde X > 66.6"
-    },
-    "interceptions_med": {
-      "required": 1,
-      "points": 0.2,
-      "description": "Interceptaciones donde X está entre 33.3 y 66.6"
-    },
-    "interceptions_low": {
-      "required": 1,
-      "points": 0.1,
-      "description": "Interceptaciones donde X < 33.3"
-    },
-    "clearances": {
-      "required": 1,
-      "points": 0.5
-    },
-    "set_pieces_taken": {
-      "required": 1,
-      "points": 0.2,
-      "description": "Lanzamiento de córner, o falta donde X > 60"
-    },
-    "successful_crosses": {
-      "required": 1,
-      "points": 0.3,
-      "description": "Centros buenos con outcome 1"
-    },
-    "long_balls_completed": {
-      "required": 1,
-      "points": 0.5,
-      "description": "Pase largo bueno: typeId 1, outcome 1, qualifier 1 presente"
     }
   },
   "penalties_per_X": {
@@ -197,23 +123,44 @@
       }
     }
   },
-  "relevo_rules": {
-    "participation_step_percent": 10,
-    "participation_points_per_step": 1,
-    "min_passes": 10,
-    "pass_accuracy_high": 85,
-    "pass_accuracy_excel": 92,
-    "pass_accuracy_low": 65,
-    "min_opp_half_passes": 10,
-    "opp_half_accuracy_high": 75,
-    "min_shots": 2,
-    "shot_accuracy_high": 50,
-    "min_duels": 5,
-    "duels_won_high": 60,
-    "duels_won_low": 30,
-    "min_aerials": 3,
-    "aerials_won_high": 60,
-    "aerials_won_low": 30
+  "relevo_limits": {
+    "_description": "Umbrales de los 4 bloques de Puntos RELEVO por posición. Cada bloque superado suma 1 punto; si no se supera ninguno, -1. Las claves '*_per_min' se multiplican por los minutos jugados para obtener el mínimo exigido; las claves '*_pct' son porcentajes absolutos.",
+    "POR": {
+      "saves_per_min": 0.06,
+      "calidad_parada_multiplier": 0.5,
+      "long_passes_per_min": 0.05,
+      "pass_pct": 65,
+      "pass_att_per_min": 0.3,
+      "claims_per_min": 0.02,
+      "punches_per_min": 0.03
+    },
+    "DEF": {
+      "last_man_per_min": 0.02,
+      "long_passes_per_min": 0.05,
+      "forward_passes_per_min": 0.05,
+      "aerials_pct": 60,
+      "ground_duels_pct": 60,
+      "abp_remates_per_min": 0.01,
+      "crosses_per_min": 0.02
+    },
+    "MED": {
+      "pass_opp_pct": 50,
+      "aerials_pct": 60,
+      "ground_duels_pct": 60,
+      "shots_on_pct": 50,
+      "takeons_pct": 35,
+      "assists_per_min": 0.03,
+      "crosses_per_min": 0.02
+    },
+    "DEL": {
+      "pass_opp_pct": 50,
+      "aerials_pct": 40,
+      "recup_opp_per_min": 0.3,
+      "shots_on_pct": 60,
+      "head_shots_per_min": 0.02,
+      "assists_per_min": 0.03,
+      "takeons_pct": 35
+    }
   },
   "typeId_mapping": {
     "1": "pass",
