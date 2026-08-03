@@ -1069,9 +1069,11 @@ export default function DashboardPage() {
         
         const teamPlayersData = newSelected.map((pid, i) => {
           let replacedId = null
-          const ch = newChangeHistory.find(c => c.index === i)
-          if (ch) replacedId = ch.outId
-          else if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+          if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+          else {
+            const ch = newChangeHistory.find(c => c.index === i)
+            if (ch) replacedId = ch.outId
+          }
           
           return {
             player_id: pid,
@@ -1110,9 +1112,11 @@ export default function DashboardPage() {
         
         const teamPlayersData = newSelected.map((pid, i) => {
           let replacedId = null
-          const ch = changeHistory.find(c => c.index === i)
-          if (ch) replacedId = ch.outId
-          else if (i !== index && dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+          if (i !== index && dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+          else {
+            const ch = changeHistory.find(c => c.index === i)
+            if (ch) replacedId = ch.outId
+          }
           
           return {
             player_id: pid,
@@ -1167,9 +1171,11 @@ export default function DashboardPage() {
 
     const teamPlayersData = newSelected.map((playerId, i) => {
       let replacedId = null
-      const ch = newChangeHistory.find(c => c.index === i)
-      if (ch) replacedId = ch.outId
-      else if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+      if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+      else {
+        const ch = newChangeHistory.find(c => c.index === i)
+        if (ch) replacedId = ch.outId
+      }
       
       return {
         player_id: playerId,
@@ -1246,9 +1252,11 @@ export default function DashboardPage() {
       
       const teamPlayersData = newSelected.map((pid, i) => {
         let replacedId = null
-        const ch = newChangeHistory.find(c => c.index === i)
-        if (ch) replacedId = ch.outId
-        else if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+        if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+        else {
+          const ch = newChangeHistory.find(c => c.index === i)
+          if (ch) replacedId = ch.outId
+        }
         
         return {
           player_id: pid,
