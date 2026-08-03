@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle, Printer, FileSpreadsheet } from 'lucide-react'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 import { applySanctionsToTeam } from '@/lib/infractions'
+import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
 import { PrintView } from './PrintView'
 
@@ -237,17 +238,20 @@ export default function JornadaPage() {
     profiles?.forEach(p => createdDates.set(p.id, p.created_at))
     const usersMap = new Map(profiles?.map(u => [u.id, u]) || [])
 
-    // Usuarios de la división seleccionada (sanciones/jornada independientes por división)
-    const divisionUserIds = new Set(
-      (profiles ?? []).filter(p => (p as any).division === selectedDivision).map(p => p.id)
-    )
+    // Equipos de la división seleccionada. Todo lo que viene después (alineaciones,
+    // exclusividad, sanciones) se calcula solo sobre este conjunto, así que la
+    // división queda aislada por completo.
+    const membership = await loadDivisionMembership(supabase)
+    const divisionTeams = isDivisionId(selectedDivision)
+      ? membership.teamsByDivision.get(selectedDivision) ?? []
+      : []
 
-    // Equipos de usuario, restringidos a la división seleccionada
     const { data: userTeamsRaw } = await supabase
       .from('user_teams')
       .select('id, user_id, name, created_at')
 
-    const userTeamsData = (userTeamsRaw ?? []).filter(t => divisionUserIds.has(t.user_id))
+    const divisionTeamIds = new Set(divisionTeams.map(t => t.id))
+    const userTeamsData = (userTeamsRaw ?? []).filter(t => divisionTeamIds.has(t.id))
 
     if (!userTeamsData || userTeamsData.length === 0) {
       setUserTeams([])
@@ -671,21 +675,16 @@ export default function JornadaPage() {
         const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
         if (!info) return
 
-        // Usuarios de la división seleccionada (para filtrar sanciones por división)
-        const { data: divProfiles } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('division', selectedDivision)
-        const divisionUserIds = new Set((divProfiles ?? []).map(p => p.id as string))
-
         let infractionsData: any[] = []
-        // 1. Siempre intentar obtener las sanciones consolidadas de la base de datos
+        // 1. Siempre intentar obtener las sanciones consolidadas de la base de datos.
+        //    Las multas guardan su división, así que se filtran directamente.
         const { data: dbPenalties } = await supabase
           .from('penalties')
-          .select('id, matchday, description, points, user_id, profiles(full_name)')
+          .select('id, matchday, description, points, user_id, division, profiles(full_name)')
           .eq('matchday', selectedMatchday)
+          .eq('division', selectedDivision)
 
-        const dbPenaltiesDiv = (dbPenalties ?? []).filter(p => divisionUserIds.has(p.user_id as string))
+        const dbPenaltiesDiv = dbPenalties ?? []
 
         if (dbPenaltiesDiv.length > 0) {
           infractionsData = dbPenaltiesDiv

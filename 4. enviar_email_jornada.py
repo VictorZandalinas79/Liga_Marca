@@ -17,44 +17,61 @@ def send_matchday_start_emails(matchday):
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     
     try:
-        profiles_resp = supabase.table("profiles").select("id, email, full_name").execute()
+        profiles_resp = supabase.table("profiles").select("id, email, full_name, division").execute()
         profiles = profiles_resp.data or []
-        
-        penalties_resp = supabase.table("penalties").select("user_id, description, points").eq("matchday", matchday).execute()
+
+        penalties_resp = supabase.table("penalties").select("user_id, description, points, division").eq("matchday", matchday).execute()
         penalties = penalties_resp.data or []
     except Exception as e:
         print(f"⚠️ No se pudieron obtener los datos: {e}")
         return
 
     user_names = {p['id']: p.get('full_name') or p.get('email', '').split('@')[0] for p in profiles if p.get('id')}
-    
-    if penalties:
-        sanctions_html = "<h3 style='color: #991b1b; margin-top: 20px;'>⚖️ Posibles Sanciones de la Jornada</h3>"
-        sanctions_html += "<p style='color: #4b5563; font-size: 14px;'><i>Las alineaciones han sido bloqueadas. Estas son las posibles sanciones por infracciones en tu alineación. Se te restarán puntos al finalizar la jornada.</i></p>"
-        sanctions_html += "<ul style='color: #7f1d1d;'>"
+
+    # Cada división es una liga independiente, así que a cada usuario solo le
+    # interesan (y solo le afectan) las sanciones de su propia tabla.
+    penalties_by_division = {}
+    for p in penalties:
+        penalties_by_division.setdefault(p.get("division"), []).append(p)
+
+    def build_sanctions_html(division_penalties):
+        if not division_penalties:
+            return "<div style='background-color: #dcfce7; padding: 10px; border-left: 4px solid #16a34a; margin: 20px 0;'><p style='color: #166534; margin: 0;'>✅ <strong>¡Sin sanciones!</strong> Ningún equipo de tu división ha cometido infracciones en esta jornada.</p></div>"
+
+        html = "<h3 style='color: #991b1b; margin-top: 20px;'>⚖️ Posibles Sanciones de la Jornada</h3>"
+        html += "<p style='color: #4b5563; font-size: 14px;'><i>Las alineaciones han sido bloqueadas. Estas son las posibles sanciones por infracciones en tu alineación. Se te restarán puntos al finalizar la jornada.</i></p>"
+        html += "<ul style='color: #7f1d1d;'>"
         grouped = {}
-        for p in penalties:
-            uid = p.get('user_id')
-            grouped.setdefault(uid, []).append(p)
-            
+        for p in division_penalties:
+            grouped.setdefault(p.get('user_id'), []).append(p)
+
         for uid, user_penalties in grouped.items():
             uname = user_names.get(uid, "Un usuario")
-            sanctions_html += f"<li style='margin-bottom: 5px;'><strong>{uname}:</strong><ul>"
+            html += f"<li style='margin-bottom: 5px;'><strong>{uname}:</strong><ul>"
             for pen in user_penalties:
-                sanctions_html += f"<li>{pen.get('description')} (<strong>se restarán los puntos al final de la jornada</strong>)</li>"
-            sanctions_html += "</ul></li>"
-        sanctions_html += "</ul>"
-    else:
-        sanctions_html = "<div style='background-color: #dcfce7; padding: 10px; border-left: 4px solid #16a34a; margin: 20px 0;'><p style='color: #166534; margin: 0;'>✅ <strong>¡Sin sanciones!</strong> Ningún equipo ha cometido infracciones en esta jornada.</p></div>"
+                html += f"<li>{pen.get('description')} (<strong>se restarán los puntos al final de la jornada</strong>)</li>"
+            html += "</ul></li>"
+        html += "</ul>"
+        return html
+
+    sanctions_html_by_division = {
+        div: build_sanctions_html(penalties_by_division.get(div, []))
+        for div in (1, 2, 3)
+    }
 
     sent_count = 0
     for p in profiles:
         email = p.get("email")
         if not email:
             continue
-            
+
         name = p.get("full_name") or email.split("@")[0]
-        
+        division = p.get("division")
+
+        # Sin división asignada no se compite en ninguna tabla: no hay sanciones
+        # que mostrar (el admin las asigna antes de la primera jornada).
+        sanctions_html = sanctions_html_by_division.get(division, "")
+
         context = {
             "name": name,
             "matchday": matchday,

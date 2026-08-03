@@ -1,4 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import {
+  DivisionTeam,
+  divisionsToCompute,
+  loadDivisionMembership,
+  userDisplayName,
+} from '@/lib/divisions'
 
 export interface Infraction {
   id: string
@@ -109,25 +115,9 @@ export async function isMatchdayLockStarted(supabase: SupabaseClient, matchday: 
 }
 
 export async function getLiveInfractions(supabase: SupabaseClient, matchday: number, division?: number | null): Promise<Infraction[]> {
-  // 1. Obtener perfiles y equipos
-  const { data: profiles } = await supabase.from('profiles').select('id, full_name, email, division')
-  const { data: allTeams } = await supabase.from('user_teams').select('id, user_id, name')
-  if (!profiles || !allTeams) return []
-
-  // Sanciones INDEPENDIENTES por división: si se indica una, solo se consideran
-  // los equipos de los usuarios de esa división. La exclusividad (regla Dolly)
-  // se calcula recorriendo `teams`, así que restringir el conjunto la aísla.
-  let teams = allTeams
-  if (division != null) {
-    const divisionUserIds = new Set(
-      profiles.filter(p => (p as any).division === division).map(p => p.id)
-    )
-    teams = allTeams.filter(t => divisionUserIds.has(t.user_id))
-  }
-  if (teams.length === 0) return []
-
-  const profileMap = new Map(profiles.map(p => [p.id, p]))
-  const teamToUser = new Map(teams.map(t => [t.id, t.user_id]))
+  // 1. Reparto de la liga en divisiones (fuente de verdad única)
+  const membership = await loadDivisionMembership(supabase)
+  const profileMap = membership.profilesById
 
   // 2. Obtener config de liga
   const { data: configData } = await supabase.from('league_config').select('*').eq('id', 1).maybeSingle()
@@ -206,7 +196,12 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
     mdMap.set(pid, (mdMap.get(pid) || 0) + (s.total_points || 0))
   })
 
-  // 5. Inicializar estructuras históricas
+  // 5. Calcular las sanciones de UNA división, como si el resto no existiera.
+  //    La exclusividad (regla Dolly) se construye recorriendo `teams`, así que
+  //    pasando aquí solo los equipos de una división queda aislada por completo.
+  const computeDivisionInfractions = (teams: DivisionTeam[]): Infraction[] => {
+  if (teams.length === 0) return []
+
   const lineupHistory: { [m: number]: { [teamId: string]: Set<string> } } = {}
   const zeroedHistory: { [m: number]: { [teamId: string]: Set<string> } } = {}
   const penaltiesHistory: { [m: number]: { [teamId: string]: any[] } } = {}
@@ -243,8 +238,7 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
       for (const [ownerTid, pids] of Object.entries(prevMineOther)) {
         if (ownerTid !== tid) {
           const ownerTeam = teams.find(t => t.id === ownerTid)
-          const ownerProfile = ownerTeam ? profileMap.get(ownerTeam.user_id) : null
-          const ownerName = ownerProfile?.full_name || ownerProfile?.email?.split('@')[0] || 'otro usuario'
+          const ownerName = userDisplayName(ownerTeam ? profileMap.get(ownerTeam.user_id) : null, 'otro usuario')
           pids.forEach(pid => {
             if (!teamHeld.has(pid)) teamHeld.set(pid, [])
             teamHeld.get(pid)!.push(ownerName)
@@ -301,8 +295,7 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
   for (const team of teams) {
     const teamId = team.id
     const userId = team.user_id
-    const profile = profileMap.get(userId)
-    const fullName = profile?.full_name || profile?.email?.split('@')[0] || 'Usuario'
+    const fullName = userDisplayName(profileMap.get(userId))
 
     const teamPenalties = penaltiesHistory[matchday][teamId] || []
     teamPenalties.forEach((p, idx) => {
@@ -316,6 +309,17 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
         is_pending: true
       })
     })
+  }
+
+  return infractions
+  }
+
+  // 8. Una división concreta (`1|2|3`) o todas por separado (`0` / `null`).
+  //    Nunca se calculan mezcladas: un jugador alineado por alguien de otra
+  //    división no puede generar sanción de exclusividad.
+  const infractions: Infraction[] = []
+  for (const d of divisionsToCompute(division)) {
+    infractions.push(...computeDivisionInfractions(membership.teamsByDivision.get(d) ?? []))
   }
 
   console.log(`[INFRACTIONS_TS] Computed ${infractions.length} live infractions. Sample:`, infractions.slice(0, 5))

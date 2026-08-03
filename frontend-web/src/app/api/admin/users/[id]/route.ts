@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from '@/lib/auth-admin'
 import { createAdminSupabase } from '@/lib/supabase/admin'
+import { getDivisionLockState } from '@/lib/divisions'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,6 +74,20 @@ export async function PATCH(
     touchProfile = true
   }
   if ('division' in body) {
+    // Las divisiones se congelan al cerrar el mercado de la primera jornada del
+    // juego. Cambiarlas después reescribiría sanciones ya cobradas —las del
+    // usuario y las de sus rivales, porque la exclusividad depende de con quién
+    // comparte tabla—, así que se rechaza aquí y no solo en la interfaz.
+    const lock = await getDivisionLockState(admin)
+    if (lock.locked) {
+      return NextResponse.json(
+        {
+          error: `Las divisiones quedaron cerradas al empezar la jornada ${lock.startingMatchday}. Ya no se puede cambiar a ningún usuario de división.`,
+        },
+        { status: 409 }
+      )
+    }
+
     // null / '' => sin asignar; solo se aceptan las divisiones 1, 2 y 3.
     const raw = body.division
     if (raw === null || raw === '' || raw === undefined) {

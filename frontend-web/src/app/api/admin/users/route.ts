@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-admin'
 import { createAdminSupabase } from '@/lib/supabase/admin'
+import { getDivisionLockState } from '@/lib/divisions'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,5 +85,11 @@ export async function GET() {
   // Más recientes primero.
   users.sort((a, b) => b.created_at.localeCompare(a.created_at))
 
-  return NextResponse.json({ users })
+  // Estado del cierre de divisiones + quién se ha quedado sin asignar. Como las
+  // divisiones se congelan al empezar la primera jornada, el panel tiene que
+  // avisar mientras aún se está a tiempo de corregirlo.
+  const divisionLock = await getDivisionLockState(admin)
+  const unassigned = users.filter((u) => u.division == null).length
+
+  return NextResponse.json({ users, divisionLock, unassignedCount: unassigned })
 }

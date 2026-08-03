@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 import { getStandings } from '@/lib/standings'
+import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 interface Player {
   id: string
   first_name: string
@@ -795,10 +796,25 @@ export default function DashboardPage() {
         setOffLimitPlayerIds(new Set())
         return
       }
+      // Solo bloquean los jugadores comprometidos por rivales de MI división:
+      // cada división es una liga aparte y no compito contra las otras, así que
+      // lo que alinee alguien de otra tabla no me limita.
+      const membership = await loadDivisionMembership(supabase)
+      const myTeam = membership.teamsByDivision.get(1)?.find(t => t.id === userTeamId)
+        ?? membership.teamsByDivision.get(2)?.find(t => t.id === userTeamId)
+        ?? membership.teamsByDivision.get(3)?.find(t => t.id === userTeamId)
+      const myDiv = myTeam ? membership.divisionByUser.get(myTeam.user_id) : null
+      if (!isDivisionId(myDiv)) {
+        setOffLimitPlayerIds(new Set())
+        return
+      }
+      const divisionTeamIds = (membership.teamsByDivision.get(myDiv) ?? []).map(t => t.id)
+
       const { data: rows } = await supabase
         .from('team_players')
         .select('player_id, team_id')
         .eq('matchday', prevMd)
+        .in('team_id', divisionTeamIds)
       const heldByMe = new Set<string>()
       const heldByOthers = new Set<string>()
       for (const r of rows || []) {
@@ -814,16 +830,23 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchAllPenalties = async () => {
+      // Solo las sanciones de mi división: el panel general enseña las de mis
+      // rivales, y los de otra tabla no lo son.
+      if (userDivision == null) {
+        setAllPenalties([])
+        return
+      }
       const { data, error } = await supabase
         .from('penalties')
-        .select('id, matchday, description, points, user_id, profiles(full_name)')
+        .select('id, matchday, description, points, user_id, division, profiles(full_name)')
+        .eq('division', userDivision)
         .order('matchday', { ascending: false })
       if (!error && data) {
         setAllPenalties(data)
       }
     }
     fetchAllPenalties()
-  }, [])
+  }, [userDivision])
 
   useEffect(() => {
     const fetchLiveInfractions = async () => {
@@ -916,6 +939,12 @@ export default function DashboardPage() {
           .maybeSingle();
         const myDivision = (myProfile?.division as number | null) ?? null;
         setUserDivision(myDivision);
+        // Sin división no se compite en ninguna tabla, así que no hay ranking
+        // que enseñar (el admin las asigna antes de la primera jornada).
+        if (myDivision == null) {
+          setLoadingRanks(false);
+          return;
+        }
         const { standings } = await getStandings(supabase, myDivision);
         if (!standings || standings.length === 0) {
           setLoadingRanks(false);

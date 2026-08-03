@@ -52,6 +52,7 @@ export default function AdminPage() {
   const [filter, setFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
   const [divFilter, setDivFilter] = useState<'all' | '1' | '2' | '3' | 'none'>('all')
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [divisionLock, setDivisionLock] = useState<{ locked: boolean; lockAt: string | null; startingMatchday: number } | null>(null)
 
   // Modales
   const [editUser, setEditUser] = useState<AdminUser | null>(null)
@@ -72,6 +73,7 @@ export default function AdminPage() {
       }
       const body = await res.json()
       setUsers(body.users)
+      setDivisionLock(body.divisionLock ?? null)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
@@ -136,7 +138,8 @@ export default function AdminPage() {
   const stats = useMemo(() => {
     const paid = users.filter((u) => u.has_paid).length
     const collected = users.reduce((sum, u) => sum + (u.has_paid ? (u.entry_fee_paid || 0) : 0), 0)
-    return { total: users.length, paid, unpaid: users.length - paid, collected }
+    const unassigned = users.filter((u) => u.division == null).length
+    return { total: users.length, paid, unpaid: users.length - paid, collected, unassigned }
   }, [users])
 
   const exportCsv = () => {
@@ -269,6 +272,32 @@ export default function AdminPage() {
         <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3 text-red-700 text-sm font-medium">{error}</div>
       )}
 
+      {/* Estado del cierre de divisiones. Cada división es una liga aparte
+          (clasificación, sanciones y pagos propios), así que hay que dejarlas
+          bien repartidas antes de que arranque la primera jornada. */}
+      {divisionLock && (
+        divisionLock.locked ? (
+          <div className="bg-slate-50 border-2 border-slate-200 rounded-xl p-3 text-slate-600 text-sm font-medium">
+            Divisiones cerradas: empezó la jornada {divisionLock.startingMatchday}. Ya no se puede mover a nadie de
+            división — hacerlo recalcularía sanciones y pagos ya aplicados.
+          </div>
+        ) : (
+          <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-3 text-amber-800 text-sm font-medium">
+            Divisiones abiertas hasta el cierre del mercado de la jornada {divisionLock.startingMatchday}
+            {divisionLock.lockAt
+              ? ` (${new Date(divisionLock.lockAt).toLocaleString('es-ES', {
+                  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                })})`
+              : ''}
+            . Después quedan congeladas toda la temporada.
+            {stats.unassigned > 0 && (
+              <> Quedan <strong>{stats.unassigned}</strong> usuario(s) sin división: no aparecerán en ninguna
+              clasificación ni entrarán en el reparto de pagos.</>
+            )}
+          </div>
+        )
+      )}
+
       {/* Tabla */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
@@ -306,12 +335,13 @@ export default function AdminPage() {
                     <td className="px-4 py-3">
                       <select
                         value={u.division ?? ''}
-                        disabled={savingId === u.id}
+                        disabled={savingId === u.id || Boolean(divisionLock?.locked)}
+                        title={divisionLock?.locked ? 'Las divisiones se cerraron al empezar la primera jornada' : undefined}
                         onChange={(e) => {
                           const v = e.target.value === '' ? null : Number(e.target.value)
                           if (v !== (u.division ?? null)) saveUser(u.id, { division: v }).catch(() => {})
                         }}
-                        className={`px-2 py-1.5 rounded-lg border-2 outline-none focus:border-emerald-500 text-sm font-medium ${
+                        className={`px-2 py-1.5 rounded-lg border-2 outline-none focus:border-emerald-500 text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed ${
                           u.division ? 'border-slate-200 text-slate-700' : 'border-amber-200 text-amber-700 bg-amber-50'
                         }`}
                       >

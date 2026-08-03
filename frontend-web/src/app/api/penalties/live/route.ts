@@ -23,13 +23,18 @@ export async function GET(request: NextRequest) {
 
   // Verificar si ya hay sanciones oficiales consolidadas en base de datos para esta jornada.
   // Si las hay, no mostramos las infracciones en vivo (que son temporales/duplicadas).
-  const { data: penalties, error: penError } = await supabase
+  // La comprobación es por división: cada una se consolida por su cuenta, y que
+  // otra ya tenga sus multas no significa que esta las tenga.
+  let penaltiesQuery = supabase
     .from('penalties')
     .select('id')
     .eq('matchday', currentMatchday)
     .limit(1)
+  if (division != null) penaltiesQuery = penaltiesQuery.eq('division', division)
 
-  console.log('[LIVE_API] currentMatchday:', currentMatchday)
+  const { data: penalties, error: penError } = await penaltiesQuery
+
+  console.log('[LIVE_API] currentMatchday:', currentMatchday, 'division:', division)
   console.log('[LIVE_API] infractions computed:', infractions.length)
   console.log('[LIVE_API] penalties data:', penalties, 'error:', penError)
 

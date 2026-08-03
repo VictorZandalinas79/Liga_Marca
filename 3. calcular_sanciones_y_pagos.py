@@ -395,61 +395,93 @@ def run_matchday(sb, matchday):
             pid = s["player_id"]
             scores_by_md.setdefault(md, {})[pid] = scores_by_md.setdefault(md, {}).get(pid, 0) + (s.get("total_points") or 0)
 
-    # 2. Calcular de manera secuencial desde J1 hasta la jornada actual
+    # 2. Calcular de manera secuencial hasta la jornada actual, DIVISIÓN A DIVISIÓN.
+    #
+    # Cada división es una liga independiente: la regla de exclusividad ("jugador
+    # de otro usuario") solo puede mirar a los rivales de la misma tabla. Antes
+    # este bucle recorría todos los equipos juntos, así que alinear a un jugador
+    # que tenía alguien de otra división generaba multa y se cobraba de verdad,
+    # mientras que la web —que sí calcula por división— no la mostraba.
+    #
+    # Los usuarios sin división asignada quedan fuera del juego: no se les
+    # calculan sanciones ni entran en el reparto de pagos. Las divisiones se
+    # asignan antes de la primera jornada, así que esto solo pasa por descuido.
+    teams_by_division = {1: [], 2: [], 3: []}
+    unassigned_teams = []
+    for t in user_teams:
+        div = user_divisions.get(t["user_id"])
+        if div in (1, 2, 3):
+            teams_by_division[div].append(t["id"])
+        else:
+            unassigned_teams.append(t["id"])
+
+    if unassigned_teams:
+        log(f"⚠️  {len(unassigned_teams)} equipo(s) sin división asignada: se excluyen de sanciones y pagos")
+
+    # La jornada en la que arranca el juego no tiene "anterior" a efectos de
+    # sanciones: se sale de cero aunque la liga real lleve jornadas jugadas.
+    start_md = max(1, fantasy_starting_matchday)
+
     lineup_history = {}
     zeroed_history = {}
     penalties_history = {}
-
-    user_teams_ids = [t["id"] for t in user_teams]
-    lineup_history[0] = {tid: [] for tid in user_teams_ids}
-    zeroed_history[0] = {tid: set() for tid in user_teams_ids}
-    penalties_history[0] = {tid: [] for tid in user_teams_ids}
-
-    for m in range(1, matchday + 1):
+    for m in range(start_md - 1, matchday + 1):
         lineup_history[m] = {}
         zeroed_history[m] = {}
         penalties_history[m] = {}
 
-        for tid in user_teams_ids:
-            lineup_history[m][tid] = get_lineup_for_matchday(all_tp, tid, m)
+    user_teams_ids = [tid for div_teams in teams_by_division.values() for tid in div_teams]
 
-        held_by_others_prev_m = {}
-        for tid in user_teams_ids:
-            held_by_others_prev_m[tid] = {}
-            prev_mine_other = lineup_history[m - 1]
-            for owner_tid, pids in prev_mine_other.items():
-                if owner_tid != tid:
+    for division, division_team_ids in teams_by_division.items():
+        if not division_team_ids:
+            continue
+
+        # Estado previo al arranque: nadie arrastra plantilla ni exclusividad.
+        for tid in division_team_ids:
+            lineup_history[start_md - 1][tid] = []
+            zeroed_history[start_md - 1][tid] = set()
+            penalties_history[start_md - 1][tid] = []
+
+        for m in range(start_md, matchday + 1):
+            for tid in division_team_ids:
+                lineup_history[m][tid] = get_lineup_for_matchday(all_tp, tid, m)
+
+            # Dueños en m-1, solo entre equipos de ESTA división.
+            held_by_others_prev_m = {}
+            for tid in division_team_ids:
+                held_by_others_prev_m[tid] = {}
+                for owner_tid in division_team_ids:
+                    if owner_tid == tid:
+                        continue
                     owner_name = team_to_username.get(owner_tid, "otro usuario")
-                    for pid in pids:
+                    for pid in lineup_history[m - 1][owner_tid]:
                         held_by_others_prev_m[tid].setdefault(pid, []).append(owner_name)
 
-        points_m = scores_by_md.get(m, {})
-        for tid in user_teams_ids:
-            lineup = lineup_history[m][tid]
-            if not lineup:
-                zeroed_history[m][tid] = set()
-                penalties_history[m][tid] = []
-                continue
+            points_m = scores_by_md.get(m, {})
+            for tid in division_team_ids:
+                lineup = lineup_history[m][tid]
+                if not lineup:
+                    zeroed_history[m][tid] = set()
+                    penalties_history[m][tid] = []
+                    continue
 
-            prev_mine = set(lineup_history[m - 1][tid])
-            held_by_others_prev = held_by_others_prev_m[tid]
+                is_first = m == start_md
+                # En la primera jornada del juego no hay plantilla previa que
+                # respetar: cambios libres y libertad para alinear a cualquiera.
+                prev_mine = set() if is_first else set(lineup_history[m - 1][tid])
+                held_by_others_prev = {} if is_first else held_by_others_prev_m[tid]
+                prev_penalties = None if is_first else penalties_history[m - 1][tid]
+                lineup_prev = None if is_first else lineup_history[m - 1][tid]
+                zeroed_prev = None if is_first else zeroed_history[m - 1][tid]
 
-            # La jornada en la que arranca el juego no tiene "anterior" a efectos de
-            # sanciones (exceso de cambios, multas no resueltas, etc.), aunque
-            # fantasy_starting_matchday no sea la J1 real de la liga.
-            has_prev = m > fantasy_starting_matchday
-            prev_penalties = penalties_history[m - 1][tid] if has_prev else None
-            lineup_prev = lineup_history[m - 1][tid] if has_prev else None
-            zeroed_prev = zeroed_history[m - 1][tid] if has_prev else None
+                sanctions, zeroed = compute_team_sanctions(
+                    lineup, prev_mine, held_by_others_prev, points_m, player_meta,
+                    cfg, valid_formations, pos_max,
+                    prev_penalties=prev_penalties, lineup_prev=lineup_prev, zeroed_prev=zeroed_prev
+                )
 
-            sanctions, zeroed = compute_team_sanctions(
-                lineup, prev_mine, held_by_others_prev, points_m, player_meta,
-                cfg, valid_formations, pos_max,
-                prev_penalties=prev_penalties, lineup_prev=lineup_prev, zeroed_prev=zeroed_prev
-            )
-
-            zeroed_history[m][tid] = zeroed
-            penalties_history[m][tid] = sanctions
+                zeroed_history[m][tid] = zeroed
+                penalties_history[m][tid] = sanctions
 
     # Contar sanciones previas por usuario para aplicar delta económico
     old_pen_res = sb.table("penalties").select("user_id").eq("matchday", matchday).execute()
@@ -482,6 +514,9 @@ def run_matchday(sb, matchday):
             penalty_rows.append({
                 "team_id": team_id, "user_id": user_id,
                 "matchday": matchday, "description": desc, "points": pts,
+                # La división se guarda con la multa para que las vistas no
+                # tengan que volver a cruzar contra `profiles` para filtrarla.
+                "division": user_divisions.get(user_id),
             })
         
         # Calcular diferencia de multas para este usuario
@@ -498,19 +533,33 @@ def run_matchday(sb, matchday):
 
         results.append((team_id, user_id, raw, penalty_total, raw - penalty_total))
 
+    # Usuarios que tenían multas en esta jornada y ya no: hay que devolverles el
+    # importe. Pasa al recalcular con el aislamiento por división (multas que
+    # antes se cobraban por culpa de rivales de otra tabla) y con quien se haya
+    # quedado sin división asignada.
+    infraction_cost = cfg.get("infraction_penalty_cost", 3)
+    still_sanctioned = {uid for _, uid, _, _, _ in results if uid}
+    for uid, old_count in old_pen_counts.items():
+        if uid in still_sanctioned or old_count == 0:
+            continue
+        delta_infraction = -float(old_count) * float(infraction_cost)
+        prof = sb.table("profiles").select("infraction_penalties").eq("id", uid).limit(1).execute()
+        base_inf = float(prof.data[0]["infraction_penalties"] or 0) if prof.data else 0
+        sb.table("profiles").update({"infraction_penalties": base_inf + delta_infraction}).eq("id", uid).execute()
+        log(f"↩️  Devueltas {old_count} multa(s) a un usuario que ya no las tiene en la jornada {matchday}")
+
     if penalty_rows:
         sb.table("penalties").insert(penalty_rows).execute()
     log(f"⚖️  {len(penalty_rows)} sanción(es) registrada(s) en la jornada {matchday}")
 
-    # Agrupar resultados por división para el reparto de pagos (1/4 ganan, 1/4 pierden)
-    div_results = {1: [], 2: [], 3: [], None: []}
+    # Agrupar resultados por división para el reparto de pagos (1/4 ganan, 1/4 pierden).
+    # `results` ya solo contiene equipos con división asignada.
+    div_results = {1: [], 2: [], 3: []}
     for r in results:
         team_id, user_id, raw, pen, net = r
         div = user_divisions.get(user_id)
         if div in (1, 2, 3):
             div_results[div].append(r)
-        else:
-            div_results[None].append(r)
 
     for div in div_results:
         div_results[div].sort(key=lambda x: x[4], reverse=True)
