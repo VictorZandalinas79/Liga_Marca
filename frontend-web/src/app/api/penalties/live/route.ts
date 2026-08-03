@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getLiveInfractions, getCurrentMatchday } from '@/lib/infractions'
+import { isDivisionId } from '@/lib/divisions'
 
 export async function GET(request: NextRequest) {
   const supabase = await createServerSupabase()
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
     .select('id')
     .eq('matchday', currentMatchday)
     .limit(1)
-  if (division != null) penaltiesQuery = penaltiesQuery.eq('division', division)
+  if (isDivisionId(division)) penaltiesQuery = penaltiesQuery.eq('division', division)
 
   const { data: penalties, error: penError } = await penaltiesQuery
 

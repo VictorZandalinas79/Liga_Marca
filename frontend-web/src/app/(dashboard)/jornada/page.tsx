@@ -678,11 +678,16 @@ export default function JornadaPage() {
         let infractionsData: any[] = []
         // 1. Siempre intentar obtener las sanciones consolidadas de la base de datos.
         //    Las multas guardan su división, así que se filtran directamente.
-        const { data: dbPenalties } = await supabase
+        let query = supabase
           .from('penalties')
           .select('id, matchday, description, points, user_id, division, profiles(full_name)')
           .eq('matchday', selectedMatchday)
-          .eq('division', selectedDivision)
+          
+        if (isDivisionId(selectedDivision)) {
+          query = query.eq('division', selectedDivision)
+        }
+
+        const { data: dbPenalties } = await query
 
         const dbPenaltiesDiv = dbPenalties ?? []
 

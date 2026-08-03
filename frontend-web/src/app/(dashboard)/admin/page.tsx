@@ -362,7 +362,17 @@ export default function AdminPage() {
                           disabled={savingId === u.id}
                           onBlur={(e) => {
                             const val = e.target.value === '' ? 0 : Number(e.target.value)
-                            if (val !== (u.entry_fee_paid || 0)) saveUser(u.id, { entry_fee_paid: val }).catch(() => {})
+                            if (val !== (u.entry_fee_paid || 0)) {
+                              const patch: Partial<AdminUser> = { entry_fee_paid: val }
+                              if (val > 0 && !u.has_paid) {
+                                patch.has_paid = true
+                                patch.paid_at = u.paid_at ?? new Date().toISOString()
+                              } else if (val === 0 && u.has_paid) {
+                                patch.has_paid = false
+                                patch.paid_at = null
+                              }
+                              saveUser(u.id, patch).catch(() => {})
+                            }
                           }}
                           placeholder="0"
                           className="w-full pl-6 pr-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm"
