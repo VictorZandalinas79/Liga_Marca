@@ -33,7 +33,7 @@ interface Player {
   // Asistencias
   key_passes?: number
   second_assists?: number
-  intent_assists?: number
+  fantasy_assist?: number
   // Defensa
   tackles_won?: number
   tackles_lost?: number
@@ -232,7 +232,7 @@ export default function PartidoDetallePage() {
           assists: score?.assists || 0,
           key_passes: score?.key_passes || 0,
           second_assists: score?.second_assists || 0,
-          intent_assists: score?.intent_assists || 0,
+          fantasy_assist: score?.fantasy_assist || 0,
           // Defensa
           tackles_won: score?.tackles_won || 0,
           tackles_lost: score?.tackles_lost || 0,
@@ -467,6 +467,19 @@ export default function PartidoDetallePage() {
       return () => clearInterval(interval)
     }
   }, [fixture?.status, fixture?.start_time, fixture?.current_minute])
+
+  // Mantener actualizado el jugador seleccionado si los datos se recargan
+  useEffect(() => {
+    if (selectedPlayer) {
+      const updatedPlayer = 
+        homePlayers.find(p => p.id === selectedPlayer.id) || 
+        awayPlayers.find(p => p.id === selectedPlayer.id)
+      
+      if (updatedPlayer && JSON.stringify(updatedPlayer) !== JSON.stringify(selectedPlayer)) {
+        setSelectedPlayer(updatedPlayer)
+      }
+    }
+  }, [homePlayers, awayPlayers])
 
   const getPositionOrder = (position: string): number => {
     const posLower = position.toLowerCase()

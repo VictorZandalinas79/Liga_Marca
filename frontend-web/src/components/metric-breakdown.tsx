@@ -46,7 +46,7 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   if (n(player.goals) > 0)         b2.push(u(n(player.goals), GOAL[pos], `Gol (${pos})`))
   if (n(player.own_goals) > 0)     b2.push(u(n(player.own_goals), R.own_goal, 'Gol en propia'))
   if (n(player.assists) > 0)       b2.push(u(n(player.assists), R.assist_goal, 'Asistencia de gol'))
-  if (n(player.intent_assists) > 0) b2.push(u(n(player.intent_assists), R.assist_no_goal, 'Asistencia sin gol'))
+  if (n(player.fantasy_assist) > 0) b2.push(u(n(player.fantasy_assist), R.assist_no_goal, 'Asistencia sin gol'))
 
   // B3: Defensa y Portería a Cero
   const b3: Row[] = []
@@ -211,27 +211,43 @@ function RelevoBreakdown({
             {block.note && <p className="text-[11px] text-slate-400 mb-2">{block.note}</p>}
 
             <div className="space-y-1">
-              {block.metrics.map((m, i) => (
-                <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {m.met ? (
-                      <Check className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
-                    ) : (
-                      <X className="w-3.5 h-3.5 shrink-0 text-slate-300" />
-                    )}
-                    <span className={`truncate ${m.met ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>
-                      {m.label}
-                    </span>
+              {block.metrics.map((m, i) => {
+                const targetVal = m.target;
+                const currentVal = m.value;
+                let pctVal = targetVal > 0 ? (currentVal / targetVal) * 100 : (currentVal > 0 ? 100 : 0);
+                if (pctVal > 100) pctVal = 100;
+
+                return (
+                  <div key={i} className="flex flex-col gap-1.5 py-1.5">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {m.met ? (
+                          <Check className="w-4 h-4 shrink-0 text-emerald-600" />
+                        ) : (
+                          <X className="w-4 h-4 shrink-0 text-slate-300" />
+                        )}
+                        <span className={`truncate ${m.met ? 'text-slate-800 font-semibold' : 'text-slate-500'}`}>
+                          {m.label}
+                        </span>
+                      </div>
+                      <span className="shrink-0 tabular-nums text-slate-500">
+                        <span className={m.met ? 'text-emerald-600 font-bold' : 'text-slate-700 font-semibold'}>
+                          {fmt(currentVal, m.unit)}
+                        </span>
+                        {m.detail && <span className="text-slate-400"> ({m.detail})</span>}
+                        <span className="text-slate-400"> / {fmt(targetVal, m.unit)}</span>
+                      </span>
+                    </div>
+                    {/* Barra de progreso visual */}
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex-1 max-w-full">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-500 ${m.met ? 'bg-emerald-500' : 'bg-indigo-400'}`} 
+                        style={{ width: `${pctVal}%` }} 
+                      />
+                    </div>
                   </div>
-                  <span className="shrink-0 tabular-nums text-slate-500">
-                    <span className={m.met ? 'text-emerald-600 font-bold' : 'text-slate-700 font-semibold'}>
-                      {fmt(m.value, m.unit)}
-                    </span>
-                    {m.detail && <span className="text-slate-400"> ({m.detail})</span>}
-                    <span className="text-slate-400"> · mín. {fmt(m.target, m.unit)}</span>
-                  </span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         ))}

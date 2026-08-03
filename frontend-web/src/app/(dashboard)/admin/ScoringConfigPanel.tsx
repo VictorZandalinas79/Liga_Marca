@@ -165,6 +165,13 @@ export function ScoringConfigPanel() {
                 </tbody>
               </table>
             </div>
+            <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg flex gap-3 text-sm text-blue-800 items-start mt-2">
+              <Info className="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-600" />
+              <div>
+                <strong>Nota sobre "Gol encajado":</strong> Si a un equipo le marcan solo 1 gol, no penaliza (0 puntos). Si le marcan 2 o más goles, se multiplica la cantidad total de goles por la penalización que configures. 
+                <br/><em>Ejemplo: Si configuras Defensa a -1 y le marcan 2 goles, el defensa restará -2 puntos.</em>
+              </div>
+            </div>
           </section>
 
           {/* Eventos de valor único */}

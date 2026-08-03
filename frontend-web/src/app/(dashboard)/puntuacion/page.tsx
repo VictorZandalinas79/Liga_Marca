@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/card'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { resolveRates, type ScoringRules } from '@/lib/scoring-config'
 import { DEFAULT_LEAGUE_CONFIG } from '@/lib/league-config-types'
-import { Coins, Activity } from 'lucide-react'
+import { Coins, Activity, Info } from 'lucide-react'
 import { num } from '@/lib/scoring-config'
 
 export const metadata = {
@@ -170,12 +170,18 @@ export default async function PuntuacionPage() {
         <p className="mb-2 mt-5 text-sm font-semibold text-slate-700">
           Goles recibidos (mientras el jugador está en el campo)
         </p>
+        <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg flex gap-3 text-sm text-blue-800 items-start mb-3">
+          <Info className="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-600" />
+          <div>
+            <strong>Nota:</strong> El primer gol encajado no penaliza. Pero si el equipo recibe <strong>2 o más goles</strong>, se multiplica la totalidad de goles encajados por esta penalización.
+          </div>
+        </div>
         <PointsTable
           rows={[
-            { accion: 'Portero (POR)', detalle: 'por cada gol encajado (si recibe 2 o más)', pts: formatPts(rates.goal_conceded.POR) },
-            { accion: 'Defensa (DEF)', detalle: 'por cada gol encajado (si recibe 2 o más)', pts: formatPts(rates.goal_conceded.DEF) },
-            { accion: 'Mediocentro (MED)', detalle: 'por cada gol encajado (si recibe 2 o más)', pts: formatPts(rates.goal_conceded.MED) },
-            { accion: 'Delantero (DEL)', detalle: 'por cada gol encajado (si recibe 2 o más)', pts: formatPts(rates.goal_conceded.DEL) },
+            { accion: 'Portero (POR)', detalle: 'por gol (si recibe 2+)', pts: formatPts(rates.goal_conceded.POR) },
+            { accion: 'Defensa (DEF)', detalle: 'por gol (si recibe 2+)', pts: formatPts(rates.goal_conceded.DEF) },
+            { accion: 'Mediocentro (MED)', detalle: 'por gol (si recibe 2+)', pts: formatPts(rates.goal_conceded.MED) },
+            { accion: 'Delantero (DEL)', detalle: 'por gol (si recibe 2+)', pts: formatPts(rates.goal_conceded.DEL) },
           ]}
         />
       </Section>

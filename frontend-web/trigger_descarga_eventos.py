@@ -178,6 +178,7 @@ class MatchEventDownloader:
         self.team_total_events = {} # NUEVO: Para calcular el % de participación
         self.processed_events = set()
         self.provisional_players = {} # team_id -> [prov_players]
+        self.event_seq = 0 # Secuencia global de eventos procesados
         self.recent_shots = [] # Para tracking de Calidad Parada (Relevo)
         self.player_calidad_parada = {} # player_id -> valor acumulado (Relevo)
         self.team_goals_conceded = {}
@@ -595,7 +596,10 @@ class MatchEventDownloader:
         clean_sheet_min = rules.get('clean_sheet', {}).get('min_minutes', 60)
 
         if mins_played > clean_sheet_min and goals_conc == 0:
+            self.stats[player_id]['clean_sheet'] = 1
             points += self.get_position_points('clean_sheet', pos)
+        else:
+            self.stats[player_id]['clean_sheet'] = 0
 
         # --- GOLES RECIBIDOS (por gol) ---
         if goals_conc > 1:
@@ -914,14 +918,15 @@ class MatchEventDownloader:
             self.apply_points(player_id, 'saves', 1, current_min)
             
             # Lógica Calidad Parada (Relevo)
-            total_sec = event.get('timeMin', 0) * 60 + event.get('timeSec', 0)
             closest_shot = None
             min_diff = 9999
-            for shot_sec, sx, sy in self.recent_shots:
-                diff = total_sec - shot_sec
-                if 0 <= diff <= 6: # Margen de 6s para la reacción
-                    if diff < min_diff:
-                        min_diff = diff
+            for shot_seq, sx, sy in self.recent_shots:
+                # Buscar disparos que ocurrieron antes de la parada (shot_seq < event_seq)
+                # y como máximo 4 eventos antes (event_seq - shot_seq <= 4)
+                seq_diff = self.event_seq - shot_seq
+                if 0 < seq_diff <= 4:
+                    if seq_diff < min_diff:
+                        min_diff = seq_diff
                         closest_shot = (sx, sy)
             
             if closest_shot:
@@ -956,10 +961,9 @@ class MatchEventDownloader:
         self.apply_points(event.get('playerId'), 'shots_total', 1, current_min)
         self.apply_points(event.get('playerId'), 'shots_on_target', 1, current_min)
         
-        total_sec = event.get('timeMin', 0) * 60 + event.get('timeSec', 0)
         x = event.get('x', 50.0)
         y = event.get('y', 50.0)
-        self.recent_shots.append((total_sec, x, y))
+        self.recent_shots.append((self.event_seq, x, y))
         self.recent_shots = self.recent_shots[-10:]
         
         # typeId 15 = "Attempt Saved": si es un penalti a puerta (no gol), lo ha
@@ -983,9 +987,15 @@ class MatchEventDownloader:
         player_name = event.get('playerName', 'Unknown')
         is_own_goal = self.has_qualifier(event, Q_OWN_GOAL)
         
-        # Todo gol cuenta como tiro total (excepto si es propia puerta)
+        # Todo gol cuenta como tiro a puerta (y por tanto tiro total) excepto si es propia puerta
         if not is_own_goal:
             self.apply_points(pid, 'shots_total', 1, current_min)
+            self.apply_points(pid, 'shots_on_target', 1, current_min)
+            
+            x = event.get('x', 50.0)
+            y = event.get('y', 50.0)
+            self.recent_shots.append((self.event_seq, x, y))
+            self.recent_shots = self.recent_shots[-10:]
 
         if is_own_goal:
             self.apply_points(pid, 'own_goals', 1, current_min)
@@ -1381,7 +1391,9 @@ class MatchEventDownloader:
                 x.get('timeMin', 0), x.get('timeSec', 0), x.get('id', 0)
             ))
 
+            self.event_seq = 0
             for event in events:
+                self.event_seq += 1
                 t_min = event.get('timeMin', 0)
                 if t_min > current_minute: current_minute = t_min
                 self.process_event(event, current_minute)

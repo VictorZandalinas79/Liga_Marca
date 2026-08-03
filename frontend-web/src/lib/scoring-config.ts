@@ -30,7 +30,7 @@ export type EditableEvent = {
 export const EDITABLE_EVENTS: EditableEvent[] = [
   { key: 'goal', label: 'Gol', kind: 'positional' },
   { key: 'clean_sheet', label: 'Portería a cero (≥60 min)', kind: 'positional' },
-  { key: 'goal_conceded', label: 'Gol encajado (por gol)', kind: 'positional' },
+  { key: 'goal_conceded', label: 'Gol encajado (penaliza por total si > 1)', kind: 'positional' },
   { key: 'assist_goal', label: 'Asistencia de gol', kind: 'single' },
   { key: 'assist_no_goal', label: 'Asistencia (sin gol)', kind: 'single' },
   { key: 'own_goal', label: 'Gol en propia', kind: 'single' },
@@ -499,6 +499,17 @@ export interface ScoringRates {
     shots_on_target: number
     takeons_won: number
     box_entries: number
+    passes_completed: number
+    forward_passes: number
+    recoveries_high: number
+    recoveries_med: number
+    recoveries_low: number
+    interceptions_high: number
+    interceptions_med: number
+    interceptions_low: number
+    set_pieces_taken: number
+    successful_crosses: number
+    long_balls_completed: number
   }
   lost_balls: number
   relevo_limits: RelevoLimits
@@ -522,6 +533,9 @@ export const DEFAULT_RATES: ScoringRates = {
   red_card: -3,
   per_unit: {
     saves: 0.5, clearances: 0.5, shots_on_target: 0.3, takeons_won: 0.5, box_entries: 0.1,
+    passes_completed: 0.05, forward_passes: 0.2, recoveries_high: 0.3, recoveries_med: 0.2,
+    recoveries_low: 0.1, interceptions_high: 0.3, interceptions_med: 0.2, interceptions_low: 0.1,
+    set_pieces_taken: 0.2, successful_crosses: 0.3, long_balls_completed: 0.5,
   },
   lost_balls: -0.1,
   relevo_limits: DEFAULT_RELEVO_LIMITS,
@@ -593,10 +607,21 @@ export function resolveRates(rules: ScoringRules | null): ScoringRates {
     red_card: eventVal(rules, 'red_card', 'MED', d.red_card),
     per_unit: {
       saves: eventVal(rules, 'save', 'MED', d.per_unit.saves),
-      clearances: eventVal(rules, 'clearances', 'MED', d.per_unit.clearances),
-      shots_on_target: eventVal(rules, 'shots_on_target', 'MED', d.per_unit.shots_on_target),
-      takeons_won: eventVal(rules, 'takeons_won', 'MED', d.per_unit.takeons_won),
-      box_entries: eventVal(rules, 'box_entries', 'MED', d.per_unit.box_entries),
+      clearances: num(rules?.bonuses_per_X as any, 'clearances') || num(events.clearances, 'all') || d.per_unit.clearances,
+      shots_on_target: num(rules?.bonuses_per_X as any, 'shots_on_target') || num(events.shots_on_target, 'all') || d.per_unit.shots_on_target,
+      takeons_won: num(rules?.bonuses_per_X as any, 'takeons_won') || num(events.takeons_won, 'all') || d.per_unit.takeons_won,
+      box_entries: num(rules?.bonuses_per_X as any, 'box_entries') || num(events.box_entries, 'all') || d.per_unit.box_entries,
+      passes_completed: num(rules?.bonuses_per_X as any, 'passes_completed') || d.per_unit.passes_completed,
+      forward_passes: num(rules?.bonuses_per_X as any, 'forward_passes') || d.per_unit.forward_passes,
+      recoveries_high: num(rules?.bonuses_per_X as any, 'recoveries_high') || d.per_unit.recoveries_high,
+      recoveries_med: num(rules?.bonuses_per_X as any, 'recoveries_med') || d.per_unit.recoveries_med,
+      recoveries_low: num(rules?.bonuses_per_X as any, 'recoveries_low') || d.per_unit.recoveries_low,
+      interceptions_high: num(rules?.bonuses_per_X as any, 'interceptions_high') || d.per_unit.interceptions_high,
+      interceptions_med: num(rules?.bonuses_per_X as any, 'interceptions_med') || d.per_unit.interceptions_med,
+      interceptions_low: num(rules?.bonuses_per_X as any, 'interceptions_low') || d.per_unit.interceptions_low,
+      set_pieces_taken: num(rules?.bonuses_per_X as any, 'set_pieces_taken') || d.per_unit.set_pieces_taken,
+      successful_crosses: num(rules?.bonuses_per_X as any, 'successful_crosses') || d.per_unit.successful_crosses,
+      long_balls_completed: num(rules?.bonuses_per_X as any, 'long_balls_completed') || d.per_unit.long_balls_completed,
     },
     lost_balls: num(events.lost_balls, 'all') || d.lost_balls,
     relevo_limits: resolveRelevoLimits(rules),

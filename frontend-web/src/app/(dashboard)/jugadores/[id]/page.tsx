@@ -631,12 +631,23 @@ export default function JugadorDetallePage() {
     const b6: ScoreRow[] = []
     if (g('saves') > 0) b6.push(u(g('saves'), SR.per_unit.saves, 'Paradas'))
 
-    // BLOQUE 7: las cuatro métricas que puntúan por unidad en el sistema v4.
+    // BLOQUE 7: las métricas que puntúan por unidad en el sistema
     const b7: ScoreRow[] = []
     if (score.clearances > 0) b7.push(u(score.clearances, SR.per_unit.clearances, 'Despejes'))
     if (score.shots_on_target > 0) b7.push(u(score.shots_on_target, SR.per_unit.shots_on_target, 'Tiros a puerta'))
     if (score.takeons_won > 0) b7.push(u(score.takeons_won, SR.per_unit.takeons_won, 'Regates completados'))
     if (g('box_entries') > 0) b7.push(u(g('box_entries'), SR.per_unit.box_entries, 'Balones al área'))
+    if (score.passes_completed > 0) b7.push(u(score.passes_completed, SR.per_unit.passes_completed, 'Pases completados'))
+    if (score.forward_passes > 0) b7.push(u(score.forward_passes, SR.per_unit.forward_passes, 'Pases hacia adelante'))
+    if (g('recoveries_high') > 0) b7.push(u(g('recoveries_high'), SR.per_unit.recoveries_high, 'Recuperaciones (alta)'))
+    if (g('recoveries_med') > 0) b7.push(u(g('recoveries_med'), SR.per_unit.recoveries_med, 'Recuperaciones (media)'))
+    if (g('recoveries_low') > 0) b7.push(u(g('recoveries_low'), SR.per_unit.recoveries_low, 'Recuperaciones (baja)'))
+    if (g('interceptions_high') > 0) b7.push(u(g('interceptions_high'), SR.per_unit.interceptions_high, 'Interceptaciones (alta)'))
+    if (g('interceptions_med') > 0) b7.push(u(g('interceptions_med'), SR.per_unit.interceptions_med, 'Interceptaciones (media)'))
+    if (g('interceptions_low') > 0) b7.push(u(g('interceptions_low'), SR.per_unit.interceptions_low, 'Interceptaciones (baja)'))
+    if (g('set_pieces_taken') > 0) b7.push(u(g('set_pieces_taken'), SR.per_unit.set_pieces_taken, 'Lanzamientos balón parado'))
+    if (g('successful_crosses') > 0) b7.push(u(g('successful_crosses'), SR.per_unit.successful_crosses, 'Centros exitosos'))
+    if (g('long_balls_completed') > 0) b7.push(u(g('long_balls_completed'), SR.per_unit.long_balls_completed, 'Pases largos comp.'))
 
     // BLOQUE 8: Pérdidas
     const b8: ScoreRow[] = []
@@ -1183,6 +1194,11 @@ export default function JugadorDetallePage() {
     { key: 'interceptaciones', label: 'Interc.', icon: '🛑' },
     { key: 'paradas', label: 'Paradas', icon: '🧤' },
     { key: 'perdidas', label: 'Pérdidas', icon: '📉' },
+    { key: 'pases_adelante', label: 'Pases adel.', icon: '▶️' },
+    { key: 'balones_area', label: 'Balones área', icon: '🎯' },
+    { key: 'pases_largos', label: 'Pases largos', icon: '🚀' },
+    { key: 'centros', label: 'Centros', icon: '🔀' },
+    { key: 'balon_parado', label: 'Balón parado', icon: '⛳' },
   ]
 
   const getMetricValue = (score: PlayerScore, key: string): number => {
@@ -1212,6 +1228,16 @@ export default function JugadorDetallePage() {
         return n(score.saves)
       case 'perdidas':
         return n(score.dispossessed) + n(score.bad_touches)
+      case 'pases_adelante':
+        return n(score.forward_passes)
+      case 'balones_area':
+        return n(score.box_entries)
+      case 'pases_largos':
+        return n(score.long_balls_completed)
+      case 'centros':
+        return n(score.successful_crosses)
+      case 'balon_parado':
+        return n(score.set_pieces_taken)
       default:
         return 0
     }
@@ -1782,6 +1808,26 @@ export default function JugadorDetallePage() {
                     <linearGradient id="grad-perdidas" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#fb7185" stopOpacity="1" />
                       <stop offset="100%" stopColor="#e11d48" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-pases_adelante" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#2563eb" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-balones_area" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#d97706" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-pases_largos" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#7c3aed" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-centros" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ec4899" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#db2777" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="grad-balon_parado" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#14b8a6" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#0d9488" stopOpacity="1" />
                     </linearGradient>
                   </defs>
 

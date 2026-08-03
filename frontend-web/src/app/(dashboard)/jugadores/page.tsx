@@ -53,6 +53,17 @@ interface PlayerStats {
   dispossessed: number
   bad_touches: number
   own_goals: number
+  forward_passes: number
+  box_entries: number
+  recoveries_high: number
+  recoveries_med: number
+  recoveries_low: number
+  interceptions_high: number
+  interceptions_med: number
+  interceptions_low: number
+  set_pieces_taken: number
+  successful_crosses: number
+  long_balls_completed: number
 }
 
 interface Team {
@@ -263,7 +274,7 @@ export default function JugadoresPage() {
       while (true) {
         const { data: page, error } = await supabase
           .from('player_scores')
-          .select('player_id, total_points, goals, assists, yellow_cards, red_cards, minutes_played, shots_on_target, passes_completed, passes_attempted, tackles_won, interceptions, saves, clearances, takeons_won, ball_recoveries, key_passes, big_chances_created, aerials_won, penalties_won, dispossessed, bad_touches, own_goals')
+          .select('player_id, total_points, goals, assists, yellow_cards, red_cards, minutes_played, shots_on_target, passes_completed, passes_attempted, tackles_won, interceptions, saves, clearances, takeons_won, ball_recoveries, key_passes, big_chances_created, aerials_won, penalties_won, dispossessed, bad_touches, own_goals, forward_passes, box_entries, recoveries_high, recoveries_med, recoveries_low, interceptions_high, interceptions_med, interceptions_low, set_pieces_taken, successful_crosses, long_balls_completed')
           .range(scoresFrom, scoresFrom + PAGE_SIZE - 1)
         if (error || !page || page.length === 0) break
         allScores.push(...page)
@@ -290,6 +301,9 @@ export default function JugadoresPage() {
           takeons_won: 0, ball_recoveries: 0, key_passes: 0,
           big_chances_created: 0, aerials_won: 0, penalties_won: 0,
           dispossessed: 0, bad_touches: 0, own_goals: 0,
+          forward_passes: 0, box_entries: 0, recoveries_high: 0, recoveries_med: 0, recoveries_low: 0,
+          interceptions_high: 0, interceptions_med: 0, interceptions_low: 0,
+          set_pieces_taken: 0, successful_crosses: 0, long_balls_completed: 0,
         }
 
         const stats = scores.reduce((acc, s) => ({
@@ -317,6 +331,17 @@ export default function JugadoresPage() {
           dispossessed: acc.dispossessed + (s.dispossessed || 0),
           bad_touches: acc.bad_touches + (s.bad_touches || 0),
           own_goals: acc.own_goals + (s.own_goals || 0),
+          forward_passes: acc.forward_passes + (s.forward_passes || 0),
+          box_entries: acc.box_entries + (s.box_entries || 0),
+          recoveries_high: acc.recoveries_high + (s.recoveries_high || 0),
+          recoveries_med: acc.recoveries_med + (s.recoveries_med || 0),
+          recoveries_low: acc.recoveries_low + (s.recoveries_low || 0),
+          interceptions_high: acc.interceptions_high + (s.interceptions_high || 0),
+          interceptions_med: acc.interceptions_med + (s.interceptions_med || 0),
+          interceptions_low: acc.interceptions_low + (s.interceptions_low || 0),
+          set_pieces_taken: acc.set_pieces_taken + (s.set_pieces_taken || 0),
+          successful_crosses: acc.successful_crosses + (s.successful_crosses || 0),
+          long_balls_completed: acc.long_balls_completed + (s.long_balls_completed || 0),
         }), zero) as PlayerStats || zero
 
         stats.avg_points = stats.matches_played > 0
@@ -676,21 +701,25 @@ export default function JugadoresPage() {
                       {renderMetricBar(per90Mode ? 'Goles / 90' : 'Goles', sA.goals, sB.goals)}
                       {renderMetricBar(per90Mode ? 'Asistencias / 90' : 'Asistencias', sA.assists, sB.assists)}
                       {renderMetricBar(per90Mode ? 'Tiros a puerta / 90' : 'Tiros a puerta', sA.shots_on_target, sB.shots_on_target)}
-                      {renderMetricBar(per90Mode ? 'Grandes oportunidades / 90' : 'Grandes oportunidades', sA.big_chances_created, sB.big_chances_created)}
-                      {renderMetricBar(per90Mode ? 'Pases clave / 90' : 'Pases clave', sA.key_passes, sB.key_passes)}
                       {renderMetricBar(per90Mode ? 'Regates / 90' : 'Regates ganados', sA.takeons_won, sB.takeons_won)}
                       {renderMetricBar(per90Mode ? 'Goles propia / 90' : 'Goles en propia', sA.own_goals, sB.own_goals, true)}
 
-                      {renderSection('Pases', '📈')}
+                      {renderSection('Pases y Creación', '📈')}
                       {renderMetricBar(per90Mode ? 'Pases completados / 90' : 'Pases completados', sA.passes_completed, sB.passes_completed)}
-                      {renderMetricBar(per90Mode ? 'Pases intentados / 90' : 'Pases intentados', sA.passes_attempted, sB.passes_attempted)}
+                      {renderMetricBar(per90Mode ? 'Pases hacia adelante / 90' : 'Pases hacia adelante', sA.forward_passes, sB.forward_passes)}
+                      {renderMetricBar(per90Mode ? 'Pases largos / 90' : 'Pases largos', sA.long_balls_completed, sB.long_balls_completed)}
+                      {renderMetricBar(per90Mode ? 'Centros exitosos / 90' : 'Centros exitosos', sA.successful_crosses, sB.successful_crosses)}
+                      {renderMetricBar(per90Mode ? 'Balones al área / 90' : 'Balones al área', sA.box_entries, sB.box_entries)}
+                      {renderMetricBar(per90Mode ? 'Balón parado / 90' : 'Lanz. Balón Parado', sA.set_pieces_taken, sB.set_pieces_taken)}
 
                       {renderSection('Defensa', '🛡️')}
-                      {renderMetricBar(per90Mode ? 'Entradas / 90' : 'Entradas ganadas', sA.tackles_won, sB.tackles_won)}
-                      {renderMetricBar(per90Mode ? 'Intercepciones / 90' : 'Intercepciones', sA.interceptions, sB.interceptions)}
+                      {renderMetricBar(per90Mode ? 'Intercept. Altas / 90' : 'Intercept. Altas', sA.interceptions_high, sB.interceptions_high)}
+                      {renderMetricBar(per90Mode ? 'Intercept. Medias / 90' : 'Intercept. Medias', sA.interceptions_med, sB.interceptions_med)}
+                      {renderMetricBar(per90Mode ? 'Intercept. Bajas / 90' : 'Intercept. Bajas', sA.interceptions_low, sB.interceptions_low)}
                       {renderMetricBar(per90Mode ? 'Despejes / 90' : 'Despejes', sA.clearances, sB.clearances)}
-                      {renderMetricBar(per90Mode ? 'Recuperaciones / 90' : 'Recuperaciones', sA.ball_recoveries, sB.ball_recoveries)}
-                      {renderMetricBar(per90Mode ? 'Duelos aéreos / 90' : 'Duelos aéreos ganados', sA.aerials_won, sB.aerials_won)}
+                      {renderMetricBar(per90Mode ? 'Recup. Altas / 90' : 'Recup. Altas', sA.recoveries_high, sB.recoveries_high)}
+                      {renderMetricBar(per90Mode ? 'Recup. Medias / 90' : 'Recup. Medias', sA.recoveries_med, sB.recoveries_med)}
+                      {renderMetricBar(per90Mode ? 'Recup. Bajas / 90' : 'Recup. Bajas', sA.recoveries_low, sB.recoveries_low)}
 
                       {renderSection('Portería', '🧤')}
                       {renderMetricBar(per90Mode ? 'Paradas / 90' : 'Paradas', sA.saves, sB.saves)}
