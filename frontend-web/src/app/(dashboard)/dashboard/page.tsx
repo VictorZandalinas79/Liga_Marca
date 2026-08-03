@@ -139,6 +139,7 @@ export default function DashboardPage() {
   const [savedPlayers, setSavedPlayers] = useState<string[]>([])
   // Alineación de la jornada ANTERIOR: sirve de base para resaltar los cambios
   const [basePlayers, setBasePlayers] = useState<string[]>([])
+  const [dbReplacedPlayers, setDbReplacedPlayers] = useState<Record<number, string>>({})
   const [changeHistory, setChangeHistory] = useState<Array<{outId: string, inId: string, index: number}>>([])
   const [formation, setFormation] = useState<Formation>(FORMATIONS[1])
   const [userDivision, setUserDivision] = useState<number | null>(null)
@@ -634,16 +635,24 @@ export default function DashboardPage() {
       // 3. Alineación de la JORNADA ACTIVA
       const { data: currentPlayers } = await supabase
         .from('team_players')
-        .select('player_id, order')
+        .select('player_id, order, replaced_player_id')
         .eq('team_id', teamData.id)
         .eq('is_starter', true)
         .eq('matchday', matchday)
 
       if (currentPlayers && currentPlayers.length > 0) {
         // Ya tiene equipo para esta jornada: usarlo tal cual (NO regenerar)
-        const ids = currentPlayers
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-          .map(tp => tp.player_id)
+        const sorted = currentPlayers.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        const ids = sorted.map(tp => tp.player_id)
+        
+        const replacedMap: Record<number, string> = {}
+        sorted.forEach(tp => {
+          if (tp.replaced_player_id) {
+            replacedMap[tp.order ?? 0] = tp.replaced_player_id
+          }
+        })
+        setDbReplacedPlayers(replacedMap)
+        
         setSelectedPlayers(ids)
         setSavedPlayers(ids)
         setLoading(false)
@@ -1045,59 +1054,82 @@ export default function DashboardPage() {
     const changeIdx = changeHistory.findIndex(ch => ch.index === index)
     if (changeIdx !== -1) {
       const change = changeHistory[changeIdx]
-      let newSelected: string[] = []
-      setSelectedPlayers(prev => {
-        newSelected = [...prev]
-        newSelected[index] = change.outId
-        return newSelected
-      })
-      setChangeHistory(prev => {
-        const next = [...prev]
-        next.splice(changeIdx, 1)
-        return next
-      })
+      const newSelected = [...selectedPlayers]
+      newSelected[index] = change.outId
+      setSelectedPlayers(newSelected)
+      
+      const newChangeHistory = [...changeHistory]
+      newChangeHistory.splice(changeIdx, 1)
+      setChangeHistory(newChangeHistory)
+      
       setCancelConfirmUniqueKey(null)
 
       if (userTeamId) {
         const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
-        await supabase.from('team_players').delete().eq('team_id', userTeamId).eq('matchday', matchdayToSave)
-        const teamPlayers = newSelected.map((pid, i) => ({
-          team_id: userTeamId,
-          player_id: pid,
-          is_starter: true,
-          is_captain: i === 0,
-          order: i,
-          matchday: matchdayToSave,
-        }))
-        await supabase.from('team_players').insert(teamPlayers)
+        
+        const teamPlayersData = newSelected.map((pid, i) => {
+          let replacedId = null
+          const ch = newChangeHistory.find(c => c.index === i)
+          if (ch) replacedId = ch.outId
+          else if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+          
+          return {
+            player_id: pid,
+            is_starter: true,
+            is_captain: i === 0,
+            order: i,
+            replaced_player_id: replacedId
+          }
+        })
+        
+        await supabase.rpc('save_team_lineup', {
+          p_team_id: userTeamId,
+          p_matchday: matchdayToSave,
+          p_players: teamPlayersData
+        })
       }
       return
     }
 
     const outPlayer = replacedPlayerByUniqueKey.get(uniqueKey)
     if (outPlayer) {
-      let newSelected: string[] = []
-      setSelectedPlayers(prev => {
-        newSelected = [...prev]
-        newSelected[index] = outPlayer.id
-        return newSelected
+      const newSelected = [...selectedPlayers]
+      newSelected[index] = outPlayer.id
+      setSelectedPlayers(newSelected)
+
+      setDbReplacedPlayers(prev => {
+        const next = { ...prev }
+        delete next[index]
+        return next
       })
+
+      setCancelConfirmUniqueKey(null)
 
       if (userTeamId) {
         const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
-        await supabase.from('team_players').delete().eq('team_id', userTeamId).eq('matchday', matchdayToSave)
-        const teamPlayers = newSelected.map((pid, i) => ({
-          team_id: userTeamId,
-          player_id: pid,
-          is_starter: true,
-          is_captain: i === 0,
-          order: i,
-          matchday: matchdayToSave,
-        }))
-        await supabase.from('team_players').insert(teamPlayers)
+        
+        const teamPlayersData = newSelected.map((pid, i) => {
+          let replacedId = null
+          const ch = changeHistory.find(c => c.index === i)
+          if (ch) replacedId = ch.outId
+          else if (i !== index && dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+          
+          return {
+            player_id: pid,
+            is_starter: true,
+            is_captain: i === 0,
+            order: i,
+            replaced_player_id: replacedId
+          }
+        })
+        
+        await supabase.rpc('save_team_lineup', {
+          p_team_id: userTeamId,
+          p_matchday: matchdayToSave,
+          p_players: teamPlayersData
+        })
       }
     }
-    setCancelConfirmUniqueKey(null)
   }
 
   const swapPlayer = (newPlayerId: string) => {
@@ -1122,35 +1154,43 @@ export default function DashboardPage() {
     if (!pendingSwap) return
 
     const { outId, inId, index } = pendingSwap
-    setChangeHistory(prev => [...prev, { outId, inId, index }])
+    const newChangeHistory = [...changeHistory, { outId, inId, index }]
+    setChangeHistory(newChangeHistory)
     
-    let newSelected: string[] = []
-    setSelectedPlayers(prev => {
-      newSelected = [...prev]
-      newSelected[index] = inId
-      return newSelected
-    })
+    const newSelected = [...selectedPlayers]
+    newSelected[index] = inId
+    setSelectedPlayers(newSelected)
 
     if (!userTeamId) return
 
     const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
 
-    const { error: deleteError } = await supabase
-      .from('team_players')
-      .delete()
-      .eq('team_id', userTeamId)
-      .eq('matchday', matchdayToSave)
-
-    if (!deleteError && newSelected.length > 0) {
-      const teamPlayers = newSelected.map((playerId, i) => ({
-        team_id: userTeamId,
+    const teamPlayersData = newSelected.map((playerId, i) => {
+      let replacedId = null
+      const ch = newChangeHistory.find(c => c.index === i)
+      if (ch) replacedId = ch.outId
+      else if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+      
+      return {
         player_id: playerId,
         is_starter: true,
         is_captain: i === 0,
         order: i,
-        matchday: matchdayToSave,
-      }))
-      await supabase.from('team_players').insert(teamPlayers)
+        replaced_player_id: replacedId
+      }
+    })
+
+    // Use RPC function for atomic operation
+    const { error: rpcError } = await supabase.rpc('save_team_lineup', {
+      p_team_id: userTeamId,
+      p_matchday: matchdayToSave,
+      p_players: teamPlayersData
+    })
+
+    if (rpcError) {
+      console.error('Error al guardar alineación:', rpcError)
+      alert('Error guardando la alineación. Por favor, inténtalo de nuevo.')
+      return
     }
 
     setPendingSwap(null)
@@ -1189,13 +1229,11 @@ export default function DashboardPage() {
 
     const lastChange = changeHistory[changeHistory.length - 1]
     
-    let newSelected: string[] = []
-    setSelectedPlayers(prev => {
-      newSelected = [...prev]
-      newSelected[lastChange.index] = lastChange.outId
-      return newSelected
-    })
-    setChangeHistory(prev => prev.slice(0, -1))
+    const newSelected = [...selectedPlayers]
+    newSelected[lastChange.index] = lastChange.outId
+    setSelectedPlayers(newSelected)
+    const newChangeHistory = changeHistory.slice(0, -1)
+    setChangeHistory(newChangeHistory)
     setPlayerToSwap(null)
     setSearchFilter('')
     setPositionFilter('ALL')
@@ -1205,23 +1243,27 @@ export default function DashboardPage() {
 
     if (userTeamId) {
       const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
-      const { error: deleteError } = await supabase
-        .from('team_players')
-        .delete()
-        .eq('team_id', userTeamId)
-        .eq('matchday', matchdayToSave)
-
-      if (!deleteError && newSelected.length > 0) {
-        const teamPlayers = newSelected.map((pid, i) => ({
-          team_id: userTeamId,
+      
+      const teamPlayersData = newSelected.map((pid, i) => {
+        let replacedId = null
+        const ch = newChangeHistory.find(c => c.index === i)
+        if (ch) replacedId = ch.outId
+        else if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+        
+        return {
           player_id: pid,
           is_starter: true,
           is_captain: i === 0,
           order: i,
-          matchday: matchdayToSave,
-        }))
-        await supabase.from('team_players').insert(teamPlayers)
-      }
+          replaced_player_id: replacedId
+        }
+      })
+      
+      await supabase.rpc('save_team_lineup', {
+        p_team_id: userTeamId,
+        p_matchday: matchdayToSave,
+        p_players: teamPlayersData
+      })
     }
   }
 
@@ -1244,66 +1286,39 @@ export default function DashboardPage() {
     })
 
   // Mapa entrante (por uniqueKey) -> jugador reemplazado (saliente).
-  // Cada saliente se asigna a UN SOLO entrante.
   const { replacedPlayerByUniqueKey, unchangedKeys } = useMemo(() => {
     const result = new Map<string, Player>()
     const unchanged = new Set<string>()
-    const usedOutIds = new Set<string>()
 
-    // 1) Encontrar jugadores no cambiados cruzando con basePlayers
-    const baseUnmatched = [...basePlayers]
     for (const player of selectedPlayersData) {
-      const bIdx = baseUnmatched.indexOf(player.id)
-      if (bIdx !== -1) {
-        unchanged.add(player._uniqueKey)
-        baseUnmatched.splice(bIdx, 1)
-      }
-    }
-
-    const availableChanges = [...changeHistory].reverse()
-
-    // 2) Emparejar cambios de la sesión actual
-    for (const player of selectedPlayersData) {
-      if (unchanged.has(player._uniqueKey)) continue
-
-      const changeIdx = availableChanges.findIndex(ch => ch.inId === player.id && !usedOutIds.has(ch.outId))
+      const idx = player._originalIndex
+      
+      // 1. ¿Hay un cambio en memoria (sesión actual) para este índice?
+      const changeIdx = changeHistory.findIndex(ch => ch.index === idx)
       if (changeIdx !== -1) {
-        const change = availableChanges[changeIdx]
-        const out = players.find(p => p.id === change.outId)
-        if (out) {
-          result.set(player._uniqueKey, out)
-          usedOutIds.add(change.outId)
-          availableChanges.splice(changeIdx, 1)
-          
-          const buIdx = baseUnmatched.indexOf(change.outId)
-          if (buIdx !== -1) baseUnmatched.splice(buIdx, 1)
+        const outPlayer = players.find(p => p.id === changeHistory[changeIdx].outId)
+        if (outPlayer) {
+          result.set(player._uniqueKey, outPlayer)
         }
+        continue
       }
-    }
-
-    // 3) Emparejar cambios cross-session por posición
-    const outgoingPlayers = baseUnmatched
-      .filter(id => !usedOutIds.has(id))
-      .map(id => players.find(p => p.id === id))
-      .filter(Boolean) as Player[]
-
-    for (const pos of ['GK', 'DEF', 'MID', 'FWD']) {
-      const outPos = outgoingPlayers.filter(p => getPositionCode(p.position) === pos && !usedOutIds.has(p.id))
-      let oi = 0
-      for (const player of selectedPlayersData) {
-        if (oi >= outPos.length) break
-        if (unchanged.has(player._uniqueKey)) continue
-        if (result.has(player._uniqueKey)) continue
-        if (getPositionCode(player.position) !== pos) continue
-
-        const out = outPos[oi++]
-        result.set(player._uniqueKey, out)
-        usedOutIds.add(out.id)
+      
+      // 2. ¿Hay un cambio persistido en la base de datos para este índice?
+      const dbReplacedId = dbReplacedPlayers[idx]
+      if (dbReplacedId) {
+        const outPlayer = players.find(p => p.id === dbReplacedId)
+        if (outPlayer) {
+          result.set(player._uniqueKey, outPlayer)
+        }
+        continue
       }
+      
+      // 3. Si no hay ni cambio en memoria ni en BD, es un titular base
+      unchanged.add(player._uniqueKey)
     }
 
     return { replacedPlayerByUniqueKey: result, unchangedKeys: unchanged }
-  }, [selectedPlayersData, changeHistory, basePlayers, players])
+  }, [selectedPlayersData, changeHistory, dbReplacedPlayers, players])
 
   // Calcular sanciones dinámicas para la visualización del campo
   const startersForSanctions = selectedPlayersData.map(p => ({
@@ -1684,7 +1699,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Mediocampistas */}
-                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-[4%]' : ''}`}>
+                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map((player, idx, arr) => (
                     <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
@@ -1696,7 +1711,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Defensas */}
-                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-0' : ''}`}>
+                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-0 -translate-y-4 sm:-translate-y-6' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map((player, idx, arr) => (
                     <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
@@ -1708,7 +1723,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Portero */}
-                <div className="flex justify-around items-center gap-1">
+                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? '-translate-y-4 sm:-translate-y-6' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
                     <PitchPlayerCard key={player._uniqueKey} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                   ))}

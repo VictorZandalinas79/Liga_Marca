@@ -287,7 +287,7 @@ def generar_pdf(fixture_id, match_id):
             blocks_info.append(("Bloque 3", f"Tiros P: {t3a} OR Regates: {t3b}", g('block_3_pts') == 1.0))
             
             # B4
-            assis = g('assists')
+            assis = g('assists') + g('fantasy_assist')
             t4a = check_fmt(assis, rate_val('assists_per_min', 0.03))
             cross = g('successful_crosses')
             t4b = check_fmt(cross, rate_val('crosses_per_min', 0.02))
@@ -317,7 +317,7 @@ def generar_pdf(fixture_id, match_id):
             blocks_info.append(("Bloque 3", f"Tiros P: {t3a} OR Remate Cabeza: {t3b}", g('block_3_pts') == 1.0))
             
             # B4
-            assis = g('assists')
+            assis = g('assists') + g('fantasy_assist')
             t4a = check_fmt(assis, rate_val('assists_per_min', 0.03))
             t_w = g('takeons_won'); t_tot = t_w + g('takeons_lost') + g('takeons_overrun')
             t_pct = (t_w / t_tot * 100) if t_tot > 0 else 0

@@ -264,7 +264,7 @@ export default function JornadaPage() {
     // Cargar todos los team_players hasta la jornada actual
     const { data: allTeamPlayers } = await supabase
       .from('team_players')
-      .select('team_id, player_id, is_starter, is_captain, matchday')
+      .select('team_id, player_id, is_starter, is_captain, matchday, replaced_player_id')
       .in('team_id', teamIdsUser)
       .lte('matchday', matchday)
       .order('matchday', { ascending: false })
@@ -399,9 +399,10 @@ export default function JornadaPage() {
 
     const playersById = new Map(playersData?.map(p => [p.id, p]) || [])
 
-    // Jugadores que salieron (estaban antes, no están ahora) → fetch sus datos
+    // Jugadores que salieron o fueron sustituidos
     const allPrevIds = [...new Set([...(prevAllData || []).map(tp => tp.player_id)])]
-    const outPlayerIds = allPrevIds.filter(id => !playerIds.includes(id))
+    const replacedIds = teamPlayersData.map(tp => tp.replaced_player_id).filter(Boolean) as string[]
+    const outPlayerIds = [...new Set([...allPrevIds, ...replacedIds])].filter(id => !playerIds.includes(id))
     const allPlayersById = new Map(playersById)
     if (outPlayerIds.length > 0) {
       const { data: outPlayersData } = await supabase
@@ -533,34 +534,25 @@ export default function JornadaPage() {
       const puntos_totales = jugadores.reduce((sum, p) => sum + Math.round((p.puntos || 0) * 10) / 10, 0)
       const valor_total = jugadores.reduce((sum, p) => sum + (p.valor || 0), 0)
 
-      // Emparejar cambios por posición: asignar replacedPlayer a cada jugador que entró
+      // Usar replaced_player_id directamente de la base de datos para mostrar la miniatura
+      jugadores.forEach(jug => {
+        const tp = teamPlayers.find(t => t.player_id === jug.id)
+        if (tp && tp.replaced_player_id) {
+          jug.replacedPlayer = allPlayersById.get(tp.replaced_player_id) || null
+        }
+      })
+      
+      // Calcular warning de exceso de cambios visual
       const prevIds = prevStartersByTeam.get(ut.id) || []
       const currentStarterIds = starters.map(j => j.id)
       const inIds = currentStarterIds.filter(id => !prevIds.includes(id))
-      const outIds = prevIds.filter(id => !currentStarterIds.includes(id))
-
-      const outByPos: Record<string, string[]> = {}
-      outIds.forEach(id => {
-        const pos = posLabel(allPlayersById.get(id)?.position || '')
-        ;(outByPos[pos] ??= []).push(id)
-      })
-
-      // Asignar replacedPlayer a cada jugador que entró (emparejando por posición)
-      const usedOutIds = new Set<string>()
-      inIds.forEach(inId => {
-        const pos = posLabel(allPlayersById.get(inId)?.position || '')
-        const available = (outByPos[pos] || []).find(outId => !usedOutIds.has(outId))
-        const jug = jugadores.find(j => j.id === inId)
-        if (jug) {
-          if (available) {
-            usedOutIds.add(available)
-            jug.replacedPlayer = allPlayersById.get(available) || null
-          }
-          if (inIds.length > 3) {
+      if (inIds.length > 3) {
+        jugadores.forEach(jug => {
+          if (inIds.includes(jug.id)) {
             jug.hasSubstitutionWarning = true
           }
-        }
-      })
+        })
+      }
 
       // Validar Presupuesto
       const valor_starters = starters.reduce((sum, p) => sum + (p.valor || 0), 0)

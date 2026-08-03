@@ -339,7 +339,7 @@ class MatchEventDownloader:
         except Exception as e:
             print(f"   ⚠️ Error cargando equipos desde BD: {e}")
 
-    def load_positions_from_squads(self):
+    def load_positions(self):
         pos_map = {
             'goalkeeper': 'POR', 'portero': 'POR', 'g': 'POR', 'gk': 'POR',
             'defender': 'DEF', 'defensa': 'DEF', 'd': 'DEF', 'df': 'DEF',
@@ -347,21 +347,44 @@ class MatchEventDownloader:
             'attacker': 'DEL', 'striker': 'DEL', 'forward': 'DEL', 'delantero': 'DEL', 'a': 'DEL', 'f': 'DEL', 'fw': 'DEL'
         }
         squads_path = BASE_OUTPUT_PATH / self.match_id / "squads"
-        if not squads_path.exists(): return False
-
         loaded = 0
-        for squad_file in squads_path.glob("*.json"):
+        
+        # 1. Fallback: cargar del JSON de Opta
+        if squads_path.exists():
+            for squad_file in squads_path.glob("*.json"):
+                try:
+                    with open(squad_file, 'r', encoding='utf-8') as f:
+                        squad_data = json.load(f)
+                    for player in squad_data.get('players', []):
+                        pid = str(player.get('id'))
+                        if pid:
+                            pos = pos_map.get(player.get('position', '').lower().strip(), 'MED')
+                            self.positions_table[pid] = pos
+                            self.player_positions_map[pid] = pos
+                            loaded += 1
+                except Exception: pass
+
+        # 2. Prioritario: Sobrescribir con posiciones oficiales de Supabase (Biwenger)
+        if self.supabase:
             try:
-                with open(squad_file, 'r', encoding='utf-8') as f:
-                    squad_data = json.load(f)
-                for player in squad_data.get('players', []):
-                    pid = str(player.get('id'))
-                    if pid:
-                        pos = pos_map.get(player.get('position', '').lower().strip(), 'MED')
-                        self.positions_table[pid] = pos
-                        self.player_positions_map[pid] = pos
-                        loaded += 1
-            except Exception: pass
+                teams_to_fetch = []
+                if self.home_team_id: teams_to_fetch.append(self.home_team_id)
+                if self.away_team_id: teams_to_fetch.append(self.away_team_id)
+                if teams_to_fetch:
+                    res = self.supabase.table('players').select('id, position').in_('team_id', teams_to_fetch).execute()
+                    if res.data:
+                        for p in res.data:
+                            pid = str(p['id'])
+                            pos_raw = (p.get('position') or '').lower().strip()
+                            if pos_raw:
+                                pos = pos_map.get(pos_raw, 'MED')
+                                self.positions_table[pid] = pos
+                                self.player_positions_map[pid] = pos
+                                loaded += 1
+                        print(f"   ✅ Cargadas {len(res.data)} posiciones desde Supabase (Biwenger)")
+            except Exception as e:
+                print(f"   ⚠️ Error cargando posiciones desde Supabase: {e}")
+
         return loaded > 0
 
     def get_qualifier(self, event, qual_id):
@@ -516,7 +539,7 @@ class MatchEventDownloader:
             if (s_pct > rules.get('shots_on_pct', 50)) or (t_pct > rules.get('takeons_pct', 35)):
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
                 
-            assists = stats.get('assists', 0)
+            assists = stats.get('assists', 0) + stats.get('fantasy_assist', 0)
             crosses = stats.get('successful_crosses', 0)
             if (assists >= req(rules.get('assists_per_min', 0.03) * 90)) or (crosses >= req(rules.get('crosses_per_min', 0.02) * 90)):
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
@@ -540,7 +563,7 @@ class MatchEventDownloader:
             if (s_pct > rules.get('shots_on_pct', 60)) or (head_shots >= req(rules.get('head_shots_per_min', 0.02) * 90)):
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
                 
-            assists = stats.get('assists', 0)
+            assists = stats.get('assists', 0) + stats.get('fantasy_assist', 0)
             t_won = stats.get('takeons_won', 0); t_lost = stats.get('takeons_lost', 0); t_over = stats.get('takeons_overrun', 0)
             t_tot = t_won + t_lost + t_over
             t_pct = (t_won / t_tot * 100) if t_tot > 0 else 0
@@ -978,6 +1001,7 @@ class MatchEventDownloader:
 
     def _handle_shot_post(self, event, current_min):
         self.apply_points(event.get('playerId'), 'shots_total', 1, current_min)
+        self.apply_points(event.get('playerId'), 'shots_on_target', 1, current_min)
         if self.has_qualifier(event, Q_PENALTY):
             self.apply_points(event.get('playerId'), 'penalties_missed', 1, current_min)
 
@@ -1354,7 +1378,7 @@ class MatchEventDownloader:
         print(f"{'='*60}")
 
         if not self.download_squads(): print("⚠️ No se pudieron descargar los squads, continuando...")
-        self.load_positions_from_squads()
+        self.load_positions()
         headers = self.load_headers()
 
         print(f"\n⏳ Obteniendo eventos del partido...")
