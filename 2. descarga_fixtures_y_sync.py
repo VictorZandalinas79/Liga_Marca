@@ -711,6 +711,65 @@ def find_team_match(json_team_name, csv_teams):
         
     return None, best_score
 
+# --------------------------------------------------------------------------
+# Quién entra en la tabla players
+#
+# La lista de Biwenger es el mercado del juego: un jugador que solo está en la
+# API de Opta (reservas, canteranos, fichas que Biwenger no publica) NO se da de
+# alta aquí. Antes se subían los ~590 de Opta y merge_players_data.py borraba
+# los ~60 que Biwenger no lista, así que la siguiente pasada los volvía a crear
+# y los anunciaba otra vez: un ciclo perpetuo de altas y borrados.
+#
+# Este script solo mantiene actualizados a los jugadores que YA están en la BD
+# (los puso Biwenger a través del merge) y admite una alta nueva únicamente
+# cuando viene a confirmar un alta provisional 'bw-', es decir, cuando Biwenger
+# ya había dado de alta al jugador y Opta acaba de publicar su ficha. De ese
+# emparejamiento se encarga después promote_provisional_players() en el merge,
+# que traspasa plantilla e historial al id de Opta y borra la fila provisional.
+#
+# Excepción: si la tabla está vacía (reset_players.py) entran todos, porque si
+# no la BD se quedaría sin ningún id de Opta con el que emparejar.
+# --------------------------------------------------------------------------
+PROVISIONAL_PREFIX = "bw-"
+
+# Mismo umbral que NAME_ONLY_MIN en merge_players_data.py: por debajo de 0.90 se
+# emparejaban jugadores distintos del mismo equipo ('Miguel Sierra' con 'Miguel
+# Morro'), y aquí una confirmación equivocada daría de alta a un jugador que
+# Biwenger no lista.
+PROVISIONAL_NAME_MIN = 0.90
+
+
+def matching_provisional(api_player, provisionals_by_team):
+    """El alta provisional que este jugador de la API viene a confirmar, o None.
+
+    Misma regla que el merge: mismo equipo y fecha de nacimiento exacta, y el
+    nombre solo para desempatar o cuando no hay fecha que respalde nada.
+    """
+    candidatos = provisionals_by_team.get(api_player.get('team_id')) or []
+    if not candidatos:
+        return None
+
+    dob = api_player.get('date_of_birth')
+    if dob:
+        por_fecha = [p for p in candidatos if p.get('date_of_birth') == dob]
+        if len(por_fecha) == 1:
+            # Equipo + fecha exacta ya identifica a la persona. El nombre no
+            # puede vetar: Biwenger pone el nombre largo donde Opta usa el apodo
+            # ('Yuri Berchiche' / 'Yuri').
+            return por_fecha[0]
+        if por_fecha:
+            candidatos = por_fecha
+
+    nombre = api_player.get('short_name') or ''
+    mejor, mejor_score = None, 0.0
+    for p in candidatos:
+        score = similarity_score(nombre, p.get('short_name') or '')
+        if score > mejor_score:
+            mejor, mejor_score = p, score
+
+    return mejor if mejor and mejor_score >= PROVISIONAL_NAME_MIN else None
+
+
 def find_player_match_reversed(csv_player_row, indexed_api_players):
     csv_name = normalize_name(csv_player_row.get('Nombre', ''))
     if not csv_name:
@@ -834,8 +893,10 @@ def find_player_match_reversed(csv_player_row, indexed_api_players):
     return None, best_score, best_candidate_name
 
 def sync_players_with_csv(squads_data):
-    """Sincroniza TODOS los jugadores de la API y usa el CSV solo para agregar foto y precio."""
-    print(f"\n🔗 Sincronizando jugadores (API dicta quién entra, CSV solo enriquece foto y precio)...")
+    """Actualiza con datos de la API a los jugadores del mercado, y usa el CSV
+    solo para agregar foto y precio. Quién entra en la tabla lo dicta Biwenger:
+    ver el comentario de matching_provisional()."""
+    print(f"\n🔗 Sincronizando jugadores (Biwenger dicta quién entra, la API pone la ficha)...")
 
     csv_players_by_team = load_csv_players()
     csv_teams = list(csv_players_by_team.keys()) if csv_players_by_team else []
@@ -952,13 +1013,15 @@ def sync_players_with_csv(squads_data):
     if players_payload:
         try:
             # Detectar jugadores nuevos o traspasados para las notificaciones
+            db_read_ok = True
+            existing_rows = []
             try:
                 # Paginado: sin el .range() PostgREST corta en 1000 filas y los
                 # jugadores de más allá parecerían altas nuevas en cada pasada.
-                existing_rows = []
                 page, size = 0, 1000
                 while True:
-                    r = supabase.table("players").select("id, team_id, precio, photo, position") \
+                    r = supabase.table("players") \
+                        .select("id, team_id, precio, photo, position, date_of_birth, short_name") \
                         .range(page * size, (page + 1) * size - 1).execute()
                     if not r.data:
                         break
@@ -968,7 +1031,10 @@ def sync_players_with_csv(squads_data):
                         break
                 existing_player_map = {r['id']: r for r in existing_rows}
                 existing_player_ids = set(existing_player_map.keys())
-            except Exception:
+            except Exception as e:
+                print(f"   ⚠️  No se pudo leer la tabla players ({e}). No se filtran altas ni se avisa de cambios.")
+                db_read_ok = False
+                existing_rows = []
                 existing_player_map = {}
                 existing_player_ids = set()
 
@@ -1010,6 +1076,51 @@ def sync_players_with_csv(squads_data):
             if respetados_biwenger:
                 print(f"   ♻️  Equipo de Biwenger respetado para {respetados_biwenger} jugadores (Opta discrepa).")
 
+            # Arranque en frío: la tabla venía vacía (reset_players.py), así que
+            # TODOS los jugadores son "nuevos" y todos los equipos son un
+            # "traspaso". Avisar de eso son 500 notificaciones que no dicen nada:
+            # no hay estado anterior con el que comparar. Y sin ningún id de Opta
+            # en la BD tampoco se puede filtrar quién entra: entran todos y el
+            # merge deja luego solo a los que Biwenger lista.
+            cold_start = not existing_player_ids
+
+            # Filtro de altas: solo entran los que ya están en la BD (los puso
+            # Biwenger) y los que confirman un alta provisional 'bw-'.
+            confirmados = set()
+            descartados = 0
+            if db_read_ok and not cold_start:
+                provisionals_by_team = {}
+                for r in existing_rows:
+                    if str(r.get('id') or '').startswith(PROVISIONAL_PREFIX):
+                        provisionals_by_team.setdefault(r.get('team_id'), []).append(r)
+
+                admitidos = []
+                for p in players_payload:
+                    if p.get('id') in existing_player_ids:
+                        admitidos.append(p)
+                        continue
+                    prov = matching_provisional(p, provisionals_by_team)
+                    if prov:
+                        confirmados.add(p.get('id'))
+                        admitidos.append(p)
+                        # Un provisional solo confirma a un jugador: si dos fichas
+                        # de Opta cuadran con él, la segunda sería un alta que
+                        # Biwenger no respalda.
+                        provisionals_by_team[p.get('team_id')] = [
+                            x for x in provisionals_by_team.get(p.get('team_id'), []) if x is not prov
+                        ]
+                        print(f"   ➕ {p.get('short_name')}: ficha de Opta para el provisional '{prov.get('short_name')}'.")
+                    else:
+                        descartados += 1
+                players_payload = admitidos
+
+                if descartados:
+                    print(f"   🚫 {descartados} jugadores de la API no están en el mercado de Biwenger: no se dan de alta.")
+
+            if not players_payload:
+                print("   ℹ️  Nada que actualizar: ningún jugador de la API está en el mercado de Biwenger.")
+                return True
+
             # IMPORTANTE: ignore_duplicates=False para que actualice fotos y precios
             # a jugadores que ya existían pero se les acaba de agregar data en el CSV.
             result = supabase.table("players").upsert(players_payload, ignore_duplicates=False).execute()
@@ -1017,11 +1128,6 @@ def sync_players_with_csv(squads_data):
             new_player_notifications = []
             team_names = {s['team']['id']: s['team']['name'] for s in squads_data if 'team' in s and 'id' in s['team']}
 
-            # Arranque en frío: la tabla venía vacía (reset_players.py), así que
-            # TODOS los jugadores son "nuevos" y todos los equipos son un
-            # "traspaso". Avisar de eso son 500 notificaciones que no dicen nada:
-            # no hay estado anterior con el que comparar.
-            cold_start = not existing_player_ids
             if cold_start:
                 print("   ℹ️  La tabla de jugadores estaba vacía: no se generan notificaciones de altas ni traspasos.")
 
@@ -1029,7 +1135,13 @@ def sync_players_with_csv(squads_data):
                 pid = p.get('id')
                 name = p.get('short_name')
                 new_team_id = p.get('team_id')
-                
+
+                # El que confirma un provisional no es un alta nueva para el
+                # usuario: ya estaba en el mercado con los datos de Biwenger. El
+                # merge emite su 'Jugador confirmado' justo después.
+                if pid in confirmados:
+                    continue
+
                 if pid and pid not in existing_player_ids:
                     new_player_notifications.append({
                         "type": "new_player",
@@ -1049,7 +1161,10 @@ def sync_players_with_csv(squads_data):
             save_notifications(new_player_notifications)
 
             print(f"\n✅ Sincronización finalizada correctamente.")
-            print(f"   Total jugadores de la API (Todos subidos a Supabase): {total_api_players}")
+            print(f"   Total jugadores en la API: {total_api_players}")
+            print(f"   Subidos a Supabase: {len(players_payload)}"
+                  + (f" ({len(confirmados)} altas que confirman un provisional)" if confirmados else ""))
+            print(f"   Descartados por no estar en el mercado de Biwenger: {descartados}")
             print(f"   Enriquecidos (Encontraron Foto/Precio en CSV): {total_enriched}")
             print(f"   Básicos (Subidos SIN Foto ni Precio): {total_no_match}")
             

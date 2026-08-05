@@ -1,5 +1,6 @@
 import os
 import csv
+import json
 import re
 import difflib
 import hashlib
@@ -88,6 +89,12 @@ PROVISIONAL_PREFIX = "bw-"
 # Tablas que apuntan a players(id) y hay que repuntar al promocionar. La FK no
 # es ON DELETE CASCADE, así que sin esto un borrado revienta el sync.
 PLAYER_FK_TABLES = ("team_players", "player_scores", "match_events")
+
+# Tope de bajas por sincronización, como fracción de los jugadores de la BD.
+# En condiciones normales las bajas son un puñado (un fichaje a otra liga); que
+# sobre un cuarto de la plantilla de la liga solo puede significar que el
+# scraping de Biwenger salió incompleto. Ver el paso 5.
+MAX_DELETE_RATIO = 0.25
 
 
 def is_provisional(player):
@@ -235,6 +242,59 @@ def repoint_player_references(prov_id, real_id):
             except Exception as e:
                 print(f"   Aviso: no se pudo mover {tabla}.{fila.get('id')} a {real_id}: {e}")
     return movidas
+
+
+def referenced_player_ids(player_ids):
+    """Qué ids de `player_ids` están en uso en las tablas que apuntan a players.
+
+    Ninguna de esas FK es ON DELETE CASCADE, así que borrar un jugador
+    referenciado revienta; y aunque lo fuera, no queremos: team_players es la
+    plantilla de alguien y player_scores es el historial de jornadas ya jugadas.
+    Si una consulta falla se dan por referenciados, que es el lado seguro.
+    """
+    referencias = {tabla: set() for tabla in PLAYER_FK_TABLES}
+    if not player_ids:
+        return referencias
+
+    for tabla in PLAYER_FK_TABLES:
+        for i in range(0, len(player_ids), 100):
+            lote = player_ids[i:i + 100]
+            try:
+                filas = supabase.table(tabla).select("player_id").in_("player_id", lote).execute().data or []
+            except Exception as e:
+                msg = str(e)
+                # La tabla no existe en este despliegue: no protege a nadie.
+                if "does not exist" in msg or "42P01" in msg:
+                    break
+                print(f"-> Aviso: no se pudo comprobar {tabla} ({e}). Se conservan esos {len(lote)} por seguridad.")
+                referencias[tabla].update(lote)
+                continue
+            referencias[tabla].update(f["player_id"] for f in filas)
+
+    return referencias
+
+
+def backup_signed_player_ids(path="team_players_backup.json"):
+    """Ids fichados según la copia de plantillas que deja reset_players.py.
+
+    En el reset la tabla team_players está vacía cuando llega este script, así
+    que team_players no protege a nadie: sin esto, un jugador que alguien tiene
+    fichado y que Biwenger ya no lista se borraría aquí y
+    restore_team_players.py no podría devolverlo a su plantilla. Los ids de Opta
+    son estables entre reconstrucciones, así que comparar por id basta.
+    """
+    if not os.path.exists(path):
+        return set()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            snapshot = json.load(f)
+    except Exception as e:
+        print(f"-> Aviso: no se pudo leer {path} ({e}). Se sigue sin esa protección.")
+        return set()
+
+    ids = {fila.get("player_id") for fila in (snapshot.get("team_players") or [])}
+    ids.discard(None)
+    return ids
 
 
 def promote_provisional_players(all_api_players, extra_columns):
@@ -549,6 +609,9 @@ def build_sync_summary(notifications, stats, cold_start=False):
     sin_match = stats.get("unmatched", 0)
     if sin_match:
         body += f" {sin_match} jugadores de Biwenger no se han podido dar de alta."
+    if stats.get("deleted"):
+        borrados = stats["deleted"]
+        body += f" {borrados} jugador{'es' if borrados != 1 else ''} fuera del mercado: se {'han' if borrados != 1 else 'ha'} eliminado."
     if stats.get("protected"):
         body += f" {stats['protected']} jugadores fichados ya no están en Biwenger."
 
@@ -564,7 +627,8 @@ def build_sync_summary(notifications, stats, cold_start=False):
             f"Biwenger: {stats['biwenger_total']} | BD: {stats['api_total']} | "
             f"Emparejados: {stats['matched']} | Provisionales: {stats.get('provisional', 0)} | "
             f"Promovidos: {stats.get('promoted', 0)} | Sin dar de alta: {sin_match} | "
-            f"Fuera de Biwenger: {stats.get('sobrantes', 0)} | Fichados fuera: {stats.get('protected', 0)}"
+            f"Fuera de Biwenger: {stats.get('sobrantes', 0)} (borrados: {stats.get('deleted', 0)}, "
+            f"con historial: {stats.get('kept_history', 0)}, fichados: {stats.get('protected', 0)})"
         ),
     }
 
@@ -901,35 +965,79 @@ def main():
                         print(f"   No se pudo dar de alta a {row.get('short_name')}: {e2}")
         print(f"-> {provisionals_saved} provisionales en la BD.")
 
-    # 5. Jugadores de la API que Biwenger no lista
+    # 5. Jugadores que estaban en la BD y Biwenger ya no lista
     #
-    # Ya NO se borran. Biwenger publica ~530 jugadores y Opta ~590: la
-    # diferencia son reservas y canteranos que existen de verdad. Borrarlos
-    # aquí y que API Core los volviera a crear en la siguiente pasada era un
-    # ciclo perpetuo: cada sincronización anunciaba a los mismos ~50 como
-    # 'nuevo jugador' (47 de los 56 del 1 de agosto eran repetidos del día
-    # anterior), llenaba la campana y de paso les borraba el historial. Se
-    # quedan en la BD sin precio de Biwenger.
-    print("5. Revisando jugadores de la API que no están en Biwenger...")
+    # Biwenger es el mercado: quien sale de su lista sale del juego, así que se
+    # borra. Esto ya no reabre el ciclo perpetuo de altas y borrados que hubo en
+    # agosto (los mismos ~50 anunciados como 'nuevo jugador' cada pasada), porque
+    # "2. descarga_fixtures_y_sync.py" dejó de dar de alta a los jugadores que
+    # solo están en la API: ahora únicamente actualiza a los que ya existen y
+    # admite altas cuando vienen a confirmar un provisional.
+    #
+    # Excepción: los que tienen historial. Si alguien los tiene fichados
+    # (team_players) o tienen puntuaciones/eventos, borrarlos rompe la FK —no hay
+    # ON DELETE CASCADE— y se llevaría por delante plantillas y jornadas ya
+    # jugadas. Esos se conservan y se avisa para mirarlos a mano.
+    print("5. Borrando jugadores que ya no están en Biwenger...")
     sobrantes_ids = [p['id'] for p in all_api_players if p['id'] not in matched_api_ids]
-    print(f"-> {len(sobrantes_ids)} jugadores de la API fuera de Biwenger. Se conservan.")
+    print(f"-> {len(sobrantes_ids)} jugadores de la BD fuera de Biwenger.")
 
-    # Lo único que sigue mereciendo un aviso es que alguien tenga fichado a un
-    # jugador que ha desaparecido del mercado: eso hay que mirarlo a mano.
-    fichados_fuera = set()
-    if sobrantes_ids:
-        for i in range(0, len(sobrantes_ids), 100):
-            lote = sobrantes_ids[i:i+100]
+    referencias = referenced_player_ids(sobrantes_ids)
+    fichados_fuera = referencias["team_players"] | (backup_signed_player_ids() & set(sobrantes_ids))
+    con_historial = set().union(*referencias.values()) - fichados_fuera
+    borrables = [pid for pid in sobrantes_ids if pid not in fichados_fuera and pid not in con_historial]
+
+    nombres_por_id = {p["id"]: api_display_name(p) for p in all_api_players}
+
+    # Freno de mano: el CSV lo acaba de generar el scraping, y si ese scraping se
+    # dejó equipos por el camino (timeout, cambio de HTML) sus jugadores parecen
+    # bajas del mercado. Borrar media BD por eso no se puede deshacer, así que
+    # por encima de este porcentaje no se toca nada y se avisa.
+    if borrables and len(borrables) > MAX_DELETE_RATIO * len(all_api_players):
+        print(
+            f"-> ABORTADO el borrado: {len(borrables)} de {len(all_api_players)} jugadores "
+            f"(más del {MAX_DELETE_RATIO:.0%}). El CSV de Biwenger parece incompleto."
+        )
+        notifications.append({
+            "type": "unmatched",
+            "title": "Borrado cancelado",
+            "body": f"{len(borrables)} jugadores no están en Biwenger: demasiados para borrarlos sin revisar.",
+            "player_id": None,
+            "player_name": None,
+            "team_id": None,
+            "team_name": None,
+            "message": (
+                f"El CSV traía {len(biwenger_players)} jugadores y sobran {len(borrables)} "
+                f"de {len(all_api_players)} en la BD. Revisar el scraping antes de repetir."
+            ),
+        })
+        borrables = []
+
+    borrados = 0
+    if borrables:
+        print(f"-> Borrando {len(borrables)} sin plantilla ni historial.")
+        for i in range(0, len(borrables), 100):
+            lote = borrables[i:i + 100]
             try:
-                filas = supabase.table("team_players").select("player_id").in_("player_id", lote).execute().data or []
-                fichados_fuera.update(f["player_id"] for f in filas)
+                supabase.table("players").delete().in_("id", lote).execute()
+                borrados += len(lote)
             except Exception as e:
-                print(f"-> Aviso: no se pudo comprobar team_players ({e}).")
-                break
+                print(f"   Aviso: lote de {len(lote)} rechazado ({e}). Reintentando uno a uno...")
+                for pid in lote:
+                    try:
+                        supabase.table("players").delete().eq("id", pid).execute()
+                        borrados += 1
+                    except Exception as e2:
+                        print(f"   No se pudo borrar {nombres_por_id.get(pid, pid)}: {e2}")
+        print(f"-> {borrados} jugadores retirados del mercado.")
 
+    if con_historial:
+        print(f"-> {len(con_historial)} se conservan por tener puntuaciones o eventos de jornadas jugadas.")
+
+    # Que alguien tenga fichado a un jugador que ha desaparecido del mercado hay
+    # que mirarlo a mano: no se le puede borrar sin romperle la plantilla.
     if fichados_fuera:
-        nombres_por_id = {p["id"]: api_display_name(p) for p in all_api_players}
-        print(f"-> {len(fichados_fuera)} de ellos están en alguna plantilla:")
+        print(f"-> {len(fichados_fuera)} están en alguna plantilla y no se borran:")
         for pid in sorted(fichados_fuera):
             nombre = nombres_por_id.get(pid, pid)
             print(f"   · {nombre} ({pid})")
@@ -941,24 +1049,8 @@ def main():
                 "player_name": nombre,
                 "team_id": None,
                 "team_name": None,
-                "message": "Se conserva en la BD sin precio de Biwenger. Revisar a mano.",
+                "message": "No se borra para no romper la plantilla. Revisar a mano.",
             })
-
-    # La excepción son los provisionales huérfanos: filas 'bw-' que creó una
-    # pasada anterior y que Biwenger ya no lista. No tienen ficha en Opta ni
-    # historial que perder, y API Core no las recrea nunca (sus ids no existen
-    # en la API), así que borrarlas no reabre el ciclo de altas repetidas.
-    prov_huerfanos = [
-        p['id'] for p in all_api_players
-        if p['id'] in set(sobrantes_ids) and is_provisional(p) and p['id'] not in fichados_fuera
-    ]
-    if prov_huerfanos:
-        print(f"-> Borrando {len(prov_huerfanos)} provisionales que ya no están en Biwenger.")
-        for i in range(0, len(prov_huerfanos), 100):
-            try:
-                supabase.table("players").delete().in_("id", prov_huerfanos[i:i+100]).execute()
-            except Exception as e:
-                print(f"   Aviso: no se pudieron borrar ({e}).")
 
     # 6. Notifications
     stats = {
@@ -971,6 +1063,8 @@ def main():
         # TEAM_MAPPING; el resto de no-emparejados entran como provisionales.
         "unmatched": len(not_found) - len(new_provisionals),
         "sobrantes": len(sobrantes_ids),
+        "deleted": borrados,
+        "kept_history": len(con_historial),
         "protected": len(fichados_fuera),
     }
 

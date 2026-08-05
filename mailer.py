@@ -74,7 +74,9 @@ def build_summary_html(notifications: list, stats: dict | None = None) -> str:
         ("Altas provisionales (solo Biwenger)", stats.get("provisional")),
         ("Promovidos a ficha oficial", stats.get("promoted")),
         ("Sin resolver", stats.get("unmatched")),
-        ("En la API pero no en Biwenger (se conservan)", stats.get("sobrantes")),
+        ("Ya no están en Biwenger", stats.get("sobrantes")),
+        ("Borrados del mercado", stats.get("deleted")),
+        ("Conservados por tener historial", stats.get("kept_history")),
         ("Fichados que ya no están en Biwenger", stats.get("protected")),
     ]
     parts.append("<h3 style='color:#1e293b;margin:0 0 12px;'>📊 Resumen</h3>")
