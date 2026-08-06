@@ -19,7 +19,7 @@ function formatKamikazeTime(totalMinutes: number): string {
   return `${mins} min ${secs} s`
 }
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown } from 'lucide-react'
+import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 import { getStandings } from '@/lib/standings'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
@@ -166,7 +166,7 @@ export default function DashboardPage() {
   const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
   const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>>(new Map())
   const supabase = createClient()
-  const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento } = useMatchdayLock()
+  const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento, upcomingLocks } = useMatchdayLock()
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
   // Estos jugadores no se pueden cambiar aunque el mercado general esté abierto.
   const lockedTeams = useLockedTeams()
@@ -1655,16 +1655,45 @@ export default function DashboardPage() {
               </div>
             ) : (
               timeUntilUnlock && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2 flex items-center gap-3 shadow-sm">
-                  <Unlock className="w-5 h-5 text-emerald-600 shrink-0" />
-                  <p className="text-sm font-semibold text-emerald-955 hidden lg:block">
-                    Se bloquean los cambios en...
-                  </p>
-                  <div className="bg-emerald-100 px-3 py-1 rounded-lg ml-auto">
-                    <p className="text-sm font-bold text-emerald-900">
-                      <span className="text-base font-mono">{timeUntilUnlock}</span>
+                <div className="flex flex-col gap-1.5">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2 flex items-center gap-3 shadow-sm">
+                    <Unlock className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <p className="text-sm font-semibold text-emerald-955 hidden lg:block">
+                      Se bloquean los cambios en...
                     </p>
+                    <div className="bg-emerald-100 px-3 py-1 rounded-lg ml-auto">
+                      <p className="text-sm font-bold text-emerald-900">
+                        <span className="text-base font-mono">{timeUntilUnlock}</span>
+                      </p>
+                    </div>
                   </div>
+                  {(() => {
+                    if (!upcomingLocks || upcomingLocks.length === 0 || !lockTime) return null;
+                    const warnings = upcomingLocks.filter(l => l.type === 'advanced' && l.from.getTime() <= lockTime.getTime())
+                    if (warnings.length === 0) return null;
+                    
+                    return (
+                      <div className="bg-amber-50 border border-amber-300/60 rounded-lg px-3 py-2 flex items-start gap-2 shadow-sm animate-pulse">
+                        <Bell className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="flex flex-col gap-1">
+                          <p className="text-[11.5px] sm:text-xs font-medium text-amber-900 leading-tight">
+                            <span className="font-bold">¡Aviso!</span> Hay equipos con partidos descolocados que sufren bloqueos especiales:
+                          </p>
+                          <ul className="text-[11px] sm:text-[11.5px] text-amber-800 leading-tight flex flex-col gap-0.5 ml-1">
+                            {warnings.map(w => (
+                              <li key={w.fixtureId} className="flex gap-1.5 items-start">
+                                <span className="mt-1 w-1 h-1 rounded-full bg-amber-600 shrink-0"></span>
+                                <span>
+                                  <span className="font-bold text-amber-900">{w.teams?.home || 'Local'} vs {w.teams?.away || 'Visitante'}</span>
+                                  <> (J{w.ownMatchday} adelantado): Sus jugadores se bloquean desde esta jornada hasta el fin de la J{w.ownMatchday}.</>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             )}

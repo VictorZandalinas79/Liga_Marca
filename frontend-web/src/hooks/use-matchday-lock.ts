@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { computeOutOfOrderLocks, type FixtureLite, type OutOfOrderLock } from '@/lib/locked-teams-core'
 
 interface MatchdayLockState {
   isLocked: boolean
@@ -10,6 +11,7 @@ interface MatchdayLockState {
   timeUntilLock: string
   currentMatchday: number
   currentMomento: string | null
+  upcomingLocks: OutOfOrderLock[]
 }
 
 export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
@@ -22,6 +24,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
     timeUntilLock: '',
     currentMatchday: 0,
     currentMomento: null,
+    upcomingLocks: [],
   })
 
   useEffect(() => {
@@ -47,7 +50,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       // Obtener todos los fixtures ordenados por fecha
       const { data: allFixtures } = await supabase
         .from('fixtures')
-        .select('matchday, momento, start_time')
+        .select('id, matchday, momento, start_time, status, home_team_id, away_team_id, home_team:real_teams!home_team_id(name), away_team:real_teams!away_team_id(name)')
         .order('start_time', { ascending: true })
 
       if (!allFixtures || allFixtures.length === 0) {
@@ -55,17 +58,32 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         return
       }
 
+      const outOfOrderLocks = computeOutOfOrderLocks(allFixtures as FixtureLite[], {
+        startHoursBefore: unlockOffsetMs / (60 * 60 * 1000),
+        endHoursAfter: lockOffsetMs / (60 * 60 * 1000)
+      })
+      const outOfOrderIds = new Set(outOfOrderLocks.map(l => l.fixtureId))
+      const VOID_STATUSES = new Set(['cancelled', 'postponed'])
+
+      // Usamos solo los fixtures "normales" para calcular los tiempos de la jornada
+      // omitiendo adelantados, aplazados, y cancelados, para que no estiren la jornada.
+      const validFixtures = allFixtures.filter(f => {
+        if (outOfOrderIds.has(f.id)) return false
+        if (f.status && VOID_STATUSES.has(f.status.toLowerCase())) return false
+        return true
+      })
+
       // Calcular el matchday numérico máximo
-      const numericMatchdays = allFixtures
+      const numericMatchdays = validFixtures
         .filter(f => f.matchday && f.matchday > 0)
         .map(f => f.matchday as number)
       const maxNumericMatchday = numericMatchdays.length > 0 ? Math.max(...numericMatchdays) : 0
 
       // Crear lista de "jornadas" unificadas: numèriques + moments especials
       // Cada jornada té: matchday (number), momento (string | null), start_time
-      const jornadasMap = new Map<string, { matchday: number; momento: string | null; start_time: string; fixtures: typeof allFixtures }>()
+      const jornadasMap = new Map<string, { matchday: number; momento: string | null; start_time: string; fixtures: typeof validFixtures }>()
 
-      for (const fixture of allFixtures) {
+      for (const fixture of validFixtures) {
         let key: string
         let logicalMatchday: number
 
@@ -248,6 +266,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         timeUntilLock,
         currentMatchday: targetMatchday,
         currentMomento: shouldShowMomento ? targetMomento : null,
+        upcomingLocks: outOfOrderLocks.filter(l => l.until.getTime() > now.getTime()),
       })
     }
 

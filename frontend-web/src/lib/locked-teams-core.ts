@@ -43,6 +43,8 @@ export interface FixtureLite {
   status: string | null
   home_team_id: string | null
   away_team_id: string | null
+  home_team?: { name: string }
+  away_team?: { name: string }
 }
 
 /** Ventana de bloqueo de un partido fuera de orden, independiente de "ahora". */
@@ -60,6 +62,7 @@ export interface OutOfOrderLock {
   /** Hora de inicio del partido descolocado. */
   kickoff: Date
   teamIds: string[]
+  teams?: { home: string, away: string }
 }
 
 export interface LockedTeam {
@@ -106,20 +109,42 @@ export function computeOutOfOrderLocks(
     repTime.set(md, times[Math.floor(times.length / 2)])
   }
 
+  // Para cada jornada, calcular min y max absolutos, descartando outliers muy lejanos (ej. >14 días de la mediana)
+  const bounds = new Map<number, {min: number, max: number}>()
+  for (const [md, fixtures] of byMatchday.entries()) {
+    const times = fixtures.map(f => new Date(f.start_time).getTime())
+    times.sort((a, b) => a - b)
+    const median = times[Math.floor(times.length / 2)]
+    const MAX_DISTANCE = 14 * 24 * 60 * 60 * 1000 // 14 días
+    const validTimes = times.filter(t => Math.abs(t - median) <= MAX_DISTANCE)
+    if (validTimes.length > 0) {
+      bounds.set(md, { min: Math.min(...validTimes), max: Math.max(...validTimes) })
+    } else {
+      bounds.set(md, { min: median, max: median })
+    }
+  }
+
   // Orden cronológico de las jornadas según su tiempo representativo.
   const chronoOrder = [...byMatchday.keys()].sort((a, b) => repTime.get(a)! - repTime.get(b)!)
 
-  // Dado un instante t, ¿en el hueco cronológico de qué jornada cae?
-  // Las fronteras entre jornadas son los puntos medios entre tiempos representativos.
-  const slotFor = (t: number): number => {
-    for (let i = 0; i < chronoOrder.length; i++) {
-      const cur = chronoOrder[i]
-      const next = chronoOrder[i + 1]
-      if (next === undefined) return cur
-      const boundary = (repTime.get(cur)! + repTime.get(next)!) / 2
-      if (t <= boundary) return cur
+  // Dado un instante t y su jornada original, ¿en el hueco de qué jornada cae?
+  const slotFor = (t: number, ownMatchday: number): number => {
+    // Busca si t cae DENTRO de los límites de una jornada ANTERIOR (K < ownMatchday)
+    for (const k of chronoOrder) {
+      if (k >= ownMatchday) break;
+      const b = bounds.get(k);
+      if (b && t >= b.min && t <= b.max) return k;
     }
-    return chronoOrder[chronoOrder.length - 1]
+
+    // Busca si t cae DENTRO de los límites de una jornada POSTERIOR (K > ownMatchday)
+    for (let i = chronoOrder.length - 1; i >= 0; i--) {
+      const k = chronoOrder[i]
+      if (k <= ownMatchday) break;
+      const b = bounds.get(k);
+      if (b && t >= b.min && t <= b.max) return k;
+    }
+
+    return ownMatchday;
   }
 
   const locks: OutOfOrderLock[] = []
@@ -127,7 +152,7 @@ export function computeOutOfOrderLocks(
   for (const f of numeric) {
     const ownMatchday = f.matchday as number
     const t = new Date(f.start_time).getTime()
-    const playedSlot = slotFor(t)
+    const playedSlot = slotFor(t, ownMatchday)
     if (playedSlot === ownMatchday) continue // en orden, nada que bloquear
 
     // Un partido cancelado o sin fecha ya no descoloca nada: no bloquea a nadie.
@@ -135,8 +160,11 @@ export function computeOutOfOrderLocks(
     if (VOID_STATUSES.has(status)) continue
 
     // Cierre de la jornada propia: último partido EN ORDEN de esa jornada + endOffset.
-    // (Excluimos este fixture, que es justo el outlier.)
-    const siblings = byMatchday.get(ownMatchday)!.filter(x => x.id !== f.id)
+    const siblings = byMatchday.get(ownMatchday)!.filter(x => {
+      if (x.id === f.id) return false;
+      const xTime = new Date(x.start_time).getTime();
+      return slotFor(xTime, ownMatchday) === ownMatchday;
+    })
     const ownCloseBase = siblings.length > 0
       ? Math.max(...siblings.map(x => new Date(x.start_time).getTime()))
       : repTime.get(ownMatchday)!
@@ -144,6 +172,10 @@ export function computeOutOfOrderLocks(
 
     const fEnd = t + endOffsetMs
     const teamIds = [f.home_team_id, f.away_team_id].filter(Boolean) as string[]
+    const teams = {
+      home: f.home_team?.name || 'Local',
+      away: f.away_team?.name || 'Visitante'
+    }
 
     if (ownMatchday < playedSlot) {
       // APLAZADO: pertenece a una jornada anterior pero se juega más tarde.
@@ -159,20 +191,31 @@ export function computeOutOfOrderLocks(
         until: new Date(fEnd),
         kickoff: new Date(t),
         teamIds,
+        teams,
       })
     } else {
       // ADELANTADO: pertenece a una jornada posterior pero se juega antes.
-      // Bloqueado desde que cierra el mercado de su partido hasta que cierra
-      // su jornada lógica.
+      // Bloqueado desde el inicio de la jornada en la que cae (playedSlot) 
+      // hasta que cierra su jornada lógica (ownMatchday).
+      const slotSiblings = byMatchday.get(playedSlot)!.filter(x => {
+        const xTime = new Date(x.start_time).getTime();
+        return slotFor(xTime, playedSlot) === playedSlot;
+      });
+      const slotStartBase = slotSiblings.length > 0
+        ? Math.min(...slotSiblings.map(x => new Date(x.start_time).getTime()))
+        : repTime.get(playedSlot)!;
+      const slotStart = slotStartBase - startOffsetMs;
+
       locks.push({
         fixtureId: f.id,
         type: 'advanced',
         ownMatchday,
         playedSlot,
-        from: new Date(t - startOffsetMs),
+        from: new Date(slotStart),
         until: new Date(ownClose),
         kickoff: new Date(t),
         teamIds,
+        teams,
       })
     }
   }
