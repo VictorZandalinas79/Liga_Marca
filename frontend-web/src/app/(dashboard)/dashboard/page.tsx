@@ -7,6 +7,7 @@ import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 import { useLockedTeams } from '@/lib/locked-teams'
 import { useLeagueConfig } from '@/lib/league-config'
 import { applySanctionsToTeam } from '@/lib/infractions'
+import { isInMarket } from '@/lib/market'
 import { Card, CardContent } from '@/components/ui/card'
 
 
@@ -459,11 +460,15 @@ export default function DashboardPage() {
   }
 
   const selectRandomPlayers = async (allPlayers: Player[], formation: Formation, autoSave: boolean = false, matchdayToSave: number = 0, teamIdParam: string | null = null) => {
+    // El catálogo que llega aquí es la tabla entera, e incluye a los que ya no
+    // están en el mercado (siguen en la BD porque alguien los tiene fichado).
+    // Un equipo generado al azar no puede fichar a esos.
+    const fichables = allPlayers.filter(isInMarket);
     const playersByPos = {
-      GK: allPlayers.filter(p => getPositionCode(p.position) === 'GK'),
-      DEF: allPlayers.filter(p => getPositionCode(p.position) === 'DEF'),
-      MID: allPlayers.filter(p => getPositionCode(p.position) === 'MID'),
-      FWD: allPlayers.filter(p => getPositionCode(p.position) === 'FWD')
+      GK: fichables.filter(p => getPositionCode(p.position) === 'GK'),
+      DEF: fichables.filter(p => getPositionCode(p.position) === 'DEF'),
+      MID: fichables.filter(p => getPositionCode(p.position) === 'MID'),
+      FWD: fichables.filter(p => getPositionCode(p.position) === 'FWD')
     };
 
     const reqs = [
@@ -1006,6 +1011,24 @@ export default function DashboardPage() {
       return
     }
 
+    // Un jugador que ya no está en Biwenger se conserva en el equipo de quien lo
+    // tenía, pero no se puede fichar de nuevo. Se comprueba aquí y no solo al
+    // pintar el mercado porque la selección puede venir de una alineación
+    // heredada o de un cambio deshecho, no siempre de la lista filtrada.
+    const yaEnPlantilla = new Set([...savedPlayers, ...basePlayers])
+    const noFichables = selectedPlayers.filter(id => {
+      if (yaEnPlantilla.has(id)) return false
+      const p = players.find(pl => pl.id === id)
+      return p ? !isInMarket(p) : false
+    })
+    if (noFichables.length > 0) {
+      const nombres = noFichables
+        .map(id => players.find(p => p.id === id))
+        .map(p => p?.short_name || `${p?.first_name || ''} ${p?.last_name || ''}`.trim() || 'Jugador')
+      alert(`Estos jugadores ya no están en el mercado y no se pueden fichar: ${nombres.join(', ')}`)
+      return
+    }
+
     console.log('[GUARDAR] Iniciando guardado...')
     console.log('[GUARDAR] user:', user)
     console.log('[GUARDAR] userTeamId:', userTeamId)
@@ -1450,9 +1473,11 @@ export default function DashboardPage() {
 
   const availablePlayers = players
 
-  // Obtener lista única de equipos para el filtro
+  // Obtener lista única de equipos para el filtro. Solo cuentan los equipos con
+  // alguien fichable: si no, el desplegable ofrece equipos que no devuelven ni
+  // un jugador.
   const uniqueTeams = Array.from(
-    new Map(players.map(p => p.team?.name ? [p.team.name, p.team_id] : null).filter(Boolean) as [string, string][])
+    new Map(players.filter(isInMarket).map(p => p.team?.name ? [p.team.name, p.team_id] : null).filter(Boolean) as [string, string][])
   ).map(([name, id]) => ({ name, id })).sort((a, b) => a.name.localeCompare(b.name))
 
   // Filtrar jugadores disponibles
@@ -1461,7 +1486,9 @@ export default function DashboardPage() {
     const q = normalize(searchFilter)
     
     return availablePlayers.filter(p => {
-      if (p.is_in_biwenger === false) return false
+      // Fuera del mercado: no se puede fichar aunque siga en la BD porque
+      // alguien lo tenga en su equipo. Ver src/lib/market.ts.
+      if (!isInMarket(p)) return false
       const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
       if (!matchesPosition) return false
       const matchesTeam = teamFilter === '' || p.team_id === teamFilter

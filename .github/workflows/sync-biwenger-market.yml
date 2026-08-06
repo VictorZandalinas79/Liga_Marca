@@ -43,6 +43,17 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python "merge_players_data.py"
 
+      # Recoge los que quedaron fuera del mercado en sincronizaciones anteriores
+      # y no se pudieron borrar entonces por tener referencias (plantillas,
+      # puntuaciones) que después desaparecieron —al vaciar player_scores entre
+      # temporadas, por ejemplo—. Sin esto se quedaban en la tabla para siempre.
+      # A quien esté en la plantilla de alguien no lo toca: se queda oculto.
+      - name: Purge Players Out Of Biwenger
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python "limpiar_jugadores_fuera_biwenger.py" --aplicar
+
       # Los precios de Comunio (asignar_precios.py + subir_precios_supabase.py)
       # se quitaron de aquí: pisaban el 'price' que acaba de escribir el merge.
       # La fuente de precios es Biwenger. Los scripts siguen en el repo para

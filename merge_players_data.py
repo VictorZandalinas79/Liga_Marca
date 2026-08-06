@@ -245,6 +245,25 @@ def repoint_player_references(prov_id, real_id):
     return movidas
 
 
+def table_missing(error):
+    """Si el error es 'esa tabla no existe en este proyecto'.
+
+    Hay que reconocerlo bien: cuando falla se da por referenciado TODO el lote
+    —el lado seguro—, así que confundir 'la tabla no existe' con 'la consulta
+    falló' blindaba a la liga entera y el borrado de jugadores fuera de Biwenger
+    no llegaba a borrar a nadie. PostgREST no devuelve el 42P01 de Postgres para
+    esto, sino su propio PGRST205 ('Could not find the table ... in the schema
+    cache'), que es justo lo que pasaba con `match_events`.
+    """
+    msg = str(error)
+    return (
+        "does not exist" in msg
+        or "42P01" in msg
+        or "PGRST205" in msg
+        or "Could not find the table" in msg
+    )
+
+
 def referenced_player_ids(player_ids):
     """Qué ids de `player_ids` están en uso en las tablas que apuntan a players.
 
@@ -263,9 +282,8 @@ def referenced_player_ids(player_ids):
             try:
                 filas = supabase.table(tabla).select("player_id").in_("player_id", lote).execute().data or []
             except Exception as e:
-                msg = str(e)
                 # La tabla no existe en este despliegue: no protege a nadie.
-                if "does not exist" in msg or "42P01" in msg:
+                if table_missing(e):
                     break
                 print(f"-> Aviso: no se pudo comprobar {tabla} ({e}). Se conservan esos {len(lote)} por seguridad.")
                 referencias[tabla].update(lote)

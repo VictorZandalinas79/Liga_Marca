@@ -1,23 +1,23 @@
 import os
 from supabase import create_client
-from dotenv import load_dotenv
 
-load_dotenv()
+url = os.environ.get("SUPABASE_URL")
+key = os.environ.get("SUPABASE_KEY")
+if not url or not key:
+    from dotenv import load_dotenv
+    load_dotenv(".env.local")
+    load_dotenv(".env")
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
 
-url = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+s = create_client(url, key)
 
-print("URL:", url)
-sb = create_client(url, key)
-
-# Get penalties
-res = sb.table("penalties").select("*").execute()
-print("Penalties:", res.data)
-
-# Get profiles
-res_p = sb.table("profiles").select("id, full_name, email").execute()
-print("Profiles:", res_p.data)
-
-# Get active matchday status
-res_md = sb.table("matchday_status").select("*").execute()
-print("Matchday Status:", res_md.data)
+nombres = ["Gonzalo García", "Rafa Mir"]
+print("Check players in DB:")
+for nombre in nombres:
+    try:
+        res = s.table("players").select("id, short_name, is_in_biwenger, precio").ilike("short_name", f"%{nombre}%").execute()
+        for p in res.data:
+            print(p)
+    except Exception as e:
+        print(f"Error checking {nombre}: {e}")

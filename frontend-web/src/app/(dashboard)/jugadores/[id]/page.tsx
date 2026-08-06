@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { applyMarketFilter } from '@/lib/market'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, TrendingUp, Goal, Ticket, X, Calendar, MapPin, Clock } from 'lucide-react'
@@ -336,10 +337,14 @@ export default function JugadorDetallePage() {
           return tb - ta
         })
 
-        // Obtener todos los jugadores para la comparativa
-        const { data: playersList } = await supabase
-          .from('players')
-          .select('id, short_name, first_name, last_name, position, team_id')
+        // Obtener todos los jugadores para la comparativa. Los que ya no están
+        // en Biwenger no salen: la comparativa se ciñe al mismo listado que la
+        // página de Jugadores.
+        const { data: playersList } = await applyMarketFilter(
+          supabase
+            .from('players')
+            .select('id, short_name, first_name, last_name, position, team_id')
+        )
           .order('short_name', { ascending: true })
         if (playersList) {
           setAllPlayers(playersList)

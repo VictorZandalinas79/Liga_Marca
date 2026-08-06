@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { applyMarketFilter } from '@/lib/market'
 import { Card, CardContent } from '@/components/ui/card'
 import { Search, TrendingUp, Goal, Ticket, Download, Swords, ChevronDown, ChevronUp, X } from 'lucide-react'
 
@@ -242,10 +243,14 @@ export default function JugadoresPage() {
       const playersData: any[] = []
       let from = 0
       while (true) {
-        const { data: page, error } = await supabase
-          .from('players')
-          .select('*')
-          .eq('is_in_biwenger', true)
+        // Solo los que sigue listando Biwenger: los que se fueron del mercado
+        // (aunque alguien los tenga fichados) y los que solo están en la API
+        // no salen en este listado. Ver src/lib/market.ts.
+        const { data: page, error } = await applyMarketFilter(
+          supabase
+            .from('players')
+            .select('*')
+        )
           .order('short_name', { ascending: true })
           .range(from, from + PAGE_SIZE - 1)
         if (error || !page || page.length === 0) break
