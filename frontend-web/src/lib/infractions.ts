@@ -14,6 +14,7 @@ export interface Infraction {
   description: string
   points: number
   is_pending: boolean
+  division?: number
 }
 
 export async function getCurrentMatchday(supabase: SupabaseClient): Promise<number> {
@@ -319,7 +320,9 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
   //    división no puede generar sanción de exclusividad.
   const infractions: Infraction[] = []
   for (const d of divisionsToCompute(division)) {
-    infractions.push(...computeDivisionInfractions(membership.teamsByDivision.get(d) ?? []))
+    const divInfractions = computeDivisionInfractions(membership.teamsByDivision.get(d) ?? [])
+    divInfractions.forEach(inf => inf.division = d)
+    infractions.push(...divInfractions)
   }
 
   console.log(`[INFRACTIONS_TS] Computed ${infractions.length} live infractions. Sample:`, infractions.slice(0, 5))

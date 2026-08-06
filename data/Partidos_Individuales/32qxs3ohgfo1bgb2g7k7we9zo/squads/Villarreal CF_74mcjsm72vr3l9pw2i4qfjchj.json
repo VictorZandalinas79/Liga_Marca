@@ -444,8 +444,9 @@
       "foot": "right",
       "shirtNumber": 33,
       "startDate": "2025-07-01Z",
+      "endDate": "2026-08-05Z",
       "status": "active",
-      "active": "yes"
+      "active": "no"
     },
     {
       "id": "73jvx4opw9wvawwpg0bnt8ay2",

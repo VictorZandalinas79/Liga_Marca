@@ -590,8 +590,30 @@ class MatchEventDownloader:
         # --- PARTICIPACIÓN ---
         if mins_played > 0:
             threshold = part_rules.get('minutes_threshold', 60)
-            if mins_played > threshold:
+            if mins_played >= threshold:
                 points += part_rules.get('starter_bonus', 2)
+                
+                # Bonos de resultado final del partido (Victoria / Empate)
+                player_team = self.players_team.get(player_id)
+                opp_team = next((t for t in set(self.players_team.values()) if t and t != player_team), None)
+                
+                if player_team and opp_team:
+                    team_goals = self.team_goals_scored.get(player_team, 0)
+                    opp_goals = self.team_goals_scored.get(opp_team, 0)
+                    
+                    if team_goals > opp_goals:
+                        win_bonus = part_rules.get('win_bonus_60', 1)
+                        points += win_bonus
+                        self.stats[player_id]['win_bonus'] = win_bonus
+                        self.stats[player_id]['draw_bonus'] = 0
+                    elif team_goals == opp_goals:
+                        draw_bonus = part_rules.get('draw_bonus_60', 0.5)
+                        points += draw_bonus
+                        self.stats[player_id]['draw_bonus'] = draw_bonus
+                        self.stats[player_id]['win_bonus'] = 0
+                    else:
+                        self.stats[player_id]['win_bonus'] = 0
+                        self.stats[player_id]['draw_bonus'] = 0
             else:
                 points += part_rules.get('substitute_bonus', 1)
 
@@ -1233,6 +1255,8 @@ class MatchEventDownloader:
                 'is_starter': is_starter,
                 'minutes_played': mins_played,
                 'total_points': total_points,
+                'win_bonus': stats.get('win_bonus', 0),
+                'draw_bonus': stats.get('draw_bonus', 0),
                 
 
                 # Goles

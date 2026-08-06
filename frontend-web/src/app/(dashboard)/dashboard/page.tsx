@@ -18,6 +18,20 @@ function formatKamikazeTime(totalMinutes: number): string {
   if (secs === 0) return `${mins} min`
   return `${mins} min ${secs} s`
 }
+
+function formatPlayerName(name: string): string {
+  if (!name) return ''
+  const trimmed = name.trim()
+  if (trimmed.length <= 11) return trimmed
+
+  const parts = trimmed.split(/\s+/)
+  if (parts.length > 1) {
+    const firstName = parts[0]
+    const lastName = parts.slice(1).join(' ')
+    return `${firstName[0].toUpperCase()}. ${lastName}`
+  }
+  return trimmed
+}
 import { Badge } from '@/components/ui/badge'
 import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
@@ -33,6 +47,10 @@ interface Player {
   photo?: string
   shirt_number?: number
   precio?: number
+  created_at?: string
+  updated_at?: string
+  is_in_biwenger?: boolean
+  stats?: any
   team?: { name: string; logo_url?: string }
 }
 
@@ -108,9 +126,9 @@ function PitchPlayerCard({
 
       {/* Nombre del jugador */}
       <div className="flex flex-col items-center w-[150%] -mt-1 md:-mt-1.5 z-30">
-        <p className="font-extrabold text-white text-[9.5px] sm:text-[11px] md:text-[12px] lg:text-[13px] leading-[1.1] drop-shadow-md relative w-full text-center transition-all duration-300 line-clamp-2 break-words"
+        <p className="font-extrabold text-white text-[9.5px] sm:text-[11px] md:text-[12px] lg:text-[13px] leading-[1.1] drop-shadow-md relative w-full text-center transition-all duration-300 truncate"
            style={{ textShadow: '1px 1px 3px rgba(0,0,0,1)' }}>
-          {player.short_name || player.first_name}
+          {formatPlayerName(player.short_name || player.first_name)}
         </p>
       </div>
       {isPenalized && sanctionReason ? (
@@ -1443,6 +1461,7 @@ export default function DashboardPage() {
     const q = normalize(searchFilter)
     
     return availablePlayers.filter(p => {
+      if (p.is_in_biwenger === false) return false
       const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
       if (!matchesPosition) return false
       const matchesTeam = teamFilter === '' || p.team_id === teamFilter
@@ -1979,6 +1998,7 @@ export default function DashboardPage() {
                 const isChanged = !unchangedKeys.has(player._uniqueKey)
                 const isLockedPlayer = isTeamLocked(player.team_id)
                 const replacedPlayer = isChanged ? replacedPlayerByUniqueKey.get(player._uniqueKey) : undefined
+                const displayName = formatPlayerName(player.short_name || player.first_name || '')
                 return (
                   <div
                     key={player._uniqueKey}
@@ -2004,7 +2024,7 @@ export default function DashboardPage() {
                         <img 
                           src={player.team.logo_url} 
                           alt="Fondo" 
-                          className="absolute inset-0 m-auto w-[140%] h-[140%] object-contain opacity-10 pointer-events-none filter blur-[2px]"
+                          className="absolute left-1/2 -translate-x-1/2 top-[-25%] w-[110%] h-[110%] object-contain opacity-20 pointer-events-none filter blur-[2px]"
                         />
                       )}
 
@@ -2044,16 +2064,16 @@ export default function DashboardPage() {
                       {/* Nombre, Valor, Dorsal, Escudo (Zona inferior) */}
                       <div className="absolute inset-x-0 bottom-[2cqw] flex flex-col items-center z-20 px-[2cqw] w-full">
                         <div className="w-full bg-black/95 rounded-lg py-[2cqw] px-[2cqw] flex flex-col items-center shadow-2xl">
-                          <p className={`font-black text-amber-50 uppercase text-center w-full leading-tight line-clamp-2 tracking-tight drop-shadow-lg ${
-                              (player.short_name || player.first_name || '').length > 14
+                          <p className={`font-black text-amber-50 uppercase text-center w-full leading-tight truncate tracking-tight drop-shadow-lg ${
+                              displayName.length > 14
                                 ? 'text-[9cqw]'
-                                : (player.short_name || player.first_name || '').length > 10
+                                : displayName.length > 10
                                 ? 'text-[11cqw]'
                                 : 'text-[13cqw]'
                             }`}
                             style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
                           >
-                            {player.short_name || player.first_name}
+                            {displayName}
                           </p>
                           
                           <div className="w-11/12 h-[1px] bg-amber-500/40 my-[1cqw]" />

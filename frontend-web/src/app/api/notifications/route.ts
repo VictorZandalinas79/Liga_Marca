@@ -80,17 +80,13 @@ export async function GET() {
     // A. Sanciones consolidadas en base de datos. Solo las de MI división: las
     //    multas de otra tabla no me afectan ni compiten conmigo. Un usuario sin
     //    división no recibe ninguna, porque no participa en ninguna tabla.
-    let penaltiesQuery = supabase
+    const { data: actualPenalties } = await supabase
       .from('penalties')
       .select('id, matchday, description, points, user_id, division, created_at, profiles(full_name)')
       .eq('matchday', currentMatchday)
 
-    const penalties = myDivision == null
-      ? []
-      : (await penaltiesQuery.eq('division', myDivision)).data ?? []
-
-    if (penalties) {
-      penaltyNotifications = penalties.map(p => {
+    if (actualPenalties) {
+      penaltyNotifications = actualPenalties.map(p => {
         const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
         const name = profileObj?.full_name || 'Usuario'
         return {
@@ -99,7 +95,8 @@ export async function GET() {
           title: `Sanción Aplicada J${p.matchday}: ${name}`,
           body: `${p.description} (Se restaron ${p.points} pts)`,
           created_at: p.created_at || new Date().toISOString(),
-          read_at: null
+          read_at: null,
+          division: p.division
         }
       })
     }
@@ -110,18 +107,19 @@ export async function GET() {
     // Sin división asignada no se compite en ninguna tabla, así que no hay
     // sanciones que avisar.
     let liveNotifications: any[] = []
-    if (myDivision != null && penalties.length === 0) {
+    if (actualPenalties == null || actualPenalties.length === 0) {
       // SOLO mostrar sanciones en vivo si ya estamos a <= 1 hora del primer partido
       const isLocked = await isMatchdayLockStarted(supabase, currentMatchday)
       if (isLocked) {
-        const liveInfractions = await getLiveInfractions(supabase, currentMatchday, myDivision)
+        const liveInfractions = await getLiveInfractions(supabase, currentMatchday, null)
         liveNotifications = liveInfractions.map(inf => ({
           id: `live-inf-${inf.id}`,
           type: 'players_locked',
           title: `Sanción en Juego J${inf.matchday}: ${inf.full_name}`,
           body: `${inf.description} (Puntuarán 0 pts esta jornada)`,
           created_at: new Date().toISOString(),
-          read_at: null
+          read_at: null,
+          division: inf.division
         }))
       }
     }

@@ -155,6 +155,7 @@ def build_provisional_player(bw_name, team_id, bw_pos, bw_precio, bw_price, bw_f
         "precio": bw_precio,
         "price": bw_price,
         "date_of_birth": bw_date or None,
+        "is_in_biwenger": True,
     }
     if bw_foto:
         row["photo"] = bw_foto
@@ -479,6 +480,7 @@ def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto):
         "price": bw_price,
         # Enforce team_id just in case
         "team_id": team_id,
+        "is_in_biwenger": True,
     }
     if bw_foto:
         update["photo"] = bw_foto
@@ -1051,6 +1053,16 @@ def main():
                 "team_name": None,
                 "message": "No se borra para no romper la plantilla. Revisar a mano.",
             })
+
+    conservados = list(con_historial | fichados_fuera)
+    if conservados:
+        print(f"-> Ocultando {len(conservados)} jugadores conservados del mercado (is_in_biwenger = False)...")
+        for i in range(0, len(conservados), 100):
+            lote = conservados[i:i + 100]
+            try:
+                supabase.table("players").update({"is_in_biwenger": False}).in_("id", lote).execute()
+            except Exception as e:
+                print(f"   Aviso: fallo al ocultar lote de {len(lote)} ({e}).")
 
     # 6. Notifications
     stats = {

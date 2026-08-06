@@ -238,8 +238,9 @@
       "foot": "right",
       "shirtNumber": 5,
       "startDate": "2024-07-01Z",
+      "endDate": "2026-08-04Z",
       "status": "active",
-      "active": "yes"
+      "active": "no"
     },
     {
       "id": "4v3mcgy4w1n4g3vkq0fe7iwwk",

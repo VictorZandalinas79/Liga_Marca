@@ -13,7 +13,6 @@ BASE_OUTPUT_PATH = Path("./data")
 # --- SISTEMA DE PUNTUACIÓN AVANZADO ---
 BASE_SCORE = 6.5
 POINTS = {
-    'MIN_PLAYED':   {'POR': 0.02, 'DEF': 0.02, 'MED': 0.02, 'DEL': 0.02},
     'GOAL':         {'POR': 12.0, 'DEF': 10.0, 'MED': 8.0,  'DEL': 6.0},
     'ASSIST':       {'POR': 4.0,  'DEF': 4.0,  'MED': 4.0,  'DEL': 4.0},
     'OWN_GOAL':     {'POR': -4.0, 'DEF': -4.0, 'MED': -4.0, 'DEL': -4.0},
@@ -47,6 +46,7 @@ class FantasyEngine:
         self.points = {}            
         self.stats = {}             
         self.processed_events = set()
+        self.team_goals = {}
 
     def load_positions_from_squads(self, match_id):
         """Carga las posiciones desde los archivos de squads en Partidos_Individuales/{match_id}/squads/"""
@@ -130,7 +130,6 @@ class FantasyEngine:
             mins_played = current_min - self.entry_minutes.get(player_id, current_min)
             if mins_played < 0: mins_played = 0
             self.total_minutes[player_id] += mins_played
-            self.apply_points(player_id, 'MIN_PLAYED', multiplier=mins_played)
 
     def apply_points(self, player_id, action_key, multiplier=1):
         if player_id not in self.points: return
@@ -138,7 +137,7 @@ class FantasyEngine:
         pts = POINTS.get(action_key, {}).get(pos, 0.0) * multiplier
         if pts != 0:
             self.points[player_id] += pts
-            if action_key not in ['MIN_PLAYED', 'PASS_OK', 'PASS_FAIL', 'AERIAL_WON', 'AERIAL_LOST']:
+            if action_key not in ['PASS_OK', 'PASS_FAIL', 'AERIAL_WON', 'AERIAL_LOST']:
                 self.stats[player_id][action_key] = self.stats[player_id].get(action_key, 0) + 1
 
     def process_event(self, event, current_min):
@@ -194,8 +193,14 @@ class FantasyEngine:
 
         elif type_id == 16: 
             is_own_goal = self.get_qualifier(event, 28)
-            if is_own_goal: self.apply_points(player_id, 'OWN_GOAL')
-            else: self.apply_points(player_id, 'GOAL')
+            if is_own_goal: 
+                self.apply_points(player_id, 'OWN_GOAL')
+                scoring_team = next((t for t in self.teams if t != team_id), None)
+                if scoring_team:
+                    self.team_goals[scoring_team] = self.team_goals.get(scoring_team, 0) + 1
+            else: 
+                self.apply_points(player_id, 'GOAL')
+                self.team_goals[team_id] = self.team_goals.get(team_id, 0) + 1
             conceding_team = team_id if is_own_goal else next((t for t in self.teams if t != team_id), None)
             if conceding_team:
                 for pid in list(self.on_pitch):
@@ -225,14 +230,36 @@ def print_dashboard(engine, current_min):
             extra_mins = current_min - engine.entry_minutes.get(pid, 0)
             if extra_mins > 0:
                 mins_played += extra_mins
-                pos = engine.get_player_pos(pid)
-                live_score += (extra_mins * POINTS['MIN_PLAYED'][pos])
+        
+        pos = engine.get_player_pos(pid)
+        part_points = 0
+        part_details = []
+        if mins_played > 0:
+            if mins_played >= 60:
+                part_points += 2
+                part_details.append(f"⏱️ +2")
+                team_id = engine.players_team.get(pid)
+                if team_id:
+                    team_goals = engine.team_goals.get(team_id, 0)
+                    opp_team = next((t for t in engine.teams if t != team_id), None)
+                    opp_goals = engine.team_goals.get(opp_team, 0) if opp_team else 0
+                    if team_goals > opp_goals:
+                        part_points += 1
+                        part_details.append(f"🏆 +1")
+                    elif team_goals == opp_goals:
+                        part_points += 0.5
+                        part_details.append(f"🤝 +0.5")
+            else:
+                part_points += 1
+                part_details.append(f"⏱️ +1")
+                
+        live_score += part_points
             
-        live_scores.append((pid, live_score, mins_played))
+        live_scores.append((pid, live_score, mins_played, part_details))
         
     live_scores.sort(key=lambda x: x[1], reverse=True)
     
-    for pid, score, mins in live_scores:
+    for pid, score, mins, part_details in live_scores:
         pos = engine.get_player_pos(pid)
         st = engine.stats.get(pid, {})
         name = engine.player_names.get(pid, str(pid))
@@ -254,9 +281,13 @@ def print_dashboard(engine, current_min):
         }
         
         metrics = []
+        if part_details:
+            metrics.extend(part_details)
+            
         for key, emoji in metric_emojis.items():
             if st.get(key):  # Si el jugador tiene más de 0 en esta métrica
-                metrics.append(f"{emoji} {st[key]}")
+                pts = POINTS.get(key, {}).get(pos, 0.0) * st[key]
+                metrics.append(f"{emoji} {st[key]} ({pts:+.1f})")
                 
         m_str = " | ".join(metrics) if metrics else ""
         

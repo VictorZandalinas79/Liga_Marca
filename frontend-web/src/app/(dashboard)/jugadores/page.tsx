@@ -24,6 +24,7 @@ interface Player {
   precio?: number
   created_at?: string
   updated_at?: string
+  is_in_biwenger?: boolean
   stats?: PlayerStats
   team?: Team
 }
@@ -244,6 +245,7 @@ export default function JugadoresPage() {
         const { data: page, error } = await supabase
           .from('players')
           .select('*')
+          .eq('is_in_biwenger', true)
           .order('short_name', { ascending: true })
           .range(from, from + PAGE_SIZE - 1)
         if (error || !page || page.length === 0) break

@@ -53,6 +53,18 @@ export function ScoringConfigPanel() {
     })
   }
 
+  // Actualiza un valor de participación.
+  const setParticipationValue = (key: string, raw: string) => {
+    const value = raw === '' || raw === '-' ? 0 : Number(raw)
+    setRules((r) => {
+      if (!r) return r
+      const next = JSON.parse(JSON.stringify(r)) as ScoringRules
+      const part = (next.participation ??= {}) as Record<string, unknown>
+      part[key] = value
+      return next
+    })
+  }
+
   // Actualiza un límite de Relevo (relevo_limits -> pos -> key).
   const setRelevoLimit = (pos: Position, key: string, raw: string) => {
     const value = raw === '' || raw === '-' ? 0 : Number(raw)
@@ -91,6 +103,7 @@ export function ScoringConfigPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           events: rules.events,
+          participation: rules.participation,
           penalties_per_X: rules.penalties_per_X,
           relevo_limits: rules.relevo_limits,
         }),
@@ -135,6 +148,39 @@ export function ScoringConfigPanel() {
         <p className="text-red-600 text-sm py-4">{error}</p>
       ) : (
         <>
+          {/* Participación y Resultado */}
+          <section className="space-y-3">
+            <p className="text-sm font-semibold text-slate-700">Participación y Resultado</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <LabeledInput
+                label="Bono Suplente (< 60 min)"
+                value={num(rules.participation, 'substitute_bonus')}
+                onChange={(v) => setParticipationValue('substitute_bonus', v)}
+              />
+              <LabeledInput
+                label="Bono Titular (≥ 60 min)"
+                value={num(rules.participation, 'starter_bonus')}
+                onChange={(v) => setParticipationValue('starter_bonus', v)}
+              />
+              <LabeledInput
+                label="Victoria (jugando ≥ 60 min)"
+                value={num(rules.participation, 'win_bonus_60') || 0}
+                onChange={(v) => setParticipationValue('win_bonus_60', v)}
+              />
+              <LabeledInput
+                label="Empate (jugando ≥ 60 min)"
+                value={num(rules.participation, 'draw_bonus_60') || 0}
+                onChange={(v) => setParticipationValue('draw_bonus_60', v)}
+              />
+            </div>
+            <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg flex gap-3 text-sm text-blue-800 items-start mt-2">
+              <Info className="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-600" />
+              <div>
+                <strong>Nota sobre resultado:</strong> Los bonos por victoria y empate se basan en el resultado final del partido y solo se otorgan a jugadores que hayan disputado al menos el umbral configurado (normalmente 60 min).
+              </div>
+            </div>
+          </section>
+
           {/* Eventos posicionales */}
           <section className="space-y-4">
             <p className="text-sm font-semibold text-slate-700">Eventos por posición</p>

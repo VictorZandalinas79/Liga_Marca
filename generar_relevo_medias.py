@@ -56,6 +56,11 @@ def calcular_medias(fixture_ids):
                     val = stats.get(f) or 0
                     stats_by_pos[pos]['sum'][f] = stats_by_pos[pos]['sum'].get(f, 0) + val
                     
+                # Añadir calidad de parada para porteros (que está en otro dict del downloader)
+                if pos == 'POR':
+                    calidad = downloader.player_calidad_parada.get(pid, 0.0)
+                    stats_by_pos['POR']['sum']['calidad_parada'] = stats_by_pos['POR']['sum'].get('calidad_parada', 0) + calidad
+                    
         except Exception as e:
             print(f"❌ Error procesando el partido {fixture_id}: {e}")
 
@@ -95,6 +100,11 @@ def calcular_medias(fixture_ids):
             print(f"  - claims_per_min: {per_min('claims'):.4f} (ej: umbral act {0.02})")
             punches = s.get('punches_ok', 0) + s.get('punches_fail', 0)
             print(f"  - punches_per_min: {(punches / mins if mins > 0 else 0):.4f} (ej: umbral act {0.03})")
+            
+            calidad = s.get('calidad_parada', 0.0)
+            saves = s.get('saves', 0)
+            avg_calidad = (calidad / saves) if saves > 0 else 0.0
+            print(f"  - calidad_parada_per_min: {per_min('calidad_parada'):.4f} (Calidad media por parada: {avg_calidad:.3f})")
             
         # DEF
         if pos == 'DEF':

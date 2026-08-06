@@ -475,7 +475,7 @@ export function evaluateRelevoBlocks(
 }
 
 export interface ScoringRates {
-  participation: { starter_bonus: number; substitute_bonus: number; minutes_threshold: number }
+  participation: { starter_bonus: number; substitute_bonus: number; minutes_threshold: number; win_bonus_60: number; draw_bonus_60: number }
   goal: Record<Position, number>
   own_goal: number
   assist_goal: number
@@ -517,7 +517,7 @@ export interface ScoringRates {
 
 // Valores por defecto (espejo de scoring_rules.json) usados como fallback.
 export const DEFAULT_RATES: ScoringRates = {
-  participation: { starter_bonus: 2, substitute_bonus: 1, minutes_threshold: 60 },
+  participation: { starter_bonus: 2, substitute_bonus: 1, minutes_threshold: 60, win_bonus_60: 1, draw_bonus_60: 0.5 },
   goal: { POR: 6, DEF: 6, MED: 5, DEL: 4 },
   own_goal: -2,
   assist_goal: 3,
@@ -591,6 +591,8 @@ export function resolveRates(rules: ScoringRules | null): ScoringRates {
       starter_bonus: pn('starter_bonus', d.participation.starter_bonus),
       substitute_bonus: pn('substitute_bonus', d.participation.substitute_bonus),
       minutes_threshold: pn('minutes_threshold', d.participation.minutes_threshold),
+      win_bonus_60: pn('win_bonus_60', d.participation.win_bonus_60),
+      draw_bonus_60: pn('draw_bonus_60', d.participation.draw_bonus_60),
     },
     goal: byPos('goal', d.goal),
     own_goal: eventVal(rules, 'own_goal', 'MED', d.own_goal),

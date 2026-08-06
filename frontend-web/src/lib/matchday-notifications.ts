@@ -17,8 +17,8 @@ export interface BellNotification {
   read_at: string | null
 }
 
-/** Con cuánta antelación se avisa de un bloqueo que aún no ha empezado. */
-const HEADS_UP_MS = 7 * 24 * 60 * 60 * 1000
+/** Con cuánta antelación se avisa de un bloqueo que aún no ha empezado (14 días). */
+const HEADS_UP_MS = 14 * 24 * 60 * 60 * 1000
 
 function formatDateTime(d: Date): string {
   return d.toLocaleString('es-ES', {

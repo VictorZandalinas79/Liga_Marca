@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Trophy, MapPin, Clock, Calendar, Users, TrendingUp, RefreshCw } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import { MetricBreakdown } from '@/components/metric-breakdown'
+import { evaluateRelevoBlocks, resolveRates, type Position } from '@/lib/scoring-config'
+import { useScoringRules } from '@/hooks/use-scoring-rules'
 
 interface Player {
   id: string
@@ -144,6 +146,81 @@ export default function PartidoDetallePage() {
   const supabase = createClient()
   const router = useRouter()
   const params = useParams()
+
+  const scoringRules = useScoringRules()
+  const R = resolveRates(scoringRules)
+
+  const normPos = (p?: string): Position => {
+    const s = (p || '').toLowerCase()
+    if (s.includes('goalkeeper') || s === 'gk' || s === 'por') return 'POR'
+    if (s.includes('defender') || s === 'def') return 'DEF'
+    if (s.includes('forward') || s.includes('attacker') || s.includes('striker') || s === 'del' || s === 'fwd') return 'DEL'
+    if (s.includes('midfielder') || s === 'med' || s === 'mid') return 'MED'
+    return 'MED'
+  }
+
+  const renderRelevoBars = (player: Player) => {
+    const min = player.minutes_played || 0
+    if (min === 0) return null
+    
+    const pos = normPos(player.calc_position || player.position)
+    const results = evaluateRelevoBlocks(player, pos, R.relevo_limits)
+    
+    if (!results || results.length === 0) return null
+    
+    const fmt = (v: number, unit: 'count' | 'pct') => unit === 'pct' ? `${v.toFixed(0)}%` : String(parseFloat(v.toFixed(2)))
+    
+    return (
+      <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Desglose Relevo</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+            (player.relevo_points || 0) >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+          }`}>
+            {(player.relevo_points || 0) >= 0 ? '+' : ''}{parseFloat((player.relevo_points || 0).toFixed(2))} pts
+          </span>
+        </div>
+        
+        {results.map((block) => (
+          <div key={block.id} className="space-y-1.5">
+            {block.metrics.map((m, i) => {
+              const targetVal = m.target;
+              const currentVal = m.value;
+              let pctVal = targetVal > 0 ? (currentVal / targetVal) * 100 : (currentVal > 0 ? 100 : 0);
+              if (pctVal > 100) pctVal = 100;
+              
+              const isMet = m.met;
+              const barColor = isMet ? 'bg-emerald-500' : 'bg-red-500';
+              const bgBarColor = isMet ? 'bg-emerald-950' : 'bg-red-950/40';
+              
+              return (
+                <div key={i} className="flex flex-col gap-1 text-[10px]">
+                  <div className="flex justify-between items-center text-slate-300">
+                    <span className="truncate flex-1 font-medium text-slate-300">{m.label}</span>
+                    <span className="shrink-0 tabular-nums ml-2 flex items-center gap-1.5">
+                      <span className={isMet ? 'text-emerald-400 font-bold' : 'text-slate-200 font-semibold'}>
+                        {fmt(currentVal, m.unit)}
+                      </span>
+                      <span className="text-slate-500"> / {fmt(targetVal, m.unit)}</span>
+                      {i === 0 && (
+                         <span className={`font-bold ml-1 w-4 text-right ${block.points > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                           {block.points > 0 ? '+1' : '0'}
+                         </span>
+                      )}
+                      {i > 0 && <span className="w-4 ml-1"></span>}
+                    </span>
+                  </div>
+                  <div className={`w-full h-1 ${bgBarColor} rounded-full overflow-hidden`}>
+                    <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${pctVal}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   const fetchPartido = async () => {
     const fixtureId = params.id as string
@@ -575,6 +652,9 @@ export default function PartidoDetallePage() {
           <p className="mt-1.5 text-xs font-semibold text-white whitespace-nowrap overflow-hidden text-ellipsis w-full">
             {player.short_name || `${player.first_name} ${player.last_name}`}
           </p>
+
+          {/* Barras de Desglose Relevo */}
+          {renderRelevoBars(player)}
         </CardContent>
       </Card>
     </div>

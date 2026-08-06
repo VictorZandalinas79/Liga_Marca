@@ -65,6 +65,19 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  // --- participation ---
+  if (body.participation && typeof body.participation === 'object') {
+    const part = (rules.participation ??= {}) as Record<string, unknown>
+    for (const [key, val] of Object.entries(body.participation as Record<string, unknown>)) {
+      if (val === undefined) continue
+      if (!isNum(val)) {
+        return NextResponse.json({ error: `Valor inválido en participation.${key}` }, { status: 400 })
+      }
+      part[key] = val
+      changed = true
+    }
+  }
+
   // --- penalties_per_X[group][POS].points ---
   if (body.penalties_per_X && typeof body.penalties_per_X === 'object') {
     const penalties = (rules.penalties_per_X ??= {}) as Record<string, Record<string, Record<string, unknown>>>

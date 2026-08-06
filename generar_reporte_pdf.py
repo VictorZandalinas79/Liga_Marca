@@ -140,8 +140,14 @@ def generar_pdf(fixture_id, match_id):
         # B1: Participación
         mins = p["min"]
         if mins > 0:
-            if mins > R_p.get('minutes_threshold', 60):
+            if mins >= R_p.get('minutes_threshold', 60):
                 add("Participación", f"Titular ({mins}')", 0, R_p.get('starter_bonus', 2), flat=True)
+                wb = g('win_bonus')
+                db = g('draw_bonus')
+                if wb > 0:
+                    add("Participación", "Victoria (>=60')", 0, wb, flat=True)
+                elif db > 0:
+                    add("Participación", "Empate (>=60')", 0, db, flat=True)
             else:
                 add("Participación", f"Suplente ({mins}')", 0, R_p.get('substitute_bonus', 1), flat=True)
         else:

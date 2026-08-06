@@ -37,8 +37,14 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   const min = n(player.minutes_played)
   const b1: Row[] = []
   if (min > 0) {
-    const titular = min > R.participation.minutes_threshold
-    b1.push({ label: titular ? `Participación · +60 min (${min}′)` : `Participación · suplente (${min}′)`, count: 0, unit: 0, points: titular ? R.participation.starter_bonus : R.participation.substitute_bonus, flat: true })
+    const titular = min >= R.participation.minutes_threshold
+    b1.push({ label: titular ? `Participación · ≥60 min (${min}′)` : `Participación · suplente (${min}′)`, count: 0, unit: 0, points: titular ? R.participation.starter_bonus : R.participation.substitute_bonus, flat: true })
+    
+    // Bonos de resultado
+    const wb = n(player.win_bonus)
+    const db = n(player.draw_bonus)
+    if (wb > 0) b1.push({ label: `Victoria (≥60 min)`, count: 0, unit: 0, points: wb, flat: true })
+    else if (db > 0) b1.push({ label: `Empate (≥60 min)`, count: 0, unit: 0, points: db, flat: true })
   }
 
   // B2: Goles y Asistencias

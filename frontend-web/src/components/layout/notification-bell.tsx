@@ -27,7 +27,10 @@ interface Notification {
   created_at: string
   read_at: string | null
   player_photo?: string | null
+  division?: number | null
 }
+
+type Tab = 'partidos' | 'jugadores' | 'sanciones'
 
 /**
  * Notificaciones que la API calcula al vuelo (sanciones en vivo, bloqueos por
@@ -40,7 +43,12 @@ const isDerived = (id: string) => DERIVED_ID_PREFIXES.some(p => id.startsWith(p)
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<Tab>('partidos')
   const [mounted, setMounted] = useState(false)
+
+  const isPartido = (n: Notification) => n.type === 'fixture_changed' || String(n.id).startsWith('locked-fx-')
+  const isSancion = (n: Notification) => String(n.id).startsWith('penalty-') || String(n.id).startsWith('live-inf-')
+  const isJugador = (n: Notification) => !isPartido(n) && !isSancion(n)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [copiedAll, setCopiedAll] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -280,92 +288,167 @@ export function NotificationBell() {
           <div id="notification-modal" className="relative w-full max-w-2xl bg-white border border-slate-300 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Cabecera del modal */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-900 to-slate-800 shrink-0">
-              <div className="flex items-center gap-4">
-                <span className="font-bold text-white text-lg">📢 Notificaciones</span>
-                {notifications.length > 0 && (
-                  <button
-                    onClick={handleCopyAll}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/80 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-md transition-colors"
-                    title="Copiar todas para WhatsApp"
-                  >
-                    {copiedAll ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                    {copiedAll ? '¡Copiado!' : 'Copiar todo'}
-                  </button>
-                )}
+            <div className="flex flex-col border-b border-slate-200 bg-slate-900 shrink-0">
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center gap-4">
+                  <span className="font-bold text-white text-lg">📢 Notificaciones</span>
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={handleCopyAll}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/80 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-md transition-colors"
+                      title="Copiar todas para WhatsApp"
+                    >
+                      {copiedAll ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                      {copiedAll ? '¡Copiado!' : 'Copiar todo'}
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="text-slate-400 hover:text-white transition-colors text-2xl leading-none"
+                >
+                  ×
+                </button>
               </div>
-              <button
-                onClick={() => setOpen(false)}
-                className="text-slate-400 hover:text-white transition-colors text-2xl leading-none"
-              >
-                ×
-              </button>
+
+              {/* Tabs */}
+              <div className="flex bg-slate-800">
+                {(['partidos', 'jugadores', 'sanciones'] as Tab[]).map(tab => {
+                  const unreadInTab = notifications.filter(n => !n.read_at && (
+                    tab === 'partidos' ? isPartido(n) :
+                    tab === 'jugadores' ? isJugador(n) :
+                    isSancion(n)
+                  )).length
+                  
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`flex-1 py-3 text-sm font-bold capitalize transition-colors flex items-center justify-center gap-2 relative ${
+                        activeTab === tab
+                          ? 'text-white bg-slate-700/50 border-b-2 border-blue-400'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+                      }`}
+                    >
+                      {tab}
+                      {unreadInTab > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5 leading-none">
+                          {unreadInTab}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             {/* Lista de notificaciones (scrollable) */}
             <div className="overflow-y-auto p-4 sm:p-6 bg-slate-50 flex-1">
-              {notifications.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-slate-400 text-sm font-medium">Sin notificaciones</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {notifications.map(n => {
-                    const isWarning = n.type.includes('lock') || n.type === 'unmatched' || n.body.includes('multa') || n.body.includes('sanción')
-                    return (
-                      <div
-                        key={n.id}
-                        onClick={() => !n.read_at && markRead(n.id)}
-                        className={`p-4 rounded-xl border-2 transition-all shadow-sm ${
-                          !n.read_at ? 'cursor-pointer hover:border-slate-400 hover:shadow-md' : ''
-                        } ${
-                          isWarning
-                            ? '!bg-red-50/80 border-red-300'
-                            : !n.read_at
-                              ? 'bg-blue-50/80 border-blue-300'
-                              : 'bg-white border-slate-200'
-                        }`}
-                        title={!n.read_at ? 'Hacer clic para marcar como leído' : undefined}
-                      >
-                          <div className="flex items-start gap-4 relative">
-                            {n.player_photo ? (
-                              <img src={n.player_photo} alt="Player" className="w-10 h-10 rounded-full object-cover shrink-0 shadow-sm border border-slate-200" />
-                            ) : (
-                              <span className="text-2xl shrink-0 drop-shadow-sm">{typeIcon[n.type] ?? '🔔'}</span>
-                            )}
-                            <div className="flex-1 min-w-0 pr-8">
-                              <div className="flex items-center gap-2 mb-1">
-                                <p className={`font-bold truncate ${isWarning ? 'text-red-900' : 'text-slate-900'}`}>{n.title}</p>
-                                {!n.read_at && (
-                                  <span className={`h-2.5 w-2.5 rounded-full shrink-0 shadow-sm ${isWarning ? 'bg-red-500' : 'bg-blue-500'}`} />
-                                )}
-                              </div>
-                              <p className={`text-sm mt-1 leading-snug ${isWarning ? 'text-red-800' : 'text-slate-700'}`}>{n.body}</p>
-                              <p className="text-xs text-slate-500 mt-2 font-medium">{formatDate(n.created_at)}</p>
-                            </div>
-                            <button
-                              onClick={(e) => handleCopy(e, `📢 *${n.title}*\n${n.body}`, n.id, n.player_photo)}
-                              className="absolute top-0 right-0 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 rounded-md transition-all z-10"
-                              title="Copiar para WhatsApp"
-                            >
-                              {copiedId === n.id ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                            </button>
-                          </div>
-                      </div>
-                    )
-                  })}
-                  {unreadCount > 0 && (
-                    <div className="pt-2">
-                      <button
-                        onClick={markAllRead}
-                        className="w-full px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg font-bold transition-colors text-sm shadow-sm"
-                      >
-                        Marcar todo como leído
-                      </button>
+              {(() => {
+                const filtered = notifications.filter(n => {
+                  if (activeTab === 'partidos') return isPartido(n)
+                  if (activeTab === 'jugadores') return isJugador(n)
+                  if (activeTab === 'sanciones') return isSancion(n)
+                  return false
+                })
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center py-12">
+                      <p className="text-slate-400 text-sm font-medium">Sin notificaciones en esta sección</p>
                     </div>
-                  )}
-                </div>
-              )}
+                  )
+                }
+
+                const renderNotificationCard = (n: Notification) => {
+                  const isWarning = n.type.includes('lock') || n.type === 'unmatched' || n.body.includes('multa') || n.body.includes('sanción')
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => !n.read_at && markRead(n.id)}
+                      className={`p-4 rounded-xl border-2 transition-all shadow-sm ${
+                        !n.read_at ? 'cursor-pointer hover:border-slate-400 hover:shadow-md' : ''
+                      } ${
+                        isWarning
+                          ? '!bg-red-50/80 border-red-300'
+                          : !n.read_at
+                            ? 'bg-blue-50/80 border-blue-300'
+                            : 'bg-white border-slate-200'
+                      }`}
+                      title={!n.read_at ? 'Hacer clic para marcar como leído' : undefined}
+                    >
+                        <div className="flex items-start gap-4 relative">
+                          {n.player_photo ? (
+                            <img src={n.player_photo} alt="Player" className="w-10 h-10 rounded-full object-cover shrink-0 shadow-sm border border-slate-200" />
+                          ) : (
+                            <span className="text-2xl shrink-0 drop-shadow-sm">{typeIcon[n.type] ?? '🔔'}</span>
+                          )}
+                          <div className="flex-1 min-w-0 pr-8">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className={`font-bold truncate ${isWarning ? 'text-red-900' : 'text-slate-900'}`}>{n.title}</p>
+                              {!n.read_at && (
+                                <span className={`h-2.5 w-2.5 rounded-full shrink-0 shadow-sm ${isWarning ? 'bg-red-500' : 'bg-blue-500'}`} />
+                              )}
+                            </div>
+                            <p className={`text-sm mt-1 leading-snug ${isWarning ? 'text-red-800' : 'text-slate-700'}`}>{n.body}</p>
+                            <p className="text-xs text-slate-500 mt-2 font-medium">{formatDate(n.created_at)}</p>
+                          </div>
+                          <button
+                            onClick={(e) => handleCopy(e, `📢 *${n.title}*\n${n.body}`, n.id, n.player_photo)}
+                            className="absolute top-0 right-0 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 rounded-md transition-all z-10"
+                            title="Copiar para WhatsApp"
+                          >
+                            {copiedId === n.id ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="space-y-4">
+                    {activeTab === 'sanciones' ? (() => {
+                      const grouped = filtered.reduce((acc, n) => {
+                        const div = n.division != null ? `División ${n.division}` : 'General'
+                        if (!acc[div]) acc[div] = []
+                        acc[div].push(n)
+                        return acc
+                      }, {} as Record<string, Notification[]>)
+
+                      const sortedDivisions = Object.keys(grouped).sort((a, b) => {
+                        if (a === 'General') return 1
+                        if (b === 'General') return -1
+                        return a.localeCompare(b)
+                      })
+
+                      return (
+                        <div className="space-y-6">
+                          {sortedDivisions.map(div => (
+                            <div key={div}>
+                              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">{div}</h3>
+                              <div className="space-y-4">
+                                {grouped[div].map(renderNotificationCard)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })() : (
+                      filtered.map(renderNotificationCard)
+                    )}
+                    {filtered.some(n => !n.read_at) && (
+                      <div className="pt-2">
+                        <button
+                          onClick={markAllRead}
+                          className="w-full px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg font-bold transition-colors text-sm shadow-sm"
+                        >
+                          Marcar todo como leído
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </div>,

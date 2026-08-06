@@ -44,6 +44,8 @@ interface PlayerScore {
   relevo_duels_pts?: number
   relevo_aerials_pts?: number
   relevo_takeons_pts?: number
+  win_bonus?: number
+  draw_bonus?: number
 
   // Goles
   goals: number
@@ -595,11 +597,17 @@ export default function JugadorDetallePage() {
     // BLOQUE 1: Participación
     const b1: ScoreRow[] = []
     if (score.minutes_played > 0) {
-      const titular = score.minutes_played > SR.participation.minutes_threshold
+      const titular = score.minutes_played >= SR.participation.minutes_threshold
       b1.push({
-        label: titular ? `Participación · +60 min (${score.minutes_played}′)` : `Participación · suplente (${score.minutes_played}′)`,
+        label: titular ? `Participación · ≥60 min (${score.minutes_played}′)` : `Participación · suplente (${score.minutes_played}′)`,
         count: 0, unit: 0, points: titular ? SR.participation.starter_bonus : SR.participation.substitute_bonus, flat: true,
       })
+      
+      if ((score.win_bonus || 0) > 0) {
+        b1.push({ label: `Victoria (≥60 min)`, count: 0, unit: 0, points: score.win_bonus!, flat: true })
+      } else if ((score.draw_bonus || 0) > 0) {
+        b1.push({ label: `Empate (≥60 min)`, count: 0, unit: 0, points: score.draw_bonus!, flat: true })
+      }
     }
 
     // BLOQUE 2: Goles y Asistencias
