@@ -36,8 +36,34 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="relative min-h-screen flex items-center justify-center p-4 bg-slate-950 overflow-hidden">
+      {/* Contenedor animado del fondo (Efecto de vuelo/paneo lento) */}
+      <div 
+        className="absolute inset-0 z-0 bg-cover bg-center"
+        style={{
+          backgroundImage: "url('/fondo.png')",
+          animation: "flyOverField 40s ease-in-out infinite alternate"
+        }}
+      />
+      {/* Capa de degradado oscuro protector (reduciendo opacidad para ver más el campo) */}
+      <div className="absolute inset-0 z-10 bg-gradient-to-br from-slate-950/70 via-slate-900/60 to-slate-950/70" />
+      
+      {/* Definición de la animación de vuelo */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes flyOverField {
+          0% {
+            transform: scale(1.1) translate(0%, 0%);
+          }
+          50% {
+            transform: scale(1.25) translate(-2%, -1.5%);
+          }
+          100% {
+            transform: scale(1.1) translate(1.5%, -2%);
+          }
+        }
+      `}} />
+
+      <div className="relative z-20 w-full max-w-md">
         {/* Logo y título */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
