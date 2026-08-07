@@ -13,17 +13,36 @@ export default function ActualizarPasswordPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [verifying, setVerifying] = useState(false)
+  const [linkError, setLinkError] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
-    // Verificar si el usuario está autenticado (debería estarlo tras clickar el enlace)
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        // Podríamos redirigir si no hay sesión, pero a veces tarda un poco en establecerse
-      }
-    }
-    checkUser()
+    // Los enlaces que genera el admin desde el panel traen ?token_hash=...: hay
+    // que canjearlos aquí para abrir la sesión de recuperación. Los correos que
+    // manda Supabase ya llegan con la sesión hecha (tokens en la URL), así que
+    // en ese caso no hay nada que canjear.
+    const params = new URLSearchParams(window.location.search)
+    const tokenHash = params.get('token_hash')
+    if (!tokenHash) return
+
+    // Solo se puede saber si hay token leyendo la URL en el cliente, así que el
+    // estado inicial no puede traerlo ya puesto (rompería la hidratación).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVerifying(true)
+    supabase.auth
+      .verifyOtp({ type: 'recovery', token_hash: tokenHash })
+      .then(({ error: verifyError }) => {
+        if (verifyError) {
+          setLinkError(
+            'Este enlace ya no es válido: puede haber caducado o haberse usado antes. Pide uno nuevo al administrador.'
+          )
+        } else {
+          // Quitar el token de la barra de direcciones para no dejarlo en el historial.
+          window.history.replaceState({}, '', window.location.pathname)
+        }
+        setVerifying(false)
+      })
   }, [supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,6 +91,25 @@ export default function ActualizarPasswordPage() {
             <p className="text-slate-600 mb-6">
               Tu contraseña se ha cambiado correctamente. Redirigiendo...
             </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (linkError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="w-full max-w-md relative z-10 text-center">
+          <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-slate-200/50">
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">Enlace no válido</h2>
+            <p className="text-slate-600 mb-6">{linkError}</p>
+            <button
+              onClick={() => router.push('/recuperar')}
+              className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white py-3.5 rounded-xl font-bold hover:from-emerald-700 hover:to-emerald-600 transition-all duration-200"
+            >
+              Pedir un enlace nuevo
+            </button>
           </div>
         </div>
       </div>
@@ -159,11 +197,11 @@ export default function ActualizarPasswordPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || verifying}
               className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white py-4 rounded-xl font-bold text-lg hover:from-emerald-700 hover:to-emerald-600 transition-all duration-200 shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none mt-2 flex items-center justify-center gap-2 group"
             >
-              {loading ? 'Guardando...' : 'Guardar contraseña'}
-              {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+              {verifying ? 'Validando enlace...' : loading ? 'Guardando...' : 'Guardar contraseña'}
+              {!loading && !verifying && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
             </button>
           </form>
         </div>

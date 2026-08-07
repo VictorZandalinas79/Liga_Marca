@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   Search, Download, ShieldCheck, CheckCircle2, XCircle, Users, RefreshCw, Euro,
-  Pencil, Trash2, X, AlertTriangle,
+  Pencil, Trash2, X, AlertTriangle, KeyRound, Copy, Check, Mail,
 } from 'lucide-react'
 import { LeagueConfigPanel } from './LeagueConfigPanel'
 import { ScoringConfigPanel } from './ScoringConfigPanel'
@@ -138,6 +138,7 @@ export default function AdminPage() {
   // Modales
   const [editUser, setEditUser] = useState<AdminUser | null>(null)
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null)
+  const [resetUser, setResetUser] = useState<AdminUser | null>(null)
 
   const loadUsers = async () => {
     setLoading(true)
@@ -535,6 +536,13 @@ export default function AdminPage() {
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
+                          onClick={() => setResetUser(u)}
+                          className="p-2 rounded-lg text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+                          title="Restablecer contraseña"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => setDeleteUser(u)}
                           className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
                           title="Eliminar usuario"
@@ -576,6 +584,10 @@ export default function AdminPage() {
             setEditUser(null)
           }}
         />
+      )}
+
+      {resetUser && (
+        <ResetPasswordModal user={resetUser} onClose={() => setResetUser(null)} />
       )}
 
       {deleteUser && (
@@ -678,6 +690,141 @@ function EditModal({
           </button>
         </div>
       </form>
+    </Overlay>
+  )
+}
+
+/* ---------- Modal de restablecer contraseña ---------- */
+// Los móviles se guardan sin prefijo, pero wa.me lo necesita en internacional.
+function whatsappNumber(phone: string): string | null {
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length === 9) return `34${digits}`
+  if (digits.length > 9) return digits
+  return null
+}
+
+function ResetPasswordModal({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const [busy, setBusy] = useState<'email' | 'link' | null>(null)
+  const [link, setLink] = useState('')
+  const [sent, setSent] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [err, setErr] = useState('')
+
+  const run = async (mode: 'email' | 'link') => {
+    setBusy(mode)
+    setErr('')
+    setSent(false)
+    setCopied(false)
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      })
+      const b = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(b.error || 'No se pudo generar el enlace')
+      if (mode === 'email') {
+        setSent(true)
+        setLink('')
+      } else {
+        setLink(b.link as string)
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No se pudo generar el enlace')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setErr('No se ha podido copiar. Selecciona el enlace y cópialo a mano.')
+    }
+  }
+
+  const wa = whatsappNumber(user.phone || '')
+  const waHref = wa
+    ? `https://wa.me/${wa}?text=${encodeURIComponent(
+        `Hola${user.full_name ? ` ${user.full_name.split(' ')[0]}` : ''}, aquí tienes tu enlace para cambiar la contraseña de la Lliga Marca Vilafranca: ${link}`
+      )}`
+    : null
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+            <KeyRound className="w-5 h-5 text-emerald-600" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">Restablecer contraseña</h2>
+        </div>
+        <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100"><X className="w-5 h-5" /></button>
+      </div>
+
+      <p className="text-sm text-slate-600 mb-4">
+        Enlace de cambio de contraseña para <strong>{user.full_name || user.email}</strong> ({user.email}).
+        Caduca en una hora y solo sirve una vez; al generar uno nuevo, el anterior deja de valer.
+      </p>
+
+      <div className="space-y-3">
+        <button
+          onClick={() => run('email')}
+          disabled={busy !== null}
+          className="w-full py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          <Mail className="w-4 h-4" />
+          {busy === 'email' ? 'Enviando…' : 'Enviar email al usuario'}
+        </button>
+        <button
+          onClick={() => run('link')}
+          disabled={busy !== null}
+          className="w-full py-2.5 rounded-lg border-2 border-slate-200 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          <Copy className="w-4 h-4" />
+          {busy === 'link' ? 'Generando…' : 'Generar enlace para pasárselo a mano'}
+        </button>
+      </div>
+
+      {sent && (
+        <p className="mt-4 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+          Email enviado a {user.email}. Que revise también la carpeta de spam.
+        </p>
+      )}
+
+      {link && (
+        <div className="mt-4 space-y-2">
+          <input
+            readOnly
+            value={link}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-full px-3 py-2 rounded-lg border-2 border-slate-200 bg-slate-50 text-xs text-slate-600 outline-none"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={copy}
+              className="flex-1 py-2.5 rounded-lg bg-slate-900 text-white font-semibold hover:bg-slate-800 flex items-center justify-center gap-2"
+            >
+              {copied ? <><Check className="w-4 h-4" /> Copiado</> : <><Copy className="w-4 h-4" /> Copiar enlace</>}
+            </button>
+            {waHref && (
+              <a
+                href={waHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 text-center"
+              >
+                Enviar por WhatsApp
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {err && <p className="mt-4 text-red-600 text-sm font-medium">{err}</p>}
     </Overlay>
   )
 }
