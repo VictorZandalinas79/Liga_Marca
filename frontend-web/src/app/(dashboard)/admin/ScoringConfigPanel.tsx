@@ -11,8 +11,9 @@ import {
   type Position
 } from '@/lib/scoring-config'
 
-export function ScoringConfigPanel() {
+export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: any) => void }) {
   const [rules, setRules] = useState<ScoringRules | null>(null)
+  const [savedRules, setSavedRules] = useState<ScoringRules | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -26,6 +27,7 @@ export function ScoringConfigPanel() {
         if (res.ok) {
           const body = await res.json()
           setRules(body.rules ?? null)
+          setSavedRules(body.rules ?? null)
           if (!body.rules) setError('No hay configuración guardada. Aplica la migración 008_scoring_config.sql en Supabase.')
         } else {
           const b = await res.json().catch(() => ({}))
@@ -113,15 +115,86 @@ export function ScoringConfigPanel() {
         throw new Error(b.error || 'No se pudo guardar')
       }
       const body = await res.json()
-      if (body.rules) setRules(body.rules)
+      if (body.rules) {
+        setRules(body.rules)
+        setSavedRules(body.rules)
+      }
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar')
+      throw e
     } finally {
       setSaving(false)
     }
   }
+
+  useEffect(() => {
+    if (!onStateChange) return
+    if (!rules || !savedRules) {
+      onStateChange({ hasChanges: false, description: [], save: async () => {}, discard: () => {} })
+      return
+    }
+
+    const diffs: string[] = []
+
+    // 1. Participacion
+    const partKeys = ['starter_bonus', 'substitute_bonus', 'win_bonus_60', 'draw_bonus_60']
+    const partLabels: Record<string, string> = {
+      starter_bonus: 'Bono Titular',
+      substitute_bonus: 'Bono Suplente',
+      win_bonus_60: 'Victoria (>=60 min)',
+      draw_bonus_60: 'Empate (>=60 min)'
+    }
+    partKeys.forEach(k => {
+      const original = (savedRules.participation as any)?.[k] ?? 0
+      const current = (rules.participation as any)?.[k] ?? 0
+      if (original !== current) {
+        diffs.push(`${partLabels[k] || k}: ${original} ➔ ${current}`)
+      }
+    })
+
+    // 2. Eventos posicionales y unicos
+    const eventsObj = (rules.events ?? {}) as Record<string, Record<string, unknown>>
+    const savedEventsObj = (savedRules.events ?? {}) as Record<string, Record<string, unknown>>
+    
+    EDITABLE_EVENTS.forEach(e => {
+      if (e.kind === 'positional') {
+        POSITIONS.forEach(pos => {
+          const original = savedEventsObj[e.key]?.[pos] ?? 0
+          const current = eventsObj[e.key]?.[pos] ?? 0
+          if (original !== current) {
+            diffs.push(`${e.label} (${POSITION_LABELS[pos]}): ${original} ➔ ${current}`)
+          }
+        })
+      } else {
+        const original = savedEventsObj[e.key]?.all ?? savedEventsObj[e.key]?.value ?? 0
+        const current = eventsObj[e.key]?.all ?? eventsObj[e.key]?.value ?? 0
+        if (original !== current) {
+          diffs.push(`${e.label}: ${original} ➔ ${current}`)
+        }
+      }
+    })
+
+    // 3. Relevo Limits
+    POSITIONS.forEach(pos => {
+      const origPos = (savedRules.relevo_limits as any)?.[pos] || {}
+      const currPos = (rules.relevo_limits as any)?.[pos] || {}
+      const keys = Array.from(new Set([...Object.keys(origPos), ...Object.keys(currPos)]))
+      keys.forEach(k => {
+        if (origPos[k] !== currPos[k]) {
+          diffs.push(`Límite Relevo ${POSITION_LABELS[pos]} (${k}): ${origPos[k] ?? 0} ➔ ${currPos[k] ?? 0}`)
+        }
+      })
+    })
+
+    onStateChange({
+      hasChanges: diffs.length > 0,
+      description: diffs.map(d => `Puntuación: ${d}`),
+      save: save,
+      discard: () => setRules(savedRules)
+    })
+  }, [rules, savedRules, onStateChange])
 
   const events = (rules?.events ?? {}) as Record<string, Record<string, unknown>>
 

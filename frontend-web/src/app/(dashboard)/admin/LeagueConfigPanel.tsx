@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { Settings, Plus, X, Save, Check } from 'lucide-react'
 import { DEFAULT_LEAGUE_CONFIG, parseFormation, type LeagueConfig } from '@/lib/league-config'
 
-export function LeagueConfigPanel() {
+export function LeagueConfigPanel({ onStateChange }: { onStateChange?: (state: any) => void }) {
   const [config, setConfig] = useState<LeagueConfig>(DEFAULT_LEAGUE_CONFIG)
+  const [savedConfig, setSavedConfig] = useState<LeagueConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -18,7 +19,11 @@ export function LeagueConfigPanel() {
         const res = await fetch('/api/admin/league-config')
         if (res.ok) {
           const body = await res.json()
-          if (body.config) setConfig({ ...DEFAULT_LEAGUE_CONFIG, ...body.config })
+          if (body.config) {
+            const loadedConfig = { ...DEFAULT_LEAGUE_CONFIG, ...body.config }
+            setConfig(loadedConfig)
+            setSavedConfig(loadedConfig)
+          }
         }
       } catch {
         /* mantiene los valores por defecto */
@@ -68,15 +73,96 @@ export function LeagueConfigPanel() {
         throw new Error(b.error || 'No se pudo guardar')
       }
       const body = await res.json()
-      if (body.config) setConfig({ ...DEFAULT_LEAGUE_CONFIG, ...body.config })
+      if (body.config) {
+        const updatedConfig = { ...DEFAULT_LEAGUE_CONFIG, ...body.config }
+        setConfig(updatedConfig)
+        setSavedConfig(updatedConfig)
+      }
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar')
+      throw e
     } finally {
       setSaving(false)
     }
   }
+
+  useEffect(() => {
+    if (!onStateChange) return
+    if (!config || !savedConfig) {
+      onStateChange({ hasChanges: false, description: [], save: async () => {}, discard: () => {} })
+      return
+    }
+
+    const diffs: string[] = []
+    
+    if (config.budget_limit !== savedConfig.budget_limit) {
+      diffs.push(`Presupuesto máximo: ${savedConfig.budget_limit}M ➔ ${config.budget_limit}M`)
+    }
+    if (config.max_players_per_team !== savedConfig.max_players_per_team) {
+      diffs.push(`Máx. jugadores del mismo equipo: ${savedConfig.max_players_per_team} ➔ ${config.max_players_per_team}`)
+    }
+    if (config.fantasy_starting_matchday !== savedConfig.fantasy_starting_matchday) {
+      diffs.push(`Jornada de inicio: J${savedConfig.fantasy_starting_matchday} ➔ J${config.fantasy_starting_matchday}`)
+    }
+    if (config.max_changes_per_matchday !== savedConfig.max_changes_per_matchday) {
+      diffs.push(`Cambios por jornada: ${savedConfig.max_changes_per_matchday} ➔ ${config.max_changes_per_matchday}`)
+    }
+    if (config.div1_win_percent !== savedConfig.div1_win_percent) {
+      diffs.push(`Div 1 Ganan: ${savedConfig.div1_win_percent} ➔ ${config.div1_win_percent}`)
+    }
+    if (config.div1_lose_percent !== savedConfig.div1_lose_percent) {
+      diffs.push(`Div 1 Pierden: ${savedConfig.div1_lose_percent} ➔ ${config.div1_lose_percent}`)
+    }
+    if (config.div2_win_percent !== savedConfig.div2_win_percent) {
+      diffs.push(`Div 2 Ganan: ${savedConfig.div2_win_percent} ➔ ${config.div2_win_percent}`)
+    }
+    if (config.div2_lose_percent !== savedConfig.div2_lose_percent) {
+      diffs.push(`Div 2 Pierden: ${savedConfig.div2_lose_percent} ➔ ${config.div2_lose_percent}`)
+    }
+    if (config.div3_win_percent !== savedConfig.div3_win_percent) {
+      diffs.push(`Div 3 Ganan: ${savedConfig.div3_win_percent} ➔ ${config.div3_win_percent}`)
+    }
+    if (config.div3_lose_percent !== savedConfig.div3_lose_percent) {
+      diffs.push(`Div 3 Pierden: ${savedConfig.div3_lose_percent} ➔ ${config.div3_lose_percent}`)
+    }
+    if (config.pay_winner !== savedConfig.pay_winner) {
+      diffs.push(`Pago Ganador: ${savedConfig.pay_winner}€ ➔ ${config.pay_winner}€`)
+    }
+    if (config.pay_loser !== savedConfig.pay_loser) {
+      diffs.push(`Pago Perdedor: ${savedConfig.pay_loser}€ ➔ ${config.pay_loser}€`)
+    }
+    if (config.pay_rest !== savedConfig.pay_rest) {
+      diffs.push(`Pago Resto: ${savedConfig.pay_rest}€ ➔ ${config.pay_rest}€`)
+    }
+    if (config.starting_balance !== savedConfig.starting_balance) {
+      diffs.push(`Saldo Inicial: ${savedConfig.starting_balance}€ ➔ ${config.starting_balance}€`)
+    }
+    if (config.infraction_penalty_cost !== savedConfig.infraction_penalty_cost) {
+      diffs.push(`Penalización por infracción: ${savedConfig.infraction_penalty_cost}€ ➔ ${config.infraction_penalty_cost}€`)
+    }
+    if (config.matchday_start_hours_before !== savedConfig.matchday_start_hours_before) {
+      diffs.push(`Inicio jornada: ${savedConfig.matchday_start_hours_before}h antes ➔ ${config.matchday_start_hours_before}h antes`)
+    }
+    if (config.matchday_end_hours_after !== savedConfig.matchday_end_hours_after) {
+      diffs.push(`Cierre jornada: ${savedConfig.matchday_end_hours_after}h después ➔ ${config.matchday_end_hours_after}h después`)
+    }
+
+    const savedForms = savedConfig.formations || []
+    const currentForms = config.formations || []
+    const addedForms = currentForms.filter(f => !savedForms.includes(f))
+    const removedForms = savedForms.filter(f => !currentForms.includes(f))
+    addedForms.forEach(f => diffs.push(`Táctica añadida: ${f}`))
+    removedForms.forEach(f => diffs.push(`Táctica eliminada: ${f}`))
+
+    onStateChange({
+      hasChanges: diffs.length > 0,
+      description: diffs.map(d => `Reglas del juego: ${d}`),
+      save: save,
+      discard: () => setConfig(savedConfig)
+    })
+  }, [config, savedConfig])
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-5">

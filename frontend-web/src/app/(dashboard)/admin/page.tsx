@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import {
   Search, Download, ShieldCheck, CheckCircle2, XCircle, Users, RefreshCw, Euro,
   Pencil, Trash2, X, AlertTriangle,
@@ -44,6 +46,7 @@ function formatEuro(n: number): string {
 
 export default function AdminPage() {
   const config = useLeagueConfig()
+  const router = useRouter()
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -53,6 +56,84 @@ export default function AdminPage() {
   const [divFilter, setDivFilter] = useState<'all' | '1' | '2' | '3' | 'none'>('all')
   const [savingId, setSavingId] = useState<string | null>(null)
   const [divisionLock, setDivisionLock] = useState<{ locked: boolean; lockAt: string | null; startingMatchday: number } | null>(null)
+
+  const [unsavedPanels, setUnsavedPanels] = useState<Record<string, {
+    hasChanges: boolean
+    description: string[]
+    save: () => Promise<void>
+    discard: () => void
+  }>>({})
+  const [pendingNavigation, setPendingNavigation] = useState<{ type: 'push' | 'signout'; href?: string } | null>(null)
+
+  const handlePanelStateChange = (panelId: string, state: {
+    hasChanges: boolean
+    description: string[]
+    save: () => Promise<void>
+    discard: () => void
+  }) => {
+    setUnsavedPanels(prev => {
+      const prevPanel = prev[panelId]
+      const hasChangesChanged = prevPanel?.hasChanges !== state.hasChanges
+      const descChanged = JSON.stringify(prevPanel?.description) !== JSON.stringify(state.description)
+      if (!hasChangesChanged && !descChanged) {
+        return prev
+      }
+      return { ...prev, [panelId]: state }
+    })
+  }
+
+  const handleSignOut = async () => {
+    const supabase = createClient()
+    localStorage.removeItem('lmv:lastActivity')
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  }
+
+  useEffect(() => {
+    const handleAnchorClick = (e: MouseEvent) => {
+      const panelsWithChanges = Object.entries(unsavedPanels).filter(([_, p]) => p.hasChanges)
+      if (panelsWithChanges.length === 0) return
+
+      let target = e.target as HTMLElement | null
+      while (target && target.tagName !== 'A') {
+        target = target.parentElement
+      }
+
+      if (target && target.tagName === 'A') {
+        const href = target.getAttribute('href')
+        if (href && (href.startsWith('/') || href.startsWith('http')) && !href.includes('#') && href !== '/admin') {
+          e.preventDefault()
+          e.stopPropagation()
+          setPendingNavigation({ type: 'push', href })
+        }
+      }
+
+      // Intercept logout button
+      const btn = (e.target as HTMLElement).closest('button')
+      if (btn && (btn.innerText.includes('Salir') || btn.title === 'Salir' || btn.getAttribute('title') === 'Salir')) {
+        e.preventDefault()
+        e.stopPropagation()
+        setPendingNavigation({ type: 'signout' })
+      }
+    }
+
+    const handleWindowBeforeUnload = (e: BeforeUnloadEvent) => {
+      const hasChanges = Object.values(unsavedPanels).some(p => p.hasChanges)
+      if (hasChanges) {
+        e.preventDefault()
+        e.returnValue = 'Tienes cambios sin guardar. ¿Deseas salir?'
+        return e.returnValue
+      }
+    }
+
+    document.addEventListener('click', handleAnchorClick, true)
+    window.addEventListener('beforeunload', handleWindowBeforeUnload)
+
+    return () => {
+      document.removeEventListener('click', handleAnchorClick, true)
+      window.removeEventListener('beforeunload', handleWindowBeforeUnload)
+    }
+  }, [unsavedPanels])
 
   // Modales
   const [editUser, setEditUser] = useState<AdminUser | null>(null)
@@ -475,13 +556,13 @@ export default function AdminPage() {
       </p>
 
       {/* Configuración de las reglas del juego */}
-      <LeagueConfigPanel />
+      <LeagueConfigPanel onStateChange={(state) => handlePanelStateChange('league', state)} />
 
       {/* Configuración del sistema de premios */}
-      <PrizesPanel users={users} />
+      <PrizesPanel users={users} onStateChange={(state) => handlePanelStateChange('prizes', state)} />
 
       {/* Configuración del sistema de puntuación */}
-      <ScoringConfigPanel />
+      <ScoringConfigPanel onStateChange={(state) => handlePanelStateChange('scoring', state)} />
 
       {/* Panel de Jugadores No Emparejados (Biwenger -> API) */}
       <UnmatchedPlayersPanel />
@@ -504,6 +585,34 @@ export default function AdminPage() {
           onDeleted={() => {
             onDeleted(deleteUser.id)
             setDeleteUser(null)
+          }}
+        />
+      )}
+
+      {pendingNavigation && (
+        <ConfirmLeaveModal
+          changes={Object.values(unsavedPanels).flatMap(p => p.description)}
+          onCancel={() => setPendingNavigation(null)}
+          onDiscard={() => {
+            Object.values(unsavedPanels).forEach(p => p.discard())
+            const nav = pendingNavigation
+            setPendingNavigation(null)
+            if (nav.type === 'push' && nav.href) {
+              router.push(nav.href)
+            } else if (nav.type === 'signout') {
+              handleSignOut()
+            }
+          }}
+          onSave={async () => {
+            const changed = Object.values(unsavedPanels).filter(p => p.hasChanges)
+            await Promise.all(changed.map(p => p.save()))
+            const nav = pendingNavigation
+            setPendingNavigation(null)
+            if (nav.type === 'push' && nav.href) {
+              router.push(nav.href)
+            } else if (nav.type === 'signout') {
+              handleSignOut()
+            }
           }}
         />
       )}
@@ -677,6 +786,91 @@ function StatCard({
       <div className="min-w-0">
         <p className="text-2xl font-bold text-slate-900 leading-none truncate">{value}</p>
         <p className="text-xs text-slate-500 mt-1">{label}</p>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Modal de confirmación al salir con cambios sin guardar ---------- */
+function ConfirmLeaveModal({
+  changes, onCancel, onDiscard, onSave
+}: {
+  changes: string[]
+  onCancel: () => void
+  onDiscard: () => void
+  onSave: () => Promise<void>
+}) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError('')
+    try {
+      await onSave()
+    } catch (err) {
+      setError('Error al guardar algunos cambios. Por favor, revísalos.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-4 text-amber-600">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">Cambios sin guardar</h2>
+        </div>
+
+        <p className="text-sm text-slate-600 mb-4">
+          Has realizado modificaciones en la configuración. Si sales ahora, perderás estos cambios:
+        </p>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 max-h-60 overflow-y-auto mb-6">
+          <ul className="space-y-2">
+            {changes.map((change, idx) => (
+              <li key={idx} className="text-xs text-slate-700 font-medium flex items-start gap-2">
+                <span className="text-amber-500 font-bold select-none">•</span>
+                <span>{change}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-600 p-3 rounded-lg text-sm font-medium">
+            {error}
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-lg border-2 border-slate-200 font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            Seguir editando
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onDiscard}
+            className="flex-1 py-2.5 rounded-lg border-2 border-red-200 font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            Descartar
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={handleSave}
+            className="flex-1 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving ? 'Guardando...' : 'Guardar y salir'}
+          </button>
+        </div>
       </div>
     </div>
   )

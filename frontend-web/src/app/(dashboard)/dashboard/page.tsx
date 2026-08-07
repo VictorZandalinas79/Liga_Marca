@@ -120,7 +120,7 @@ function PitchPlayerCard({
         )}
 
         {/* Precio (a la derecha) */}
-        <div className="absolute top-1/2 -right-3 sm:-right-4 md:-right-5 lg:-right-5 -translate-y-1/2 bg-emerald-600 text-white font-black text-[10px] sm:text-[11px] md:text-[12px] lg:text-[13px] flex items-center justify-center rounded-full w-[24px] h-[24px] sm:w-[28px] sm:h-[28px] md:w-[32px] md:h-[32px] lg:w-[36px] lg:h-[36px] shadow-xl border-2 border-white transition-all duration-300 z-20">
+        <div className="absolute top-1/2 -right-4 sm:-right-[18px] md:-right-[20px] lg:-right-[22px] -translate-y-1/2 bg-emerald-600 text-white font-black text-[12px] sm:text-[13px] md:text-[14px] lg:text-[15px] flex items-center justify-center rounded-full w-[28px] h-[28px] sm:w-[32px] sm:h-[32px] md:w-[36px] md:h-[36px] lg:w-[40px] lg:h-[40px] shadow-xl border-2 border-white transition-all duration-300 z-20">
           {player.precio ? `${player.precio}M` : '-'}
         </div>
       </div>
@@ -2108,7 +2108,7 @@ export default function DashboardPage() {
                           <div className="w-full flex justify-between items-center px-[1cqw]">
                             {/* Valor */}
                             <div className="flex-1 flex justify-start">
-                              <span className="font-black text-emerald-400 text-[10cqw] drop-shadow-md">
+                              <span className="font-black text-emerald-400 text-[14cqw] drop-shadow-md">
                                 {player.precio ? `${player.precio}M` : '-'}
                               </span>
                             </div>

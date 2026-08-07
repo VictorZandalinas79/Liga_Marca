@@ -95,6 +95,7 @@ export default async function PuntuacionPage() {
   
   const { data: configData } = await supabase.from('league_config').select('*').eq('id', 1).maybeSingle()
   const leagueConfig = { ...DEFAULT_LEAGUE_CONFIG, ...(configData || {}) }
+  const porteroMultiplier = num((rules?.relevo_limits as any)?.POR, 'calidad_parada_multiplier') || 0.33
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -111,12 +112,14 @@ export default async function PuntuacionPage() {
         icon={Clock}
         number={1}
         title="Participación Básica (Fija)"
-        description="Puntos iniciales según los minutos disputados en el encuentro."
+        description="Puntos iniciales y bonos por resultado según los minutos disputados."
       >
         <PointsTable
           rows={[
             { accion: `Menos de ${rates.participation.minutes_threshold} minutos jugados`, pts: formatPts(rates.participation.substitute_bonus) },
             { accion: `${rates.participation.minutes_threshold} minutos o más jugados`, pts: formatPts(rates.participation.starter_bonus) },
+            { accion: `Victoria (jugando ${rates.participation.minutes_threshold} minutos o más)`, pts: formatPts(rates.participation.win_bonus_60) },
+            { accion: `Empate (jugando ${rates.participation.minutes_threshold} minutos o más)`, pts: formatPts(rates.participation.draw_bonus_60) },
           ]}
         />
       </Section>
@@ -252,9 +255,44 @@ export default async function PuntuacionPage() {
         {/* PORTERO */}
         <div className="mb-6">
           <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Portero (POR)</h3>
-          <ul className="text-sm text-slate-600 space-y-2 pl-2">
+          <ul className="text-sm text-slate-600 space-y-4 pl-2">
             <li><span className="font-semibold">Bloque 1:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'saves_per_min') || 0.06} paradas por min. jugado.</li>
-            <li><span className="font-semibold">Bloque 2:</span> Ratio de Calidad de Parada supera el multiplicador de {num((rules?.relevo_limits as any)?.POR, 'calidad_parada_multiplier') || 0.5} respecto a sus paradas/min.</li>
+            <li className="space-y-3">
+              <div>
+                <span className="font-semibold text-slate-900">Bloque 2:</span> Ratio de Calidad de Parada supera el multiplicador de {porteroMultiplier} respecto a sus paradas/min.
+                <p className="mt-1 text-slate-500 text-xs leading-relaxed">
+                  Se busca un tiro rival en los 5 segundos previos a cada parada. Ese tiro recibe un <strong>Valor de Importancia</strong> según su zona (ver mapa). Se suman todos los valores y se dividen por los minutos jugados. Si este ratio supera una fracción (multiplicador) de las paradas por minuto, gana 1 punto.
+                </p>
+              </div>
+
+              <div className="flex flex-col md:flex-row gap-4 items-start bg-slate-50 border border-slate-200 p-4 rounded-xl mt-2">
+                {/* Mapa Calidad Parada */}
+                <div className="w-full md:w-1/2 max-w-xs border border-slate-200 rounded-lg overflow-hidden bg-white shrink-0 shadow-sm">
+                  <img src="/calidad_parada.png" alt="Mapa de puntos por Calidad de Parada" className="w-full h-auto object-cover" />
+                </div>
+
+                <div className="w-full md:w-1/2 space-y-3">
+                  {/* Multiplicador Badge / Info */}
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Multiplicador Configurado</span>
+                    <span className="text-2xl font-black text-amber-600">
+                      {porteroMultiplier}
+                    </span>
+                    <span className="text-xs text-slate-500 ml-2">({porteroMultiplier === 0.5 ? 'la mitad' : porteroMultiplier === 0.33 ? 'una tercera parte' : `fracción de ${porteroMultiplier}`})</span>
+                  </div>
+
+                  {/* Ejemplo de la regla */}
+                  <div className="text-xs text-slate-600 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
+                    <strong className="text-slate-800 font-bold">Ejemplo de la regla:</strong>
+                    <div className="mt-1.5 space-y-1">
+                      <p>• El portero promedia <strong className="text-slate-800">0,06 paradas</strong> por minuto jugado.</p>
+                      <p>• En sus paradas acumula un "valor de calidad" que equivale a <strong className="text-slate-800">0,04 por minuto jugado</strong>.</p>
+                      <p>• Como la calidad (0,04) es mayor que la fracción de sus paradas (0,06 x {porteroMultiplier} = {(0.06 * porteroMultiplier).toFixed(3)}), entonces <strong className="text-emerald-600 font-bold">supera la métrica y suma 1 punto</strong>.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </li>
             <li>
               <span className="font-semibold">Bloque 3:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'long_passes_per_min') || 0.05} pases largos/min, O BIEN (≥ {num((rules?.relevo_limits as any)?.POR, 'pass_pct') || 65}% acierto de pase Y ≥ {num((rules?.relevo_limits as any)?.POR, 'pass_att_per_min') || 0.3} pases/min).
             </li>
@@ -324,27 +362,27 @@ export default async function PuntuacionPage() {
         <p className="mb-2 mt-5 text-sm font-semibold text-slate-700">Premios Finales - 1ª División</p>
         <PointsTable
           rows={[
-            { accion: '1º Clasificado', pts: `+${leagueConfig.prize_div1_1st}€` },
-            { accion: '2º Clasificado', pts: `+${leagueConfig.prize_div1_2nd}€` },
-            { accion: '3º Clasificado', pts: `+${leagueConfig.prize_div1_3rd}€` },
+            { accion: '1º Clasificado', pts: `+${leagueConfig.prize_div1_1st}%` },
+            { accion: '2º Clasificado', pts: `+${leagueConfig.prize_div1_2nd}%` },
+            { accion: '3º Clasificado', pts: `+${leagueConfig.prize_div1_3rd}%` },
           ]}
         />
 
         <p className="mb-2 mt-5 text-sm font-semibold text-slate-700">Premios Finales - 2ª División</p>
         <PointsTable
           rows={[
-            { accion: '1º Clasificado', pts: `+${leagueConfig.prize_div2_1st}€` },
-            { accion: '2º Clasificado', pts: `+${leagueConfig.prize_div2_2nd}€` },
-            { accion: '3º Clasificado', pts: `+${leagueConfig.prize_div2_3rd}€` },
+            { accion: '1º Clasificado', pts: `+${leagueConfig.prize_div2_1st}%` },
+            { accion: '2º Clasificado', pts: `+${leagueConfig.prize_div2_2nd}%` },
+            { accion: '3º Clasificado', pts: `+${leagueConfig.prize_div2_3rd}%` },
           ]}
         />
 
         <p className="mb-2 mt-5 text-sm font-semibold text-slate-700">Premios Finales - 3ª División</p>
         <PointsTable
           rows={[
-            { accion: '1º Clasificado', pts: `+${leagueConfig.prize_div3_1st}€` },
-            { accion: '2º Clasificado', pts: `+${leagueConfig.prize_div3_2nd}€` },
-            { accion: '3º Clasificado', pts: `+${leagueConfig.prize_div3_3rd}€` },
+            { accion: '1º Clasificado', pts: `+${leagueConfig.prize_div3_1st}%` },
+            { accion: '2º Clasificado', pts: `+${leagueConfig.prize_div3_2nd}%` },
+            { accion: '3º Clasificado', pts: `+${leagueConfig.prize_div3_3rd}%` },
           ]}
         />
       </Section>

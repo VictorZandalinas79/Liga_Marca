@@ -22,10 +22,17 @@ function NumberField({ label, value, onChange, step = "1", min = "0" }: { label:
   )
 }
 
-export function PrizesPanel({ users }: { users?: { id: string, full_name: string, division: number | null, entry_fee_paid: number, amount_paid: number, infraction_penalties: number }[] }) {
+export function PrizesPanel({
+  users,
+  onStateChange
+}: {
+  users?: { id: string, full_name: string, division: number | null, entry_fee_paid: number, amount_paid: number, infraction_penalties: number }[]
+  onStateChange?: (state: any) => void
+}) {
   const [saving, setSaving] = useState(false)
   const [totalPot, setTotalPot] = useState(0)
   const [configValues, setConfigValues] = useState<Record<string, number>>({})
+  const [savedConfigValues, setSavedConfigValues] = useState<Record<string, number>>({})
   const [topUsers, setTopUsers] = useState<Record<number, string[]>>({ 1: [], 2: [], 3: [] })
   const [err, setErr] = useState('')
 
@@ -34,7 +41,7 @@ export function PrizesPanel({ users }: { users?: { id: string, full_name: string
 
   useEffect(() => {
     if (Object.keys(configValues).length === 0 && baseConfig.entry_fee !== undefined) {
-      setConfigValues({
+      const initValues = {
         entry_fee: baseConfig.entry_fee,
         prize_div1_1st: baseConfig.prize_div1_1st,
         prize_div1_2nd: baseConfig.prize_div1_2nd,
@@ -45,9 +52,11 @@ export function PrizesPanel({ users }: { users?: { id: string, full_name: string
         prize_div3_1st: baseConfig.prize_div3_1st,
         prize_div3_2nd: baseConfig.prize_div3_2nd,
         prize_div3_3rd: baseConfig.prize_div3_3rd,
-      })
+      }
+      setConfigValues(initValues)
+      setSavedConfigValues(initValues)
     }
-  }, [baseConfig, configValues])
+  }, [baseConfig])
 
   useEffect(() => {
     let total = 0
@@ -96,8 +105,10 @@ export function PrizesPanel({ users }: { users?: { id: string, full_name: string
       const supabase = createClient()
       const res = await supabase.from('league_config').update(configValues).eq('id', 1)
       if (res.error) throw res.error
+      setSavedConfigValues(configValues)
     } catch (e: any) {
       setErr(e.message || 'Error guardando config de premios')
+      throw e
     } finally {
       setSaving(false)
     }
@@ -106,6 +117,40 @@ export function PrizesPanel({ users }: { users?: { id: string, full_name: string
   const setNum = (key: string, val: number) => {
     setConfigValues(prev => ({ ...prev, [key]: val }))
   }
+
+  useEffect(() => {
+    if (!onStateChange) return
+    if (Object.keys(configValues).length === 0 || Object.keys(savedConfigValues).length === 0) {
+      onStateChange({ hasChanges: false, description: [], save: async () => {}, discard: () => {} })
+      return
+    }
+
+    const diffs: string[] = []
+    const keyLabels: Record<string, string> = {
+      entry_fee: 'Cuota de entrada',
+      prize_div1_1st: 'Premio 1º Div 1',
+      prize_div1_2nd: 'Premio 2º Div 1',
+      prize_div1_3rd: 'Premio 3º Div 1',
+      prize_div2_1st: 'Premio 1º Div 2',
+      prize_div2_2nd: 'Premio 2º Div 2',
+      prize_div2_3rd: 'Premio 3º Div 2',
+      prize_div3_1st: 'Premio 1º Div 3',
+      prize_div3_2nd: 'Premio 2º Div 3',
+      prize_div3_3rd: 'Premio 3º Div 3',
+    }
+    for (const key of Object.keys(configValues)) {
+      if (configValues[key] !== savedConfigValues[key]) {
+        diffs.push(`${keyLabels[key] || key}: ${savedConfigValues[key]}% ➔ ${configValues[key]}%`)
+      }
+    }
+
+    onStateChange({
+      hasChanges: diffs.length > 0,
+      description: diffs.map(d => `Premios: ${d}`),
+      save: saveConfig,
+      discard: () => setConfigValues(savedConfigValues)
+    })
+  }, [configValues, savedConfigValues, onStateChange])
 
   const calcPrize = (percent: number) => {
     return (totalPot * (percent / 100)).toFixed(2)
