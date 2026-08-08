@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Trophy, Users, Calendar, LogOut, Home, CircleDot, Lock, Gauge, ShieldCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -30,6 +31,9 @@ export default function DashboardLayout({
   const [isAdmin, setIsAdmin] = useState(false)
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock } = useMatchdayLock()
+  const pathname = usePathname()
+  
+  const isFullWidth = pathname === '/admin'
 
   useEffect(() => {
     const getUser = async () => {
@@ -145,7 +149,7 @@ export default function DashboardLayout({
       )}
 
       <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
-        <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div className={`px-4 sm:px-6 lg:px-8 mx-auto ${isFullWidth ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
           <div className="flex items-center justify-between h-16">
             <Link href="/dashboard" className="flex items-center space-x-2 sm:space-x-3 group">
               <div className="relative w-9 h-9 sm:w-10 sm:h-10 transition-transform group-hover:scale-105">
@@ -216,7 +220,7 @@ export default function DashboardLayout({
         </div>
       </nav>
 
-      <main className="px-4 sm:px-6 lg:px-8 pt-3 pb-24 md:pb-8 max-w-7xl mx-auto">
+      <main className={`px-4 sm:px-6 lg:px-8 pt-3 pb-24 md:pb-8 mx-auto ${isFullWidth ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
         {children}
       </main>
     </div>

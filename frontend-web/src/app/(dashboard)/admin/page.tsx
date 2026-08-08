@@ -11,7 +11,10 @@ import { LeagueConfigPanel } from './LeagueConfigPanel'
 import { ScoringConfigPanel } from './ScoringConfigPanel'
 import { UnmatchedPlayersPanel } from './UnmatchedPlayersPanel'
 import { PrizesPanel } from './PrizesPanel'
+import { RestartLeaguePanel } from './RestartLeaguePanel'
 import { useLeagueConfig } from '@/lib/league-config'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 type AdminUser = {
   id: string
@@ -221,13 +224,26 @@ export default function AdminPage() {
     const paid = users.filter((u) => u.has_paid).length
     const collected = users.reduce((sum, u) => sum + (u.has_paid ? (u.entry_fee_paid || 0) : 0), 0)
     const unassigned = users.filter((u) => u.division == null).length
-    return { total: users.length, paid, unpaid: users.length - paid, collected, unassigned }
+    
+    const collectedBy = new Map<string, number>()
+    users.filter(u => u.has_paid).forEach(u => {
+      const collector = u.collected_by?.trim() || 'Desconocido'
+      collectedBy.set(collector, (collectedBy.get(collector) || 0) + (u.entry_fee_paid || 0))
+    })
+
+    return { total: users.length, paid, unpaid: users.length - paid, collected, unassigned, collectedBy }
   }, [users])
 
   const exportCsv = () => {
     const headers = ['Nombre', 'Email', 'Teléfono', 'División', 'Ha pagado', 'Cuota Inicial (€)', 'Sanciones (€)', 'Dinero Actual (€)', 'Fecha de pago', 'Cobrado por', 'Fecha de registro']
-    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
-    const rows = filtered.map((u) => {
+    const sortedForCsv = [...filtered].sort((a, b) => {
+      const divA = a.division ?? 999
+      const divB = b.division ?? 999
+      if (divA !== divB) return divA - divB
+      return a.full_name.localeCompare(b.full_name)
+    })
+    
+    const rows = sortedForCsv.map((u) => {
       const sanciones = -((u.amount_paid || 0) + (u.infraction_penalties || 0))
       const dineroActual = (u.entry_fee_paid || 0) - (config.starting_balance ?? 45) + sanciones
       return [
@@ -250,6 +266,44 @@ export default function AdminPage() {
     a.download = `registrados_lmv_${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const exportPdf = () => {
+    const doc = new jsPDF('landscape')
+    doc.text('Usuarios LMV', 14, 15)
+    
+    const sortedForPdf = [...filtered].sort((a, b) => {
+      const divA = a.division ?? 999
+      const divB = b.division ?? 999
+      if (divA !== divB) return divA - divB
+      return a.full_name.localeCompare(b.full_name)
+    })
+
+    const rows = sortedForPdf.map(u => {
+      const sanciones = -((u.amount_paid || 0) + (u.infraction_penalties || 0))
+      const dineroActual = (u.entry_fee_paid || 0) - (config.starting_balance ?? 45) + sanciones
+      return [
+        u.full_name || u.email,
+        u.phone || '',
+        divisionLabel(u.division),
+        u.has_paid ? 'Sí' : 'No',
+        `${(u.entry_fee_paid || 0).toFixed(2)}€`,
+        `${sanciones.toFixed(2)}€`,
+        `${dineroActual.toFixed(2)}€`,
+        formatDate(u.paid_at),
+        u.collected_by || ''
+      ]
+    })
+
+    autoTable(doc, {
+      head: [['Nombre', 'Teléfono', 'División', 'Ha pagado', 'Cuota', 'Sanciones', 'Dinero Actual', 'Fecha pago', 'Cobrado por']],
+      body: rows,
+      startY: 20,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [16, 185, 129] } // emerald-500
+    })
+
+    doc.save(`registrados_lmv_${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
   if (loading) {
@@ -301,6 +355,14 @@ export default function AdminPage() {
             <Download className="w-4 h-4" />
             Exportar CSV
           </button>
+          <button
+            onClick={exportPdf}
+            disabled={filtered.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            Exportar PDF
+          </button>
         </div>
       </div>
 
@@ -309,7 +371,17 @@ export default function AdminPage() {
         <StatCard icon={<Users className="w-5 h-5" />} label="Total" value={String(stats.total)} color="slate" />
         <StatCard icon={<CheckCircle2 className="w-5 h-5" />} label="Han pagado" value={String(stats.paid)} color="emerald" />
         <StatCard icon={<XCircle className="w-5 h-5" />} label="Pendientes" value={String(stats.unpaid)} color="amber" />
-        <StatCard icon={<Euro className="w-5 h-5" />} label="Recaudado" value={formatEuro(stats.collected)} color="emerald" />
+        <StatCard icon={<Euro className="w-5 h-5" />} label="Recaudado" value={formatEuro(stats.collected)} color="emerald">
+          {stats.collectedBy.size > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {Array.from(stats.collectedBy.entries()).map(([name, amount]) => (
+                <span key={name} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-medium border border-emerald-100">
+                  {name}: {amount}€
+                </span>
+              ))}
+            </div>
+          )}
+        </StatCard>
       </div>
 
       {/* Filtros */}
@@ -386,18 +458,18 @@ export default function AdminPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-left text-slate-500 text-xs uppercase tracking-wide">
-                <th className="px-4 py-3 font-semibold">Nombre</th>
-                <th className="px-4 py-3 font-semibold">Email</th>
-                <th className="px-4 py-3 font-semibold">Teléfono</th>
-                <th className="px-4 py-3 font-semibold">Registro</th>
-                <th className="px-4 py-3 font-semibold">División</th>
-                <th className="px-4 py-3 font-semibold">Cuota Inicial</th>
-                <th className="px-4 py-3 font-semibold">Sanciones</th>
-                <th className="px-4 py-3 font-semibold">Dinero Actual</th>
-                <th className="px-4 py-3 font-semibold">Fecha de pago</th>
-                <th className="px-4 py-3 font-semibold">Cobrado por</th>
-                <th className="px-4 py-3 font-semibold text-center">Estado</th>
-                <th className="px-4 py-3 font-semibold text-center">Acciones</th>
+                <th className="px-2 py-2 font-semibold text-center w-8">Nombre</th>
+                <th className="px-2 py-2 font-semibold">Email</th>
+                <th className="px-2 py-2 font-semibold">Teléfono</th>
+                <th className="px-2 py-2 font-semibold">Registro</th>
+                <th className="px-2 py-2 font-semibold">División</th>
+                <th className="px-2 py-2 font-semibold">Cuota</th>
+                <th className="px-2 py-2 font-semibold">Sanciones</th>
+                <th className="px-2 py-2 font-semibold">Balance</th>
+                <th className="px-2 py-2 font-semibold">Fecha pago</th>
+                <th className="px-2 py-2 font-semibold">Cobrado por</th>
+                <th className="px-2 py-2 font-semibold text-center">Estado</th>
+                <th className="px-2 py-2 font-semibold text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -408,13 +480,13 @@ export default function AdminPage() {
               ) : (
                 filtered.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">{u.full_name || '—'}</td>
-                    <td className="px-4 py-3 text-slate-600">{u.email}</td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{u.phone || '—'}</td>
-                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{formatDate(u.created_at)}</td>
+                    <td className="px-2 py-2 font-medium text-slate-900 whitespace-nowrap">{u.full_name || '—'}</td>
+                    <td className="px-2 py-2 text-slate-600 truncate max-w-[150px]" title={u.email}>{u.email}</td>
+                    <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{u.phone || '—'}</td>
+                    <td className="px-2 py-2 text-slate-500 whitespace-nowrap">{formatDate(u.created_at)}</td>
 
                     {/* División (asignada por el admin) */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-2">
                       <select
                         value={u.division ?? ''}
                         disabled={savingId === u.id || Boolean(divisionLock?.locked)}
@@ -435,8 +507,8 @@ export default function AdminPage() {
                     </td>
 
                     {/* Cuota inicial editable */}
-                    <td className="px-4 py-3">
-                      <div className="relative w-28">
+                    <td className="px-2 py-2">
+                      <div className="relative w-20">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">€</span>
                         <input
                           type="number" min="0" step="0.5"
@@ -457,13 +529,13 @@ export default function AdminPage() {
                             }
                           }}
                           placeholder="0"
-                          className="w-full pl-6 pr-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm"
+                          className="w-full pl-5 pr-1 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm"
                         />
                       </div>
                     </td>
 
                     {/* Sanciones (readonly) */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-2 text-center whitespace-nowrap">
                       <div className={`font-semibold ${-((u.amount_paid || 0) + (u.infraction_penalties || 0)) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                         {-((u.amount_paid || 0) + (u.infraction_penalties || 0)) < 0 ? '' : '+'}
                         {-((u.amount_paid || 0) + (u.infraction_penalties || 0)).toFixed(2)}€
@@ -471,7 +543,7 @@ export default function AdminPage() {
                     </td>
 
                     {/* Dinero Actual (readonly) */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-2 text-center whitespace-nowrap">
                       <div className={`font-bold ${((u.entry_fee_paid || 0) - (config.starting_balance ?? 45) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                         {((u.entry_fee_paid || 0) - (config.starting_balance ?? 45) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))) < 0 ? '' : '+'}
                         {((u.entry_fee_paid || 0) - (config.starting_balance ?? 45) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))).toFixed(2)}€
@@ -479,7 +551,7 @@ export default function AdminPage() {
                     </td>
 
                     {/* Fecha de pago editable */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-2">
                       <input
                         type="date"
                         value={toDateInput(u.paid_at)}
@@ -493,7 +565,7 @@ export default function AdminPage() {
                     </td>
 
                     {/* Cobrado por editable */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-2">
                       <input
                         type="text"
                         defaultValue={u.collected_by || ''}
@@ -505,12 +577,12 @@ export default function AdminPage() {
                           }
                         }}
                         placeholder="Nombre..."
-                        className="w-28 px-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm"
+                        className="w-20 px-2 py-1.5 rounded-lg border-2 border-slate-200 outline-none focus:border-emerald-500 text-sm"
                       />
                     </td>
 
                     {/* Estado (toggle) */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-2">
                       <div className="flex justify-center">
                         <button
                           onClick={() => togglePaid(u)}
@@ -526,7 +598,7 @@ export default function AdminPage() {
                     </td>
 
                     {/* Acciones */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-2">
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           onClick={() => setEditUser(u)}
@@ -574,6 +646,9 @@ export default function AdminPage() {
 
       {/* Panel de Jugadores No Emparejados (Biwenger -> API) */}
       <UnmatchedPlayersPanel />
+
+      {/* Panel para reiniciar la liga */}
+      <RestartLeaguePanel />
 
       {editUser && (
         <EditModal
@@ -915,12 +990,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function StatCard({
-  icon, label, value, color,
+  icon, label, value, color, children
 }: {
   icon: React.ReactNode
   label: string
   value: string
   color: 'slate' | 'emerald' | 'amber'
+  children?: React.ReactNode
 }) {
   const colors = {
     slate: 'bg-slate-100 text-slate-600',
@@ -928,11 +1004,12 @@ function StatCard({
     amber: 'bg-amber-100 text-amber-600',
   }
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-start gap-3">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${colors[color]}`}>{icon}</div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-2xl font-bold text-slate-900 leading-none truncate">{value}</p>
         <p className="text-xs text-slate-500 mt-1">{label}</p>
+        {children}
       </div>
     </div>
   )
