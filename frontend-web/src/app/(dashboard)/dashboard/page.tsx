@@ -2022,7 +2022,7 @@ export default function DashboardPage() {
           </div>
           ) : (
             <div 
-              className="relative grid grid-cols-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-4 sm:gap-6 lg:gap-8 p-6 sm:p-8 md:p-10 rounded-3xl shadow-[inset_0_10px_30px_rgba(0,0,0,0.6)] border-[4px] border-[#064e3b]" 
+              className="relative grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-4 sm:gap-6 lg:gap-8 p-6 sm:p-8 md:p-10 rounded-3xl shadow-[inset_0_10px_30px_rgba(0,0,0,0.6)] border-[4px] border-[#064e3b]" 
               style={{
                 backgroundImage: 'repeating-linear-gradient(0deg, #15803d, #15803d 40px, #14532d 40px, #14532d 80px)',
               }}
@@ -2159,29 +2159,29 @@ export default function DashboardPage() {
                     {/* Jugador reemplazado (mini tarjeta) */}
                     {replacedPlayer && (
                       <div className="absolute z-40 flex flex-col items-center pointer-events-none drop-shadow-xl 
-                        -top-6 sm:-top-[8cqw] left-1/2 -translate-x-1/2 
+                        -top-5 sm:-top-[8cqw] left-1/2 -translate-x-1/2 
                         md:top-[9cqw] md:left-auto md:-right-[4cqw] md:translate-x-0 md:items-center
                       ">
                         <div className="relative">
                           {replacedPlayer.photo ? (
                             <img
                               src={replacedPlayer.photo}
-                              className="w-7 h-7 md:w-10 md:h-10 rounded-full object-cover border-[1.5px] border-red-400 shadow-xl bg-slate-200 grayscale-[10%]"
+                              className="w-5 h-5 sm:w-7 sm:h-7 md:w-10 md:h-10 rounded-full object-cover border-[1.5px] border-red-400 shadow-xl bg-slate-200 grayscale-[10%]"
                             />
                           ) : (
-                            <div className="w-7 h-7 md:w-10 md:h-10 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] font-bold border-[1.5px] border-red-400 shadow-xl">
+                            <div className="w-5 h-5 sm:w-7 sm:h-7 md:w-10 md:h-10 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[8px] sm:text-[10px] font-bold border-[1.5px] border-red-400 shadow-xl">
                               {replacedPlayer.shirt_number || '?'}
                             </div>
                           )}
                           {replacedPlayer.team?.logo_url && (
                             <img
                               src={replacedPlayer.team.logo_url}
-                              className="absolute -bottom-1 -left-1 w-3.5 h-3.5 md:w-4 md:h-4 object-contain bg-white rounded-full p-[1px] shadow-sm"
+                              className="absolute -bottom-1 -left-1 w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 object-contain bg-white rounded-full p-[1px] shadow-sm"
                             />
                           )}
                         </div>
                         <div className="mt-0.5 md:mt-1 bg-black/95 rounded px-1.5 md:px-1.5 py-0.5 flex flex-col items-center shadow-xl border border-red-500/30">
-                          <p className="font-bold text-red-100 text-[7px] md:text-[7px] leading-tight truncate text-center max-w-[45px]">
+                          <p className="font-bold text-red-100 text-[5px] sm:text-[7px] md:text-[7px] leading-tight truncate text-center max-w-[35px] sm:max-w-[45px]">
                             {replacedPlayer.short_name || replacedPlayer.first_name}
                           </p>
                         </div>
