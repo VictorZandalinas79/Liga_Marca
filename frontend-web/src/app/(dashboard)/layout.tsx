@@ -12,7 +12,7 @@ import { NotificationBell } from '@/components/layout/notification-bell'
 import { OnlineUsersMenu } from '@/components/layout/online-users-menu'
 
 const navigation = [
-  { name: 'Inicio', href: '/dashboard', icon: Home },
+  { name: 'Mi Equipo', href: '/dashboard', icon: Home },
   { name: 'Jugadores', href: '/jugadores', icon: Users },
   { name: 'Partidos', href: '/partidos', icon: CircleDot },
   { name: 'Jornada', href: '/jornada', icon: Calendar },

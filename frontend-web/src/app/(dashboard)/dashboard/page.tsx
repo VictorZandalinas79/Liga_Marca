@@ -184,6 +184,7 @@ export default function DashboardPage() {
   const [loadingRanks, setLoadingRanks] = useState(true)
   const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
   const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>>(new Map())
+  const [showWarningsModal, setShowWarningsModal] = useState(false)
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento, upcomingLocks } = useMatchdayLock()
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
@@ -212,6 +213,11 @@ export default function DashboardPage() {
   }
   const [liveInfractions, setLiveInfractions] = useState<LiveInfraction[]>([])
   const [historicalPoints, setHistoricalPoints] = useState<{ matchday: number, name: string, points: number, avgPoints: number, hasPenalty: boolean }[]>([])
+  
+  const warnings = useMemo(() => {
+    if (!upcomingLocks || upcomingLocks.length === 0 || !lockTime) return []
+    return upcomingLocks.filter(l => l.type === 'advanced' && l.from.getTime() <= lockTime.getTime())
+  }, [upcomingLocks, lockTime])
   
   useEffect(() => {
     const fetchHistory = async () => {
@@ -1681,7 +1687,19 @@ export default function DashboardPage() {
       {/* Encabezado con usuarios en línea */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 w-full">
-          <h1 className="text-3xl font-bold text-slate-900">Inicio</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-slate-900">Mi Equipo</h1>
+            {warnings.length > 0 && (
+              <button
+                onClick={() => setShowWarningsModal(true)}
+                className="flex items-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1.5 rounded-lg border border-amber-300 font-semibold text-sm animate-pulse transition-colors"
+                title="Avisos sobre partidos descolocados"
+              >
+                <Bell className="w-4 h-4" />
+                Avisos ({warnings.length})
+              </button>
+            )}
+          </div>
           
           {/* Mensaje de estado de cambios */}
           <div className="flex-1">
@@ -1692,10 +1710,15 @@ export default function DashboardPage() {
                   Los cambios están bloqueados
                 </p>
                 {timeUntilLock && timeUntilLock !== 'Finalizada' && (
-                  <div className="bg-amber-100 px-3 py-1 rounded-lg ml-auto">
-                    <p className="text-sm font-bold text-amber-900">
-                      Finaliza en: <span className="text-base">{timeUntilLock}</span>
+                  <div className="bg-amber-100 px-4 py-2 rounded-xl ml-auto flex flex-col items-end shadow-sm">
+                    <p className="text-base font-bold text-amber-900 leading-none mb-1">
+                      Finaliza en: <span className="text-lg">{timeUntilLock}</span>
                     </p>
+                    {lockTime && (
+                      <p className="text-sm font-bold text-amber-800">
+                        {lockTime.toLocaleDateString('es-ES', {weekday: 'long', day:'numeric', month:'long'})} a las {lockTime.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -1707,39 +1730,17 @@ export default function DashboardPage() {
                     <p className="text-sm font-semibold text-emerald-955 hidden lg:block">
                       Se bloquean los cambios en...
                     </p>
-                    <div className="bg-emerald-100 px-3 py-1 rounded-lg ml-auto">
-                      <p className="text-sm font-bold text-emerald-900">
-                        <span className="text-base font-mono">{timeUntilUnlock}</span>
+                    <div className="bg-emerald-100 px-4 py-2 rounded-xl ml-auto flex flex-col items-end shadow-sm">
+                      <p className="text-base font-bold text-emerald-900 leading-none mb-1">
+                        <span className="text-lg font-mono">{timeUntilUnlock}</span>
                       </p>
+                      {unlockTime && (
+                        <p className="text-sm font-bold text-emerald-800">
+                          {unlockTime.toLocaleDateString('es-ES', {weekday: 'long', day:'numeric', month:'long'})} a las {unlockTime.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  {(() => {
-                    if (!upcomingLocks || upcomingLocks.length === 0 || !lockTime) return null;
-                    const warnings = upcomingLocks.filter(l => l.type === 'advanced' && l.from.getTime() <= lockTime.getTime())
-                    if (warnings.length === 0) return null;
-                    
-                    return (
-                      <div className="bg-amber-50 border border-amber-300/60 rounded-lg px-3 py-2 flex items-start gap-2 shadow-sm animate-pulse">
-                        <Bell className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                        <div className="flex flex-col gap-1">
-                          <p className="text-[11.5px] sm:text-xs font-medium text-amber-900 leading-tight">
-                            <span className="font-bold">¡Aviso!</span> Hay equipos con partidos descolocados que sufren bloqueos especiales:
-                          </p>
-                          <ul className="text-[11px] sm:text-[11.5px] text-amber-800 leading-tight flex flex-col gap-0.5 ml-1">
-                            {warnings.map(w => (
-                              <li key={w.fixtureId} className="flex gap-1.5 items-start">
-                                <span className="mt-1 w-1 h-1 rounded-full bg-amber-600 shrink-0"></span>
-                                <span>
-                                  <span className="font-bold text-amber-900">{w.teams?.home || 'Local'} vs {w.teams?.away || 'Visitante'}</span>
-                                  <> (J{w.ownMatchday} adelantado): Sus jugadores se bloquean desde esta jornada hasta el fin de la J{w.ownMatchday}.</>
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    )
-                  })()}
                 </div>
               )
             )}
@@ -2020,7 +2021,13 @@ export default function DashboardPage() {
             </div>
           </div>
           ) : (
-            <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
+            <div 
+              className="relative grid grid-cols-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-4 sm:gap-6 lg:gap-8 p-6 sm:p-8 md:p-10 rounded-3xl shadow-[inset_0_10px_30px_rgba(0,0,0,0.6)] border-[4px] border-[#064e3b]" 
+              style={{
+                backgroundImage: 'repeating-linear-gradient(0deg, #15803d, #15803d 40px, #14532d 40px, #14532d 80px)',
+              }}
+            >
+              <div className="absolute inset-0 rounded-3xl pointer-events-none shadow-[inset_0_0_60px_rgba(0,0,0,0.7)]" />
               {selectedPlayersData.map((player, idx) => {
                 const isChanged = !unchangedKeys.has(player._uniqueKey)
                 const isLockedPlayer = isTeamLocked(player.team_id)
@@ -2030,11 +2037,14 @@ export default function DashboardPage() {
                   <div
                     key={player._uniqueKey}
                     onClick={() => openPlayerSelector(player.id, player._originalIndex)}
-                    className={`@container relative w-full aspect-[5/7] transition-all group ${
+                    className={`@container relative z-10 w-full aspect-[5/7] transition-all duration-300 group ${
                       isUnlockWindowOpen || isLockedPlayer
-                        ? 'cursor-not-allowed opacity-60'
-                        : 'cursor-pointer hover:scale-[1.03] md:hover:scale-105 hover:z-50 drop-shadow-xl'
+                        ? 'cursor-not-allowed opacity-70'
+                        : 'cursor-pointer hover:scale-105 hover:-translate-y-2 hover:z-50'
                     }`}
+                    style={{
+                      filter: 'drop-shadow(0 25px 25px rgba(0,0,0,0.9)) drop-shadow(0 10px 10px rgba(0,0,0,0.7))'
+                    }}
                   >
                     {/* === CONTENIDO INTERNO DE LA TARJETA (Recortado) === */}
                     <div className={`absolute inset-0 overflow-hidden rounded-xl border ${
@@ -2735,6 +2745,42 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {showWarningsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setShowWarningsModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-amber-50">
+              <div className="flex items-center gap-2 text-amber-900">
+                <Bell className="w-5 h-5" />
+                <h2 className="font-bold text-lg">Avisos y Bloqueos Especiales</h2>
+              </div>
+              <button onClick={() => setShowWarningsModal(false)} className="p-1.5 rounded-lg text-amber-700 hover:bg-amber-200 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto max-h-[60vh]">
+              <p className="text-sm text-slate-600 mb-4">
+                Hay equipos con partidos descolocados que sufren bloqueos especiales:
+              </p>
+              <ul className="space-y-3">
+                {warnings.map(w => (
+                  <li key={w.fixtureId} className="flex gap-2.5 items-start bg-amber-50/50 p-3 rounded-xl border border-amber-100">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                    <span className="text-sm text-slate-700">
+                      <span className="font-bold text-amber-900">{w.teams?.home || 'Local'} vs {w.teams?.away || 'Visitante'}</span>
+                      <> (J{w.ownMatchday} adelantado): Sus jugadores se bloquean desde esta jornada hasta el fin de la J{w.ownMatchday}.</>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button onClick={() => setShowWarningsModal(false)} className="px-5 py-2 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-colors">
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
