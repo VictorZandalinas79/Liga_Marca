@@ -235,7 +235,7 @@ export default function AdminPage() {
   }, [users])
 
   const exportCsv = () => {
-    const headers = ['Nombre', 'Email', 'Teléfono', 'División', 'Ha pagado', 'Cuota Inicial (€)', 'Sanciones (€)', 'Dinero Actual (€)', 'Fecha de pago', 'Cobrado por', 'Fecha de registro']
+    const headers = ['Nombre', 'Email', 'Teléfono', 'División', 'Ha pagado', 'Cuota Inicial (€)', 'Balance (€)', 'Fecha de pago', 'Cobrado por', 'Fecha de registro']
     const sortedForCsv = [...filtered].sort((a, b) => {
       const divA = a.division ?? 999
       const divB = b.division ?? 999
@@ -245,13 +245,12 @@ export default function AdminPage() {
     
     const rows = sortedForCsv.map((u) => {
       const sanciones = -((u.amount_paid || 0) + (u.infraction_penalties || 0))
-      const dineroActual = (u.entry_fee_paid || 0) - (config.starting_balance ?? 45) + sanciones
+      const dineroActual = sanciones
       return [
         u.full_name, u.email, u.phone,
         divisionLabel(u.division),
         u.has_paid ? 'Sí' : 'No',
         (u.entry_fee_paid || 0).toFixed(2).replace('.', ','),
-        sanciones.toFixed(2).replace('.', ','),
         dineroActual.toFixed(2).replace('.', ','),
         formatDate(u.paid_at),
         u.collected_by || '',
@@ -281,14 +280,13 @@ export default function AdminPage() {
 
     const rows = sortedForPdf.map(u => {
       const sanciones = -((u.amount_paid || 0) + (u.infraction_penalties || 0))
-      const dineroActual = (u.entry_fee_paid || 0) - (config.starting_balance ?? 45) + sanciones
+      const dineroActual = sanciones
       return [
         u.full_name || u.email,
         u.phone || '',
         divisionLabel(u.division),
         u.has_paid ? 'Sí' : 'No',
         `${(u.entry_fee_paid || 0).toFixed(2)}€`,
-        `${sanciones.toFixed(2)}€`,
         `${dineroActual.toFixed(2)}€`,
         formatDate(u.paid_at),
         u.collected_by || ''
@@ -296,7 +294,7 @@ export default function AdminPage() {
     })
 
     autoTable(doc, {
-      head: [['Nombre', 'Teléfono', 'División', 'Ha pagado', 'Cuota', 'Sanciones', 'Dinero Actual', 'Fecha pago', 'Cobrado por']],
+      head: [['Nombre', 'Teléfono', 'División', 'Ha pagado', 'Cuota', 'Balance', 'Fecha pago', 'Cobrado por']],
       body: rows,
       startY: 20,
       styles: { fontSize: 8 },
@@ -464,7 +462,6 @@ export default function AdminPage() {
                 <th className="px-2 py-2 font-semibold">Registro</th>
                 <th className="px-2 py-2 font-semibold">División</th>
                 <th className="px-2 py-2 font-semibold">Cuota</th>
-                <th className="px-2 py-2 font-semibold">Sanciones</th>
                 <th className="px-2 py-2 font-semibold">Balance</th>
                 <th className="px-2 py-2 font-semibold">Fecha pago</th>
                 <th className="px-2 py-2 font-semibold">Cobrado por</th>
@@ -534,19 +531,11 @@ export default function AdminPage() {
                       </div>
                     </td>
 
-                    {/* Sanciones (readonly) */}
+                    {/* Balance (readonly) */}
                     <td className="px-2 py-2 text-center whitespace-nowrap">
-                      <div className={`font-semibold ${-((u.amount_paid || 0) + (u.infraction_penalties || 0)) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                      <div className={`font-bold ${-((u.amount_paid || 0) + (u.infraction_penalties || 0)) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                         {-((u.amount_paid || 0) + (u.infraction_penalties || 0)) < 0 ? '' : '+'}
                         {-((u.amount_paid || 0) + (u.infraction_penalties || 0)).toFixed(2)}€
-                      </div>
-                    </td>
-
-                    {/* Dinero Actual (readonly) */}
-                    <td className="px-2 py-2 text-center whitespace-nowrap">
-                      <div className={`font-bold ${((u.entry_fee_paid || 0) - (config.starting_balance ?? 45) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {((u.entry_fee_paid || 0) - (config.starting_balance ?? 45) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))) < 0 ? '' : '+'}
-                        {((u.entry_fee_paid || 0) - (config.starting_balance ?? 45) - ((u.amount_paid || 0) + (u.infraction_penalties || 0))).toFixed(2)}€
                       </div>
                     </td>
 

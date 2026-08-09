@@ -6,6 +6,7 @@ import {
   Sparkles,
   Ban,
   Gauge,
+  AlertTriangle,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { createServerSupabase } from '@/lib/supabase/server'
@@ -385,6 +386,66 @@ export default async function PuntuacionPage() {
             { accion: '3º Clasificado', pts: `+${leagueConfig.prize_div3_3rd}%` },
           ]}
         />
+      </Section>
+
+      {/* 9. Sanciones por Alineación Indebida */}
+      <Section
+        icon={AlertTriangle}
+        number={9}
+        title="Sanciones por Alineación Indebida"
+        description="Penalizaciones de puntos aplicadas cuando no se respetan las reglas de la liga."
+      >
+        <div className="space-y-6">
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm mb-2">Jugador perteneciente a otro equipo</h3>
+            <p className="text-sm text-slate-600 mb-1">
+              No puntuará el jugador en cuestión, ni el mejor del resto del equipo.
+            </p>
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+              El jugador que afecta a la sanción deberá ser sustituido en la siguiente jornada.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm mb-2">Superado el número de jugadores de un equipo</h3>
+            <p className="text-sm text-slate-600 mb-1">
+              No puntuará el mejor de los once jugadores del equipo sancionado, ni el jugador con mayor puntuación introducido esa jornada del equipo afectado por la sanción.
+            </p>
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+              Se deberá sustituir uno de los jugadores fichados que afectan a la sanción en la siguiente jornada.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm mb-2">Superado el presupuesto permitido</h3>
+            <p className="text-sm text-slate-600 mb-1">
+              No puntuarán los dos jugadores que tengan la mayor puntuación en el equipo.
+            </p>
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+              Se deberá sustituir uno de los jugadores fichados que afectan a la sanción en la siguiente jornada.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm mb-2">Táctica incorrecta</h3>
+            <p className="text-sm text-slate-600 mb-1">
+              No le puntuará el jugador con mayor puntuación introducido esa jornada en la posición que rebasa el máximo, ni el jugador mejor puntuado de los 10 restantes.
+            </p>
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+              Se deberá sustituir uno de los jugadores fichados que afectan a la sanción en la siguiente jornada.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm mb-2">Oveja Dolly (Made in Crispin)</h3>
+            <p className="text-sm text-slate-600 mb-1">
+              Alinear dos jugadores con el mismo ID en el mismo equipo. No puntuará el jugador en cuestión, ni el mejor del resto del equipo.
+            </p>
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+              El jugador que afecta a la sanción deberá ser sustituido en la siguiente jornada.
+            </p>
+          </div>
+        </div>
       </Section>
     </div>
   )

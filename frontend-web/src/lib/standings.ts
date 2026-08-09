@@ -605,9 +605,9 @@ function computeDivisionStandings(
       if (m < minMinutes) minMinutes = m
     }
 
-    // Deuda: cuota inicial + sanciones (se muestra en negativo)
+    // Deuda: Sanciones (se muestra en negativo)
     const finance = shared.financeByUser.get(userId)
-    const deuda = -(config.starting_balance + (finance?.amount_paid || 0) + (finance?.infraction_penalties || 0))
+    const deuda = -((finance?.amount_paid || 0) + (finance?.infraction_penalties || 0))
 
     return {
       user_id: userId,
