@@ -1127,93 +1127,51 @@ export default function DashboardPage() {
     if (!playerMatch) return
     const index = playerMatch._originalIndex
 
-    const firstChangeIdx = changeHistory.findIndex(ch => ch.index === index)
-    if (firstChangeIdx !== -1) {
-      const firstChange = changeHistory[firstChangeIdx]
-      const newSelected = [...selectedPlayers]
-      // Revert to the original player
-      newSelected[index] = firstChange.outId
-      setSelectedPlayers(newSelected)
-      
-      // Remove ALL changes for this index from the history
-      const newChangeHistory = changeHistory.filter(ch => ch.index !== index)
-      setChangeHistory(newChangeHistory)
-      
-      setCancelConfirmUniqueKey(null)
-
-      if (userTeamId) {
-        const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
-        
-        const teamPlayersData = newSelected.map((pid, i) => {
-          let replacedId = null
-          if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
-            if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
-            else {
-              const ch = newChangeHistory.find(c => c.index === i)
-              if (ch) replacedId = ch.outId
-            }
-          }
-          
-          return {
-            player_id: pid,
-            is_starter: true,
-            is_captain: i === 0,
-            order: i,
-            replaced_player_id: replacedId
-          }
-        })
-        
-        await supabase.rpc('save_team_lineup', {
-          p_team_id: userTeamId,
-          p_matchday: matchdayToSave,
-          p_players: teamPlayersData
-        })
-      }
-      return
-    }
-
     const outPlayer = replacedPlayerByUniqueKey.get(uniqueKey)
-    if (outPlayer) {
-      const newSelected = [...selectedPlayers]
-      newSelected[index] = outPlayer.id
-      setSelectedPlayers(newSelected)
+    if (!outPlayer) return
 
-      setDbReplacedPlayers(prev => {
-        const next = { ...prev }
-        delete next[index]
-        return next
+    const newSelected = [...selectedPlayers]
+    newSelected[index] = outPlayer.id
+    setSelectedPlayers(newSelected)
+
+    // Remove ALL changes for this index from the history
+    const newChangeHistory = changeHistory.filter(ch => ch.index !== index)
+    setChangeHistory(newChangeHistory)
+    
+    // Remove from dbReplacedPlayers
+    const newDbReplaced = { ...dbReplacedPlayers }
+    delete newDbReplaced[index]
+    setDbReplacedPlayers(newDbReplaced)
+
+    setCancelConfirmUniqueKey(null)
+
+    if (userTeamId) {
+      const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+      
+      const teamPlayersData = newSelected.map((pid, i) => {
+        let replacedId = null
+        if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
+          if (newDbReplaced[i]) replacedId = newDbReplaced[i]
+          else {
+            const ch = newChangeHistory.find(c => c.index === i)
+            if (ch) replacedId = ch.outId
+          }
+        }
+        
+        return {
+          player_id: pid,
+          is_starter: true,
+          is_captain: i === 0,
+          order: i,
+          replaced_player_id: replacedId
+        }
       })
-
-      setCancelConfirmUniqueKey(null)
-
-      if (userTeamId) {
-        const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
-        
-        const teamPlayersData = newSelected.map((pid, i) => {
-          let replacedId = null
-          if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
-            if (i !== index && dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
-            else {
-              const ch = changeHistory.find(c => c.index === i)
-              if (ch) replacedId = ch.outId
-            }
-          }
-          
-          return {
-            player_id: pid,
-            is_starter: true,
-            is_captain: i === 0,
-            order: i,
-            replaced_player_id: replacedId
-          }
-        })
-        
-        await supabase.rpc('save_team_lineup', {
-          p_team_id: userTeamId,
-          p_matchday: matchdayToSave,
-          p_players: teamPlayersData
-        })
-      }
+      
+      await supabase.rpc('save_team_lineup', {
+        p_team_id: userTeamId,
+        p_matchday: matchdayToSave,
+        p_players: teamPlayersData
+      })
     }
   }
 
@@ -1388,20 +1346,20 @@ export default function DashboardPage() {
       
       // Only show changed players if we are past the starting matchday
       if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
-        // 1. ¿Hay un cambio en memoria (sesión actual) para este índice?
-        const changeIdx = changeHistory.findIndex(ch => ch.index === idx)
-        if (changeIdx !== -1) {
-          const outPlayer = players.find(p => p.id === changeHistory[changeIdx].outId)
+        // 1. ¿Hay un cambio persistido en la base de datos para este índice?
+        const dbReplacedId = dbReplacedPlayers[idx]
+        if (dbReplacedId) {
+          const outPlayer = players.find(p => p.id === dbReplacedId)
           if (outPlayer) {
             result.set(player._uniqueKey, outPlayer)
           }
           continue
         }
-        
-        // 2. ¿Hay un cambio persistido en la base de datos para este índice?
-        const dbReplacedId = dbReplacedPlayers[idx]
-        if (dbReplacedId) {
-          const outPlayer = players.find(p => p.id === dbReplacedId)
+
+        // 2. ¿Hay un cambio en memoria (sesión actual) para este índice?
+        const changeIdx = changeHistory.findIndex(ch => ch.index === idx)
+        if (changeIdx !== -1) {
+          const outPlayer = players.find(p => p.id === changeHistory[changeIdx].outId)
           if (outPlayer) {
             result.set(player._uniqueKey, outPlayer)
           }
@@ -1414,7 +1372,7 @@ export default function DashboardPage() {
     }
 
     return { replacedPlayerByUniqueKey: result, unchangedKeys: unchanged }
-  }, [selectedPlayersData, changeHistory, dbReplacedPlayers, players])
+  }, [selectedPlayersData, changeHistory, dbReplacedPlayers, players, activeMatchday, config])
 
   // Calcular sanciones dinámicas para la visualización del campo
   const startersForSanctions = selectedPlayersData.map(p => ({
