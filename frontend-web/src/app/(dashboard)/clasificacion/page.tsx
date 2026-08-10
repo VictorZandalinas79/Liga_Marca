@@ -14,7 +14,7 @@ function formatKamikazeTime(totalMinutes: number): string {
   if (secs === 0) return `${mins} min`
   return `${mins} min ${secs} s`
 }
-import { applySanctionsToTeam } from '@/lib/infractions'
+import { applySanctionsToTeam, getCurrentMatchday } from '@/lib/infractions'
 import { getStandings } from '@/lib/standings'
 import { DIVISION_COMBINED, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
@@ -59,6 +59,7 @@ export default function ClasificacionPage() {
   const [standings, setStandings] = useState<UserStanding[]>([])
   const [loading, setLoading] = useState(true)
   const [currentMatchday, setCurrentMatchday] = useState<number>(1)
+  const [isLeagueOpen, setIsLeagueOpen] = useState<boolean>(false)
   const [lastPlayedMatchday, setLastPlayedMatchday] = useState<number>(1)
   const [sortField, setSortField] = useState<SortField>('total_points')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -82,15 +83,17 @@ export default function ClasificacionPage() {
   const lastFetchKeyRef = useRef<string | null>(null)
 
   const fetchMatchdays = async () => {
+    const md = await getCurrentMatchday(supabase)
+    setCurrentMatchday(md)
+
     const { data: statusData } = await supabase
       .from('matchday_status')
-      .select('matchday, is_open')
-      .order('matchday', { ascending: false })
-      .limit(1)
+      .select('is_open')
+      .eq('matchday', md)
       .maybeSingle()
 
     if (statusData) {
-      setCurrentMatchday(statusData.matchday)
+      setIsLeagueOpen(statusData.is_open)
     }
   }
 
@@ -222,6 +225,32 @@ export default function ClasificacionPage() {
 
     const teamId = userTeamsData[0].id
     const teamName = userTeamsData[0].name
+
+    if (userId !== currentUserId) {
+      if (isLeagueOpen) {
+        setUserTeamData(prev => ({
+          ...prev,
+          [userId]: { teamName, isHidden: true, hiddenReason: 'Mercado abierto. Alineaciones ocultas.' }
+        }))
+        setTimeout(() => {
+          teamRefs.current[userId]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 100)
+        return
+      } else {
+        // En jornada, solo se verán de jornadas anteriores
+        targetMatchday = currentMatchday - 1
+        if (targetMatchday < 1) {
+          setUserTeamData(prev => ({
+            ...prev,
+            [userId]: { teamName, isHidden: true, hiddenReason: 'Sin jornadas anteriores.' }
+          }))
+          setTimeout(() => {
+            teamRefs.current[userId]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }, 100)
+          return
+        }
+      }
+    }
 
     // Obtener jugadores del equipo en la jornada seleccionada o anterior disponible
     let { data: teamPlayersData } = await supabase
@@ -369,17 +398,22 @@ export default function ClasificacionPage() {
     const isMatchdayFinished = fixturesForMatchday ? fixturesForMatchday.every((f: any) => f.status === 'finished') : true;
     const prevMine = new Set<string>(prevMatchday >= 1 ? (prevSquadByTeam.get(teamId) || []) : [])
     const starters = jugadores.filter(j => j.is_starter)
-    const sanctionResult = applySanctionsToTeam(
-      starters, 
-      prevMine, 
-      heldByOthersPrev, 
-      config, 
-      !isMatchdayFinished,
-      undefined,
-      undefined,
-      undefined,
-      actualMatchday === Math.max(1, config.fantasy_starting_matchday)
-    )
+    
+    const isCurrentOpenMatchday = isLeagueOpen && actualMatchday === currentMatchday;
+    
+    const sanctionResult = isCurrentOpenMatchday
+      ? { zeroedPlayers: new Map<string, string>(), netPoints: starters.reduce((sum, j) => sum + (j.puntos || 0), 0) }
+      : applySanctionsToTeam(
+          starters, 
+          prevMine, 
+          heldByOthersPrev, 
+          config, 
+          !isMatchdayFinished,
+          undefined,
+          undefined,
+          undefined,
+          actualMatchday === Math.max(1, config.fantasy_starting_matchday)
+        )
 
     jugadores.forEach(j => {
       if (j.is_starter && sanctionResult.zeroedPlayers.has(j.id)) {
@@ -748,119 +782,137 @@ export default function ClasificacionPage() {
                             <span className="text-sm font-bold text-white truncate">
                               {userTeamData[standing.user_id]?.teamName}
                             </span>
-                            <Badge className="bg-emerald-600 text-white text-xs shrink-0">
-                              {Math.round((userTeamData[standing.user_id]?.totalPoints || 0) * 10) / 10} pts · J{userTeamData[standing.user_id]?.matchday}
-                            </Badge>
-                            {userTeamData[standing.user_id]?.penalties > 0 && (
-                              <Badge className="bg-red-600 text-white text-xs shrink-0">
-                                -{Math.round((userTeamData[standing.user_id]?.penalties || 0) * 10) / 10} pts multa
-                              </Badge>
+                            {!userTeamData[standing.user_id]?.isHidden && (
+                              <>
+                                <Badge className="bg-emerald-600 text-white text-xs shrink-0">
+                                  {Math.round((userTeamData[standing.user_id]?.totalPoints || 0) * 10) / 10} pts · J{userTeamData[standing.user_id]?.matchday}
+                                </Badge>
+                                {userTeamData[standing.user_id]?.penalties > 0 && (
+                                  <Badge className="bg-red-600 text-white text-xs shrink-0">
+                                    -{Math.round((userTeamData[standing.user_id]?.penalties || 0) * 10) / 10} pts multa
+                                  </Badge>
+                                )}
+                              </>
                             )}
                           </div>
 
-                          {/* Lista de jugadores: grid de 3 columnas con ancho máximo fijo
-                              col1=foto(24px) col2=nombre(crece) col3=puntos(56px fijos)
-                              max-w-xs garantiza que la columna de puntos siempre sea visible en móvil */}
-                          <div className="max-w-xs space-y-0.5">
-                            {userTeamData[standing.user_id]?.jugadores.map((player: any) => (
-                              <div
-                                key={player.id}
-                                className={`grid items-center gap-x-2 py-1 px-1.5 rounded ${
-                                  player.sanctionReason
-                                    ? 'bg-red-950/50 border border-red-800'
-                                    : 'bg-slate-700/60'
-                                }`}
-                                style={{ gridTemplateColumns: '1.5rem 1fr 3.5rem' }}
-                              >
-                                {/* col 1: foto */}
-                                {player.photo ? (
-                                  <img src={player.photo} alt={player.short_name} className="w-6 h-6 rounded-full object-cover border border-slate-500" />
-                                ) : (
-                                  <div className="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center text-[9px] font-bold text-slate-300">
-                                    {player.shirt_number || '?'}
-                                  </div>
-                                )}
-
-                                {/* col 2: nombre + posición + equipo */}
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1 flex-wrap">
-                                    <span className={`text-xs font-semibold truncate ${player.sanctionReason ? 'text-red-200' : 'text-white'}`}>
-                                      {player.short_name}
-                                    </span>
-                                    <Badge className={`text-[9px] px-1 py-0 leading-tight shrink-0 ${getPositionColor(player.position)}`}>
-                                      {getPositionLabel(player.position)}
-                                    </Badge>
-                                    {player.is_captain && (
-                                      <Badge className="text-[9px] px-1 py-0 leading-tight shrink-0 bg-yellow-500 text-white">C</Badge>
-                                    )}
-                                    {player.sanctionReason && (
-                                      <AlertTriangle className="w-3 h-3 text-red-400 shrink-0" />
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1 mt-0.5">
-                                    {player.team?.logo_url && (
-                                      <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain shrink-0" />
-                                    )}
-                                    <span className="text-[10px] text-slate-400 truncate">{player.team?.name}</span>
-                                  </div>
-                                </div>
-
-                                {/* col 3: puntos en amarillo — columna fija de 3.5rem */}
-                                <div className="text-right">
-                                  {player.sanctionReason ? (
-                                    <>
-                                      <span className="text-xs font-bold text-red-400 line-through block leading-none">
-                                        {Math.round((player.originalPuntos || 0) * 10) / 10}
-                                      </span>
-                                      <span className="text-xs font-bold text-red-400 block leading-none">0 pts</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span className="text-sm font-bold text-yellow-400 leading-none">
-                                        {Math.round((player.puntos || 0) * 10) / 10}
-                                      </span>
-                                      <span className="text-[10px] text-yellow-600 ml-0.5">pts</span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Suplentes */}
-                          {userTeamData[standing.user_id]?.suplentes.length > 0 && (
-                            <div className="max-w-xs mt-2 pt-2 border-t border-slate-700">
-                              <p className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Suplentes</p>
-                              <div className="space-y-0.5">
-                                {userTeamData[standing.user_id]?.suplentes.map((player: any) => (
+                          {userTeamData[standing.user_id]?.isHidden ? (
+                            <div className="max-w-xs py-4 text-center">
+                              <AlertTriangle className="w-6 h-6 text-amber-500 mx-auto mb-2 opacity-80" />
+                              <p className="text-sm text-amber-200/80 font-medium">
+                                {userTeamData[standing.user_id]?.hiddenReason}
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              {/* Lista de jugadores: grid de 3 columnas con ancho máximo fijo
+                                  col1=foto(24px) col2=nombre(crece) col3=puntos(56px fijos)
+                                  max-w-xs garantiza que la columna de puntos siempre sea visible en móvil */}
+                              <div className="max-w-xs space-y-0.5">
+                                {userTeamData[standing.user_id]?.jugadores.map((player: any) => (
                                   <div
                                     key={player.id}
-                                    className="grid items-center gap-x-2 py-0.5 px-1.5 rounded bg-slate-800/40"
+                                    className={`grid items-center gap-x-2 py-1 px-1.5 rounded ${
+                                      player.sanctionReason
+                                        ? 'bg-red-950/50 border border-red-800'
+                                        : 'bg-slate-700/60'
+                                    }`}
                                     style={{ gridTemplateColumns: '1.5rem 1fr 3.5rem' }}
                                   >
+                                    {/* col 1: foto */}
                                     {player.photo ? (
-                                      <img src={player.photo} alt={player.short_name} className="w-5 h-5 rounded-full object-cover border border-slate-600 opacity-70" />
+                                      <img src={player.photo} alt={player.short_name} className="w-6 h-6 rounded-full object-cover border border-slate-500" />
                                     ) : (
-                                      <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-500">
+                                      <div className="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center text-[9px] font-bold text-slate-300">
                                         {player.shirt_number || '?'}
                                       </div>
                                     )}
-                                    <div className="min-w-0 flex items-center gap-1">
-                                      <span className="text-[11px] font-medium text-slate-400 truncate">{player.short_name}</span>
-                                      <Badge className={`text-[9px] px-1 py-0 leading-tight shrink-0 opacity-70 ${getPositionColor(player.position)}`}>
-                                        {getPositionLabel(player.position)}
-                                      </Badge>
+
+                                    {/* col 2: nombre + posición + equipo */}
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1 flex-wrap">
+                                        <span className={`text-xs font-semibold truncate ${player.sanctionReason ? 'text-red-200' : 'text-white'}`}>
+                                          {player.short_name}
+                                        </span>
+                                        <Badge className={`text-[9px] px-1 py-0 leading-tight shrink-0 ${getPositionColor(player.position)}`}>
+                                          {getPositionLabel(player.position)}
+                                        </Badge>
+                                        {player.is_captain && (
+                                          <Badge className="text-[9px] px-1 py-0 leading-tight shrink-0 bg-yellow-500 text-white">C</Badge>
+                                        )}
+                                        {player.sanctionReason && (
+                                          <AlertTriangle 
+                                            className="w-3 h-3 text-red-400 shrink-0 cursor-help" 
+                                            title={player.sanctionReason}
+                                          />
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        {player.team?.logo_url && (
+                                          <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain shrink-0" />
+                                        )}
+                                        <span className="text-[10px] text-slate-400 truncate">{player.team?.name}</span>
+                                      </div>
                                     </div>
+
+                                    {/* col 3: puntos en amarillo — columna fija de 3.5rem */}
                                     <div className="text-right">
-                                      <span className="text-xs font-bold text-yellow-500/60">
-                                        {Math.round((player.puntos || 0) * 10) / 10}
-                                      </span>
-                                      <span className="text-[10px] text-slate-500 ml-0.5">pts</span>
+                                      {player.sanctionReason ? (
+                                        <>
+                                          <span className="text-xs font-bold text-red-400 line-through block leading-none">
+                                            {Math.round((player.originalPuntos || 0) * 10) / 10}
+                                          </span>
+                                          <span className="text-xs font-bold text-red-400 block leading-none">0 pts</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-sm font-bold text-yellow-400 leading-none">
+                                            {Math.round((player.puntos || 0) * 10) / 10}
+                                          </span>
+                                          <span className="text-[10px] text-yellow-600 ml-0.5">pts</span>
+                                        </>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
                               </div>
-                            </div>
+
+                              {/* Suplentes */}
+                              {userTeamData[standing.user_id]?.suplentes.length > 0 && (
+                                <div className="max-w-xs mt-2 pt-2 border-t border-slate-700">
+                                  <p className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Suplentes</p>
+                                  <div className="space-y-0.5">
+                                    {userTeamData[standing.user_id]?.suplentes.map((player: any) => (
+                                      <div
+                                        key={player.id}
+                                        className="grid items-center gap-x-2 py-0.5 px-1.5 rounded bg-slate-800/40"
+                                        style={{ gridTemplateColumns: '1.5rem 1fr 3.5rem' }}
+                                      >
+                                        {player.photo ? (
+                                          <img src={player.photo} alt={player.short_name} className="w-5 h-5 rounded-full object-cover border border-slate-600 opacity-70" />
+                                        ) : (
+                                          <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-500">
+                                            {player.shirt_number || '?'}
+                                          </div>
+                                        )}
+                                        <div className="min-w-0 flex items-center gap-1">
+                                          <span className="text-[11px] font-medium text-slate-400 truncate">{player.short_name}</span>
+                                          <Badge className={`text-[9px] px-1 py-0 leading-tight shrink-0 opacity-70 ${getPositionColor(player.position)}`}>
+                                            {getPositionLabel(player.position)}
+                                          </Badge>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="text-xs font-bold text-yellow-500/60">
+                                            {Math.round((player.puntos || 0) * 10) / 10}
+                                          </span>
+                                          <span className="text-[10px] text-slate-500 ml-0.5">pts</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
