@@ -1127,15 +1127,16 @@ export default function DashboardPage() {
     if (!playerMatch) return
     const index = playerMatch._originalIndex
 
-    const changeIdx = changeHistory.findIndex(ch => ch.index === index)
-    if (changeIdx !== -1) {
-      const change = changeHistory[changeIdx]
+    const firstChangeIdx = changeHistory.findIndex(ch => ch.index === index)
+    if (firstChangeIdx !== -1) {
+      const firstChange = changeHistory[firstChangeIdx]
       const newSelected = [...selectedPlayers]
-      newSelected[index] = change.outId
+      // Revert to the original player
+      newSelected[index] = firstChange.outId
       setSelectedPlayers(newSelected)
       
-      const newChangeHistory = [...changeHistory]
-      newChangeHistory.splice(changeIdx, 1)
+      // Remove ALL changes for this index from the history
+      const newChangeHistory = changeHistory.filter(ch => ch.index !== index)
       setChangeHistory(newChangeHistory)
       
       setCancelConfirmUniqueKey(null)
@@ -1145,10 +1146,12 @@ export default function DashboardPage() {
         
         const teamPlayersData = newSelected.map((pid, i) => {
           let replacedId = null
-          if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
-          else {
-            const ch = newChangeHistory.find(c => c.index === i)
-            if (ch) replacedId = ch.outId
+          if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
+            if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+            else {
+              const ch = newChangeHistory.find(c => c.index === i)
+              if (ch) replacedId = ch.outId
+            }
           }
           
           return {
@@ -1188,10 +1191,12 @@ export default function DashboardPage() {
         
         const teamPlayersData = newSelected.map((pid, i) => {
           let replacedId = null
-          if (i !== index && dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
-          else {
-            const ch = changeHistory.find(c => c.index === i)
-            if (ch) replacedId = ch.outId
+          if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
+            if (i !== index && dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+            else {
+              const ch = changeHistory.find(c => c.index === i)
+              if (ch) replacedId = ch.outId
+            }
           }
           
           return {
@@ -1247,10 +1252,12 @@ export default function DashboardPage() {
 
     const teamPlayersData = newSelected.map((playerId, i) => {
       let replacedId = null
-      if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
-      else {
-        const ch = newChangeHistory.find(c => c.index === i)
-        if (ch) replacedId = ch.outId
+      if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
+        if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+        else {
+          const ch = newChangeHistory.find(c => c.index === i)
+          if (ch) replacedId = ch.outId
+        }
       }
       
       return {
@@ -1328,10 +1335,12 @@ export default function DashboardPage() {
       
       const teamPlayersData = newSelected.map((pid, i) => {
         let replacedId = null
-        if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
-        else {
-          const ch = newChangeHistory.find(c => c.index === i)
-          if (ch) replacedId = ch.outId
+        if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
+          if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
+          else {
+            const ch = newChangeHistory.find(c => c.index === i)
+            if (ch) replacedId = ch.outId
+          }
         }
         
         return {
@@ -1377,27 +1386,30 @@ export default function DashboardPage() {
     for (const player of selectedPlayersData) {
       const idx = player._originalIndex
       
-      // 1. ¿Hay un cambio en memoria (sesión actual) para este índice?
-      const changeIdx = changeHistory.findIndex(ch => ch.index === idx)
-      if (changeIdx !== -1) {
-        const outPlayer = players.find(p => p.id === changeHistory[changeIdx].outId)
-        if (outPlayer) {
-          result.set(player._uniqueKey, outPlayer)
+      // Only show changed players if we are past the starting matchday
+      if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
+        // 1. ¿Hay un cambio en memoria (sesión actual) para este índice?
+        const changeIdx = changeHistory.findIndex(ch => ch.index === idx)
+        if (changeIdx !== -1) {
+          const outPlayer = players.find(p => p.id === changeHistory[changeIdx].outId)
+          if (outPlayer) {
+            result.set(player._uniqueKey, outPlayer)
+          }
+          continue
         }
-        continue
+        
+        // 2. ¿Hay un cambio persistido en la base de datos para este índice?
+        const dbReplacedId = dbReplacedPlayers[idx]
+        if (dbReplacedId) {
+          const outPlayer = players.find(p => p.id === dbReplacedId)
+          if (outPlayer) {
+            result.set(player._uniqueKey, outPlayer)
+          }
+          continue
+        }
       }
       
-      // 2. ¿Hay un cambio persistido en la base de datos para este índice?
-      const dbReplacedId = dbReplacedPlayers[idx]
-      if (dbReplacedId) {
-        const outPlayer = players.find(p => p.id === dbReplacedId)
-        if (outPlayer) {
-          result.set(player._uniqueKey, outPlayer)
-        }
-        continue
-      }
-      
-      // 3. Si no hay ni cambio en memoria ni en BD, es un titular base
+      // 3. Si no hay ni cambio en memoria ni en BD, o es la J1, es un titular base
       unchanged.add(player._uniqueKey)
     }
 
@@ -1526,7 +1538,7 @@ export default function DashboardPage() {
 
   const changedCount = changeHistory.length
   const actualChangesCount = selectedPlayers.filter(id => !basePlayers.includes(id)).length
-  const changesLimit = (activeMatchday && activeMatchday >= config.fantasy_starting_matchday) 
+  const changesLimit = (activeMatchday && activeMatchday > config.fantasy_starting_matchday) 
         ? config.max_changes_per_matchday 
         : Infinity;
 
