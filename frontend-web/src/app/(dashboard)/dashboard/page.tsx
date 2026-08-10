@@ -2044,16 +2044,16 @@ export default function DashboardPage() {
                       <div className="absolute inset-x-0 bottom-0 h-[30%] bg-black z-10 pointer-events-none" />
                       <div className="absolute inset-x-0 bottom-[30%] h-[30%] bg-gradient-to-t from-black via-black/80 to-transparent z-10 pointer-events-none" />
 
-                      {/* Columna Izquierda (Stats estilo FUT) */}
-                      <div className="absolute top-[3cqw] left-[3cqw] flex flex-col items-center z-20 drop-shadow-md w-[15cqw]">
+                      {/* Fila Superior Izquierda (Stats estilo FUT) */}
+                      <div className="absolute top-[3cqw] left-[3cqw] flex flex-row items-center gap-[1.5cqw] z-20 drop-shadow-md">
                         {/* Índice */}
-                        <div className="bg-black/60 rounded flex items-center justify-center px-[2cqw] py-[0.5cqw] mb-[0.5cqw]">
-                          <span className="text-[14cqw] font-black text-white leading-none">
+                        <div className="bg-black/60 rounded flex items-center justify-center px-[2cqw] py-[1cqw]">
+                          <span className="text-[10cqw] font-black text-white leading-none">
                             {idx + 1}
                           </span>
                         </div>
                         {/* Posición */}
-                        <div className={`mt-[1cqw] text-[8cqw] px-[2cqw] py-[1cqw] w-[130%] text-center font-bold text-white rounded-sm drop-shadow-md ${getPositionColor(player.position)}`}>
+                        <div className={`text-[8cqw] px-[2cqw] py-[1cqw] font-bold text-white rounded-sm drop-shadow-md ${getPositionColor(player.position)}`}>
                           {getPositionLabel(player.position)}
                         </div>
                       </div>
