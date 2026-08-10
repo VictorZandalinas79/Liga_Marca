@@ -1657,8 +1657,13 @@ export default function DashboardPage() {
       {/* Encabezado con usuarios en línea */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 w-full">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-3xl font-bold text-slate-900">Mi Equipo</h1>
+            {config?.budget_limit > 0 && (
+              <div className="bg-emerald-100 border border-emerald-300 text-emerald-800 px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm">
+                Tope Presupuesto: <span className="text-emerald-900 text-base">{config.budget_limit}M</span>
+              </div>
+            )}
             {warnings.length > 0 && (
               <button
                 onClick={() => setShowWarningsModal(true)}
