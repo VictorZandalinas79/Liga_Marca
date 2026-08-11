@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { computeOutOfOrderLocks, type FixtureLite, type OutOfOrderLock } from '@/lib/locked-teams-core'
 
+let lastLogKey = ''
+
 /**
  * Un fixture tal y como lo consulta este hook. `FixtureLite` (compartido con
  * locked-teams-core) no lleva `momento`, y aquí sí hace falta para agrupar las
@@ -49,7 +51,6 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       lockOffsetMs: number
       fantasyStart: number
     } | null = null
-    let lastLogKey = ''
 
     const fetchMatchdayData = async () => {
       const supabase = createClient()
