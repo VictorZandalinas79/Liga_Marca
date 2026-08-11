@@ -2264,18 +2264,19 @@ export default function DashboardPage() {
 
           {showAllHistory && (
             <div className="mt-3 pt-3 border-t border-slate-200 space-y-3">
-              <p className="text-xs font-bold text-slate-500 uppercase">Todas las Sanciones de la Liga</p>
-              {allPenalties.length === 0 && liveInfractions.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">No hay sanciones registradas en la liga.</p>
+              <p className="text-xs font-bold text-slate-500 uppercase">Tus Sanciones</p>
+              {allPenalties.filter(p => p.user_id === user?.id && !(p.matchday === activeMatchday && isUnlockWindowOpen)).length === 0 &&
+               liveInfractions.filter(inf => inf.user_id === user?.id && !(inf.matchday === activeMatchday && isUnlockWindowOpen) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday)).length === 0 ? (
+                <p className="text-xs text-slate-500 italic">No tienes sanciones registradas.</p>
               ) : (
                 <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                  {/* Sanciones dinámicas activas de todos los usuarios */}
+                  {/* Sanciones dinámicas activas del usuario */}
                   {liveInfractions
-                    .filter(inf => !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday))
+                    .filter(inf => inf.user_id === user?.id && !(inf.matchday === activeMatchday && isUnlockWindowOpen) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday))
                     .map((inf) => (
                     <div key={inf.id} className="flex justify-between items-start text-xs bg-amber-50 rounded p-2 border border-amber-200 shadow-sm animate-pulse">
                       <div>
-                        <span className="font-bold text-amber-900 mr-1">[{inf.full_name}]</span>
+                        <span className="font-bold text-amber-900 mr-1">[{inf.full_name || 'Tú'}]</span>
                         <span className="font-semibold text-amber-955 mr-2">J{inf.matchday}:</span>
                         <span className="text-amber-800 font-medium">{inf.description}</span>
                       </div>
@@ -2283,23 +2284,25 @@ export default function DashboardPage() {
                     </div>
                   ))}
 
-                  {/* Sanciones consolidadas históricas */}
-                  {allPenalties.map((p) => {
-                    const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
-                    const userName = profileObj?.full_name || 'Usuario'
-                    return (
-                      <div key={p.id} className="flex justify-between items-start text-xs bg-white rounded p-2 border border-slate-100 shadow-sm">
-                        <div>
-                          <span className="font-bold text-slate-800 mr-1">[{userName}]</span>
-                          <span className="font-semibold text-red-955 mr-2">J{p.matchday}:</span>
-                          <span className="text-slate-700 font-medium">{p.description}</span>
+                  {/* Sanciones consolidadas históricas del usuario */}
+                  {allPenalties
+                    .filter(p => p.user_id === user?.id && !(p.matchday === activeMatchday && isUnlockWindowOpen))
+                    .map((p) => {
+                      const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
+                      const userName = profileObj?.full_name || 'Tú'
+                      return (
+                        <div key={p.id} className="flex justify-between items-start text-xs bg-white rounded p-2 border border-slate-100 shadow-sm">
+                          <div>
+                            <span className="font-bold text-slate-800 mr-1">[{userName}]</span>
+                            <span className="font-semibold text-red-955 mr-2">J{p.matchday}:</span>
+                            <span className="text-slate-700 font-medium">{p.description}</span>
+                          </div>
+                          <span className={`font-bold shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : p.matchday === activeMatchday ? 'text-amber-600 text-[10px] uppercase' : 'text-slate-500'}`}>
+                            {p.points > 0 ? `-${p.points} pts` : p.matchday === activeMatchday ? 'Pendiente' : '0 pts'}
+                          </span>
                         </div>
-                        <span className={`font-bold shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : p.matchday === activeMatchday ? 'text-amber-600 text-[10px] uppercase' : 'text-slate-500'}`}>
-                          {p.points > 0 ? `-${p.points} pts` : p.matchday === activeMatchday ? 'Pendiente' : '0 pts'}
-                        </span>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
                 </div>
               )}
             </div>
