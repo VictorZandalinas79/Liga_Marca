@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { computeOutOfOrderLocks, type FixtureLite, type OutOfOrderLock } from '@/lib/locked-teams-core'
 
+/**
+ * Un fixture tal y como lo consulta este hook. `FixtureLite` (compartido con
+ * locked-teams-core) no lleva `momento`, y aquí sí hace falta para agrupar las
+ * jornadas especiales.
+ */
+type FixtureWithMomento = FixtureLite & { momento: string | null }
+
 interface MatchdayLockState {
   isLocked: boolean
   isUnlockWindowOpen: boolean
@@ -28,7 +35,23 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
   })
 
   useEffect(() => {
-    const fetchMatchdayTimes = async () => {
+    let cancelled = false
+
+    // El calendario y la configuración cambian como mucho una vez al día, pero
+    // la cuenta atrás tiene que refrescarse cada segundo. Separamos las dos
+    // cosas: la BD se consulta cada minuto y se cachea aquí, y el reloj se
+    // recalcula en memoria sobre esa caché. Antes se repetían las dos consultas
+    // (la de fixtures son >100 KB con los joins) una vez por segundo y por cada
+    // sitio que monta el hook, lo que ahogaba la carga inicial de la página.
+    let cache: {
+      fixtures: FixtureWithMomento[]
+      unlockOffsetMs: number
+      lockOffsetMs: number
+      fantasyStart: number
+    } | null = null
+    let lastLogKey = ''
+
+    const fetchMatchdayData = async () => {
       const supabase = createClient()
 
       // Offsets configurables (Admin → Reglas del Juego): cuándo empieza la
@@ -53,10 +76,27 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         .select('id, matchday, momento, start_time, status, home_team_id, away_team_id, home_team:real_teams!home_team_id(name), away_team:real_teams!away_team_id(name)')
         .order('start_time', { ascending: true })
 
+      if (cancelled) return
+
       if (!allFixtures || allFixtures.length === 0) {
+        cache = null
         setState(s => ({ ...s, isLocked: true, isUnlockWindowOpen: false }))
         return
       }
+
+      cache = {
+        fixtures: allFixtures as unknown as FixtureWithMomento[],
+        unlockOffsetMs,
+        lockOffsetMs,
+        fantasyStart,
+      }
+      recomputeState()
+    }
+
+    // Recalcula el estado a partir de la caché. No toca la red.
+    const recomputeState = () => {
+      if (cancelled || !cache) return
+      const { fixtures: allFixtures, unlockOffsetMs, lockOffsetMs, fantasyStart } = cache
 
       const outOfOrderLocks = computeOutOfOrderLocks(allFixtures as FixtureLite[], {
         startHoursBefore: unlockOffsetMs / (60 * 60 * 1000),
@@ -231,12 +271,18 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       const isUnlockWindowOpen = now.getTime() >= unlockTimeDate.getTime() && now.getTime() <= lockTimeDate.getTime()
       const isLocked = !isUnlockWindowOpen
 
-      console.log('[useMatchdayLock] Jornada:', targetMatchday)
-      console.log('[useMatchdayLock] Momento:', targetMomento)
-      console.log('[useMatchdayLock] Ahora:', now.toISOString())
-      console.log('[useMatchdayLock] unlockTime:', unlockTimeDate.toISOString())
-      console.log('[useMatchdayLock] lockTime:', lockTimeDate.toISOString())
-      console.log('[useMatchdayLock] isUnlockWindowOpen:', isUnlockWindowOpen)
+      // Se recalcula cada segundo, así que solo se traza cuando algo cambia:
+      // si no, la consola se llena de la misma línea repetida.
+      const logKey = `${targetMatchday}|${targetMomento}|${isUnlockWindowOpen}`
+      if (logKey !== lastLogKey) {
+        lastLogKey = logKey
+        console.log('[useMatchdayLock] Jornada:', targetMatchday)
+        console.log('[useMatchdayLock] Momento:', targetMomento)
+        console.log('[useMatchdayLock] Ahora:', now.toISOString())
+        console.log('[useMatchdayLock] unlockTime:', unlockTimeDate.toISOString())
+        console.log('[useMatchdayLock] lockTime:', lockTimeDate.toISOString())
+        console.log('[useMatchdayLock] isUnlockWindowOpen:', isUnlockWindowOpen)
+      }
 
       let timeUntilUnlock = ''
       let timeUntilLock = ''
@@ -270,11 +316,19 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       })
     }
 
-    fetchMatchdayTimes()
+    fetchMatchdayData()
 
-    // Actualizar cada segundo para la cuenta atrás, o cada 60 segundos en caso contrario
-    const interval = setInterval(fetchMatchdayTimes, 1000)
-    return () => clearInterval(interval)
+    // La cuenta atrás sigue avanzando cada segundo, pero sobre la caché.
+    const tickInterval = setInterval(recomputeState, 1000)
+    // El calendario y la config se releen cada minuto (por si el admin cambia
+    // los offsets o entra un partido aplazado mientras la página está abierta).
+    const dataInterval = setInterval(fetchMatchdayData, 60 * 1000)
+
+    return () => {
+      cancelled = true
+      clearInterval(tickInterval)
+      clearInterval(dataInterval)
+    }
   }, [currentMatchday])
 
   return state

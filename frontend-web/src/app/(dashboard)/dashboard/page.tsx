@@ -185,6 +185,9 @@ export default function DashboardPage() {
   const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
   const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>>(new Map())
   const [showWarningsModal, setShowWarningsModal] = useState(false)
+  // Las medias históricas de todos los jugadores se cargan bajo demanda (al
+  // abrir el modal de cambio) y una sola vez por sesión.
+  const playerStatsLoadedRef = useRef(false)
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento, upcomingLocks } = useMatchdayLock()
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
@@ -402,10 +405,15 @@ export default function DashboardPage() {
       setAllPlayerStats(stats)
     }
 
-    if (isRegistered) {
+    // Esto pagina la tabla `player_scores` ENTERA, y lo único que alimenta son
+    // los totales y el sparkline del modal de cambio de jugador. Se carga la
+    // primera vez que se abre ese modal, no al entrar en la página: hasta
+    // entonces competía por el ancho de banda con la carga del once.
+    if (isRegistered && playerToSwap && !playerStatsLoadedRef.current) {
+      playerStatsLoadedRef.current = true
       fetchAllPlayerStats()
     }
-  }, [isRegistered, supabase])
+  }, [isRegistered, playerToSwap, supabase])
 
   const [showAllHistory, setShowAllHistory] = useState(false)
   const lockedTeamIds = new Set(lockedTeams.map(l => l.teamId))
@@ -614,7 +622,10 @@ export default function DashboardPage() {
         while (true) {
           const { data: page, error } = await supabase
             .from('players')
-            .select('*')
+            // Columnas concretas y no `*`: la tabla tiene el doble de campos
+            // (nacionalidad, altura, peso, pie, fechas...) que esta pantalla no
+            // usa para nada y que engordan la descarga ~40%.
+            .select('id, first_name, last_name, short_name, position, team_id, photo, shirt_number, precio, is_in_biwenger')
             .order('short_name', { ascending: true })
             .range(from, from + pageSize - 1)
           if (error) {
