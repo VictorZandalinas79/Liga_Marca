@@ -60,6 +60,11 @@ export default function AdminPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [divisionLock, setDivisionLock] = useState<{ locked: boolean; lockAt: string | null; startingMatchday: number } | null>(null)
 
+  const [extraPayments, setExtraPayments] = useState<{ id: string; username: string; amount: number; collected_by: string | null; created_at: string }[]>([])
+  const [newUsername, setNewUsername] = useState('')
+  const [newAmount, setNewAmount] = useState('')
+  const [newCollectedBy, setNewCollectedBy] = useState('')
+
   const [unsavedPanels, setUnsavedPanels] = useState<Record<string, {
     hasChanges: boolean
     description: string[]
@@ -159,6 +164,13 @@ export default function AdminPage() {
       const body = await res.json()
       setUsers(body.users)
       setDivisionLock(body.divisionLock ?? null)
+
+      // Cargar pagos extras
+      const extrasRes = await fetch('/api/admin/extra-payments')
+      if (extrasRes.ok) {
+        const extrasBody = await extrasRes.json()
+        setExtraPayments(extrasBody.extraPayments || [])
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
@@ -220,9 +232,72 @@ export default function AdminPage() {
     })
   }, [users, search, filter, divFilter])
 
+  const addExtraPayment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newUsername.trim() || !newAmount) return
+    try {
+      const res = await fetch('/api/admin/extra-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: newUsername.trim(),
+          amount: Number(newAmount),
+          collected_by: newCollectedBy.trim() || null
+        })
+      })
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}))
+        throw new Error(b.error || 'No se pudo añadir el pago extra')
+      }
+      const body = await res.json()
+      setExtraPayments(prev => [body.extraPayment, ...prev])
+      setNewUsername('')
+      setNewAmount('')
+      setNewCollectedBy('')
+    } catch (err: any) {
+      setError(err.message || 'Error al añadir pago extra')
+    }
+  }
+
+  const deleteExtraPayment = async (id: string) => {
+    if (!confirm('¿Seguro que deseas eliminar este pago extra?')) return
+    try {
+      const res = await fetch(`/api/admin/extra-payments?id=${id}`, {
+        method: 'DELETE'
+      })
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}))
+        throw new Error(b.error || 'No se pudo eliminar el pago extra')
+      }
+      setExtraPayments(prev => prev.filter(p => p.id !== id))
+    } catch (err: any) {
+      setError(err.message || 'Error al eliminar pago extra')
+    }
+  }
+
+  const updateExtraPayment = async (id: string, patch: Partial<{ username: string; amount: number; collected_by: string | null }>) => {
+    try {
+      const res = await fetch('/api/admin/extra-payments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...patch })
+      })
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}))
+        throw new Error(b.error || 'No se pudo actualizar el pago extra')
+      }
+      const body = await res.json()
+      setExtraPayments(prev => prev.map(p => p.id === id ? body.extraPayment : p))
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar pago extra')
+    }
+  }
+
   const stats = useMemo(() => {
     const paid = users.filter((u) => u.has_paid).length
-    const collected = users.reduce((sum, u) => sum + (u.has_paid ? (u.entry_fee_paid || 0) : 0), 0)
+    const usersCollected = users.reduce((sum, u) => sum + (u.has_paid ? (u.entry_fee_paid || 0) : 0), 0)
+    const extraCollected = extraPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
+    const collected = usersCollected + extraCollected
     const unassigned = users.filter((u) => u.division == null).length
     
     const collectedBy = new Map<string, number>()
@@ -230,9 +305,13 @@ export default function AdminPage() {
       const collector = u.collected_by?.trim() || 'Desconocido'
       collectedBy.set(collector, (collectedBy.get(collector) || 0) + (u.entry_fee_paid || 0))
     })
+    extraPayments.forEach(p => {
+      const collector = p.collected_by?.trim() || 'Desconocido'
+      collectedBy.set(collector, (collectedBy.get(collector) || 0) + (p.amount || 0))
+    })
 
     return { total: users.length, paid, unpaid: users.length - paid, collected, unassigned, collectedBy }
-  }, [users])
+  }, [users, extraPayments])
 
   const exportCsv = () => {
     const headers = ['Nombre', 'Email', 'Teléfono', 'División', 'Ha pagado', 'Cuota Inicial (€)', 'Balance (€)', 'Fecha de pago', 'Cobrado por', 'Fecha de registro']
@@ -618,6 +697,137 @@ export default function AdminPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Pagos Extras */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden p-6 mt-6">
+        <div className="flex items-center gap-2 mb-4 pb-2 border-b">
+          <Euro className="w-5 h-5 text-emerald-500" />
+          <h2 className="text-lg font-bold text-slate-900 font-sans">Pagos Extras (Temporada Anterior / No Registrados)</h2>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Registra cobros de usuarios que no están registrados en la plataforma pero han pagado importes de la temporada anterior.
+        </p>
+
+        {/* Formulario para añadir */}
+        <form onSubmit={addExtraPayment} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 items-end bg-slate-50 p-4 rounded-xl border border-slate-100">
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Nombre de usuario</label>
+            <input
+              type="text"
+              required
+              placeholder="Ej. Juan Pérez"
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
+              className="w-full px-3 py-2 border-2 border-slate-200 rounded-lg outline-none focus:border-emerald-500 text-sm bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Importe cobrado (€)</label>
+            <input
+              type="number"
+              required
+              min="0"
+              step="0.01"
+              placeholder="40"
+              value={newAmount}
+              onChange={(e) => setNewAmount(e.target.value)}
+              className="w-full px-3 py-2 border-2 border-slate-200 rounded-lg outline-none focus:border-emerald-500 text-sm bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Cobrado por</label>
+            <input
+              type="text"
+              placeholder="Ej. Admin"
+              value={newCollectedBy}
+              onChange={(e) => setNewCollectedBy(e.target.value)}
+              className="w-full px-3 py-2 border-2 border-slate-200 rounded-lg outline-none focus:border-emerald-500 text-sm bg-white"
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+          >
+            Añadir Pago
+          </button>
+        </form>
+
+        {/* Tabla de pagos extras */}
+        {extraPayments.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4 italic">No hay pagos extras registrados.</p>
+        ) : (
+          <div className="overflow-x-auto border border-slate-100 rounded-xl">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-left text-slate-500 text-xs uppercase tracking-wide">
+                  <th className="px-4 py-3 font-semibold">Usuario</th>
+                  <th className="px-4 py-3 font-semibold">Pago</th>
+                  <th className="px-4 py-3 font-semibold">Cobrado por</th>
+                  <th className="px-4 py-3 font-semibold text-center w-24">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {extraPayments.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50/50">
+                    <td className="px-4 py-3 font-medium text-slate-900">
+                      <input
+                        type="text"
+                        defaultValue={p.username}
+                        onBlur={(e) => {
+                          const val = e.target.value.trim()
+                          if (val && val !== p.username) {
+                            updateExtraPayment(p.id, { username: val })
+                          }
+                        }}
+                        className="px-2 py-1 rounded border border-transparent hover:border-slate-200 focus:border-emerald-500 outline-none text-sm w-full bg-transparent focus:bg-white"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          defaultValue={p.amount}
+                          onBlur={(e) => {
+                            const val = Number(e.target.value)
+                            if (!isNaN(val) && val !== p.amount) {
+                              updateExtraPayment(p.id, { amount: val })
+                            }
+                          }}
+                          className="px-2 py-1 rounded border border-transparent hover:border-slate-200 focus:border-emerald-500 outline-none text-sm w-20 bg-transparent focus:bg-white"
+                        />
+                        <span>€</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">
+                      <input
+                        type="text"
+                        defaultValue={p.collected_by || ''}
+                        placeholder="Sin asignar"
+                        onBlur={(e) => {
+                          const val = e.target.value.trim()
+                          if (val !== (p.collected_by || '')) {
+                            updateExtraPayment(p.id, { collected_by: val || null })
+                          }
+                        }}
+                        className="px-2 py-1 rounded border border-transparent hover:border-slate-200 focus:border-emerald-500 outline-none text-sm w-full bg-transparent focus:bg-white"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => deleteExtraPayment(p.id)}
+                        className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title="Eliminar pago"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <p className="text-xs text-slate-400 text-center">
