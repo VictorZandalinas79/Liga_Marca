@@ -130,7 +130,7 @@ export default function DashboardLayout({
 
   return (
     <AuthGuard>
-    <div className="min-h-full">
+    <div className="min-h-screen flex flex-col">
       {/* Aviso de tramo de jornada */}
       {isUnlockWindowOpen && (
         <div className="bg-amber-400 border-b border-amber-500 py-2 px-4">
@@ -204,8 +204,12 @@ export default function DashboardLayout({
         </div>
       </header>
 
-      {/* Navegación móvil inferior */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <main className={`flex-1 w-full px-4 sm:px-6 lg:px-8 pt-3 pb-8 mx-auto ${isFullWidth ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
+        {children}
+      </main>
+
+      {/* Navegación móvil inferior (siempre abajo del contenido) */}
+      <nav className="md:hidden bg-slate-900 border-t border-slate-800 pb-[max(0.5rem,env(safe-area-inset-bottom))] w-full mt-auto">
         <div className="flex items-center justify-around px-2 py-2">
           {navItems.map((item) => (
             <Link
@@ -219,10 +223,6 @@ export default function DashboardLayout({
           ))}
         </div>
       </nav>
-
-      <main className={`px-4 sm:px-6 lg:px-8 pt-3 pb-24 md:pb-8 mx-auto ${isFullWidth ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
-        {children}
-      </main>
     </div>
     </AuthGuard>
   )

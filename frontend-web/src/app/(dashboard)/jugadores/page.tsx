@@ -207,6 +207,8 @@ export default function JugadoresPage() {
   const [filter, setFilter] = useState('')
   const [positionFilter, setPositionFilter] = useState('ALL')
   const [teamFilter, setTeamFilter] = useState<string>('ALL')
+  const [minPrice, setMinPrice] = useState<string>('')
+  const [maxPrice, setMaxPrice] = useState<string>('')
   const [teams, setTeams] = useState<Array<{ id: string; name: string; logo_url?: string }>>([])
   const [sortBy, setSortBy] = useState<'price' | 'points' | 'goals' | 'name'>('price')
   const [loading, setLoading] = useState(true)
@@ -411,7 +413,12 @@ export default function JugadoresPage() {
       const matchesFilter = !q || displayName.includes(q)
       const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
       const matchesTeam = teamFilter === 'ALL' || p.team_id === teamFilter
-      return matchesFilter && matchesPosition && matchesTeam
+      
+      const price = p.precio || 0
+      const matchesMin = minPrice === '' || price >= parseFloat(minPrice)
+      const matchesMax = maxPrice === '' || price <= parseFloat(maxPrice)
+      
+      return matchesFilter && matchesPosition && matchesTeam && matchesMin && matchesMax
     })
     .sort((a, b) => {
       const q = normalize(filter)
@@ -454,7 +461,7 @@ export default function JugadoresPage() {
 
       {/* Filtros */}
       <Card>
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-4">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
@@ -465,21 +472,6 @@ export default function JugadoresPage() {
                 onChange={(e) => setFilter(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
               />
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {positions.map((pos) => (
-                <button
-                  key={pos}
-                  onClick={() => setPositionFilter(pos)}
-                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors text-white ${
-                    positionFilter === pos
-                      ? getPositionFilterColor(pos)
-                      : 'bg-slate-300 text-slate-600 hover:bg-slate-400'
-                  }`}
-                >
-                  {pos === 'ALL' ? 'Todos' : getPositionLabel(pos)}
-                </button>
-              ))}
             </div>
             <select
               value={teamFilter}
@@ -501,6 +493,54 @@ export default function JugadoresPage() {
               <option value="goals">Ordenar por Goles</option>
               <option value="name">Ordenar por Nombre</option>
             </select>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pt-2 border-t border-slate-100">
+            <div className="flex gap-2 flex-wrap w-full md:w-auto">
+              {positions.map((pos) => (
+                <button
+                  key={pos}
+                  onClick={() => setPositionFilter(pos)}
+                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors text-white ${
+                    positionFilter === pos
+                      ? getPositionFilterColor(pos)
+                      : 'bg-slate-300 text-slate-600 hover:bg-slate-400'
+                  }`}
+                >
+                  {pos === 'ALL' ? 'Todos' : getPositionLabel(pos)}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+              <span className="text-sm font-medium text-slate-600 shrink-0">Precio (M):</span>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="Mín"
+                value={minPrice}
+                onChange={(e) => setMinPrice(e.target.value)}
+                className="w-20 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
+              />
+              <span className="text-slate-400 text-sm">-</span>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="Máx"
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+                className="w-20 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
+              />
+              {(minPrice !== '' || maxPrice !== '') && (
+                <button
+                  onClick={() => { setMinPrice(''); setMaxPrice('') }}
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                  title="Limpiar precios"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

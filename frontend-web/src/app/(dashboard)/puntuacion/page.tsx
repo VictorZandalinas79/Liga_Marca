@@ -7,6 +7,8 @@ import {
   Ban,
   Gauge,
   AlertTriangle,
+  Users,
+  Settings,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { createServerSupabase } from '@/lib/supabase/server'
@@ -388,10 +390,48 @@ export default async function PuntuacionPage() {
         />
       </Section>
 
-      {/* 9. Sanciones por Alineación Indebida */}
+      {/* 9. Sistemas de Juego y Reglas de Plantilla */}
+      <Section
+        icon={Users}
+        number={9}
+        title="Sistemas de Juego y Reglas de Plantilla"
+        description="Sistemas tácticos permitidos y limitaciones a la hora de confeccionar tu plantilla."
+      >
+        <div className="space-y-6">
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm mb-1.5">Sistemas de juego (Tácticas)</h3>
+            <p className="text-sm text-slate-600 mb-2">
+              Tu alineación debe ajustarse a una de las tácticas autorizadas por la liga.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(leagueConfig.formations || []).map((f: string) => (
+                <span key={f} className="inline-block bg-emerald-50 text-emerald-700 border border-emerald-100 rounded px-2 py-1 text-xs font-mono font-bold">
+                  {f}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm mb-1.5">Jugadores del mismo equipo</h3>
+            <p className="text-sm text-slate-600">
+              No se permite tener más de <strong className="text-slate-900">{leagueConfig.max_players_per_team} jugadores</strong> del mismo equipo real de LaLiga en la alineación.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm mb-1.5">Exclusividad de jugadores</h3>
+            <p className="text-sm text-slate-600">
+              Cada futbolista solo puede pertenecer a un mánager de la liga. <strong>No se podrá fichar a un jugador que pertenezca a algún equipo</strong>.
+            </p>
+          </div>
+        </div>
+      </Section>
+
+      {/* 10. Sanciones por Alineación Indebida */}
       <Section
         icon={AlertTriangle}
-        number={9}
+        number={10}
         title="Sanciones por Alineación Indebida"
         description="Penalizaciones de puntos aplicadas cuando no se respetan las reglas de la liga."
       >
@@ -401,28 +441,28 @@ export default async function PuntuacionPage() {
             <p className="text-sm text-slate-600 mb-1">
               No puntuará el jugador en cuestión, ni el mejor del resto del equipo.
             </p>
-            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
-              El jugador que afecta a la sanción deberá ser sustituido en la siguiente jornada.
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 font-medium">
+              El jugador que afecta a la sanción deberá ser sustituido, en la siguiente jornada
             </p>
           </div>
 
           <div>
             <h3 className="font-bold text-slate-800 text-sm mb-2">Superado el número de jugadores de un equipo</h3>
             <p className="text-sm text-slate-600 mb-1">
-              No puntuará el mejor de los once jugadores del equipo sancionado, ni el jugador con mayor puntuación introducido esa jornada del equipo afectado por la sanción.
+              No puntuará el mejor de los once jugadores del equipo sancionado, ni el el jugador con mayor puntuación introducido esa jornada del equipo afectado por la sanción.
             </p>
-            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
-              Se deberá sustituir uno de los jugadores fichados que afectan a la sanción en la siguiente jornada.
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 font-medium">
+              Se deberá sustituir uno de los jugadores fichados que afectan a la sanción, en la siguiente jornada
             </p>
           </div>
 
           <div>
             <h3 className="font-bold text-slate-800 text-sm mb-2">Superado el presupuesto permitido</h3>
             <p className="text-sm text-slate-600 mb-1">
-              No puntuarán los dos jugadores que tengan la mayor puntuación en el equipo.
+              No puntuarán los dos jugadores que tengan la mayor puntuación.
             </p>
-            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
-              Se deberá sustituir uno de los jugadores fichados que afectan a la sanción en la siguiente jornada.
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 font-medium">
+              Se deberá sustituir uno de los jugadores fichados que afectan a la sanción, en la siguiente jornada
             </p>
           </div>
 
@@ -431,18 +471,18 @@ export default async function PuntuacionPage() {
             <p className="text-sm text-slate-600 mb-1">
               No le puntuará el jugador con mayor puntuación introducido esa jornada en la posición que rebasa el máximo, ni el jugador mejor puntuado de los 10 restantes.
             </p>
-            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
-              Se deberá sustituir uno de los jugadores fichados que afectan a la sanción en la siguiente jornada.
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 font-medium">
+              Se deberá sustituir uno de los jugadores fichados que afectan a la sanción, en la siguiente jornada
             </p>
           </div>
 
           <div>
             <h3 className="font-bold text-slate-800 text-sm mb-2">Oveja Dolly (Made in Crispin)</h3>
             <p className="text-sm text-slate-600 mb-1">
-              Alinear dos jugadores con el mismo ID en el mismo equipo. No puntuará el jugador en cuestión, ni el mejor del resto del equipo.
+              No puntuará el jugador en cuestión, ni el mejor del resto del equipo.
             </p>
-            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
-              El jugador que afecta a la sanción deberá ser sustituido en la siguiente jornada.
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 font-medium">
+              El jugador que afecta a la sanción deberá ser sustituido, en la siguiente jornada
             </p>
           </div>
         </div>
