@@ -800,40 +800,40 @@ export default function JugadoresPage() {
         {filteredPlayers.map((player) => (
           <div key={player.id} onClick={() => router.push(`/jugadores/${player.id}`)} className="cursor-pointer">
             <Card className="!bg-white hover:shadow-md transition-all border-slate-200 hover:border-emerald-500 rounded-none sm:rounded-lg overflow-hidden">
-              <div className="flex flex-col sm:flex-row gap-3 p-3 sm:items-center">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2 p-2 sm:p-3">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                   {player.photo ? (
                     <img
                       src={player.photo}
                       alt={player.short_name || ''}
-                      className="w-11 h-11 rounded-full object-cover border border-slate-200 shrink-0"
+                      className="w-9 h-9 sm:w-11 sm:h-11 rounded-full object-cover border border-slate-200 shrink-0"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                     />
                   ) : (
-                    <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-400 border border-slate-200 shrink-0">
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-slate-100 flex items-center justify-center text-xs sm:text-sm font-bold text-slate-400 border border-slate-200 shrink-0">
                       {player.shirt_number || '?'}
                     </div>
                   )}
 
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <h3 className="text-sm font-bold !text-slate-900 truncate">{player.short_name || `${player.first_name} ${player.last_name}`}</h3>
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${getPositionColor(player.position)}`}>
+                    <div className="flex items-baseline gap-1.5 flex-wrap">
+                      <h3 className="text-xs sm:text-sm font-bold !text-slate-900 truncate">{player.short_name || `${player.first_name} ${player.last_name}`}</h3>
+                      <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] sm:text-[10px] font-bold shrink-0 ${getPositionColor(player.position)}`}>
                         {getPositionLabel(player.position)}
                       </span>
                       {player.precio && (
-                        <span className="text-base font-black text-emerald-600 shrink-0">
+                        <span className="text-xs sm:text-base font-black text-emerald-600 shrink-0">
                           {player.precio}M
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-1 mt-0.5 sm:mt-1">
                       {player.team?.logo_url && (
-                        <img src={player.team.logo_url} alt={player.team.name || ''} className="w-4 h-4 object-contain shrink-0" />
+                        <img src={player.team.logo_url} alt={player.team.name || ''} className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain shrink-0" />
                       )}
-                      <p className="text-xs !text-slate-500 truncate">{player.team?.name || 'Sin equipo'}</p>
+                      <p className="text-[11px] sm:text-xs !text-slate-500 truncate">{player.team?.name || 'Sin equipo'}</p>
                       {player.shirt_number && (
-                        <span className="inline-flex items-center justify-center w-5 h-5 bg-slate-100 border border-slate-200 rounded text-[11px] font-bold text-slate-600 shrink-0" title="Dorsal">
+                        <span className="inline-flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 bg-slate-100 border border-slate-200 rounded text-[10px] sm:text-[11px] font-bold text-slate-600 shrink-0" title="Dorsal">
                           {player.shirt_number}
                         </span>
                       )}
@@ -841,42 +841,42 @@ export default function JugadoresPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto pt-2.5 sm:pt-0 border-t border-slate-100 sm:border-t-0 shrink-0">
-                  <div className="text-center flex-1 sm:flex-none">
+                <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                  <div className="text-center">
                     <div className="flex items-center justify-center gap-0.5 !text-emerald-600 leading-none">
                       <TrendingUp className="h-3 w-3" />
-                      <span className="text-sm font-bold">
+                      <span className="text-xs sm:text-sm font-bold">
                         {player.stats ? Math.round(player.stats.total_points * 10) / 10 : 0}
                       </span>
                     </div>
-                    <p className="text-[10px] !text-slate-400 mt-0.5">Puntos</p>
+                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Puntos</p>
                   </div>
-                  <div className="text-center flex-1 sm:flex-none">
+                  <div className="text-center">
                     <div className="flex items-center justify-center gap-0.5 !text-slate-700 leading-none">
                       <Goal className="h-3 w-3" />
-                      <span className="text-sm font-semibold">{player.stats?.goals || 0}</span>
+                      <span className="text-xs sm:text-sm font-semibold">{player.stats?.goals || 0}</span>
                     </div>
-                    <p className="text-[10px] !text-slate-400 mt-0.5">Goles</p>
+                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Goles</p>
                   </div>
-                  <div className="text-center flex-1 sm:flex-none">
+                  <div className="text-center">
                     <div className="flex items-center justify-center gap-0.5 !text-slate-700 leading-none">
-                      <span className="text-[11px]">🅰️</span>
-                      <span className="text-sm font-semibold">{player.stats?.assists || 0}</span>
+                      <span className="text-[10px] sm:text-[11px]">🅰️</span>
+                      <span className="text-xs sm:text-sm font-semibold">{player.stats?.assists || 0}</span>
                     </div>
-                    <p className="text-[10px] !text-slate-400 mt-0.5">Asist.</p>
+                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Asist.</p>
                   </div>
-                  <div className="text-center flex-1 sm:flex-none">
+                  <div className="text-center">
                     <div className="flex items-center justify-center gap-0.5 !text-amber-600 leading-none">
                       <Ticket className="h-3 w-3" />
-                      <span className="text-sm font-semibold">{player.stats?.yellow_cards || 0}</span>
+                      <span className="text-xs sm:text-sm font-semibold">{player.stats?.yellow_cards || 0}</span>
                     </div>
-                    <p className="text-[10px] !text-slate-400 mt-0.5">Amarillas</p>
+                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Amarillas</p>
                   </div>
-                  <div className="text-center flex-1 sm:flex-none min-w-[55px] sm:min-w-[52px]">
-                    <span className="block text-sm font-semibold !text-slate-700 leading-none">
+                  <div className="text-center min-w-[28px] sm:min-w-[52px]">
+                    <span className="block text-xs sm:text-sm font-semibold !text-slate-700 leading-none">
                       {player.stats?.matches_played || 0}
                     </span>
-                    <p className="text-[10px] !text-slate-400 mt-0.5">
+                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">
                       {player.stats?.avg_points || 0} pts/pj
                     </p>
                   </div>
