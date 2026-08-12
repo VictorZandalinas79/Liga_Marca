@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Trophy, Users, Calendar, LogOut, Home, CircleDot, Lock, Gauge, ShieldCheck } from 'lucide-react'
+import { Trophy, Users, Calendar, LogOut, Home, CircleDot, Lock, Gauge, ShieldCheck, Menu, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 import { AuthGuard } from '@/components/layout/auth-guard'
@@ -29,6 +29,7 @@ export default function DashboardLayout({
 }) {
   const [userName, setUserName] = useState<string>('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const supabase = createClient()
   const { isUnlockWindowOpen, timeUntilLock } = useMatchdayLock()
   const pathname = usePathname()
@@ -173,6 +174,14 @@ export default function DashboardLayout({
               </div>
             </Link>
 
+            {/* Iconos centrados (Móvil) */}
+            <div className="flex md:hidden items-center justify-center flex-1">
+              <div className="flex items-center gap-3">
+                <OnlineUsersMenu />
+                <NotificationBell />
+              </div>
+            </div>
+
             <nav className="hidden md:flex items-center space-x-1">
               {navItems.map((item) => (
                 <Link
@@ -186,18 +195,33 @@ export default function DashboardLayout({
               ))}
             </nav>
 
-            <div className="flex items-center gap-2 sm:gap-4">
-              <OnlineUsersMenu />
-              <NotificationBell />
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+              {/* Iconos en la derecha (Desktop) */}
+              <div className="hidden md:flex items-center gap-3">
+                <OnlineUsersMenu />
+                <NotificationBell />
+              </div>
+              
               <div className="h-6 w-px bg-slate-700 hidden sm:block"></div>
               <span className="text-sm font-medium text-slate-200 hidden sm:block">{userName}</span>
+              
+              {/* Salir (Desktop) */}
               <button
                 onClick={handleSignOut}
-                className="flex items-center space-x-2 p-2 sm:px-3 sm:py-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all duration-200"
+                className="hidden sm:flex items-center space-x-2 p-2 sm:px-3 sm:py-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all duration-200"
                 title="Salir"
               >
                 <LogOut className="h-5 w-5 sm:h-4 sm:w-4 group-hover:text-rose-400" />
-                <span className="text-sm hidden sm:block">Salir</span>
+                <span className="text-sm">Salir</span>
+              </button>
+
+              {/* Botón Hamburguesa (Móvil) - Queda solo a la derecha */}
+              <button
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="md:hidden flex items-center justify-center p-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all duration-200"
+                title="Menú"
+              >
+                <Menu className="h-6 w-6" />
               </button>
             </div>
           </div>
@@ -208,21 +232,85 @@ export default function DashboardLayout({
         {children}
       </main>
 
-      {/* Navegación móvil inferior (siempre abajo del contenido) */}
-      <nav className="md:hidden bg-slate-900 border-t border-slate-800 pb-[max(0.5rem,env(safe-area-inset-bottom))] w-full mt-auto">
-        <div className="flex items-center justify-around px-2 py-2">
-          {navItems.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className="flex flex-col items-center space-y-1 p-2 rounded-xl text-slate-400 hover:text-white active:bg-slate-800 transition-all w-16"
-            >
-              <item.icon className="h-5 w-5 mb-0.5" />
-              <span className="text-[10px] font-medium leading-tight truncate w-full text-center">{item.name}</span>
-            </Link>
-          ))}
+      {/* Menú Lateral Desplegable Móvil */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden bg-slate-950/80 backdrop-blur-md flex justify-end transition-opacity duration-300">
+          <div className="w-4/5 max-w-sm bg-slate-900 border-l border-slate-800 h-full flex flex-col p-6 shadow-2xl relative animate-in slide-in-from-right duration-250">
+            {/* Botón Cerrar (X) arriba a la derecha */}
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+                title="Cerrar"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Cabecera / Logos Centrados y más Grandes */}
+            <div className="flex items-center justify-center pb-6 border-b border-slate-800 mb-6 gap-4">
+              <div className="relative w-14 h-14">
+                <Image
+                  src="/icono_lliga.png"
+                  alt="Logo"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+              <div className="relative w-20 h-20">
+                <Image
+                  src="/liga.png"
+                  alt="Liga"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+            </div>
+
+            {/* Info usuario */}
+            <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800/80 mb-6">
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Usuario</p>
+              <p className="text-white font-bold text-lg mt-0.5 truncate">{userName || 'Manager LMV'}</p>
+            </div>
+
+            {/* Enlaces de navegación */}
+            <nav className="flex-1 space-y-1.5 overflow-y-auto">
+              {navItems.map((item) => {
+                const isActive = pathname === item.href
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`flex items-center space-x-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all ${
+                      isActive
+                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/10'
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <item.icon className="h-5 w-5 shrink-0" />
+                    <span>{item.name}</span>
+                  </Link>
+                )
+              })}
+            </nav>
+
+            {/* Botón Salir en el menú desplegable */}
+            <div className="pt-6 border-t border-slate-800 mt-auto">
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false)
+                  handleSignOut()
+                }}
+                className="w-full flex items-center justify-center space-x-2 px-4 py-3.5 bg-rose-950/20 hover:bg-rose-900/30 border border-rose-900/40 hover:border-rose-900/60 rounded-xl text-sm font-semibold text-rose-400 transition-all"
+              >
+                <LogOut className="h-5 w-5 shrink-0" />
+                <span>Cerrar sesión</span>
+              </button>
+            </div>
+          </div>
         </div>
-      </nav>
+      )}
     </div>
     </AuthGuard>
   )

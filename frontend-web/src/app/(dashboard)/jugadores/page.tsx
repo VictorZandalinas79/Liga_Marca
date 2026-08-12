@@ -796,97 +796,99 @@ export default function JugadoresPage() {
       </div>
 
       {/* Lista de jugadores */}
-      <div className="grid gap-3">
+      <div className="grid gap-3 -mx-4 sm:mx-0">
         {filteredPlayers.map((player) => (
           <div key={player.id} onClick={() => router.push(`/jugadores/${player.id}`)} className="cursor-pointer">
-            <Card className="hover:shadow-lg transition-all !bg-slate-800 border-transparent hover:border-emerald-500">
-              <CardContent className="p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="flex items-center space-x-4 sm:space-x-5">
-                    {player.photo ? (
-                      <img
-                        src={player.photo}
-                        alt={player.short_name || ''}
-                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shadow-sm border-2 border-black shrink-0"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                      />
-                    ) : (
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 border-2 border-black shrink-0">
-                        {player.shirt_number || '?'}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-semibold text-white truncate">{player.short_name || `${player.first_name} ${player.last_name}`}</h3>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${getPositionColor(player.position)}`}>
-                          {getPositionLabel(player.position)}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2 mt-1">
-                        {player.team?.logo_url && (
-                          <img src={player.team.logo_url} alt={player.team.name || ''} className="w-6 h-6 object-contain shrink-0" />
-                        )}
-                        <p className="text-sm text-slate-400 truncate">{player.team?.name || 'Sin equipo'}</p>
-                        {player.shirt_number && (
-                          <span
-                            className="font-black text-white/95 text-xl sm:text-2xl leading-none ml-2"
-                            style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}
-                          >
-                            {player.shirt_number}
-                          </span>
-                        )}
-                      </div>
+            <Card className="hover:shadow-lg transition-all border-transparent hover:border-emerald-500 rounded-none sm:rounded-xl overflow-hidden">
+              {/* Parte Superior: Fondo Claro/Blanco */}
+              <div className="!bg-slate-50 p-6 sm:p-4 border-b border-slate-200">
+                <div className="flex items-center space-x-4 sm:space-x-5">
+                  {player.photo ? (
+                    <img
+                      src={player.photo}
+                      alt={player.short_name || ''}
+                      className="w-20 h-20 sm:w-22 sm:h-22 rounded-full object-cover shadow-md border-2 border-slate-200 shrink-0"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                    />
+                  ) : (
+                    <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full bg-slate-200 flex items-center justify-center text-2xl font-bold text-slate-400 border-2 border-slate-200 shrink-0">
+                      {player.shirt_number || '?'}
                     </div>
-                  </div>
-
-                  <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 flex-wrap border-t border-slate-700 sm:border-0 pt-3 sm:pt-0">
-                    <div className="text-center">
-                      <p className="text-xs text-slate-400 mb-1">Precio</p>
-                      <span className="text-2xl sm:text-3xl font-bold text-emerald-400">
-                        {player.precio ? `${player.precio}M` : '-'}
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                      <h3 className="text-lg sm:text-xl font-bold !text-slate-900 truncate">{player.short_name || `${player.first_name} ${player.last_name}`}</h3>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${getPositionColor(player.position)}`}>
+                        {getPositionLabel(player.position)}
                       </span>
                     </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center space-x-1 text-emerald-400">
-                        <TrendingUp className="h-4 w-4" />
-                        <span className="text-2xl font-bold">
-                          {player.stats ? Math.round(player.stats.total_points * 10) / 10 : 0}
+                    <div className="flex items-center space-x-2 mt-1.5">
+                      {player.team?.logo_url && (
+                        <img src={player.team.logo_url} alt={player.team.name || ''} className="w-6 h-6 object-contain shrink-0" />
+                      )}
+                      <p className="text-sm sm:text-base !text-slate-600 truncate">{player.team?.name || 'Sin equipo'}</p>
+                      {player.shirt_number && (
+                        <span
+                          className="font-black !text-slate-800 text-2xl sm:text-2xl leading-none ml-2"
+                          style={{ textShadow: '2px 2px 4px rgba(255,255,255,0.9), -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff' }}
+                        >
+                          {player.shirt_number}
                         </span>
-                      </div>
-                      <p className="text-xs text-slate-400">Puntos</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center space-x-1 text-slate-300">
-                        <Goal className="h-4 w-4" />
-                        <span className="font-semibold">{player.stats?.goals || 0}</span>
-                      </div>
-                      <p className="text-xs text-slate-400">Goles</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center space-x-1 text-slate-300">
-                        <span className="text-sm">🅰️</span>
-                        <span className="font-semibold">{player.stats?.assists || 0}</span>
-                      </div>
-                      <p className="text-xs text-slate-400">Asist.</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center space-x-1 text-amber-400">
-                        <Ticket className="h-4 w-4" />
-                        <span className="font-semibold">{player.stats?.yellow_cards || 0}</span>
-                      </div>
-                      <p className="text-xs text-slate-400">Amarillas</p>
-                    </div>
-                    <div className="text-center min-w-[60px]">
-                      <div className="text-sm text-slate-400">
-                        {player.stats?.matches_played || 0} partidos
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        Media: {player.stats?.avg_points || 0} pts
-                      </p>
+                      )}
                     </div>
                   </div>
                 </div>
-              </CardContent>
+              </div>
+
+              {/* Parte Inferior: Fondo Oscuro para Estadísticas */}
+              <div className="p-6 sm:p-4 bg-slate-800">
+                <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 flex-wrap">
+                  <div className="text-center">
+                    <p className="text-xs text-slate-400 mb-1">Precio</p>
+                    <span className="text-2xl sm:text-3xl font-bold text-emerald-400">
+                      {player.precio ? `${player.precio}M` : '-'}
+                    </span>
+                  </div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center space-x-1 text-emerald-400">
+                      <TrendingUp className="h-4 w-4" />
+                      <span className="text-2xl font-bold">
+                        {player.stats ? Math.round(player.stats.total_points * 10) / 10 : 0}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">Puntos</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center space-x-1 text-slate-300">
+                      <Goal className="h-4 w-4" />
+                      <span className="font-semibold">{player.stats?.goals || 0}</span>
+                    </div>
+                    <p className="text-xs text-slate-400">Goles</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center space-x-1 text-slate-300">
+                      <span className="text-sm">🅰️</span>
+                      <span className="font-semibold">{player.stats?.assists || 0}</span>
+                    </div>
+                    <p className="text-xs text-slate-400">Asist.</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center space-x-1 text-amber-400">
+                      <Ticket className="h-4 w-4" />
+                      <span className="font-semibold">{player.stats?.yellow_cards || 0}</span>
+                    </div>
+                    <p className="text-xs text-slate-400">Amarillas</p>
+                  </div>
+                  <div className="text-center min-w-[60px]">
+                    <div className="text-sm text-slate-400">
+                      {player.stats?.matches_played || 0} partidos
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Media: {player.stats?.avg_points || 0} pts
+                    </p>
+                  </div>
+                </div>
+              </div>
             </Card>
           </div>
         ))}
