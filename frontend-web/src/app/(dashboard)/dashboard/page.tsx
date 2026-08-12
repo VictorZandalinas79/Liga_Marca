@@ -88,17 +88,17 @@ function PitchPlayerCard({
   const pts = points !== undefined ? (Math.round(points * 10) / 10).toFixed(1) : (hasMatchStarted ? "0.0" : null)
 
   return (
-    <div className="flex flex-col items-center w-[56px] sm:w-[72px] md:w-[80px] lg:w-[84px] text-center relative shrink-0 group transition-all duration-300">
+    <div className="flex flex-col items-center w-[64px] sm:w-[80px] md:w-[88px] lg:w-[94px] text-center relative shrink-0 group transition-all duration-300">
       <div className="relative mb-1 md:mb-2 lg:mb-3">
         {/* Foto del jugador actual */}
         {player.photo ? (
           <img
             src={player.photo}
             alt={player.short_name || ''}
-            className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded-full object-cover border-2 sm:border-[3px] shadow-lg bg-slate-200 transition-all duration-300 ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}
+            className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-[72px] lg:h-[72px] rounded-full object-cover border-2 sm:border-[3px] shadow-lg bg-slate-200 transition-all duration-300 ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}
           />
         ) : (
-          <div className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs sm:text-sm md:text-sm lg:text-base font-bold border-2 sm:border-[3px] shadow-lg transition-all duration-300 ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}>
+          <div className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-[72px] lg:h-[72px] rounded-full bg-slate-800 text-white flex items-center justify-center text-xs sm:text-sm md:text-base lg:text-lg font-bold border-2 sm:border-[3px] shadow-lg transition-all duration-300 ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}>
             {player.shirt_number || '?'}
           </div>
         )}
@@ -108,26 +108,26 @@ function PitchPlayerCard({
           <img
             src={player.team.logo_url}
             alt={player.team?.name || ''}
-            className="absolute -bottom-1 -left-2 sm:-left-3 md:-bottom-1 md:-left-4 lg:-bottom-1 lg:-left-4 w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 object-contain drop-shadow-md transition-all duration-300"
+            className="absolute -bottom-1 -left-2 sm:-left-3 md:-bottom-1 md:-left-4 lg:-bottom-1 lg:-left-4 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 object-contain drop-shadow-md transition-all duration-300"
           />
         )}
 
         {/* Puntos (arriba de la foto) */}
         {pts !== null && (
-          <div className="absolute -top-3 md:-top-4 lg:-top-4 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white font-extrabold text-[10px] sm:text-[11px] md:text-[11px] lg:text-[12px] leading-none rounded-sm px-1 py-[2px] md:px-1 md:py-0.5 lg:px-1 lg:py-1 flex items-center justify-center shadow-md border border-amber-400 transition-all duration-300">
+          <div className="absolute -top-3 sm:-top-4 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white font-extrabold text-[10px] sm:text-[11px] md:text-[11px] lg:text-[12px] leading-none rounded-sm px-1 py-[2px] md:px-1 md:py-0.5 lg:px-1 lg:py-1 flex items-center justify-center shadow-md border border-amber-400 transition-all duration-300">
             {isPenalized ? '0.0' : pts}
           </div>
         )}
 
         {/* Precio (a la derecha) */}
-        <div className="absolute top-1/2 -right-4 sm:-right-[18px] md:-right-[20px] lg:-right-[22px] -translate-y-1/2 bg-emerald-600 text-white font-black text-[12px] sm:text-[13px] md:text-[14px] lg:text-[15px] flex items-center justify-center rounded-full w-[28px] h-[28px] sm:w-[32px] sm:h-[32px] md:w-[36px] md:h-[36px] lg:w-[40px] lg:h-[40px] shadow-xl border-2 border-white transition-all duration-300 z-20">
+        <div className="absolute top-1/2 -right-4 sm:-right-5 md:-right-6 -translate-y-1/2 bg-emerald-600 text-white font-black text-[12px] sm:text-[13px] md:text-[14px] lg:text-[15px] flex items-center justify-center rounded-full w-[32px] h-[32px] sm:w-[36px] sm:h-[36px] md:w-[40px] md:h-[40px] lg:w-[44px] lg:h-[44px] shadow-xl border-2 border-white transition-all duration-300 z-20">
           {player.precio ? `${player.precio}M` : '-'}
         </div>
       </div>
 
       {/* Nombre del jugador */}
       <div className="flex flex-col items-center w-[150%] -mt-1 md:-mt-1.5 z-30">
-        <p className="font-extrabold text-white text-[9.5px] sm:text-[11px] md:text-[12px] lg:text-[13px] leading-[1.1] drop-shadow-md relative w-full text-center transition-all duration-300 truncate"
+        <p className="font-extrabold text-white text-[10px] sm:text-[12px] md:text-[13px] lg:text-[14px] leading-[1.1] drop-shadow-md relative w-full text-center transition-all duration-300 truncate"
            style={{ textShadow: '1px 1px 3px rgba(0,0,0,1)' }}>
           {formatPlayerName(player.short_name || player.first_name)}
         </p>
