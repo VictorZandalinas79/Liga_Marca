@@ -30,7 +30,7 @@ export async function dispatchLiveSync(inputs: DispatchInputs): Promise<void> {
         SYNC_MATCHDAY: inputs.matchday || '' 
       }
       // Ejecutar en segundo plano, sin esperar (fuego y olvida, igual que GitHub Actions)
-      const child = exec('python ci/run_live_sync.py', { env })
+      const child = exec('../venv/bin/python ci/run_live_sync.py', { env })
       child.stdout?.on('data', console.log)
       child.stderr?.on('data', console.error)
       return

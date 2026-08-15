@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -37,6 +37,9 @@ interface Fixture {
   is_complete?: boolean
 }
 
+// Cada cuánto se refrescan marcadores y puntos mientras hay partidos en juego
+const LIVE_REFRESH_MS = 45_000
+
 interface SyncStatus {
   syncing: boolean
   syncingAll: boolean
@@ -53,6 +56,10 @@ export default function PartidosPage() {
   const [fixtures, setFixtures] = useState<Fixture[]>([])
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ syncing: false, syncingAll: false })
   const [allFixturesGlobal, setAllFixturesGlobal] = useState<Fixture[]>([])
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  // Mientras Date.now() < pollUntil forzamos refresco aunque ningún partido esté marcado 'live'
+  // (tras lanzar un sync los datos tardan un par de minutos en aparecer).
+  const [pollUntil, setPollUntil] = useState(0)
   const supabase = createClient()
   const router = useRouter()
   const { currentMatchday: hookMatchday, unlockTime: hookUnlockTime } = useMatchdayLock()
@@ -227,8 +234,9 @@ export default function PartidosPage() {
     await loadFixturesForMatchday(closestMatchday)
   }
 
-  const loadFixturesForMatchday = async (matchday: number | string) => {
-    console.log(`📥 Cargando jornada ${matchday}...`)
+  const loadFixturesForMatchday = async (matchday: number | string, opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true
+    if (!silent) console.log(`📥 Cargando jornada ${matchday}...`)
 
     // Determinar si estamos cargando por matchday o por momento
     const isMomentoMode = typeof matchday === 'string'
@@ -244,12 +252,17 @@ export default function PartidosPage() {
       console.error('Error al obtener fixtures:', fixturesError)
     }
 
-    console.log('Fixtures recibidos:', fixturesData?.length || 0)
-    console.log('Datos de fixtures:', fixturesData)
+    if (!silent) {
+      console.log('Fixtures recibidos:', fixturesData?.length || 0)
+      console.log('Datos de fixtures:', fixturesData)
+    }
 
     if (!fixturesData) {
-      setFixtures([])
-      setLoading(false)
+      // En refrescos silenciosos no vaciamos la vista por un fallo puntual de red.
+      if (!silent) {
+        setFixtures([])
+        setLoading(false)
+      }
       return
     }
 
@@ -273,8 +286,10 @@ export default function PartidosPage() {
       console.error('Error al obtener player_scores:', scoresError)
     }
 
-    console.log('Player scores recibidos:', scoresData?.length || 0)
-    console.log('Fixture IDs:', fixtureIds)
+    if (!silent) {
+      console.log('Player scores recibidos:', scoresData?.length || 0)
+      console.log('Fixture IDs:', fixtureIds)
+    }
 
     // Contar jugadores por fixture para determinar si está completo
     const fixturesWithPlayers = new Map<string, number>()
@@ -282,13 +297,13 @@ export default function PartidosPage() {
       fixturesWithPlayers.set(score.fixture_id, (fixturesWithPlayers.get(score.fixture_id) || 0) + 1)
     })
 
-    console.log('Contador de jugadores por fixture:', Object.fromEntries(fixturesWithPlayers))
+    if (!silent) console.log('Contador de jugadores por fixture:', Object.fromEntries(fixturesWithPlayers))
 
     // Un partido se considera completo si tiene más de 18 jugadores con puntos (aprox 2 equipos completos)
     const fixturesWithTeams = fixturesData.map(f => {
       const playerCount = fixturesWithPlayers.get(f.id) || 0
       const isComplete = playerCount > 18
-      console.log(`Fixture ${f.id}: ${playerCount} jugadores, status: ${f.status}, is_complete: ${isComplete}`)
+      if (!silent) console.log(`Fixture ${f.id}: ${playerCount} jugadores, status: ${f.status}, is_complete: ${isComplete}`)
       return {
         ...f,
         home_team: f.home_team_id ? {
@@ -304,8 +319,49 @@ export default function PartidosPage() {
     })
 
     setFixtures(fixturesWithTeams)
-    setLoading(false)
+    setLastRefresh(new Date())
+    if (!silent) setLoading(false)
   }
+
+  // ── Auto-refresco en vivo ──────────────────────────────────────────────
+  // La página solo cargaba los fixtures al montar, así que marcadores y puntos
+  // de los partidos en juego se quedaban congelados hasta refrescar a mano.
+  // Refrescamos en silencio mientras haya partidos en juego (o en su ventana
+  // horaria), y también durante unos minutos tras lanzar una sincronización.
+  const hasLiveFixtures = fixtures.some(f => f.status === 'live')
+  const hasFixturesInPlayWindow = fixtures.some(f => {
+    if (f.is_complete || !f.start_time) return false
+    const elapsedMs = Date.now() - new Date(f.start_time).getTime()
+    // Desde 5 min antes del pitido inicial hasta 3 h después
+    return elapsedMs > -5 * 60 * 1000 && elapsedMs < 3 * 60 * 60 * 1000
+  })
+  const shouldAutoRefresh = hasLiveFixtures || hasFixturesInPlayWindow || Date.now() < pollUntil
+
+  // El intervalo lee la jornada desde una ref para no reiniciarse en cada refresco.
+  const matchdayRef = useRef<number | string>(currentMatchday)
+  matchdayRef.current = currentMatchday
+
+  useEffect(() => {
+    if (!shouldAutoRefresh) return
+
+    const refresh = () => loadFixturesForMatchday(matchdayRef.current, { silent: true })
+
+    const intervalId = setInterval(() => {
+      // Sin refrescos en pestañas de fondo; al volver se refresca al instante.
+      if (!document.hidden) refresh()
+    }, LIVE_REFRESH_MS)
+
+    const onVisible = () => {
+      if (!document.hidden) refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldAutoRefresh])
 
   const handleMatchdayChange = async (newMatchday: number | string) => {
   if (typeof newMatchday === 'string') {
@@ -454,14 +510,16 @@ export default function PartidosPage() {
     if (response.ok) {
       setSyncStatus({
         syncingAll: false,
-        syncMessage: `✅ ${result.message || 'Sincronización lanzada'}. Los puntos aparecerán en unos minutos; refresca la página.`,
+        syncMessage: `✅ ${result.message || 'Sincronización lanzada'}. Los puntos se actualizarán solos en cuanto lleguen.`,
         syncType: 'success',
         syncing: false
       })
 
       // La sincronización corre en segundo plano (GitHub Actions): recargamos
-      // por si ya había datos, pero los nuevos tardan un par de minutos.
+      // por si ya había datos, y mantenemos el auto-refresco 10 min para
+      // recoger los que lleguen después.
       console.log('🔄 Recargando datos de la jornada...')
+      setPollUntil(Date.now() + 10 * 60 * 1000)
       await loadFixturesForMatchday(currentMatchday)
     } else {
       setSyncStatus({
@@ -562,6 +620,13 @@ export default function PartidosPage() {
                 </span>
               )}
             </p>
+            {shouldAutoRefresh && (
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-red-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600 inline-block animate-pulse" />
+                Actualizando en directo
+                {lastRefresh && ` · ${formatTime(lastRefresh.toISOString())}`}
+              </p>
+            )}
           </div>
 
           {/* Selector de jornadas */}
