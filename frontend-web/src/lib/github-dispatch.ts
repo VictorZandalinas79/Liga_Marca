@@ -17,9 +17,24 @@ export type DispatchInputs = {
   matchday?: string
 }
 
+import { exec } from 'child_process'
+
 export async function dispatchLiveSync(inputs: DispatchInputs): Promise<void> {
   const token = process.env.GITHUB_DISPATCH_TOKEN
   if (!token) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Falta GITHUB_DISPATCH_TOKEN. Ejecutando script de sincronización localmente en segundo plano...')
+      const env = { 
+        ...process.env, 
+        SYNC_FIXTURE_IDS: inputs.fixture_ids || '', 
+        SYNC_MATCHDAY: inputs.matchday || '' 
+      }
+      // Ejecutar en segundo plano, sin esperar (fuego y olvida, igual que GitHub Actions)
+      const child = exec('python ci/run_live_sync.py', { env })
+      child.stdout?.on('data', console.log)
+      child.stderr?.on('data', console.error)
+      return
+    }
     throw new Error('Falta GITHUB_DISPATCH_TOKEN en el entorno')
   }
 

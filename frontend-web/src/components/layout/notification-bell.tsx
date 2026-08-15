@@ -385,7 +385,7 @@ export function NotificationBell() {
                           )}
                           <div className="flex-1 min-w-0 pr-8">
                             <div className="flex items-center gap-2 mb-1">
-                              <p className={`font-bold truncate ${isWarning ? 'text-red-900' : 'text-slate-900'}`}>{n.title}</p>
+                              <p className={`font-bold ${isWarning ? 'text-red-900' : 'text-slate-900'}`}>{n.title}</p>
                               {!n.read_at && (
                                 <span className={`h-2.5 w-2.5 rounded-full shrink-0 shadow-sm ${isWarning ? 'bg-red-500' : 'bg-blue-500'}`} />
                               )}

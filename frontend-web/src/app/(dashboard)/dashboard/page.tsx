@@ -133,7 +133,7 @@ function PitchPlayerCard({
         </p>
       </div>
       {isPenalized && sanctionReason ? (
-        <p className="text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] text-red-300 font-bold leading-tight w-[130%] drop-shadow-md mt-0.5 lg:mt-1 truncate bg-red-950/80 rounded px-1 py-0.5 transition-all duration-300 z-30" title={sanctionReason}>
+        <p className="text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] text-red-300 font-bold leading-tight w-[130%] drop-shadow-md mt-0.5 lg:mt-1 break-words whitespace-normal bg-red-950/80 rounded px-1 py-0.5 transition-all duration-300 z-30" title={sanctionReason}>
           {sanctionReason}
         </p>
       ) : null}
@@ -1748,7 +1748,7 @@ export default function DashboardPage() {
           {isUnlockWindowOpen ? (
             <div className="flex flex-col lg:flex-row gap-4 items-start">
               {/* Pitch */}
-              <div className="relative w-full lg:flex-1 max-w-md mx-auto border-2 border-white rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]" style={{
+              <div className={`relative w-full lg:flex-1 ${userDivision === 1 ? 'max-w-lg' : 'max-w-md'} mx-auto border-2 border-white rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]`} style={{
                 backgroundImage: userDivision === 1 ? 'url(/pitches/pitch_div1.png)' : userDivision === 2 ? 'url(/pitches/pitch_div2.png)' : userDivision === 3 ? 'url(/pitches/pitch_div3_large.png)' : 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
                 backgroundSize: userDivision === 1 || userDivision === 2 || userDivision === 3 ? '100% 100%' : 'auto',
                 backgroundColor: userDivision === 1 ? 'transparent' : userDivision === 2 ? '#dfd6a7' : userDivision === 3 ? '#8B5A2B' : '#43a047',
@@ -1786,7 +1786,7 @@ export default function DashboardPage() {
                 style={userDivision === 1 ? { filter: 'drop-shadow(0 25px 20px rgba(0,0,0,0.6))' } : {}}
               >
                 {/* Delanteros */}
-                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-[15%]' : ''}`}>
+                <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? 'px-[15%]' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map((player, idx, arr) => (
                     <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
@@ -1798,7 +1798,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Mediocampistas */}
-                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''}`}>
+                <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map((player, idx, arr) => (
                     <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
@@ -1810,7 +1810,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Defensas */}
-                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? 'px-0 -translate-y-4 sm:-translate-y-6' : ''}`}>
+                <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? 'px-0 -translate-y-4 sm:-translate-y-6' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map((player, idx, arr) => (
                     <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
                       <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
@@ -1822,7 +1822,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Portero */}
-                <div className={`flex justify-around items-center gap-1 ${userDivision === 1 ? '-translate-y-4 sm:-translate-y-6' : ''}`}>
+                <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? '-translate-y-4 sm:-translate-y-6' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
                     <PitchPlayerCard key={player._uniqueKey} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
                   ))}
