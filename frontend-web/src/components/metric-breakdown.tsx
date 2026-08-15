@@ -104,6 +104,12 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   const total = n(player.total_points)
   const visibleBlocks = blocks.filter(b => b.rows.length > 0)
 
+  // Encontrar el valor máximo absoluto para escalar las barras proporcionalmente
+  let maxPoints = 0.1;
+  visibleBlocks.forEach(b => b.rows.forEach(r => {
+    if (Math.abs(r.points) > maxPoints) maxPoints = Math.abs(r.points);
+  }));
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -129,21 +135,41 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
               </span>
             </div>
             <div className="divide-y divide-slate-50">
-              {blk.rows.map((row, idx) => (
-                <div key={idx} className="flex items-center justify-between px-4 py-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">{row.label}</p>
-                    {!row.flat && (
-                      <p className="text-xs text-slate-400">
-                        {row.count} × {row.unit >= 0 ? '+' : ''}{fmtPts(row.unit)}
-                      </p>
-                    )}
+              {blk.rows.map((row, idx) => {
+                const isPositive = row.points >= 0;
+                const pct = Math.min((Math.abs(row.points) / maxPoints) * 100, 100);
+                const barColor = isPositive ? 'bg-emerald-500' : 'bg-rose-500';
+                const bgBarColor = isPositive ? 'bg-emerald-50' : 'bg-rose-50';
+
+                return (
+                  <div key={idx} className="flex flex-col gap-1.5 px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`truncate text-sm font-semibold ${isPositive ? 'text-slate-800' : 'text-slate-600'}`}>
+                          {row.label}
+                        </span>
+                      </div>
+                      <div className="shrink-0 flex flex-col items-end">
+                        <span className={`text-sm font-bold tabular-nums ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {isPositive ? '+' : ''}{fmtPts(row.points)}
+                        </span>
+                        {!row.flat && (
+                          <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">
+                            {row.count} × {row.unit >= 0 ? '+' : ''}{fmtPts(row.unit)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Barra de progreso visual */}
+                    <div className={`w-full h-1.5 ${bgBarColor} rounded-full overflow-hidden flex-1 max-w-full`}>
+                      <div 
+                        className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
+                        style={{ width: `${pct}%` }} 
+                      />
+                    </div>
                   </div>
-                  <span className={`shrink-0 text-sm font-bold tabular-nums ${row.points >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {row.points >= 0 ? '+' : ''}{fmtPts(row.points)}
-                  </span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )
