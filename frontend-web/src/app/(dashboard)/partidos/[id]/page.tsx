@@ -133,6 +133,73 @@ interface PlayerScore {
 }
 
 
+const DorsalBadge = ({ number, className = '' }: { number: number | string; className?: string }) => {
+  const numberStr = String(number)
+  const isLong = numberStr.length > 2
+  const fontSize = isLong ? '55' : '70'
+  const strokeWidthOuter = isLong ? '5' : '7'
+  const strokeWidthInner = isLong ? '1.4' : '1.8'
+
+  return (
+    <div className={`bg-white border border-slate-200 shadow-sm flex items-center justify-center overflow-hidden shrink-0 ${className}`}>
+      <svg viewBox="0 0 100 100" className="w-full h-full p-0.5">
+        <text
+          x="50"
+          y="52"
+          dominantBaseline="middle"
+          textAnchor="middle"
+          className="font-black"
+          fontSize={fontSize}
+          fill="#154734"
+          stroke="#154734"
+          strokeWidth={strokeWidthOuter}
+          strokeLinejoin="round"
+        >
+          {numberStr}
+        </text>
+        <text
+          x="50"
+          y="52"
+          dominantBaseline="middle"
+          textAnchor="middle"
+          className="font-black"
+          fontSize={fontSize}
+          fill="#154734"
+          stroke="white"
+          strokeWidth={strokeWidthInner}
+          strokeLinejoin="round"
+        >
+          {numberStr}
+        </text>
+        <text
+          x="50"
+          y="52"
+          dominantBaseline="middle"
+          textAnchor="middle"
+          className="font-black"
+          fontSize={fontSize}
+          fill="#154734"
+        >
+          {numberStr}
+        </text>
+      </svg>
+    </div>
+  )
+}
+
+
+const formatPlayerName = (player: { short_name?: string; first_name?: string; last_name?: string }) => {
+  const fullName = player.short_name || `${player.first_name || ''} ${player.last_name || ''}`.trim()
+  const nameParts = fullName.split(/\s+/)
+  if (nameParts.length > 1) {
+    const firstName = nameParts[0]
+    const lastName = nameParts.slice(1).join(' ')
+    return `${firstName.charAt(0).toUpperCase()}. ${lastName}`
+  }
+  return fullName
+}
+
+
 export default function PartidoDetallePage() {
   const [loading, setLoading] = useState(true)
   const [fixture, setFixture] = useState<Fixture | null>(null)
@@ -530,6 +597,7 @@ export default function PartidoDetallePage() {
 
   const renderPlayerCard = (player: Player) => {
     const playerTeam = player.team_id === homeTeam?.id ? homeTeam : awayTeam
+    const isHome = player.team_id === homeTeam?.id
 
     return (
       <div
@@ -537,33 +605,46 @@ export default function PartidoDetallePage() {
         onClick={() => setSelectedPlayer(player)}
         className="cursor-pointer"
       >
-        <Card className={`hover:shadow-lg transition-all !bg-slate-800 border-slate-700 hover:border-emerald-500 ${
+        <Card className={`relative overflow-hidden hover:shadow-lg transition-all !bg-slate-800 border-slate-700 hover:border-emerald-500 ${
           !player.is_starter ? 'opacity-75' : ''
         }`}>
+          {player.shirt_number !== undefined && player.shirt_number !== null && player.photo && (
+            <DorsalBadge
+              number={player.shirt_number}
+              className={`absolute top-0 z-10 w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 ${
+                isHome 
+                  ? 'left-0 rounded-br-md border-r border-b' 
+                  : 'right-0 rounded-bl-md border-l border-b'
+              }`}
+            />
+          )}
           <CardContent className="p-1.5 sm:p-2.5 flex flex-col gap-1 sm:gap-1.5 min-h-[64px]">
             {/* Fila 1: Nombre completo del jugador (toda la línea para él) */}
-            <p className="text-[11px] sm:text-xs font-extrabold text-white truncate leading-none">
-              {player.short_name || `${player.first_name} ${player.last_name}`}
+            <p className={`text-[11px] sm:text-xs font-extrabold text-white truncate leading-none ${
+              isHome ? 'pl-6 sm:pl-8' : 'pr-6 sm:pr-8'
+            }`}>
+              {formatPlayerName(player)}
             </p>
 
             {/* Fila 2: Foto, demarcación/stats y puntos/eventos */}
             <div className="grid grid-cols-[auto_1fr_45px] sm:grid-cols-[auto_1fr_55px] items-center gap-1.5 sm:gap-2.5">
               {/* Col 1: Foto o dorsal (contenedor de tamaño fijo) */}
-              <div className="relative w-8 h-8 sm:w-10 sm:h-10 shrink-0">
+              <div className="relative w-8 h-8 sm:w-9.5 sm:h-9.5 shrink-0">
                 {player.photo ? (
                   <img
                     src={player.photo}
                     alt={player.short_name || ''}
-                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border border-slate-600 absolute inset-0"
+                    className="w-8 h-8 sm:w-9.5 sm:h-9.5 rounded-full object-cover border border-slate-600 absolute inset-0"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none'
                       ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
                     }}
                   />
                 ) : null}
-                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-700 flex items-center justify-center text-[10px] sm:text-xs font-bold text-slate-400 border border-slate-600 absolute inset-0 ${player.photo ? 'hidden' : ''}`}>
-                  {player.shirt_number || '?'}
-                </div>
+                <DorsalBadge
+                  number={player.shirt_number || '?'}
+                  className={`w-8 h-8 sm:w-9.5 sm:h-9.5 rounded-md absolute inset-0 ${player.photo ? 'hidden' : ''}`}
+                />
               </div>
 
               {/* Col 2: Escudo, Demarcación, Minutos */}
@@ -931,14 +1012,15 @@ export default function PartidoDetallePage() {
                     }}
                   />
                 ) : null}
-                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 border-2 border-slate-200 shrink-0 ${selectedPlayer.photo ? 'hidden' : ''}`}>
-                  {selectedPlayer.shirt_number || '?'}
-                </div>
+                <DorsalBadge
+                  number={selectedPlayer.shirt_number || '?'}
+                  className={`w-10 h-10 sm:w-12 sm:h-12 rounded-md border-2 border-slate-200 shrink-0 ${selectedPlayer.photo ? 'hidden' : ''}`}
+                />
                 
                 <div className="min-w-0 flex-1 flex flex-col justify-center">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 truncate max-w-[120px] sm:max-w-[220px] leading-tight">
-                      {selectedPlayer.short_name || `${selectedPlayer.first_name} ${selectedPlayer.last_name}`}
+                      {formatPlayerName(selectedPlayer)}
                     </h2>
                     <span className={`inline-flex items-center px-1 py-0.2 rounded text-[8px] sm:text-[9px] font-bold leading-none ${getPositionColor(selectedPlayer.position)}`}>
                       {getPositionLabel(selectedPlayer.position)}
