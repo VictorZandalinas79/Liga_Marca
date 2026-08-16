@@ -970,128 +970,173 @@ export default function JugadorDetallePage() {
   const p1Values = playerRadar.map(a => a.value)
   const p2Values = compareRadar.map(a => a.value)
 
-  // Preparar grupos de estadísticas para mostrar todas las métricas puntuables
-  interface StatItem {
-    label: string
-    value: number | string
-    valNum: number
-    color?: string
+  // ============================================================
+  // MÉTRICAS QUE PUNTÚAN (espejo de recalculate_player_points en
+  // trigger_descarga_eventos.py). Se acumulan partido a partido para
+  // respetar las reglas condicionales (portería a cero, goles
+  // encajados sólo si > 1 en el partido) y se muestran por 90 minutos.
+  // ============================================================
+  type AnyScore = PlayerScore & Record<string, unknown>
+  const nv = (s: AnyScore, k: string): number => Number(s[k]) || 0
+  const assistNoGoal = (s: AnyScore) => nv(s, 'fantasy_assist') || nv(s, 'intent_assists')
+  const lostBallsOf = (s: AnyScore) => nv(s, 'dispossessed') + nv(s, 'bad_touches')
+
+  // Bonus por resultado: si la BD no lo trae, se deduce del marcador (igual
+  // que en MetricBreakdown), para que el acumulado no se quede corto.
+  const resultBonusOf = (s: AnyScore): number => {
+    const stored = nv(s, 'win_bonus') + nv(s, 'draw_bonus')
+    if (stored > 0) return stored
+    const f = s.fixture
+    if (!f || nv(s, 'minutes_played') < SR.participation.minutes_threshold) return 0
+    const isHome = player.team_id === f.home_team_id
+    const isAway = player.team_id === f.away_team_id
+    if (!isHome && !isAway) return 0
+    const hs = Number(f.home_score)
+    const as = Number(f.away_score)
+    if (!Number.isFinite(hs) || !Number.isFinite(as)) return 0
+    const gf = isHome ? hs : as
+    const ga = isHome ? as : hs
+    if (gf > ga) return SR.participation.win_bonus_60
+    if (gf === ga) return SR.participation.draw_bonus_60
+    return 0
   }
 
-  interface StatGroup {
+  type MetricGroupId = 'ataque' | 'defensa' | 'bonus' | 'penal'
+
+  interface ScoringMetricDef {
+    key: string
+    label: string
+    group: MetricGroupId
+    /** Nº de eventos del jugador (base del valor /90). */
+    count: (s: AnyScore) => number
+    /** Puntos aportados en ese partido, con las mismas reglas que el motor. */
+    points: (s: AnyScore, pos: Pos) => number
+    /** Puntos por unidad para el chip "× valor". */
+    rate?: (pos: Pos) => number
+    /** Bonus fijos (participación, RELEVO): el número grande es pts/90. */
+    flat?: boolean
+  }
+
+  const SCORING_METRICS: ScoringMetricDef[] = [
+    // — Ataque —
+    { key: 'goals', label: 'Goles', group: 'ataque',
+      count: s => nv(s, 'goals'), rate: p => SR.goal[p],
+      points: (s, p) => nv(s, 'goals') * SR.goal[p] },
+    { key: 'assists', label: 'Asistencias de gol', group: 'ataque',
+      count: s => nv(s, 'assists'), rate: () => SR.assist_goal,
+      points: s => nv(s, 'assists') * SR.assist_goal },
+    { key: 'assist_no_goal', label: 'Asistencias sin gol', group: 'ataque',
+      count: assistNoGoal, rate: () => SR.assist_no_goal,
+      points: s => assistNoGoal(s) * SR.assist_no_goal },
+    { key: 'shots_on_target', label: 'Tiros a puerta', group: 'ataque',
+      count: s => nv(s, 'shots_on_target'), rate: () => SR.per_unit.shots_on_target,
+      points: s => nv(s, 'shots_on_target') * SR.per_unit.shots_on_target },
+    { key: 'takeons_won', label: 'Regates completados', group: 'ataque',
+      count: s => nv(s, 'takeons_won'), rate: () => SR.per_unit.takeons_won,
+      points: s => nv(s, 'takeons_won') * SR.per_unit.takeons_won },
+    { key: 'box_entries', label: 'Balones al área', group: 'ataque',
+      count: s => nv(s, 'box_entries'), rate: () => SR.per_unit.box_entries,
+      points: s => nv(s, 'box_entries') * SR.per_unit.box_entries },
+    { key: 'penalties_won', label: 'Penaltis provocados', group: 'ataque',
+      count: s => nv(s, 'penalties_won'), rate: p => SR.penalty_won[p],
+      points: (s, p) => nv(s, 'penalties_won') * SR.penalty_won[p] },
+
+    // — Defensa y portería —
+    { key: 'clean_sheet', label: 'Porterías a cero', group: 'defensa',
+      count: s => (s.clean_sheet ? 1 : 0), rate: p => SR.clean_sheet[p],
+      points: (s, p) => (s.clean_sheet ? SR.clean_sheet[p] : 0) },
+    { key: 'clearances', label: 'Despejes', group: 'defensa',
+      count: s => nv(s, 'clearances'), rate: () => SR.per_unit.clearances,
+      points: s => nv(s, 'clearances') * SR.per_unit.clearances },
+    { key: 'ball_recoveries', label: 'Balones recuperados', group: 'defensa',
+      count: s => nv(s, 'ball_recoveries'), rate: () => SR.per_unit.ball_recoveries,
+      points: s => nv(s, 'ball_recoveries') * SR.per_unit.ball_recoveries },
+    { key: 'saves', label: 'Paradas', group: 'defensa',
+      count: s => nv(s, 'saves'), rate: () => SR.per_unit.saves,
+      points: s => nv(s, 'saves') * SR.per_unit.saves },
+    { key: 'penalty_saves', label: 'Penaltis parados', group: 'defensa',
+      count: s => nv(s, 'penalty_saves'), rate: p => SR.penalty_save[p],
+      points: (s, p) => nv(s, 'penalty_saves') * SR.penalty_save[p] },
+    { key: 'goals_conceded', label: 'Goles encajados', group: 'defensa',
+      count: s => nv(s, 'goals_conceded'), rate: p => SR.goal_conceded[p],
+      // El motor sólo penaliza si encaja más de uno en ese partido.
+      points: (s, p) => (nv(s, 'goals_conceded') > 1 ? nv(s, 'goals_conceded') * SR.goal_conceded[p] : 0) },
+
+    // — Bonus de partido —
+    { key: 'participation', label: 'Participación', group: 'bonus', flat: true,
+      count: s => (nv(s, 'minutes_played') > 0 ? 1 : 0),
+      points: s => nv(s, 'minutes_played') > 0
+        ? (nv(s, 'minutes_played') >= SR.participation.minutes_threshold
+          ? SR.participation.starter_bonus
+          : SR.participation.substitute_bonus)
+        : 0 },
+    { key: 'result_bonus', label: 'Victoria / empate (≥60′)', group: 'bonus', flat: true,
+      count: s => (resultBonusOf(s) > 0 ? 1 : 0),
+      points: resultBonusOf },
+    { key: 'relevo', label: 'Puntos RELEVO', group: 'bonus', flat: true,
+      count: s => (nv(s, 'minutes_played') > 0 ? 1 : 0),
+      points: s => nv(s, 'relevo_points') },
+
+    // — Penalizaciones —
+    { key: 'lost_balls', label: 'Balones perdidos', group: 'penal',
+      count: lostBallsOf, rate: () => SR.lost_balls,
+      points: s => lostBallsOf(s) * SR.lost_balls },
+    { key: 'yellow_cards', label: 'Tarjetas amarillas', group: 'penal',
+      count: s => nv(s, 'yellow_cards'), rate: () => SR.yellow_card,
+      points: s => nv(s, 'yellow_cards') * SR.yellow_card },
+    { key: 'second_yellow_cards', label: 'Dobles amarillas', group: 'penal',
+      count: s => nv(s, 'second_yellow_cards'), rate: () => SR.second_yellow_card,
+      points: s => nv(s, 'second_yellow_cards') * SR.second_yellow_card },
+    { key: 'red_cards', label: 'Tarjetas rojas', group: 'penal',
+      count: s => nv(s, 'red_cards'), rate: () => SR.red_card,
+      points: s => nv(s, 'red_cards') * SR.red_card },
+    { key: 'penalties_conceded', label: 'Penaltis cometidos', group: 'penal',
+      count: s => nv(s, 'penalties_conceded'), rate: p => SR.penalty_conceded[p],
+      points: (s, p) => nv(s, 'penalties_conceded') * SR.penalty_conceded[p] },
+    { key: 'penalties_missed', label: 'Penaltis fallados', group: 'penal',
+      count: s => nv(s, 'penalties_missed'), rate: () => SR.penalty_missed,
+      points: s => nv(s, 'penalties_missed') * SR.penalty_missed },
+    { key: 'own_goals', label: 'Goles en propia', group: 'penal',
+      count: s => nv(s, 'own_goals'), rate: () => SR.own_goal,
+      points: s => nv(s, 'own_goals') * SR.own_goal },
+  ]
+
+  const mainPos = normPos(player.position)
+  // Minutos totales expresados en "partidos de 90′"
+  const per90Base = totalStats.minutes_played > 0 ? totalStats.minutes_played / 90 : 0
+
+  const scoringMetrics = SCORING_METRICS.map(def => {
+    let count = 0
+    let points = 0
+    for (const raw of scores) {
+      const s = raw as AnyScore
+      const pos = normPos(raw.position || player.position)
+      count += def.count(s)
+      points += def.points(s, pos)
+    }
+    return {
+      ...def,
+      count: r2(count),
+      points: r2(points),
+      per90: per90Base > 0 ? r2((def.flat ? points : count) / per90Base) : null,
+      rateValue: def.rate ? def.rate(mainPos) : null,
+    }
+  })
+
+  const maxAbsMetricPoints = Math.max(...scoringMetrics.map(m => Math.abs(m.points)), 1)
+  const pointsPer90 = per90Base > 0 ? r2(totalStats.total_points / per90Base) : null
+
+  const METRIC_GROUPS: Array<{
+    id: MetricGroupId
     title: string
     icon: string
-    colorClass: string
-    items: StatItem[]
-  }
-
-  const statGroups: StatGroup[] = [
-    {
-      title: 'Ataque y Distribución',
-      icon: '⚽',
-      colorClass: 'text-red-600 border-red-100 bg-red-50/30',
-      items: [
-        { label: 'Goles', value: totalStats.goals, valNum: totalStats.goals },
-        { label: 'Goles de cabeza', value: totalStats.goal_header_bonus, valNum: totalStats.goal_header_bonus },
-        { label: 'Goles de falta directa', value: totalStats.goal_freekick_bonus, valNum: totalStats.goal_freekick_bonus },
-        { label: 'Asistencias de gol', value: totalStats.assists, valNum: totalStats.assists },
-        { label: 'Pases clave', value: totalStats.key_passes, valNum: totalStats.key_passes },
-        { label: 'Segundas asistencias', value: totalStats.second_assists, valNum: totalStats.second_assists },
-        { label: 'Asistencias sin gol (ocasiones creadas)', value: totalStats.intent_assists, valNum: totalStats.intent_assists },
-        { label: 'Tiros a puerta', value: totalStats.shots_on_target, valNum: totalStats.shots_on_target },
-        { label: 'Tiros fuera', value: totalStats.shots_off_target, valNum: totalStats.shots_off_target },
-        { label: 'Tiros al palo', value: totalStats.shots_hit_woodwork, valNum: totalStats.shots_hit_woodwork },
-        { label: 'Grandes ocasiones creadas', value: totalStats.big_chances_created, valNum: totalStats.big_chances_created },
-        { label: 'Grandes ocasiones falladas', value: totalStats.big_chances_missed, valNum: totalStats.big_chances_missed },
-        { label: 'Regates ganados', value: totalStats.takeons_won, valNum: totalStats.takeons_won },
-        { label: 'Regates fallados', value: totalStats.takeons_lost, valNum: totalStats.takeons_lost },
-        { label: 'Regates desbordados', value: totalStats.takeons_overrun, valNum: totalStats.takeons_overrun },
-        { label: 'Habilidades destacadas', value: totalStats.good_skills, valNum: totalStats.good_skills },
-        { 
-          label: 'Pases completados', 
-          value: totalStats.passes_attempted > 0 ? `${totalStats.passes_completed} / ${totalStats.passes_attempted} (${Math.round((totalStats.passes_completed / totalStats.passes_attempted) * 100)}%)` : '0 / 0', 
-          valNum: totalStats.passes_attempted 
-        },
-        { label: 'Pases hacia adelante', value: totalStats.forward_passes, valNum: totalStats.forward_passes },
-        { label: 'Pases progresivos', value: totalStats.progressive_passes, valNum: totalStats.progressive_passes },
-        { label: 'Pases al último tercio', value: totalStats.passes_into_final_third, valNum: totalStats.passes_into_final_third },
-        { label: 'Pases al área', value: totalStats.passes_into_box, valNum: totalStats.passes_into_box },
-        { label: 'Pases al hueco (Through balls)', value: totalStats.through_balls, valNum: totalStats.through_balls },
-        { 
-          label: 'Centros completados', 
-          value: totalStats.crosses_attempted > 0 ? `${totalStats.crosses_completed} / ${totalStats.crosses_attempted} (${Math.round((totalStats.crosses_completed / totalStats.crosses_attempted) * 100)}%)` : '0 / 0', 
-          valNum: totalStats.crosses_attempted 
-        },
-        { label: 'Centros exitosos', value: totalStats.successful_crosses, valNum: totalStats.successful_crosses },
-        { label: 'Balones colgados al área (entries)', value: totalStats.box_entries, valNum: totalStats.box_entries },
-        { label: 'Pases largos completados', value: totalStats.long_balls_completed, valNum: totalStats.long_balls_completed },
-        { label: 'Lanzamientos a balón parado', value: totalStats.set_pieces_taken, valNum: totalStats.set_pieces_taken },
-        { label: 'Pases en corto (lay offs)', value: totalStats.lay_offs, valNum: totalStats.lay_offs },
-      ]
-    },
-    {
-      title: 'Defensa',
-      icon: '🛡️',
-      colorClass: 'text-indigo-600 border-indigo-100 bg-indigo-50/30',
-      items: [
-        { label: 'Porterías a cero', value: totalStats.clean_sheets, valNum: totalStats.clean_sheets, color: 'text-emerald-600' },
-        { label: 'Goles encajados', value: totalStats.goals_conceded, valNum: totalStats.goals_conceded, color: totalStats.goals_conceded > 0 ? 'text-red-600' : '' },
-        { label: 'Entradas ganadas', value: totalStats.tackles_won, valNum: totalStats.tackles_won },
-        { label: 'Entradas fallidas', value: totalStats.tackles_lost, valNum: totalStats.tackles_lost },
-        { label: 'Interceptaciones', value: totalStats.interceptions, valNum: totalStats.interceptions },
-        { label: 'Interceptaciones (Zona alta)', value: totalStats.interceptions_high, valNum: totalStats.interceptions_high },
-        { label: 'Recuperaciones de balón', value: totalStats.ball_recoveries, valNum: totalStats.ball_recoveries },
-        { label: 'Despejes', value: totalStats.clearances, valNum: totalStats.clearances },
-        { label: 'Despejes en última línea', value: totalStats.clearances_last_line, valNum: totalStats.clearances_last_line },
-        { label: 'Tiros bloqueados', value: totalStats.blocked_shots, valNum: totalStats.blocked_shots },
-        { label: 'Centros bloqueados', value: totalStats.blocked_crosses, valNum: totalStats.blocked_crosses },
-        { label: 'Fueras de juego provocados', value: totalStats.offsides_provoked, valNum: totalStats.offsides_provoked },
-        { label: 'Duelos aéreos ganados', value: totalStats.aerials_won, valNum: totalStats.aerials_won },
-        { label: 'Duelos aéreos perdidos', value: totalStats.aerials_lost, valNum: totalStats.aerials_lost },
-        { label: 'Duelos terrestres perdidos (Challenges)', value: totalStats.challenges_lost, valNum: totalStats.challenges_lost },
-      ]
-    },
-    {
-      title: 'Portería',
-      icon: '🧤',
-      colorClass: 'text-cyan-600 border-cyan-100 bg-cyan-50/30',
-      items: [
-        { label: 'Paradas', value: totalStats.saves, valNum: totalStats.saves },
-        { label: 'Penaltis parados', value: totalStats.penalty_saves, valNum: totalStats.penalty_saves },
-        { label: 'Blocajes correctos (Claims)', value: totalStats.claims_ok, valNum: totalStats.claims_ok },
-        { label: 'Blocajes fallidos', value: totalStats.claims_fail, valNum: totalStats.claims_fail },
-        { label: 'Despejes de puños correctos', value: totalStats.punches_ok, valNum: totalStats.punches_ok },
-        { label: 'Despejes de puños fallidos', value: totalStats.punches_fail, valNum: totalStats.punches_fail },
-        { label: 'Salidas de área correctas', value: totalStats.sweepers_ok, valNum: totalStats.sweepers_ok },
-        { label: 'Salidas de área fallidas', value: totalStats.sweepers_fail, valNum: totalStats.sweepers_fail },
-        { label: 'Anticipaciones por bajo (Smothers)', value: totalStats.smothers, valNum: totalStats.smothers },
-        { label: 'Paradas seguras (Parries safe)', value: totalStats.parries_safe, valNum: totalStats.parries_safe },
-        { label: 'Paradas con peligro (Parries danger)', value: totalStats.parries_danger, valNum: totalStats.parries_danger },
-        { label: 'Fumbles (Pérdidas de control)', value: totalStats.fumbles, valNum: totalStats.fumbles },
-        { label: 'Centros no cortados', value: totalStats.crosses_not_claimed, valNum: totalStats.crosses_not_claimed },
-      ]
-    },
-    {
-      title: 'Penaltis, Disciplina y Penalizaciones',
-      icon: '🟨',
-      colorClass: 'text-amber-600 border-amber-100 bg-amber-50/30',
-      items: [
-        { label: 'Penaltis provocados', value: totalStats.penalties_won, valNum: totalStats.penalties_won },
-        { label: 'Penaltis cometidos', value: totalStats.penalties_conceded, valNum: totalStats.penalties_conceded, color: totalStats.penalties_conceded > 0 ? 'text-red-600' : '' },
-        { label: 'Penaltis fallados', value: totalStats.penalties_missed, valNum: totalStats.penalties_missed, color: totalStats.penalties_missed > 0 ? 'text-red-600' : '' },
-        { label: 'Faltas cometidas', value: totalStats.fouls_committed, valNum: totalStats.fouls_committed },
-        { label: 'Faltas recibidas', value: totalStats.fouls_won, valNum: totalStats.fouls_won },
-        { label: 'Tarjetas amarillas', value: totalStats.yellow_cards, valNum: totalStats.yellow_cards, color: 'text-amber-600' },
-        { label: 'Dobles amarillas', value: totalStats.second_yellow_cards, valNum: totalStats.second_yellow_cards, color: 'text-amber-600' },
-        { label: 'Tarjetas rojas', value: totalStats.red_cards, valNum: totalStats.red_cards, color: 'text-red-600' },
-        { label: 'Balones perdidos (Desposeído)', value: totalStats.dispossessed, valNum: totalStats.dispossessed },
-        { label: 'Malos controles de balón', value: totalStats.bad_touches, valNum: totalStats.bad_touches },
-        { label: 'Balones perdidos (Total)', value: totalStats.dispossessed + totalStats.bad_touches, valNum: totalStats.dispossessed + totalStats.bad_touches },
-        { label: 'Errores que llevan a tiro', value: totalStats.errors_leading_to_shot, valNum: totalStats.errors_leading_to_shot, color: totalStats.errors_leading_to_shot > 0 ? 'text-red-600' : '' },
-        { label: 'Errores que llevan a gol', value: totalStats.errors_leading_to_goal, valNum: totalStats.errors_leading_to_goal, color: totalStats.errors_leading_to_goal > 0 ? 'text-red-600' : '' },
-        { label: 'Puntos RELEVO acumulados', value: totalStats.relevo_points, valNum: totalStats.relevo_points, color: 'text-violet-600' },
-      ]
-    }
+    grad: string
+    bar: string
+  }> = [
+    { id: 'ataque', title: 'Ataque', icon: '⚽', grad: 'from-rose-500 to-pink-500', bar: 'from-rose-400 to-pink-500' },
+    { id: 'defensa', title: 'Defensa y portería', icon: '🛡️', grad: 'from-indigo-500 to-sky-500', bar: 'from-indigo-400 to-sky-500' },
+    { id: 'bonus', title: 'Bonus de partido', icon: '⭐', grad: 'from-violet-500 to-fuchsia-500', bar: 'from-violet-400 to-fuchsia-500' },
+    { id: 'penal', title: 'Penalizaciones', icon: '⚠️', grad: 'from-amber-500 to-orange-600', bar: 'from-amber-400 to-orange-500' },
   ]
 
   // Configuración de la gráfica de evolución
@@ -1330,57 +1375,100 @@ export default function JugadorDetallePage() {
         </Card>
       </div>
 
-      {/* Selector y Contenedor de Stats Detalladas */}
+      {/* Métricas que puntúan (acumuladas y por 90 minutos) */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            📊 Estadísticas Detalladas Acumuladas
-          </h2>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-violet-500 font-semibold bg-violet-50 px-2 py-1 rounded-full border border-violet-100">
-              ⚡ /90 min junto a cada valor
+        <div className="flex flex-col gap-3 mt-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+              📊 Métricas que puntúan
+            </h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Sólo lo que suma o resta puntos en la liga, normalizado <span className="font-semibold text-slate-600">por 90 minutos</span>.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {pointsPer90 !== null && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                ⚡ {fmtPts(pointsPer90)} pts/90
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 tabular-nums">
+              ⏱️ {totalStats.minutes_played}′ · {r2(per90Base)} part. de 90′
             </span>
             <button
               onClick={() => setHideZeros(!hideZeros)}
-              className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 transition-colors shadow-sm cursor-pointer"
+              className="cursor-pointer rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
             >
               {hideZeros ? '✨ Mostrar métricas en cero' : '🙈 Ocultar métricas en cero'}
             </button>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {statGroups.map((group, gIdx) => {
-            const minutesPer90 = totalStats.minutes_played > 0 ? totalStats.minutes_played / 90 : null
+        <div className="grid gap-6 md:grid-cols-2">
+          {METRIC_GROUPS.map(group => {
+            const all = scoringMetrics.filter(m => m.group === group.id)
+            const items = hideZeros ? all.filter(m => m.count !== 0 || m.points !== 0) : all
+            if (items.length === 0) return null
 
-            const visibleItems = hideZeros
-              ? group.items.filter(item => item.valNum > 0)
-              : group.items
-
-            if (visibleItems.length === 0) return null
+            const groupPoints = r2(items.reduce((acc, m) => acc + m.points, 0))
 
             return (
-              <Card key={gIdx} className="overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow duration-300">
-                <div className={`px-4 py-3 border-b flex items-center gap-2.5 ${group.colorClass}`}>
-                  <span className="text-xl leading-none">{group.icon}</span>
-                  <h3 className="font-bold text-slate-800 text-base">{group.title}</h3>
+              <Card key={group.id} className="overflow-hidden border border-slate-200 bg-white shadow-sm transition-shadow duration-300 hover:shadow-md">
+                <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${group.grad} text-base shadow-sm`}>
+                    {group.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-bold text-slate-900">{group.title}</h3>
+                    <p className="text-[11px] font-medium text-slate-400">{items.length} métricas puntuables</p>
+                  </div>
+                  <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-black tabular-nums ${
+                    groupPoints > 0 ? 'bg-emerald-50 text-emerald-700'
+                      : groupPoints < 0 ? 'bg-rose-50 text-rose-700'
+                      : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {groupPoints > 0 ? `+${fmtPts(groupPoints)}` : fmtPts(groupPoints)} pts
+                  </span>
                 </div>
-                <CardContent className="p-4 divide-y divide-slate-100">
-                  {visibleItems.map((item, idx) => {
-                    const per90Val = minutesPer90 && typeof item.valNum === 'number'
-                      ? Math.round((item.valNum / minutesPer90) * 100) / 100
-                      : null
+
+                <CardContent className="divide-y divide-slate-100 p-4 pt-2">
+                  {items.map(m => {
+                    const share = Math.min(100, (Math.abs(m.points) / maxAbsMetricPoints) * 100)
+                    const ptsTone = m.points > 0
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : m.points < 0 ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-400'
+
                     return (
-                      <div key={idx} className="flex justify-between items-center py-2.5 text-sm hover:bg-slate-50/50 px-2 -mx-2 rounded transition-colors duration-150">
-                        <span className="text-slate-600 font-medium">{item.label}</span>
-                        <div className="flex items-center gap-3">
-                          {per90Val !== null && (
-                            <span className="text-[11px] text-violet-500 font-semibold tabular-nums bg-violet-50 px-1.5 py-0.5 rounded">
-                              {per90Val}/90
+                      <div
+                        key={m.key}
+                        className="-mx-2 rounded-lg px-2 py-2.5 transition-colors duration-150 hover:bg-slate-50/70"
+                        title={`${m.count} en total · ${totalStats.minutes_played}′ jugados`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-700">
+                            {m.label}
+                          </span>
+                          {m.rateValue !== null && (
+                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-slate-500">
+                              ×{fmtPts(m.rateValue)}
                             </span>
                           )}
-                          <span className={`font-bold tabular-nums ${item.color || 'text-slate-800'}`}>
-                            {item.value}
+                          <span className="w-16 shrink-0 text-right text-lg font-black leading-none tabular-nums text-slate-900">
+                            {m.per90 !== null ? fmtPts(m.per90) : '—'}
+                          </span>
+                          <span className={`w-[62px] shrink-0 rounded-md py-0.5 text-center text-[11px] font-extrabold tabular-nums ${ptsTone}`}>
+                            {m.points > 0 ? `+${fmtPts(m.points)}` : fmtPts(m.points)}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <div className="h-1 flex-1 overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className={`h-full rounded-full bg-gradient-to-r ${group.bar} transition-all duration-500`}
+                              style={{ width: `${share}%` }}
+                            />
+                          </div>
+                          <span className="shrink-0 text-[10px] font-medium tabular-nums text-slate-400">
+                            {m.flat ? `${m.count} part.` : `${m.count} tot.`} · {m.flat ? 'pts/90' : 'por 90′'}
                           </span>
                         </div>
                       </div>
