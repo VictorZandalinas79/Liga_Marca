@@ -32,7 +32,7 @@ export interface UserStanding {
   sanctioned_matchdays: number
   kamikaze_score?: number
   app_opens?: number
-  deuda?: number
+  saldo?: number
 }
 
 export interface StandingsResult {
@@ -55,6 +55,16 @@ interface LeagueConfig {
   fantasy_starting_matchday: number
   matchday_start_hours_before: number
   starting_balance: number
+  div1_win_percent?: number
+  div1_lose_percent?: number
+  div2_win_percent?: number
+  div2_lose_percent?: number
+  div3_win_percent?: number
+  div3_lose_percent?: number
+  infraction_penalty_cost?: number
+  pay_winner?: number
+  pay_loser?: number
+  pay_rest?: number
 }
 
 interface TeamPlayerRow {
@@ -122,6 +132,16 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     fantasy_starting_matchday: Math.max(1, configData?.fantasy_starting_matchday ?? 1),
     matchday_start_hours_before: configData?.matchday_start_hours_before ?? 1,
     starting_balance: configData?.starting_balance ?? 40,
+    div1_win_percent: configData?.div1_win_percent ?? 3,
+    div1_lose_percent: configData?.div1_lose_percent ?? 3,
+    div2_win_percent: configData?.div2_win_percent ?? 3,
+    div2_lose_percent: configData?.div2_lose_percent ?? 3,
+    div3_win_percent: configData?.div3_win_percent ?? 3,
+    div3_lose_percent: configData?.div3_lose_percent ?? 3,
+    infraction_penalty_cost: configData?.infraction_penalty_cost ?? 3,
+    pay_winner: configData?.pay_winner ?? 0,
+    pay_loser: configData?.pay_loser ?? 2,
+    pay_rest: configData?.pay_rest ?? 1,
   }
   const fantasyStart = config.fantasy_starting_matchday
 
@@ -370,8 +390,12 @@ function computeDivisionStandings(
   const userPointsByMatchday = new Map<string, Map<number, number>>()
   const userChangesCount = new Map<string, number>()
   const userChangesPointsDiff = new Map<string, number>()
-  const userSanctionedMatchdays = new Map<string, Set<number>>()
+  const userSanctionCount = new Map<string, number>()
   const userMatchdaysFromTeamPlayers = new Map<string, Set<number>>()
+
+  const mdHasDbPenalties = new Set(shared.penalties.map(p => {
+    return typeof p.matchday === 'string' ? parseInt(p.matchday, 10) : (p.matchday as number)
+  }))
 
   let prevStartersByTeam = new Map<string, string[]>()
   let prevSquadByTeam = new Map<string, string[]>()
@@ -395,7 +419,6 @@ function computeDivisionStandings(
     for (const [userId, userTeams] of userTeamsMap.entries()) {
       if (!userPointsByMatchday.has(userId)) userPointsByMatchday.set(userId, new Map())
       if (!userMatchdaysFromTeamPlayers.has(userId)) userMatchdaysFromTeamPlayers.set(userId, new Set())
-      if (!userSanctionedMatchdays.has(userId)) userSanctionedMatchdays.set(userId, new Set())
 
       for (const team of userTeams) {
         const teamMatchdays = shared.teamPlayersByMatchday.get(team.teamId)
@@ -455,7 +478,10 @@ function computeDivisionStandings(
           if (sanctionResult.zeroedPlayers.has(s.id)) s.puntos = 0
         })
 
-        if (sanctionResult.zeroedPlayers.size > 0) userSanctionedMatchdays.get(userId)!.add(md)
+        if (!mdHasDbPenalties.has(md) && sanctionResult.zeroedPlayers.size > 0) {
+          const uniqueReasons = new Set(sanctionResult.zeroedPlayers.values())
+          userSanctionCount.set(userId, (userSanctionCount.get(userId) || 0) + uniqueReasons.size)
+        }
 
         const prevIds = prevStartersByTeam.get(team.teamId) || []
         const currentStarterIds = startersList.map(s => s.id)
@@ -500,8 +526,8 @@ function computeDivisionStandings(
     const pts = typeof pen.points === 'string' ? parseFloat(pen.points) : (pen.points as number)
     if (!uid || !userIdSet.has(uid) || !md || md < fantasyStart) continue
 
-    if (!userSanctionedMatchdays.has(uid)) userSanctionedMatchdays.set(uid, new Set())
-    userSanctionedMatchdays.get(uid)!.add(md)
+    // Incrementar el contador total de sanciones para este usuario
+    userSanctionCount.set(uid, (userSanctionCount.get(uid) || 0) + 1)
 
     // Si es una sanción de alineación, la ignoramos porque ya la hemos calculado y restado en JS
     if (isLineupSanction(pen.description || '')) continue
@@ -514,6 +540,19 @@ function computeDivisionStandings(
   // Podios y colistas: dentro de la división, nunca contra toda la liga.
   const podiumCount = new Map<string, number>()
   const bottomCount = new Map<string, number>()
+
+  let winCount = 3
+  let loseCount = 3
+  if (division === 1) {
+    winCount = config.div1_win_percent ?? 3
+    loseCount = config.div1_lose_percent ?? 3
+  } else if (division === 2) {
+    winCount = config.div2_win_percent ?? 3
+    loseCount = config.div2_lose_percent ?? 3
+  } else if (division === 3) {
+    winCount = config.div3_win_percent ?? 3
+    loseCount = config.div3_lose_percent ?? 3
+  }
 
   const participantsByMatchday = new Map<number, { userId: string; points: number }[]>()
   for (const [userId, pointsMap] of userPointsByMatchday.entries()) {
@@ -529,11 +568,17 @@ function computeDivisionStandings(
     if (maxPoints <= 0) continue
 
     const sorted = [...participants].sort((a, b) => b.points - a.points)
-    for (const p of sorted.slice(0, 3)) {
+    
+    // Contar ganadores (podios)
+    const winners = sorted.slice(0, winCount)
+    for (const p of winners) {
       podiumCount.set(p.userId, (podiumCount.get(p.userId) || 0) + 1)
     }
-    if (sorted.length > 3) {
-      for (const p of sorted.slice(-3)) {
+
+    // Contar colistas
+    if (sorted.length > winCount) {
+      const losers = sorted.slice(winCount).slice(-loseCount)
+      for (const p of losers) {
         bottomCount.set(p.userId, (bottomCount.get(p.userId) || 0) + 1)
       }
     }
@@ -554,6 +599,53 @@ function computeDivisionStandings(
       }
     }
     userKamikazeMinutes.set(userId, minutesBeforeArr)
+  }
+
+  // Calcular pagos por jornada dinámicamente para evitar desfases de la base de datos
+  const userMatchdayPaymentsTotal = new Map<string, number>()
+  const payWinner = config.pay_winner ?? 0
+  const payLoser = config.pay_loser ?? 2
+  const payRest = config.pay_rest ?? 1
+
+  for (const md of shared.sortedPlayedMatchdays) {
+    const participants: { userId: string; points: number }[] = []
+    
+    for (const [userId, pointsMap] of userPointsByMatchday.entries()) {
+      if (pointsMap.has(md)) {
+        const userTeams = userTeamsMap.get(userId) || []
+        let hasLineup = false
+        for (const team of userTeams) {
+          const teamMatchdays = shared.teamPlayersByMatchday.get(team.teamId)
+          if (teamMatchdays && teamMatchdays.has(md) && (teamMatchdays.get(md) || []).length > 0) {
+            hasLineup = true
+            break
+          }
+        }
+        if (hasLineup) {
+          participants.push({ userId, points: pointsMap.get(md) || 0 })
+        }
+      }
+    }
+
+    if (participants.length === 0) continue
+
+    const sorted = [...participants].sort((a, b) => b.points - a.points)
+    
+    const winners = sorted.slice(0, winCount)
+    const losers = sorted.length > winCount ? sorted.slice(winCount).slice(-loseCount) : []
+    
+    const winnersSet = new Set(winners.map(w => w.userId))
+    const losersSet = new Set(losers.map(l => l.userId))
+    
+    for (const p of sorted) {
+      let cost = payRest
+      if (winnersSet.has(p.userId)) {
+        cost = payWinner
+      } else if (losersSet.has(p.userId)) {
+        cost = payLoser
+      }
+      userMatchdayPaymentsTotal.set(p.userId, (userMatchdayPaymentsTotal.get(p.userId) || 0) + cost)
+    }
   }
 
   return userIds.map(userId => {
@@ -605,9 +697,10 @@ function computeDivisionStandings(
       if (m < minMinutes) minMinutes = m
     }
 
-    // Deuda: Sanciones (se muestra en negativo)
-    const finance = shared.financeByUser.get(userId)
-    const deuda = -((finance?.amount_paid || 0) + (finance?.infraction_penalties || 0))
+    // Saldo: Saldo Inicial (Virtual) - amount_paid (perder/no ganar) - infraction_penalties (sanciones)
+    const dynamicAmountPaid = userMatchdayPaymentsTotal.get(userId) || 0
+    const dynamicInfractionPenalties = (userSanctionCount.get(userId) || 0) * (config.infraction_penalty_cost ?? 3)
+    const saldo = (config.starting_balance ?? 40) - dynamicAmountPaid - dynamicInfractionPenalties
 
     return {
       user_id: userId,
@@ -630,10 +723,10 @@ function computeDivisionStandings(
       teams_count: userTeamsMap.get(userId)?.length || 0,
       best_matchday_points: bestMatchdayPoints,
       best_matchday: bestMatchday,
-      sanctioned_matchdays: userSanctionedMatchdays.get(userId)?.size ?? 0,
+      sanctioned_matchdays: userSanctionCount.get(userId) ?? 0,
       kamikaze_score: minMinutes === Infinity ? 999999 : minMinutes,
       app_opens: shared.sessionCounts.get(userId) || 0,
-      deuda,
+      saldo,
     }
   })
 }

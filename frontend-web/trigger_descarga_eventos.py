@@ -689,6 +689,7 @@ class MatchEventDownloader:
         points += stats.get('shots_on_target', 0) * self.get_position_points('shots_on_target', pos)
         points += stats.get('takeons_won', 0) * self.get_position_points('takeons_won', pos)
         points += stats.get('box_entries', 0) * self.get_position_points('box_entries', pos)
+        points += stats.get('ball_recoveries', 0) * self.get_position_points('ball_recoveries', pos)
 
         # ============================================
         # === PENALIZACIONES ===
@@ -802,6 +803,7 @@ class MatchEventDownloader:
             44: self._handle_aerial,
             49: self._handle_recovery,
             50: self._handle_dispossessed,
+            52: self._handle_keeper_pickup,
             58: self._handle_penalty_faced,
             59: self._handle_sweeper,  
             61: self._handle_ball_touch,
@@ -987,7 +989,17 @@ class MatchEventDownloader:
 
 
     def _handle_claim(self, event, current_min):
-        self.apply_points(event.get('playerId'), 'claims', 1, current_min)
+        player_id = event.get('playerId')
+        self.apply_points(player_id, 'claims', 1, current_min)
+        pos = self.player_positions_map.get(player_id, 'MED')
+        if pos == 'POR' and event.get('outcome', 0) == 1:
+            self.apply_points(player_id, 'ball_recoveries', 1, current_min)
+
+    def _handle_keeper_pickup(self, event, current_min):
+        player_id = event.get('playerId')
+        pos = self.player_positions_map.get(player_id, 'MED')
+        if pos == 'POR':
+            self.apply_points(player_id, 'ball_recoveries', 1, current_min)
 
     def _handle_punch(self, event, current_min):
         if event.get('outcome', 0) == 1:
@@ -1381,20 +1393,54 @@ class MatchEventDownloader:
                 'shots_total': stats.get('shots_total', 0),
             }
 
-            try:
-                existing = self.supabase.table('player_scores').select('id').eq('player_id', db_player_id).eq('fixture_id', self.fixture_id).execute()
-                if existing.data:
-                    response = self.supabase.table('player_scores').update(player_score_data).eq('player_id', db_player_id).eq('fixture_id', self.fixture_id).execute()
-                else:
-                    response = self.supabase.table('player_scores').insert(player_score_data).execute()
+            payload = player_score_data.copy()
+            while True:
+                try:
+                    existing = self.supabase.table('player_scores').select('id').eq('player_id', db_player_id).eq('fixture_id', self.fixture_id).execute()
+                    if existing.data:
+                        response = self.supabase.table('player_scores').update(payload).eq('player_id', db_player_id).eq('fixture_id', self.fixture_id).execute()
+                    else:
+                        response = self.supabase.table('player_scores').insert(payload).execute()
 
-                if response.data:
-                    player_name = self.player_names.get(player_id, player_id)
-                    relevo_pts = stats.get('relevo_points', 0)
-                    print(f"  ✅ {player_name}: {int(total_points)} pts (Relevo: {relevo_pts}) ({mins_played}')")
+                    if response.data:
+                        player_name = self.player_names.get(player_id, player_id)
+                        relevo_pts = stats.get('relevo_points', 0)
+                        print(f"  ✅ {player_name}: {int(total_points)} pts (Relevo: {relevo_pts}) ({mins_played}')")
+                    break
+                except Exception as e:
+                    import re
+                    err_msg = str(e)
+                    match = re.search(r"Could not find the '([^']+)' column", err_msg)
+                    if match:
+                        missing_col = match.group(1)
+                        if missing_col in payload:
+                            print(f"   ⚠️ Column '{missing_col}' not found in DB schema. Removing from payload and retrying...")
+                            del payload[missing_col]
+                            continue
 
-            except Exception as e:
-                print(f"  ❌ Error subiendo {player_id}: {e}")
+                    # Handle dict-like structure from supabase Python API Error
+                    try:
+                        err_dict = None
+                        if isinstance(e, dict):
+                            err_dict = e
+                        elif hasattr(e, 'message'):
+                            err_dict = {'message': getattr(e, 'message'), 'code': getattr(e, 'code', '')}
+                        elif hasattr(e, 'args') and e.args and isinstance(e.args[0], dict):
+                            err_dict = e.args[0]
+
+                        if err_dict and 'message' in err_dict:
+                            match = re.search(r"Could not find the '([^']+)' column", err_dict['message'])
+                            if match:
+                                missing_col = match.group(1)
+                                if missing_col in payload:
+                                    print(f"   ⚠️ Column '{missing_col}' not found in DB schema. Removing from payload and retrying...")
+                                    del payload[missing_col]
+                                    continue
+                    except:
+                        pass
+
+                    print(f"  ❌ Error subiendo {player_id}: {e}")
+                    break
 
     def run(self):
         print(f"\n{'='*60}")

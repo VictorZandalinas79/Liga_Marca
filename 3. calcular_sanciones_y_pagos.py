@@ -332,6 +332,23 @@ def compute_team_sanctions(lineup, prev_mine, held_by_others_prev, points, playe
             to_zero = new_players_candidates[:excess]
             zero(to_zero, f"Exceso de cambios ({num_changes} cambios/máx {allowed_changes})")
 
+    # 6) Jugadores duplicados
+    player_counts = {}
+    for pid in lineup:
+        player_counts[pid] = player_counts.get(pid, 0) + 1
+        
+    has_duplicates = False
+    for pid, count in player_counts.items():
+        if count > 1:
+            has_duplicates = True
+            name = player_meta.get(pid, {}).get("name", pid)
+            zero([pid], f"Jugador duplicado en la alineación: {name}")
+            
+    if has_duplicates:
+        best_in_team = best_player(lineup, zeroed, points)
+        if best_in_team:
+            zero([best_in_team], "Sanción por jugador duplicado (Mejor jugador restante)")
+
     return sanctions, zeroed
 
 

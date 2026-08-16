@@ -9,6 +9,7 @@ import { ArrowLeft, TrendingUp, Goal, Ticket, X, Calendar, MapPin, Clock } from 
 import { useRouter, useParams } from 'next/navigation'
 import { evaluateRelevoBlocks, resolveRates } from '@/lib/scoring-config'
 import { useScoringRules } from '@/hooks/use-scoring-rules'
+import { MetricBreakdown } from '@/components/metric-breakdown'
 
 interface Player {
   id: string
@@ -360,7 +361,32 @@ export default function JugadorDetallePage() {
   }, [params.id])
 
   useEffect(() => {
-    if (compareTarget !== 'media-pos' && compareTarget !== 'media-gen' && compareTarget) {
+    if (compareTarget === 'media-pos') {
+      const loadPositionAverage = async () => {
+        if (!player?.position) return
+        const posCode = getPositionLabel(player.position)
+        const { data } = await supabase
+          .from('player_scores')
+          .select('*')
+          .eq('position', posCode)
+        if (data) {
+          setCompareScores(data)
+        }
+      }
+      loadPositionAverage()
+      setComparePlayer(null)
+    } else if (compareTarget === 'media-gen') {
+      const loadGeneralAverage = async () => {
+        const { data } = await supabase
+          .from('player_scores')
+          .select('*')
+        if (data) {
+          setCompareScores(data)
+        }
+      }
+      loadGeneralAverage()
+      setComparePlayer(null)
+    } else if (compareTarget) {
       const loadCompareData = async () => {
         const p = allPlayers.find(pl => pl.id === compareTarget)
         if (p) {
@@ -379,7 +405,7 @@ export default function JugadorDetallePage() {
       setComparePlayer(null)
       setCompareScores([])
     }
-  }, [compareTarget, allPlayers])
+  }, [compareTarget, allPlayers, player?.position])
 
   const getPositionLabel = (position: string) => {
     const posLower = position.toLowerCase()
@@ -912,22 +938,7 @@ export default function JugadorDetallePage() {
     const isPos = compareTarget === 'media-pos'
     const pos = normPos(player.position)
     compareLabel = isPos ? `Media Liga (${pos})` : 'Media Liga'
-    
-    // Recopilar todos los scores relevantes
-    const relevantScores = allPlayers
-      .filter(p => isPos ? normPos(p.position) === pos : true)
-      .flatMap(p => p.player_scores || [])
-      
-    // Si no hay datos, mostramos el radar vacío
-    if (relevantScores.length === 0) {
-      compareRadar = calculateRadarStats([], player.position)
-    } else {
-      // Para evitar distorsionar (ej: sumar 5000 goles y dividir entre 5000 partidos),
-      // la propia función calculateRadarStats se basa en promedios por partido, 
-      // así que pasar todos los scores de todos los jugadores de esa posición junta 
-      // calculará la media exacta de la posición.
-      compareRadar = calculateRadarStats(relevantScores, player.position)
-    }
+    compareRadar = calculateRadarStats(compareScores, player.position)
 
   } else if (comparePlayer) {
     compareLabel = comparePlayer.short_name || `${comparePlayer.first_name} ${comparePlayer.last_name}`
@@ -1940,10 +1951,17 @@ export default function JugadorDetallePage() {
                     </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-emerald-600">{Math.round((score.total_points || 0) * 10) / 10}</p>
+                <div className="text-right flex flex-col items-end gap-1 shrink-0">
+                  <div className="flex items-center gap-2">
+                    {Number(score.relevo_points) < 0 && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">
+                        R: {score.relevo_points}
+                      </span>
+                    )}
+                    <p className="text-xl font-bold text-emerald-600">{Math.round((score.total_points || 0) * 10) / 10}</p>
+                  </div>
                   <p className="text-xs text-slate-500">
-                    {score.minutes_played > 0 ? `${score.minutes_played}' ${score.is_starter ? '(T)' : '(S)'}` : <span className="text-red-500 font-semibold">Sin minutos</span>}
+                    {score.minutes_played > 0 ? `${score.minutes_played}' ${score.is_starter ? '(T)' : '(S)'}` : <span className="text-red-500 font-semibold text-[11px]">Sin minutos</span>}
                   </p>
                 </div>
               </div>
@@ -2017,71 +2035,7 @@ export default function JugadorDetallePage() {
 
             {/* Desglose de puntos por bloques */}
             <div className="p-4 sm:p-6 space-y-4">
-              <h3 className="text-lg font-bold text-slate-900">Puntos por bloques</h3>
-
-              {getScoreBlocks(selectedMatch).length === 0 && (
-                <p className="text-slate-500 text-center py-4">
-                  Sin métricas puntuables en este partido.
-                </p>
-              )}
-
-              {getScoreBlocks(selectedMatch).map((blk) => {
-                const subtotal = r2(blk.rows.reduce((acc, row) => acc + row.points, 0))
-                return (
-                  <div key={blk.id} className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg leading-none">{blk.emoji}</span>
-                        <h4 className={`font-bold text-sm ${blk.accent}`}>{blk.title}</h4>
-                      </div>
-                      <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${subtotal >= 0 ? blk.chip : 'bg-red-50 text-red-700'}`}>
-                        {subtotal >= 0 ? '+' : ''}{fmtPts(subtotal)}
-                      </span>
-                    </div>
-                    <div className="divide-y divide-slate-50">
-                      {blk.rows.map((row, idx) => (
-                        <div key={idx} className="flex items-center justify-between px-4 py-2">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-800 truncate">{row.label}</p>
-                            {!row.flat && (
-                              <p className="text-xs text-slate-400">
-                                {row.count} × {row.unit >= 0 ? '+' : ''}{fmtPts(row.unit)}
-                              </p>
-                            )}
-                          </div>
-                          <span className={`shrink-0 text-sm font-bold tabular-nums ${row.points >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {row.points >= 0 ? '+' : ''}{fmtPts(row.points)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-
-              {/* Ajuste de redondeo + total oficial */}
-              {(() => {
-                const desglose = sumBlockPoints(selectedMatch)
-                const oficial = Math.round((selectedMatch.total_points || 0) * 10) / 10
-                const ajuste = r2(oficial - desglose)
-                return (
-                  <>
-                    {ajuste !== 0 && (
-                      <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-slate-50 border border-slate-200">
-                        <span className="text-sm text-slate-500">Ajuste / redondeo</span>
-                        <span className={`text-sm font-semibold ${ajuste >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {ajuste >= 0 ? '+' : ''}{fmtPts(ajuste)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 flex items-center justify-between shadow-md">
-                      <span className="text-white font-bold text-lg">Puntos totales</span>
-                      <span className="text-white font-extrabold text-3xl tabular-nums">{fmtPts(oficial)}</span>
-                    </div>
-                  </>
-                )
-              })()}
-
+              <MetricBreakdown player={selectedMatch} fixture={selectedMatch.fixture || undefined} />
               {/* Estadísticas informativas (no puntúan directamente) */}
               {getInfoStats(selectedMatch).length > 0 && (
                 <div className="border-t border-slate-200 pt-4">

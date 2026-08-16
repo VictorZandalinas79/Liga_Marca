@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Trophy, MapPin, Clock, Calendar, Users, TrendingUp, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Trophy, MapPin, Clock, Calendar, Users, TrendingUp, RefreshCw, X } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 import { evaluateRelevoBlocks, resolveRates, type Position } from '@/lib/scoring-config'
@@ -159,68 +159,7 @@ export default function PartidoDetallePage() {
     return 'MED'
   }
 
-  const renderRelevoBars = (player: Player) => {
-    const min = player.minutes_played || 0
-    if (min === 0) return null
-    
-    const pos = normPos(player.calc_position || player.position)
-    const results = evaluateRelevoBlocks(player, pos, R.relevo_limits)
-    
-    if (!results || results.length === 0) return null
-    
-    const fmt = (v: number, unit: 'count' | 'pct') => unit === 'pct' ? `${v.toFixed(0)}%` : String(parseFloat(v.toFixed(2)))
-    
-    return (
-      <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-3" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Desglose Relevo</span>
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-            (player.relevo_points || 0) >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-          }`}>
-            {(player.relevo_points || 0) >= 0 ? '+' : ''}{parseFloat((player.relevo_points || 0).toFixed(2))} pts
-          </span>
-        </div>
-        
-        {results.map((block) => (
-          <div key={block.id} className="space-y-1.5">
-            {block.metrics.map((m, i) => {
-              const targetVal = m.target;
-              const currentVal = m.value;
-              let pctVal = targetVal > 0 ? (currentVal / targetVal) * 100 : (currentVal > 0 ? 100 : 0);
-              if (pctVal > 100) pctVal = 100;
-              
-              const isMet = m.met;
-              const barColor = isMet ? 'bg-emerald-500' : 'bg-red-500';
-              const bgBarColor = isMet ? 'bg-emerald-950' : 'bg-red-950/40';
-              
-              return (
-                <div key={i} className="flex flex-col gap-1 text-[10px]">
-                  <div className="flex justify-between items-center text-slate-300">
-                    <span className="truncate flex-1 font-medium text-slate-300">{m.label}</span>
-                    <span className="shrink-0 tabular-nums ml-2 flex items-center gap-1.5">
-                      <span className={isMet ? 'text-emerald-400 font-bold' : 'text-slate-200 font-semibold'}>
-                        {fmt(currentVal, m.unit)}
-                      </span>
-                      <span className="text-slate-500"> / {fmt(targetVal, m.unit)}</span>
-                      {i === 0 && (
-                         <span className={`font-bold ml-1 w-4 text-right ${block.points > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                           {block.points > 0 ? '+1' : '0'}
-                         </span>
-                      )}
-                      {i > 0 && <span className="w-4 ml-1"></span>}
-                    </span>
-                  </div>
-                  <div className={`w-full h-1 ${bgBarColor} rounded-full overflow-hidden`}>
-                    <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${pctVal}%` }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ))}
-      </div>
-    )
-  }
+
 
   const fetchPartido = async () => {
     const fixtureId = params.id as string
@@ -309,7 +248,7 @@ export default function PartidoDetallePage() {
           assists: score?.assists || 0,
           key_passes: score?.key_passes || 0,
           second_assists: score?.second_assists || 0,
-          fantasy_assist: score?.fantasy_assist || 0,
+          fantasy_assist: score?.intent_assists || score?.fantasy_assist || 0,
           // Defensa
           tackles_won: score?.tackles_won || 0,
           tackles_lost: score?.tackles_lost || 0,
@@ -587,19 +526,22 @@ export default function PartidoDetallePage() {
     return colors[code] || 'bg-slate-500 text-white'
   }
 
-  const renderPlayerCard = (player: Player) => (
-    <div
-      key={player.id}
-      onClick={() => setSelectedPlayer(player)}
-      className="cursor-pointer"
-    >
-      <Card className={`hover:shadow-lg transition-all !bg-slate-800 border-slate-700 hover:border-emerald-500 ${
-        !player.is_starter ? 'opacity-75' : ''
-      }`}>
-        <CardContent className="p-2 sm:p-3">
-          {/* Fila superior: foto + posición/estado + puntos */}
-          <div className="flex items-center justify-between gap-1">
-            <div className="flex items-center gap-1.5 shrink-0">
+  const renderPlayerCard = (player: Player) => {
+    const playerTeam = player.team_id === homeTeam?.id ? homeTeam : awayTeam
+
+    return (
+      <div
+        key={player.id}
+        onClick={() => setSelectedPlayer(player)}
+        className="cursor-pointer"
+      >
+        <Card className={`hover:shadow-lg transition-all !bg-slate-800 border-slate-700 hover:border-emerald-500 ${
+          !player.is_starter ? 'opacity-75' : ''
+        }`}>
+          <CardContent className="p-1.5 sm:p-2.5 flex items-center justify-between gap-2 min-h-[56px]">
+            {/* Izquierda: Foto + Info básica */}
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+              {/* Foto o dorsal */}
               {player.photo ? (
                 <img
                   src={player.photo}
@@ -611,54 +553,55 @@ export default function PartidoDetallePage() {
                   }}
                 />
               ) : null}
-              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-400 border-2 border-slate-600 shrink-0 ${player.photo ? 'hidden' : ''}`}>
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-700 flex items-center justify-center text-[10px] sm:text-xs font-bold text-slate-400 border-2 border-slate-600 shrink-0 ${player.photo ? 'hidden' : ''}`}>
                 {player.shirt_number || '?'}
               </div>
-              <div>
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <span className="inline-flex items-center justify-center min-w-[20px] px-1 h-5 rounded bg-white/10 border border-white/20 text-white text-[11px] font-bold backdrop-blur-sm shadow-sm">
-                    {player.shirt_number || '-'}
-                  </span>
-                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getPositionColor(player.position)}`}>
+
+              {/* Nombre y demarcación/minutos */}
+              <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
+                <p className="text-[11px] sm:text-xs font-bold text-white truncate leading-tight">
+                  {player.short_name || `${player.first_name} ${player.last_name}`}
+                </p>
+                <div className="flex items-center gap-1">
+                  <span className={`inline-flex items-center px-1 rounded text-[8px] font-bold leading-none py-0.5 ${getPositionColor(player.position)}`}>
                     {getPositionLabel(player.position)}
                   </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                  <span>{player.is_starter ? 'Titular' : 'Suplente'}</span>
-                  <span>{player.minutes_played || 0}'</span>
+                  <span className="text-[9px] sm:text-[10px] text-slate-400 truncate">
+                    {player.is_starter ? 'Tit' : 'Sup'} · {player.minutes_played || 0}' · Rec: {player.ball_recoveries || 0}
+                  </span>
                 </div>
               </div>
             </div>
-            <div className="text-right shrink-0">
-              <div className="text-emerald-400">
-                <span className="text-base sm:text-lg font-bold">{player.total_points || 0}</span>
-              </div>
-              <p className="text-[10px] text-slate-400">pts</p>
-              {(player.goals || 0) > 0 && (
-                <p className="text-[10px] text-green-400">⚽ {player.goals}</p>
-              )}
-              {(player.assists || 0) > 0 && (
-                <p className="text-[10px] text-blue-400">🅰️ {player.assists}</p>
-              )}
-              {(player.yellow_cards || 0) > 0 && (
-                <p className="text-[10px] text-yellow-400">🟨 {player.yellow_cards}</p>
-              )}
-              {(player.red_cards || 0) > 0 && (
-                <p className="text-[10px] text-red-400">🟥 {player.red_cards}</p>
-              )}
-            </div>
-          </div>
-          {/* Nombre en fila propia con todo el ancho */}
-          <p className="mt-1.5 text-xs font-semibold text-white whitespace-nowrap overflow-hidden text-ellipsis w-full">
-            {player.short_name || `${player.first_name} ${player.last_name}`}
-          </p>
 
-          {/* Barras de Desglose Relevo */}
-          {renderRelevoBars(player)}
-        </CardContent>
-      </Card>
-    </div>
-  )
+            {/* Derecha: Puntos + Escudo */}
+            <div className="flex flex-col items-end justify-center shrink-0 min-w-[36px]">
+              <span className="text-sm sm:text-base font-extrabold text-emerald-400 leading-none">
+                {player.total_points || 0}
+              </span>
+              
+              {playerTeam?.logo_url ? (
+                <img 
+                  src={playerTeam.logo_url} 
+                  alt={playerTeam.name} 
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain mt-1 shrink-0" 
+                />
+              ) : (
+                <span className="text-[8px] text-slate-500 mt-1 shrink-0 truncate max-w-[36px]">
+                  {playerTeam?.name}
+                </span>
+              )}
+
+              {Number(player.relevo_points) < 0 && (
+                <span className="inline-flex items-center px-1 rounded bg-rose-500/10 text-rose-400 text-[8px] font-bold mt-1 scale-90">
+                  {player.relevo_points}
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando partido...</div>
@@ -929,86 +872,84 @@ export default function PartidoDetallePage() {
       </div>
 
       {/* Modal de detalle de jugador con métricas completas */}
+      {/* Modal de detalle de jugador con métricas completas */}
       {selectedPlayer && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4"
           onClick={() => setSelectedPlayer(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
-            {/* Cabecera */}
-            <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-100 p-6 flex justify-between items-start z-10">
-              <div className="flex items-center space-x-4">
+            {/* Cabecera compacta con resumen en la misma línea */}
+            <div className="bg-white border-b border-slate-100 px-3 py-2 sm:px-4 sm:py-2.5 flex justify-between items-center z-10 shrink-0">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                 {selectedPlayer.photo ? (
                   <img
                     src={selectedPlayer.photo}
                     alt={selectedPlayer.short_name || ''}
-                    className="w-20 h-20 rounded-full object-cover border-4 border-white"
+                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-slate-200 shrink-0"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none'
                       ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
                     }}
                   />
                 ) : null}
-                <div className={`w-20 h-20 rounded-full bg-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 border-4 border-white ${selectedPlayer.photo ? 'hidden' : ''}`}>
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 border-2 border-slate-200 shrink-0 ${selectedPlayer.photo ? 'hidden' : ''}`}>
                   {selectedPlayer.shirt_number || '?'}
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">
-                    {selectedPlayer.first_name} {selectedPlayer.last_name}
-                  </h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPositionColor(selectedPlayer.position)}`}>
+                
+                <div className="min-w-0 flex-1 flex flex-col justify-center">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 truncate max-w-[120px] sm:max-w-[220px] leading-tight">
+                      {selectedPlayer.short_name || `${selectedPlayer.first_name} ${selectedPlayer.last_name}`}
+                    </h2>
+                    <span className={`inline-flex items-center px-1 py-0.2 rounded text-[8px] sm:text-[9px] font-bold leading-none ${getPositionColor(selectedPlayer.position)}`}>
                       {getPositionLabel(selectedPlayer.position)}
                     </span>
-                    <span className="text-sm text-slate-600">
-                      {selectedPlayer.is_starter ? 'Titular' : 'Suplente'}
+                    <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium">
+                      ({selectedPlayer.is_starter ? 'Titular' : 'Suplente'})
+                    </span>
+                  </div>
+
+                  {/* Resumen al lado del nombre en más pequeño para moviles */}
+                  <div className="flex items-center gap-1.5 sm:gap-2.5 text-[9px] sm:text-[11px] text-slate-600 mt-0.5 leading-none">
+                    <span className="flex items-center gap-0.5">
+                      <strong className="text-emerald-600 font-extrabold">{selectedPlayer.total_points || 0}</strong> pts
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span><strong>{selectedPlayer.minutes_played || 0}</strong> min</span>
+                    <span className="text-slate-300">•</span>
+                    <span className="flex items-center gap-0.5">
+                      ⚽ <strong>{selectedPlayer.goals || 0}</strong>
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className="flex items-center gap-0.5">
+                      🅰️ <strong>{selectedPlayer.assists || 0}</strong>
                     </span>
                   </div>
                 </div>
               </div>
+              
               <button
                 onClick={() => setSelectedPlayer(null)}
-                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500"
+                className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-500 shrink-0 ml-2 border border-slate-200/50"
               >
-                <ArrowLeft className="w-5 h-5 rotate-180" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Cuerpo con métricas */}
-            <div className="p-4 sm:p-6 space-y-6">
-              {/* Resumen principal */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-                <div className="bg-emerald-50 p-4 rounded-xl text-center">
-                  <p className="text-emerald-800 text-sm font-semibold">Puntos</p>
-                  <p className="text-3xl font-bold text-emerald-600">{selectedPlayer.total_points || 0}</p>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-xl text-center">
-                  <p className="text-slate-600 text-sm font-semibold">Minutos</p>
-                  <p className="text-3xl font-bold text-slate-800">{selectedPlayer.minutes_played || 0}'</p>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-xl text-center">
-                  <p className="text-slate-600 text-sm font-semibold">Goles</p>
-                  <p className="text-3xl font-bold text-slate-800">{selectedPlayer.goals || 0}</p>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-xl text-center">
-                  <p className="text-slate-600 text-sm font-semibold">Asistencias</p>
-                  <p className="text-3xl font-bold text-slate-800">{selectedPlayer.assists || 0}</p>
-                </div>
-              </div>
+            {/* Cuerpo scrollable internamente y muy compacto */}
+            <div className="p-2 sm:p-3 overflow-y-auto space-y-2 flex-1">
+              <MetricBreakdown player={selectedPlayer} fixture={fixture || undefined} />
 
-              {/* Métricas por categoría */}
-              <MetricBreakdown player={selectedPlayer} />
-
-              {/* Botón para ver perfil completo */}
               <button
                 onClick={() => {
                   router.push(`/jugadores/${selectedPlayer.id}`)
                   setSelectedPlayer(null)
                 }}
-                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-colors"
+                className="w-full py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-semibold rounded-lg transition-colors mt-2"
               >
                 Ver perfil completo con historial
               </button>

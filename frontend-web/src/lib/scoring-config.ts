@@ -47,6 +47,7 @@ export const EDITABLE_EVENTS: EditableEvent[] = [
   { key: 'shots_on_target', label: 'Tiro a puerta', kind: 'single' },
   { key: 'takeons_won', label: 'Regate completado', kind: 'single' },
   { key: 'box_entries', label: 'Balones al área', kind: 'single' },
+  { key: 'ball_recoveries', label: 'Balón recuperado', kind: 'single' },
 ]
 
 
@@ -229,7 +230,7 @@ const crosses = (fallback: number): RelevoMetricSpec => ({
 const assists = (fallback: number): RelevoMetricSpec => ({
   label: 'Asistencias',
   unit: 'count',
-  value: (s) => n(s, 'assists'),
+  value: (s) => n(s, 'assists') + n(s, 'fantasy_assist') + n(s, 'intent_assists'),
   target: perMin('assists_per_min', fallback),
   cmp: 'gte',
   describe: (lim) => `${lim?.assists_per_min ?? fallback} asistencias por minuto jugado`,
@@ -510,6 +511,7 @@ export interface ScoringRates {
     set_pieces_taken: number
     successful_crosses: number
     long_balls_completed: number
+    ball_recoveries: number
   }
   lost_balls: number
   relevo_limits: RelevoLimits
@@ -535,7 +537,7 @@ export const DEFAULT_RATES: ScoringRates = {
     saves: 0.5, clearances: 0.5, shots_on_target: 0.3, takeons_won: 0.5, box_entries: 0.1,
     passes_completed: 0.05, forward_passes: 0.2, recoveries_high: 0.3, recoveries_med: 0.2,
     recoveries_low: 0.1, interceptions_high: 0.3, interceptions_med: 0.2, interceptions_low: 0.1,
-    set_pieces_taken: 0.2, successful_crosses: 0.3, long_balls_completed: 0.5,
+    set_pieces_taken: 0.2, successful_crosses: 0.3, long_balls_completed: 0.5, ball_recoveries: 0.1,
   },
   lost_balls: -0.1,
   relevo_limits: DEFAULT_RELEVO_LIMITS,
@@ -624,6 +626,7 @@ export function resolveRates(rules: ScoringRules | null): ScoringRates {
       set_pieces_taken: num(rules?.bonuses_per_X as any, 'set_pieces_taken') || d.per_unit.set_pieces_taken,
       successful_crosses: num(rules?.bonuses_per_X as any, 'successful_crosses') || d.per_unit.successful_crosses,
       long_balls_completed: num(rules?.bonuses_per_X as any, 'long_balls_completed') || d.per_unit.long_balls_completed,
+      ball_recoveries: num(rules?.bonuses_per_X as any, 'ball_recoveries') || num(events.ball_recoveries, 'all') || d.per_unit.ball_recoveries,
     },
     lost_balls: num(events.lost_balls, 'all') || d.lost_balls,
     relevo_limits: resolveRelevoLimits(rules),

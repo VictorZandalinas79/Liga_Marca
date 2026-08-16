@@ -1020,7 +1020,7 @@ export default function JornadaPage() {
         >
           <span className="flex items-center gap-2">
             <Users className="w-4 h-4 text-emerald-400" />
-            <span className="hidden sm:inline">Equipos</span>
+            <span>Equipos usuarios</span>
           </span>
           <span className="hidden sm:inline">
             {showEquipos ? <ChevronUp className="w-4 h-4 ml-2" /> : <ChevronDown className="w-4 h-4 ml-2" />}

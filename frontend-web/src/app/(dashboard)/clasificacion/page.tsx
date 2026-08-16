@@ -43,7 +43,7 @@ interface UserStanding {
   sanctioned_matchdays: number
   kamikaze_score?: number
   app_opens?: number
-  deuda?: number
+  saldo?: number
 }
 
 interface MatchdayStatus {
@@ -51,7 +51,7 @@ interface MatchdayStatus {
   is_open: boolean
 }
 
-type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_avg' | 'best_change_score' | 'change_impact_points' | 'podium_finishes' | 'bottom_finishes' | 'sanctioned_matchdays' | 'deuda'
+type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_avg' | 'best_change_score' | 'change_impact_points' | 'podium_finishes' | 'bottom_finishes' | 'sanctioned_matchdays' | 'saldo'
 type SortOrder = 'asc' | 'desc'
 
 export default function ClasificacionPage() {
@@ -200,19 +200,12 @@ export default function ClasificacionPage() {
 
     setExpandedUser(userId)
 
-    // Determinar la jornada a mostrar: en marcha o última jugada
-    let targetMatchday = lastPlayedMatchday
-
-    // Verificar si hay partidos en marcha
-    const { data: fixturesInProgress } = await supabase
-      .from('fixtures')
-      .select('matchday')
-      .eq('status', 'in_progress')
-      .limit(1)
-      .maybeSingle()
-
-    if (fixturesInProgress?.matchday) {
-      targetMatchday = fixturesInProgress.matchday
+    // Determinar la jornada a mostrar:
+    // Si la jornada está en juego (isLeagueOpen === false), mostramos la jornada actual (currentMatchday).
+    // Si la jornada está abierta para cambios (isLeagueOpen === true), mostramos la jornada anterior (currentMatchday - 1).
+    let targetMatchday = currentMatchday
+    if (isLeagueOpen) {
+      targetMatchday = currentMatchday - 1
     }
 
     // Obtener los equipos del usuario
@@ -226,36 +219,21 @@ export default function ClasificacionPage() {
     const teamId = userTeamsData[0].id
     const teamName = userTeamsData[0].name
 
-    if (userId !== currentUserId) {
-      if (isLeagueOpen) {
-        setUserTeamData(prev => ({
-          ...prev,
-          [userId]: { teamName, isHidden: true, hiddenReason: 'Mercado abierto. Alineaciones ocultas.' }
-        }))
-        setTimeout(() => {
-          teamRefs.current[userId]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }, 100)
-        return
-      } else {
-        // En jornada, solo se verán de jornadas anteriores
-        targetMatchday = currentMatchday - 1
-        if (targetMatchday < 1) {
-          setUserTeamData(prev => ({
-            ...prev,
-            [userId]: { teamName, isHidden: true, hiddenReason: 'Sin jornadas anteriores.' }
-          }))
-          setTimeout(() => {
-            teamRefs.current[userId]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          }, 100)
-          return
-        }
-      }
+    if (targetMatchday < 1) {
+      setUserTeamData(prev => ({
+        ...prev,
+        [userId]: { teamName, isHidden: true, hiddenReason: 'Sin jornadas anteriores.' }
+      }))
+      setTimeout(() => {
+        teamRefs.current[userId]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+      return
     }
 
     // Obtener jugadores del equipo en la jornada seleccionada o anterior disponible
     let { data: teamPlayersData } = await supabase
       .from('team_players')
-      .select('player_id, is_starter, is_captain, matchday')
+      .select('player_id, is_starter, is_captain, matchday, replaced_player_id')
       .eq('team_id', teamId)
       .lte('matchday', targetMatchday)
       .order('matchday', { ascending: false })
@@ -271,12 +249,14 @@ export default function ClasificacionPage() {
     }
 
     const playerIds = teamPlayersData.map(tp => tp.player_id)
+    const replacedPlayerIds = teamPlayersData.map(tp => tp.replaced_player_id).filter(Boolean) as string[]
+    const allQueryPlayerIds = [...new Set([...playerIds, ...replacedPlayerIds])]
     const actualMatchday = teamPlayersData[0].matchday
 
     const { data: playersData } = await supabase
       .from('players')
       .select('id, first_name, last_name, short_name, position, photo, shirt_number, team_id, precio')
-      .in('id', playerIds)
+      .in('id', allQueryPlayerIds)
 
     const realTeamIds = [...new Set(playersData?.map(p => p.team_id).filter(Boolean) || [])]
     const { data: teamsData } = await supabase
@@ -379,6 +359,19 @@ export default function ClasificacionPage() {
     const jugadores = teamPlayersData.map(tp => {
       const p = playersData?.find(pl => pl.id === tp.player_id)
       const teamObj = p ? teamsMap.get(p.team_id) : undefined
+      
+      let replacedPlayerObj = null
+      if (tp.replaced_player_id) {
+        const rp = playersData?.find(pl => pl.id === tp.replaced_player_id)
+        if (rp) {
+          replacedPlayerObj = {
+            id: rp.id,
+            short_name: rp.short_name || rp.first_name || '',
+            photo: rp.photo
+          }
+        }
+      }
+
       return {
         id: tp.player_id,
         short_name: p?.short_name || p?.first_name || '',
@@ -392,6 +385,7 @@ export default function ClasificacionPage() {
         is_captain: tp.is_captain || false,
         originalPuntos: playerPointsMap.get(tp.player_id) ?? 0,
         sanctionReason: undefined as string | undefined,
+        replacedPlayer: replacedPlayerObj,
       }
     })
 
@@ -644,7 +638,7 @@ export default function ClasificacionPage() {
                   <th
                     className="text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('sanctioned_matchdays')}
-                    title="Jornadas con alguna sanción"
+                    title="Número total de sanciones"
                   >
                     <div className="flex items-center justify-center gap-1">
                       Sanciones
@@ -663,12 +657,12 @@ export default function ClasificacionPage() {
                   </th>
                   <th
                     className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('deuda')}
-                    title="Dinero a pagar para la próxima temporada (Cuota + Sanciones)"
+                    onClick={() => handleSort('saldo')}
+                    title="Saldo disponible (Saldo Inicial Virtual - Cuotas - Sanciones)"
                   >
                     <div className="flex items-center justify-end gap-1 text-emerald-400">
-                      Deuda
-                      <SortIcon field="deuda" />
+                      Saldo
+                      <SortIcon field="saldo" />
                     </div>
                   </th>
                   <th
@@ -760,8 +754,8 @@ export default function ClasificacionPage() {
                       </div>
                     </td>
                     <td className="px-1 py-1 text-right whitespace-nowrap">
-                      <span className={`font-bold text-sm ${((standing.deuda || 0) < 0) ? 'text-red-400' : 'text-emerald-400'}`}>
-                        {standing.deuda?.toFixed(2)}€
+                      <span className={`font-bold text-sm ${((standing.saldo || 0) < 0) ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {standing.saldo?.toFixed(2)}€
                       </span>
                     </td>
                     <td className="px-1 py-1 text-center whitespace-nowrap">
@@ -841,10 +835,11 @@ export default function ClasificacionPage() {
                                           <Badge className="text-[9px] px-1 py-0 leading-tight shrink-0 bg-yellow-500 text-white">C</Badge>
                                         )}
                                         {player.sanctionReason && (
-                                          <AlertTriangle 
-                                            className="w-3 h-3 text-red-400 shrink-0 cursor-help" 
-                                            title={player.sanctionReason}
-                                          />
+                                          <span title={player.sanctionReason} className="inline-flex shrink-0">
+                                            <AlertTriangle 
+                                              className="w-3 h-3 text-red-400 cursor-help" 
+                                            />
+                                          </span>
                                         )}
                                       </div>
                                       <div className="flex items-center gap-1 mt-0.5">
@@ -853,6 +848,17 @@ export default function ClasificacionPage() {
                                         )}
                                         <span className="text-[10px] text-slate-400 truncate">{player.team?.name}</span>
                                       </div>
+                                      {player.replacedPlayer && (
+                                        <div className="flex items-center gap-1 mt-0.5">
+                                          <span className="text-[9px] text-slate-400">por</span>
+                                          {player.replacedPlayer.photo && (
+                                            <img src={player.replacedPlayer.photo} className="w-3.5 h-3.5 rounded-full object-cover border border-slate-500 shrink-0" alt="" />
+                                          )}
+                                          <span className="text-[9px] text-red-400 font-semibold truncate max-w-[90px]">
+                                            {player.replacedPlayer.short_name}
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
 
                                     {/* col 3: puntos en amarillo — columna fija de 3.5rem */}

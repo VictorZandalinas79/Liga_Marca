@@ -18,6 +18,8 @@ export type DispatchInputs = {
 }
 
 import { exec } from 'child_process'
+import fs from 'fs'
+import path from 'path'
 
 export async function dispatchLiveSync(inputs: DispatchInputs): Promise<void> {
   const token = process.env.GITHUB_DISPATCH_TOKEN
@@ -29,8 +31,27 @@ export async function dispatchLiveSync(inputs: DispatchInputs): Promise<void> {
         SYNC_FIXTURE_IDS: inputs.fixture_ids || '', 
         SYNC_MATCHDAY: inputs.matchday || '' 
       }
+      
+      // Intentar usar sync_venv (para arm64 de Mac) o test_venv si existen, de lo contrario venv
+      let pythonPath = '../venv/bin/python'
+      if (fs.existsSync(path.resolve(process.cwd(), '../sync_venv/bin/python'))) {
+        pythonPath = '../sync_venv/bin/python'
+      } else if (fs.existsSync(path.resolve(process.cwd(), '../test_venv/bin/python'))) {
+        pythonPath = '../test_venv/bin/python'
+      } else {
+        // Red de seguridad: si no existen, usar python3 global
+        try {
+          if (!fs.existsSync(path.resolve(process.cwd(), '../venv/bin/python'))) {
+            pythonPath = 'python3'
+          }
+        } catch (e) {
+          pythonPath = 'python3'
+        }
+      }
+      
+      console.log(`[dispatchLiveSync] Ejecutando con Python: ${pythonPath}`)
       // Ejecutar en segundo plano, sin esperar (fuego y olvida, igual que GitHub Actions)
-      const child = exec('../venv/bin/python ci/run_live_sync.py', { env })
+      const child = exec(`${pythonPath} ci/run_live_sync.py`, { env })
       child.stdout?.on('data', console.log)
       child.stderr?.on('data', console.error)
       return

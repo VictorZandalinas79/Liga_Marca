@@ -76,6 +76,7 @@ function PitchPlayerCard({
   hasMatchStarted,
   isPenalized,
   sanctionReason,
+  replacedPlayer,
 }: {
   player: Player
   points?: number
@@ -84,21 +85,22 @@ function PitchPlayerCard({
   hasMatchStarted?: boolean
   isPenalized?: boolean
   sanctionReason?: string
+  replacedPlayer?: Player | null
 }) {
   const pts = points !== undefined ? (Math.round(points * 10) / 10).toFixed(1) : (hasMatchStarted ? "0.0" : null)
 
   return (
-    <div className="flex flex-col items-center w-[64px] sm:w-[80px] md:w-[88px] lg:w-[94px] text-center relative shrink-0 group transition-all duration-300">
-      <div className="relative mb-1 md:mb-2 lg:mb-3">
+    <div className="flex flex-col items-center w-[58px] sm:w-[68px] md:w-[74px] lg:w-[80px] text-center relative shrink-0 group transition-all duration-300">
+      <div className="relative mb-1 md:mb-1.5 lg:mb-2">
         {/* Foto del jugador actual */}
         {player.photo ? (
           <img
             src={player.photo}
             alt={player.short_name || ''}
-            className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-[72px] lg:h-[72px] rounded-full object-cover border-2 sm:border-[3px] shadow-lg bg-slate-200 transition-all duration-300 ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}
+            className={`w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-full object-cover shadow-lg bg-transparent transition-all duration-300 ${isPenalized ? 'border-2 border-red-500 ring-2 ring-red-500 animate-pulse' : ''}`}
           />
         ) : (
-          <div className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-[72px] lg:h-[72px] rounded-full bg-slate-800 text-white flex items-center justify-center text-xs sm:text-sm md:text-base lg:text-lg font-bold border-2 sm:border-[3px] shadow-lg transition-all duration-300 ${isPenalized ? 'border-red-500 ring-2 ring-red-500 animate-pulse' : 'border-white'}`}>
+          <div className={`w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] sm:text-xs md:text-sm lg:text-base font-bold shadow-lg transition-all duration-300 ${isPenalized ? 'border-2 border-red-500 ring-2 ring-red-500 animate-pulse' : ''}`}>
             {player.shirt_number || '?'}
           </div>
         )}
@@ -108,29 +110,46 @@ function PitchPlayerCard({
           <img
             src={player.team.logo_url}
             alt={player.team?.name || ''}
-            className="absolute -bottom-1 -left-2 sm:-left-3 md:-bottom-1 md:-left-4 lg:-bottom-1 lg:-left-4 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 object-contain drop-shadow-md transition-all duration-300"
+            className="absolute -bottom-0.5 -left-1.5 sm:-left-2 md:-bottom-1 md:-left-2.5 lg:-bottom-1 lg:-left-3 w-4.5 h-4.5 sm:w-5 sm:h-5 md:w-5.5 md:h-5.5 lg:w-6 lg:h-6 object-contain drop-shadow-md transition-all duration-300"
           />
         )}
 
-        {/* Puntos (arriba de la foto) */}
-        {pts !== null && (
-          <div className="absolute -top-3 sm:-top-4 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white font-extrabold text-[10px] sm:text-[11px] md:text-[11px] lg:text-[12px] leading-none rounded-sm px-1 py-[2px] md:px-1 md:py-0.5 lg:px-1 lg:py-1 flex items-center justify-center shadow-md border border-amber-400 transition-all duration-300">
-            {isPenalized ? '0.0' : pts}
-          </div>
-        )}
-
         {/* Precio (a la derecha) */}
-        <div className="absolute top-1/2 -right-4 sm:-right-5 md:-right-6 -translate-y-1/2 bg-emerald-600 text-white font-black text-[12px] sm:text-[13px] md:text-[14px] lg:text-[15px] flex items-center justify-center rounded-full w-[32px] h-[32px] sm:w-[36px] sm:h-[36px] md:w-[40px] md:h-[40px] lg:w-[44px] lg:h-[44px] shadow-xl border-2 border-white transition-all duration-300 z-20">
+        <div className="absolute top-1/2 -right-3.5 sm:-right-4 md:-right-4.5 lg:-right-5 -translate-y-1/2 bg-emerald-600 text-white font-black text-[9px] sm:text-[10px] md:text-[11px] lg:text-[12px] flex items-center justify-center rounded-full w-[25px] h-[25px] sm:w-[28px] sm:h-[28px] md:w-[30px] md:h-[30px] lg:w-[32px] lg:h-[32px] shadow-xl transition-all duration-300 z-20">
           {player.precio ? `${player.precio}M` : '-'}
         </div>
+
+        {/* Reemplazado (arriba izquierda) */}
+        {replacedPlayer && (
+          <div 
+            className="absolute -top-1 -left-1.5 sm:-top-1.5 sm:-left-2 md:-top-2 md:-left-2.5 w-5.5 h-5.5 sm:w-6 sm:h-6 md:w-7 md:h-7 rounded-full border border-red-500 bg-slate-900 shadow-md flex items-center justify-center z-30 cursor-help"
+            title={`Reemplaza a: ${replacedPlayer.short_name || replacedPlayer.first_name}`}
+          >
+            {replacedPlayer.photo ? (
+              <img src={replacedPlayer.photo} className="w-full h-full rounded-full object-cover grayscale-[30%]" />
+            ) : (
+              <span className="text-[6px] sm:text-[8px] md:text-[9px] font-bold text-red-200">
+                {replacedPlayer.shirt_number || '?'}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Nombre del jugador */}
-      <div className="flex flex-col items-center w-[150%] -mt-1 md:-mt-1.5 z-30">
-        <p className="font-extrabold text-white text-[10px] sm:text-[12px] md:text-[13px] lg:text-[14px] leading-[1.1] drop-shadow-md relative w-full text-center transition-all duration-300 truncate"
+      <div className="flex flex-col items-center w-[100px] sm:w-[110px] md:w-[115px] lg:w-[120px] -mt-1 md:-mt-1.5 z-30">
+        <p className="font-extrabold text-white text-[10.5px] sm:text-[11px] md:text-[11.5px] lg:text-[12px] leading-tight drop-shadow-md relative w-full text-center transition-all duration-300 whitespace-normal break-words"
            style={{ textShadow: '1px 1px 3px rgba(0,0,0,1)' }}>
           {formatPlayerName(player.short_name || player.first_name)}
         </p>
+
+        {/* Puntos (debajo del nombre) */}
+        {pts !== null && (
+          <div className="mt-0.5 text-yellow-300 font-extrabold text-[21px] sm:text-[22px] md:text-[23px] lg:text-[24px] leading-none transition-all duration-300"
+               style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.9)' }}>
+            {isPenalized ? '0.0' : pts}
+          </div>
+        )}
       </div>
       {isPenalized && sanctionReason ? (
         <p className="text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] text-red-300 font-bold leading-tight w-[130%] drop-shadow-md mt-0.5 lg:mt-1 break-words whitespace-normal bg-red-950/80 rounded px-1 py-0.5 transition-all duration-300 z-30" title={sanctionReason}>
@@ -150,6 +169,38 @@ function getStagger(len: number, idx: number) {
   }
   return ''
 }
+
+function splitRowPlayers<T>(arr: T[]): T[][] {
+  if (arr.length <= 4) {
+    return [arr]
+  }
+  return [arr.slice(0, 4), arr.slice(4)]
+}
+
+function getRowGapClass(len: number, isFwd: boolean = false, isDiv1: boolean = false): string {
+  if (isFwd && isDiv1) {
+    // Delanteros de primera división: mantener espaciado original
+    if (len === 4) return 'gap-1 sm:gap-3'
+    if (len === 3) return 'gap-4 sm:gap-10'
+    if (len === 2) return 'gap-8 sm:gap-14'
+    return 'gap-1 sm:gap-3'
+  }
+  
+  // Para los demás (o si no es Div 1), aumentar espaciado en móvil
+  if (isFwd) {
+    if (len === 4) return 'gap-3 sm:gap-3' // un poco más que gap-1
+    if (len === 3) return 'gap-6 sm:gap-10' // un poco más que gap-4
+    if (len === 2) return 'gap-10 sm:gap-14' // un poco más que gap-8
+    return 'gap-3 sm:gap-3'
+  }
+
+  // Defensores y mediocampistas
+  if (len === 4) return 'gap-4 sm:gap-8' // un poco más que gap-2
+  if (len === 3) return 'gap-6 sm:gap-10' // un poco más que gap-4
+  if (len === 2) return 'gap-10 sm:gap-14' // un poco más que gap-8
+  return 'gap-3 sm:gap-3'
+}
+
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth()
@@ -1168,6 +1219,7 @@ export default function DashboardPage() {
             if (ch) replacedId = ch.outId
           }
         }
+        if (replacedId === pid) replacedId = null
         
         return {
           player_id: pid,
@@ -1228,6 +1280,7 @@ export default function DashboardPage() {
           if (ch) replacedId = ch.outId
         }
       }
+      if (replacedId === playerId) replacedId = null
       
       return {
         player_id: playerId,
@@ -1311,6 +1364,7 @@ export default function DashboardPage() {
             if (ch) replacedId = ch.outId
           }
         }
+        if (replacedId === pid) replacedId = null
         
         return {
           player_id: pid,
@@ -1738,9 +1792,9 @@ export default function DashboardPage() {
       {/* ================= CONTENEDOR PRINCIPAL ================= */}
       <div className="w-full space-y-4 mt-2">
       {/* Once inicial - Grid responsive ordenado por posiciones */}
-      <Card className="border-2 border-emerald-200">
-        <CardContent className="p-2">
-          <div className="flex items-center justify-between mb-2">
+      <Card className="border-0 sm:border-2 border-emerald-200 shadow-none sm:shadow-md bg-transparent sm:bg-white mx-[-1rem] sm:mx-0">
+        <CardContent className="p-0 sm:p-2">
+          <div className="flex items-center justify-between mb-2 px-3 sm:px-0">
             <span className="text-sm font-bold text-slate-900">{currentMomento ? `${currentMomento} · J${activeMatchday}` : `Jornada ${activeMatchday}`}</span>
             <span className="text-xs text-slate-500">{selectedPlayersData.length}/11</span>
           </div>
@@ -1748,7 +1802,7 @@ export default function DashboardPage() {
           {isUnlockWindowOpen ? (
             <div className="flex flex-col lg:flex-row gap-4 items-start">
               {/* Pitch */}
-              <div className={`relative w-full lg:flex-1 ${userDivision === 1 ? 'max-w-lg' : 'max-w-md'} mx-auto border-2 border-white rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]`} style={{
+              <div className={`relative w-full lg:flex-1 max-w-full ${userDivision === 1 ? 'sm:max-w-lg' : 'sm:max-w-md'} mx-auto border-y-2 sm:border-2 border-white rounded-none sm:rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]`} style={{
                 backgroundImage: userDivision === 1 ? 'url(/pitches/pitch_div1.png)' : userDivision === 2 ? 'url(/pitches/pitch_div2.png)' : userDivision === 3 ? 'url(/pitches/pitch_div3_large.png)' : 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
                 backgroundSize: userDivision === 1 || userDivision === 2 || userDivision === 3 ? '100% 100%' : 'auto',
                 backgroundColor: userDivision === 1 ? 'transparent' : userDivision === 2 ? '#dfd6a7' : userDivision === 3 ? '#8B5A2B' : '#43a047',
@@ -1780,42 +1834,72 @@ export default function DashboardPage() {
               <div 
                 className={`relative z-10 flex flex-col justify-between h-full -translate-x-2 sm:-translate-x-3 md:-translate-x-4 lg:-translate-x-5 ${
                   userDivision === 1 
-                    ? 'pt-[18%] pb-[18%] px-0 scale-[0.85] origin-bottom' 
+                    ? 'pt-[23%] pb-[23%] px-0 scale-[0.85] origin-bottom sm:pt-[25%] sm:pb-[20%] sm:scale-[0.83] sm:origin-center' 
                     : 'px-6 pt-24 pb-12 sm:px-2 sm:pt-20 sm:pb-4 md:px-0 md:pt-24 md:pb-6 lg:pt-28 lg:pb-8'
                 }`}
                 style={userDivision === 1 ? { filter: 'drop-shadow(0 25px 20px rgba(0,0,0,0.6))' } : {}}
               >
                 {/* Delanteros */}
-                <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? 'px-[15%]' : ''}`}>
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').map((player, idx, arr) => (
-                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
-                      <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
-                    </div>
-                  ))}
+                <div className="flex flex-col items-center gap-2 w-full sm:translate-y-8">
+                  {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD')).map((subRow, rowIdx, rowsArr) => {
+                    const isSplit = rowsArr.length > 1
+                    return (
+                      <div 
+                        key={rowIdx} 
+                        className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, true, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[15%]' : ''}`}
+                      >
+                        {subRow.map((player, idx) => (
+                          <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
+                            <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Delanteros</div>
                   )}
                 </div>
 
                 {/* Mediocampistas */}
-                <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''}`}>
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').map((player, idx, arr) => (
-                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
-                      <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
-                    </div>
-                  ))}
+                <div className="flex flex-col items-center gap-2 w-full">
+                  {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID')).map((subRow, rowIdx, rowsArr) => {
+                    const isSplit = rowsArr.length > 1
+                    return (
+                      <div 
+                        key={rowIdx} 
+                        className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''}`}
+                      >
+                        {subRow.map((player, idx) => (
+                          <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
+                            <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Centrocampistas</div>
                   )}
                 </div>
 
                 {/* Defensas */}
-                <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? 'px-0 -translate-y-4 sm:-translate-y-6' : ''}`}>
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').map((player, idx, arr) => (
-                    <div key={player._uniqueKey} className={`transition-transform duration-300 ${getStagger(arr.length, idx)} z-20`}>
-                      <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
-                    </div>
-                  ))}
+                <div className="flex flex-col items-center gap-2 w-full">
+                  {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF')).map((subRow, rowIdx, rowsArr) => {
+                    const isSplit = rowsArr.length > 1
+                    return (
+                      <div 
+                        key={rowIdx} 
+                        className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-0 -translate-y-4 sm:-translate-y-6' : ''}`}
+                      >
+                        {subRow.map((player, idx) => (
+                          <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
+                            <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Defensas</div>
                   )}
@@ -1824,7 +1908,7 @@ export default function DashboardPage() {
                 {/* Portero */}
                 <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? '-translate-y-4 sm:-translate-y-6' : ''}`}>
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
-                    <PitchPlayerCard key={player._uniqueKey} player={player} points={playerPoints.get(player.id)} hasMatchStarted={teamMatchStatus.get(String(player.team_id)) || isTeamLocked(player.team_id)} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} />
+                    <PitchPlayerCard key={player._uniqueKey} player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
                   ))}
                   {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
                     <div className="text-[10px] text-white/30 italic">Sin Portero</div>
@@ -1834,7 +1918,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Estadísticas del equipo (Columna 2 en PC, debajo en móvil) */}
-          <div className="w-full lg:w-64 shrink-0">
+          <div className="w-full lg:w-64 shrink-0 px-3 sm:px-0">
             <Card className="!bg-emerald-50 border-emerald-200">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-3">
@@ -1927,7 +2011,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Tus Rankings (Columna 3 en PC, debajo en móvil) */}
-            <div className="w-full lg:w-64 shrink-0">
+            <div className="w-full lg:w-64 shrink-0 px-3 sm:px-0">
               <Card className="!bg-indigo-50 border-indigo-200">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-3">

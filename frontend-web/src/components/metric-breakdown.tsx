@@ -1,13 +1,17 @@
 'use client'
 
-import { TrendingUp, Check, X } from 'lucide-react'
-import { evaluateRelevoBlocks, resolveRates, type Position, type RelevoLimits } from '@/lib/scoring-config'
+import { RELEVO_BLOCKS, evaluateRelevoBlocks, resolveRates, type Position } from '@/lib/scoring-config'
 import { useScoringRules } from '@/hooks/use-scoring-rules'
 
-// Acepta cualquier objeto con campos de player_scores (los lee con Number(v)||0)
-export function MetricBreakdown({ player }: { player: Record<string, any> }) {
-  // Tarifas desde scoring_config (editables en Admin); fallback a los defaults.
+export function MetricBreakdown({ 
+  player, 
+  fixture 
+}: { 
+  player: Record<string, any>
+  fixture?: Record<string, any>
+}) {
   const R = resolveRates(useScoringRules())
+  
   const normPos = (p?: string): Position => {
     const s = (p || '').toLowerCase()
     if (s.includes('goalkeeper') || s === 'gk' || s === 'por') return 'POR'
@@ -17,7 +21,7 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
     return 'MED'
   }
 
-  const fmtPts = (n: number): string => String(parseFloat((Math.round(n * 100) / 100).toFixed(2)))
+  const fmtPts = (num: number): string => String(parseFloat((Math.round(num * 100) / 100).toFixed(2)))
   const r2 = (v: number) => Math.round(v * 100) / 100
   const n = (v: any) => Number(v) || 0
 
@@ -27,262 +31,487 @@ export function MetricBreakdown({ player }: { player: Record<string, any> }) {
   const CLEAN_SHEET   = R.clean_sheet
   const GOAL_CONCEDED = R.goal_conceded
 
-  interface Row  { label: string; count: number; unit: number; points: number; flat?: boolean }
-  interface Block { id: string; emoji: string; title: string; accent: string; chip: string; rows: Row[] }
-
-  const u = (count: number, unit: number, label: string): Row =>
-    ({ label, count, unit, points: r2(count * unit) })
-
-  // B1: Participación
-  const min = n(player.minutes_played)
-  const b1: Row[] = []
-  if (min > 0) {
-    const titular = min >= R.participation.minutes_threshold
-    b1.push({ label: titular ? `Participación · ≥60 min (${min}′)` : `Participación · suplente (${min}′)`, count: 0, unit: 0, points: titular ? R.participation.starter_bonus : R.participation.substitute_bonus, flat: true })
-    
-    // Bonos de resultado
-    const wb = n(player.win_bonus)
-    const db = n(player.draw_bonus)
-    if (wb > 0) b1.push({ label: `Victoria (≥60 min)`, count: 0, unit: 0, points: wb, flat: true })
-    else if (db > 0) b1.push({ label: `Empate (≥60 min)`, count: 0, unit: 0, points: db, flat: true })
+  interface Row {
+    block: string
+    label: string
+    count: string | number
+    unit: string | number
+    points: number
   }
 
-  // B2: Goles y Asistencias
-  const b2: Row[] = []
-  if (n(player.goals) > 0)         b2.push(u(n(player.goals), GOAL[pos], `Gol (${pos})`))
-  if (n(player.own_goals) > 0)     b2.push(u(n(player.own_goals), R.own_goal, 'Gol en propia'))
-  if (n(player.assists) > 0)       b2.push(u(n(player.assists), R.assist_goal, 'Asistencia de gol'))
-  if (n(player.fantasy_assist) > 0) b2.push(u(n(player.fantasy_assist), R.assist_no_goal, 'Asistencia sin gol'))
+  const rows: Row[] = []
 
-  // B3: Defensa y Portería a Cero
-  const b3: Row[] = []
+  // Determinar resultado si fixture está disponible
+  let isWin = false
+  let isDraw = false
+  let isLoss = false
+  let hasResult = false
+
+  if (fixture) {
+    const playerTeamId = player.team_id
+    const homeTeamId = fixture.home_team_id
+    const awayTeamId = fixture.away_team_id
+    
+    if (playerTeamId === homeTeamId || playerTeamId === awayTeamId) {
+      hasResult = true
+      const homeScore = n(fixture.home_score)
+      const awayScore = n(fixture.away_score)
+      const isHome = playerTeamId === homeTeamId
+      
+      if (homeScore > awayScore) {
+        isWin = isHome
+        isLoss = !isHome
+      } else if (awayScore > homeScore) {
+        isWin = !isHome
+        isLoss = isHome
+      } else {
+        isDraw = true
+      }
+    }
+  }
+
+  // 1. Participación
+  const min = n(player.minutes_played)
+  if (min > 0) {
+    const isStarter = player.is_starter === true || player.is_starter === 1 || player.is_starter === 'true'
+    rows.push({
+      block: 'Participación',
+      label: isStarter ? `Titular (${min}')` : `Suplente (${min}')`,
+      count: '-',
+      unit: '-',
+      points: isStarter ? R.participation.starter_bonus : R.participation.substitute_bonus
+    })
+
+    let wb = n(player.win_bonus)
+    let db = n(player.draw_bonus)
+
+    // Si los bonus no se recuperaron de la BD, inferir del resultado
+    if (wb === 0 && db === 0 && hasResult && min >= R.participation.minutes_threshold) {
+      if (isWin) {
+        wb = R.participation.win_bonus_60
+      } else if (isDraw) {
+        db = R.participation.draw_bonus_60
+      }
+    }
+
+    if (wb > 0) {
+      rows.push({
+        block: 'Participación',
+        label: 'Victoria (>=60\')',
+        count: '-',
+        unit: '-',
+        points: wb
+      })
+    } else if (db > 0) {
+      rows.push({
+        block: 'Participación',
+        label: 'Empate (>=60\')',
+        count: '-',
+        unit: '-',
+        points: db
+      })
+    } else if (min >= R.participation.minutes_threshold) {
+      rows.push({
+        block: 'Participación',
+        label: isWin ? 'Victoria (>=60\')' : isDraw ? 'Empate (>=60\')' : 'Derrota (>=60\')',
+        count: '-',
+        unit: '-',
+        points: 0
+      })
+    }
+  } else {
+    rows.push({
+      block: 'Participación',
+      label: 'Titular/Suplente (0\')',
+      count: '-',
+      unit: '-',
+      points: 0
+    })
+  }
+
+  // 2. Goles/Asis
+  rows.push({
+    block: 'Goles/Asis',
+    label: `Gol (${pos})`,
+    count: n(player.goals),
+    unit: GOAL[pos],
+    points: r2(n(player.goals) * GOAL[pos])
+  })
+  rows.push({
+    block: 'Goles/Asis',
+    label: 'Gol Propia',
+    count: n(player.own_goals),
+    unit: R.own_goal,
+    points: r2(n(player.own_goals) * R.own_goal)
+  })
+  rows.push({
+    block: 'Goles/Asis',
+    label: 'Asistencia de gol',
+    count: n(player.assists),
+    unit: R.assist_goal,
+    points: r2(n(player.assists) * R.assist_goal)
+  })
+  rows.push({
+    block: 'Goles/Asis',
+    label: 'Asistencia sin gol',
+    count: n(player.fantasy_assist || player.intent_assists),
+    unit: R.assist_no_goal,
+    points: r2(n(player.fantasy_assist || player.intent_assists) * R.assist_no_goal)
+  })
+
+  // 3. Defensa
   const cs = player.clean_sheet === true || player.clean_sheet === 1 || player.clean_sheet === 'true'
-  if (cs) b3.push({ label: `Portería a cero · +60 min (${pos})`, count: 0, unit: 0, points: CLEAN_SHEET[pos], flat: true })
-  if (n(player.goals_conceded) > 1) b3.push(u(n(player.goals_conceded), GOAL_CONCEDED[pos], `Gol encajado (${pos})`))
+  rows.push({
+    block: 'Defensa',
+    label: `Portería Cero (${pos})`,
+    count: '-',
+    unit: '-',
+    points: cs ? CLEAN_SHEET[pos] : 0
+  })
+  const gcCount = n(player.goals_conceded)
+  rows.push({
+    block: 'Defensa',
+    label: `Gol Encajado (${pos})`,
+    count: gcCount,
+    unit: GOAL_CONCEDED[pos],
+    points: gcCount > 1 ? r2(gcCount * GOAL_CONCEDED[pos]) : 0
+  })
 
-  // B4: Penaltis
-  const b4: Row[] = []
-  if (n(player.penalties_won) > 0)      b4.push(u(n(player.penalties_won), R.penalty_won[pos], 'Penalti provocado'))
-  if (n(player.penalties_conceded) > 0) b4.push(u(n(player.penalties_conceded), R.penalty_conceded[pos], 'Penalti cometido'))
-  if (n(player.penalties_missed) > 0)   b4.push(u(n(player.penalties_missed), R.penalty_missed, 'Penalti fallado'))
-  if (n(player.penalty_saves) > 0)      b4.push(u(n(player.penalty_saves), R.penalty_save[pos], 'Penalti parado'))
+  // 4. Penaltis
+  rows.push({
+    block: 'Penaltis',
+    label: 'Penalti Provocado',
+    count: n(player.penalties_won),
+    unit: R.penalty_won[pos],
+    points: r2(n(player.penalties_won) * R.penalty_won[pos])
+  })
+  rows.push({
+    block: 'Penaltis',
+    label: 'Penalti Cometido',
+    count: n(player.penalties_conceded),
+    unit: R.penalty_conceded[pos],
+    points: r2(n(player.penalties_conceded) * R.penalty_conceded[pos])
+  })
+  rows.push({
+    block: 'Penaltis',
+    label: 'Penalti Fallado',
+    count: n(player.penalties_missed),
+    unit: R.penalty_missed,
+    points: r2(n(player.penalties_missed) * R.penalty_missed)
+  })
+  rows.push({
+    block: 'Penaltis',
+    label: 'Penalti Parado',
+    count: n(player.penalty_saves),
+    unit: R.penalty_save[pos],
+    points: r2(n(player.penalty_saves) * R.penalty_save[pos])
+  })
 
-  // B5: Tarjetas
-  const b5: Row[] = []
-  if (n(player.yellow_cards) > 0)        b5.push(u(n(player.yellow_cards), R.yellow_card, 'Amarilla'))
-  if (n(player.second_yellow_cards) > 0) b5.push(u(n(player.second_yellow_cards), R.second_yellow_card, 'Doble amarilla'))
-  if (n(player.red_cards) > 0)           b5.push(u(n(player.red_cards), R.red_card, 'Roja directa'))
+  // 5. Tarjetas
+  rows.push({
+    block: 'Tarjetas',
+    label: 'Amarilla',
+    count: n(player.yellow_cards),
+    unit: R.yellow_card,
+    points: r2(n(player.yellow_cards) * R.yellow_card)
+  })
+  rows.push({
+    block: 'Tarjetas',
+    label: 'Doble Amarilla',
+    count: n(player.second_yellow_cards),
+    unit: R.second_yellow_card,
+    points: r2(n(player.second_yellow_cards) * R.second_yellow_card)
+  })
+  rows.push({
+    block: 'Tarjetas',
+    label: 'Roja Directa',
+    count: n(player.red_cards),
+    unit: R.red_card,
+    points: r2(n(player.red_cards) * R.red_card)
+  })
 
-  // B6: Portero. Desde el sistema v4 sólo la parada puntúa por unidad; blocajes,
-  // despejes de puños y salidas ya sólo cuentan dentro del bloque 4 de RELEVO.
-  const b6: Row[] = []
-  if (n(player.saves) > 0) b6.push(u(n(player.saves), R.per_unit.saves, 'Parada'))
+  // 6. Portero (solo para POR)
+  if (pos === 'POR') {
+    rows.push({
+      block: 'Portero',
+      label: 'Paradas',
+      count: n(player.saves),
+      unit: R.per_unit.saves,
+      points: r2(n(player.saves) * R.per_unit.saves)
+    })
+  }
 
-  // B7: las cuatro métricas que puntúan por unidad en el sistema v4.
-  const b7: Row[] = []
-  if (n(player.clearances) > 0)      b7.push(u(n(player.clearances), R.per_unit.clearances, 'Despejes'))
-  if (n(player.shots_on_target) > 0) b7.push(u(n(player.shots_on_target), R.per_unit.shots_on_target, 'Tiros a puerta'))
-  if (n(player.takeons_won) > 0)     b7.push(u(n(player.takeons_won), R.per_unit.takeons_won, 'Regates completados'))
-  if (n(player.box_entries) > 0)     b7.push(u(n(player.box_entries), R.per_unit.box_entries, 'Balones al área'))
+  // 7. Otras
+  rows.push({
+    block: 'Otras',
+    label: 'Despejes',
+    count: n(player.clearances),
+    unit: R.per_unit.clearances,
+    points: r2(n(player.clearances) * R.per_unit.clearances)
+  })
+  rows.push({
+    block: 'Otras',
+    label: 'Tiros a puerta',
+    count: n(player.shots_on_target),
+    unit: R.per_unit.shots_on_target,
+    points: r2(n(player.shots_on_target) * R.per_unit.shots_on_target)
+  })
+  rows.push({
+    block: 'Otras',
+    label: 'Regates comp.',
+    count: n(player.takeons_won),
+    unit: R.per_unit.takeons_won,
+    points: r2(n(player.takeons_won) * R.per_unit.takeons_won)
+  })
+  rows.push({
+    block: 'Otras',
+    label: 'Balones al área',
+    count: n(player.box_entries),
+    unit: R.per_unit.box_entries,
+    points: r2(n(player.box_entries) * R.per_unit.box_entries)
+  })
+  rows.push({
+    block: 'Otras',
+    label: 'Balón recuperado',
+    count: n(player.ball_recoveries),
+    unit: R.per_unit.ball_recoveries,
+    points: r2(n(player.ball_recoveries) * R.per_unit.ball_recoveries)
+  })
 
-  // B8: Penalizaciones
-  const b8: Row[] = []
+  // 8. Pérdidas
   const lostBalls = n(player.dispossessed) + n(player.bad_touches)
-  if (lostBalls > 0) b8.push(u(lostBalls, R.lost_balls, `Pérdida de balón (${pos})`))
+  rows.push({
+    block: 'Pérdidas',
+    label: 'Pérdida de balón',
+    count: lostBalls,
+    unit: R.lost_balls,
+    points: r2(lostBalls * R.lost_balls)
+  })
 
-  const blocks: Block[] = [
-    { id: 'b1', emoji: '⏱️', title: 'Participación',             accent: 'text-slate-600',   chip: 'bg-slate-100 text-slate-700',   rows: b1 },
-    { id: 'b2', emoji: '⚽', title: 'Goles y Asistencias',       accent: 'text-red-600',     chip: 'bg-red-50 text-red-700',        rows: b2 },
-    { id: 'b3', emoji: '🛡️', title: 'Defensa y Portería a Cero', accent: 'text-indigo-600',  chip: 'bg-indigo-50 text-indigo-700',  rows: b3 },
-    { id: 'b4', emoji: '🎯', title: 'Penaltis',                  accent: 'text-fuchsia-600', chip: 'bg-fuchsia-50 text-fuchsia-700', rows: b4 },
-    { id: 'b5', emoji: '🟨', title: 'Tarjetas',                  accent: 'text-amber-600',   chip: 'bg-amber-50 text-amber-700',    rows: b5 },
-    { id: 'b6', emoji: '🧤', title: 'Acciones de Portero',       accent: 'text-cyan-600',    chip: 'bg-cyan-50 text-cyan-700',      rows: b6 },
-    { id: 'b7', emoji: '📈', title: 'Bonus en Juego',            accent: 'text-emerald-600', chip: 'bg-emerald-50 text-emerald-700', rows: b7 },
-    { id: 'b8', emoji: '📉', title: 'Penalizaciones',            accent: 'text-rose-600',    chip: 'bg-rose-50 text-rose-700',      rows: b8 },
-  ]
+  // 9. RELEVO
+  if (min > 0) {
+    const lim = R.relevo_limits?.[pos]
+    const relevoBlocks = evaluateRelevoBlocks(player as any, pos, R.relevo_limits)
+
+    const shortLabels: Record<string, string> = {
+      'Paradas': 'Paradas',
+      'Valor de calidad acumulado': 'Calidad P.',
+      'Acierto en el pase': 'Pases',
+      'Pases intentados': 'int.',
+      'Blocajes': 'Blocaje',
+      'Despejes de puños': 'Puños',
+      'Acciones de último hombre': 'Últ. hombre',
+      'Pases hacia adelante': 'Pases adelante',
+      'Duelos aéreos': 'Aéreos',
+      'Duelos por el suelo': 'Terrestres',
+      'Remates a balón parado': 'ABP Remates',
+      'Centros intentados': 'Centros',
+      'Acierto en campo rival': 'Pases campo rival',
+      'Acierto en tiros a puerta': 'Tiros a puerta %',
+      'Acierto en regates': 'Regates %',
+      'Asistencias por minuto': 'Asistencias',
+      'Recuperaciones en campo rival': 'Recup. campo rival',
+      'Remates de cabeza': 'Remates cabeza',
+      'Pases largos': 'Pases largos',
+    }
+
+    relevoBlocks.forEach((blk, idx) => {
+      const blockSpec = RELEVO_BLOCKS[pos]?.[idx]
+      if (!blockSpec) return
+
+      const optionStrings = blockSpec.options.map((opt) => {
+        const metricStrings = opt.metrics.map((m) => {
+          const value = m.value(player)
+          const target = m.label === 'Valor de calidad acumulado' && pos === 'POR'
+            ? (lim?.calidad_parada_multiplier ?? 0.5) * n(player.saves)
+            : m.target(lim, min)
+
+          const labelText = shortLabels[m.label] ?? m.label
+          const cmpSymbol = m.cmp === 'gte' ? '>=' : m.cmp === 'gt' ? '>' : m.cmp
+
+          if (m.unit === 'pct') {
+            return `${labelText ? `${labelText}: ` : ''}${value.toFixed(0)}% (${cmpSymbol} ${target.toFixed(0)}%)`
+          } else {
+            const valPerMin = min > 0 ? (value / min).toFixed(3) : '0.000'
+            const tgtPerMin = min > 0 ? (target / min).toFixed(3) : '0.000'
+
+            if (m.label === 'Pases largos' && pos === 'POR') {
+              return `${value} (${valPerMin}/m ${cmpSymbol} ${tgtPerMin}/m)`
+            } else if (m.label === 'Valor de calidad acumulado' && pos === 'POR') {
+              return `${labelText}: ${valPerMin}/m (${cmpSymbol} ${tgtPerMin}/m)`
+            } else if (m.label === 'Pases intentados') {
+              return `${value} ${labelText} (${valPerMin}/m ${cmpSymbol} ${tgtPerMin}/m)`
+            } else {
+              return `${labelText ? `${labelText}: ` : ''}${value} (${valPerMin}/m ${cmpSymbol} ${tgtPerMin}/m)`
+            }
+          }
+        })
+        return metricStrings.join(opt.requireAll ? ' y ' : ' o ')
+      })
+
+      const desc = optionStrings.join(' OR ')
+
+      rows.push({
+        block: 'RELEVO',
+        label: `Bloque ${blk.id}: ${desc}`,
+        count: '-',
+        unit: '-',
+        points: blk.points
+      })
+    })
+
+    const allZero = relevoBlocks.every((blk) => blk.points <= 0)
+    if (allZero) {
+      rows.push({
+        block: 'RELEVO',
+        label: 'Ningún bloque superado',
+        count: '-',
+        unit: '-',
+        points: -1
+      })
+    }
+  } else {
+    for (let i = 1; i <= 4; i++) {
+      rows.push({
+        block: 'RELEVO',
+        label: `Bloque ${i}`,
+        count: '-',
+        unit: '-',
+        points: 0
+      })
+    }
+  }
 
   const total = n(player.total_points)
-  const visibleBlocks = blocks.filter(b => b.rows.length > 0)
+  const maxAbsPoints = Math.max(...rows.map(r => Math.abs(r.points)), 1)
 
-  // Encontrar el valor máximo absoluto para escalar las barras proporcionalmente
-  let maxPoints = 0.1;
-  visibleBlocks.forEach(b => b.rows.forEach(r => {
-    if (Math.abs(r.points) > maxPoints) maxPoints = Math.abs(r.points);
-  }));
+  // Filtrar las filas: RELEVO siempre visible; las demás solo si tienen al menos un evento (count > 0 o cs o wb/db > 0)
+  const filteredRows = rows.filter(row => {
+    if (row.block === 'RELEVO') return true
+    if (row.block === 'Participación') {
+      if (row.label.includes('Titular') || row.label.includes('Suplente')) {
+        return min > 0
+      }
+      return row.points > 0
+    }
+    if (row.label.includes('Portería Cero')) {
+      return cs
+    }
+    if (row.count !== '-') {
+      return n(row.count) > 0
+    }
+    return row.points !== 0
+  })
 
-  return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-        <TrendingUp className="w-5 h-5 text-emerald-600" />
-        Puntos por bloques
-      </h3>
+  // Separar bloques en columna izquierda y derecha para el diseño dual en desktop
+  const leftBlocks = ['Participación', 'Goles/Asis', 'Defensa', 'Penaltis', 'Tarjetas', 'Portero']
+  const leftRows = filteredRows.filter(r => leftBlocks.includes(r.block))
+  const rightRows = filteredRows.filter(r => !leftBlocks.includes(r.block))
 
-      {visibleBlocks.length === 0 && min === 0 && (
-        <p className="text-slate-500 text-center py-4">Sin métricas puntuables en este partido.</p>
-      )}
+  const renderTable = (tableRows: Row[]) => (
+    <table className="w-full border-collapse text-left text-[11px] sm:text-xs text-slate-700">
+      <thead className="bg-slate-50 text-[10px] sm:text-[11px] font-bold uppercase text-slate-500 border-b border-slate-200">
+        <tr>
+          <th scope="col" className="px-2 py-1.5 w-[90px]">Bloque</th>
+          <th scope="col" className="px-2 py-1.5">Métrica</th>
+          <th scope="col" className="px-2 py-1.5 text-center w-[45px]">Cant.</th>
+          <th scope="col" className="px-2 py-1.5 text-center w-[50px]">Val U.</th>
+          <th scope="col" className="px-2 py-1.5 text-right w-[95px]">Puntos</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-100">
+        {tableRows.map((row, idx) => {
+          const isPositive = row.points > 0
+          const isNegative = row.points < 0
+          const pct = Math.min((Math.abs(row.points) / maxAbsPoints) * 100, 100)
+          
+          let ptsColor = 'text-slate-500 font-bold'
+          let barColor = 'bg-slate-300'
+          if (isPositive) {
+            ptsColor = 'text-emerald-700 font-extrabold text-xs sm:text-sm'
+            barColor = 'bg-emerald-500'
+          } else if (isNegative) {
+            ptsColor = 'text-rose-700 font-extrabold text-xs sm:text-sm'
+            barColor = 'bg-rose-500'
+          }
 
-      {visibleBlocks.map((blk) => {
-        const subtotal = r2(blk.rows.reduce((s, row) => s + row.points, 0))
-        return (
-          <div key={blk.id} className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="text-lg leading-none">{blk.emoji}</span>
-                <h4 className={`font-bold text-sm ${blk.accent}`}>{blk.title}</h4>
-              </div>
-              <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${subtotal >= 0 ? blk.chip : 'bg-red-50 text-red-700'}`}>
-                {subtotal >= 0 ? '+' : ''}{fmtPts(subtotal)}
-              </span>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {blk.rows.map((row, idx) => {
-                const isPositive = row.points >= 0;
-                const pct = Math.min((Math.abs(row.points) / maxPoints) * 100, 100);
-                const barColor = isPositive ? 'bg-emerald-500' : 'bg-rose-500';
-                const bgBarColor = isPositive ? 'bg-emerald-50' : 'bg-rose-50';
+          const isRelevo = row.block === 'RELEVO'
 
-                return (
-                  <div key={idx} className="flex flex-col gap-1.5 px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`truncate text-sm font-semibold ${isPositive ? 'text-slate-800' : 'text-slate-600'}`}>
-                          {row.label}
-                        </span>
-                      </div>
-                      <div className="shrink-0 flex flex-col items-end">
-                        <span className={`text-sm font-bold tabular-nums ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {isPositive ? '+' : ''}{fmtPts(row.points)}
-                        </span>
-                        {!row.flat && (
-                          <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">
-                            {row.count} × {row.unit >= 0 ? '+' : ''}{fmtPts(row.unit)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {/* Barra de progreso visual */}
-                    <div className={`w-full h-1.5 ${bgBarColor} rounded-full overflow-hidden flex-1 max-w-full`}>
+          return (
+            <tr 
+              key={idx} 
+              className={`hover:bg-slate-50/50 transition-colors ${
+                isRelevo ? 'bg-violet-50/10' : ''
+              }`}
+            >
+              <td className="px-2 py-1 font-bold text-slate-600 text-[10px] sm:text-[11px]">
+                <span className={`px-1.5 py-0.5 rounded ${
+                  row.block === 'Participación' ? 'bg-slate-100 text-slate-700' :
+                  row.block === 'Goles/Asis' ? 'bg-red-50 text-red-700' :
+                  row.block === 'Defensa' ? 'bg-indigo-50 text-indigo-700' :
+                  row.block === 'Penaltis' ? 'bg-fuchsia-50 text-fuchsia-700' :
+                  row.block === 'Tarjetas' ? 'bg-amber-50 text-amber-700' :
+                  row.block === 'Portero' ? 'bg-cyan-50 text-cyan-700' :
+                  row.block === 'Otras' ? 'bg-emerald-50 text-emerald-700' :
+                  row.block === 'Pérdidas' ? 'bg-rose-50 text-rose-700' :
+                  'bg-violet-50 text-violet-700'
+                }`}>
+                  {row.block}
+                </span>
+              </td>
+              <td className={`px-2 py-1 font-bold text-slate-900 text-xs sm:text-sm leading-snug ${isRelevo ? 'text-violet-950 font-bold' : ''}`}>
+                {row.label}
+              </td>
+              <td className="px-2 py-1 text-center font-bold tabular-nums text-slate-800 text-xs sm:text-sm">
+                {row.count === '-' ? <span className="text-slate-300 font-normal">-</span> : row.count}
+              </td>
+              <td className="px-2 py-1 text-center font-bold tabular-nums text-xs sm:text-sm">
+                {row.unit === '-' ? (
+                  <span className="text-slate-300 font-normal">-</span>
+                ) : (
+                  <span className={Number(row.unit) > 0 ? 'text-emerald-700' : Number(row.unit) < 0 ? 'text-rose-700' : 'text-slate-700'}>
+                    {Number(row.unit) > 0 ? `+${row.unit}` : row.unit}
+                  </span>
+                )}
+              </td>
+              <td className="px-2 py-1 text-right">
+                <div className="flex flex-col items-end gap-0.5">
+                  <span className={`tabular-nums leading-none ${ptsColor}`}>
+                    {isPositive ? `+${fmtPts(row.points)}` : fmtPts(row.points)}
+                  </span>
+                  {Math.abs(row.points) > 0 && (
+                    <div className="w-[45px] h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
                       <div 
                         className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
                         style={{ width: `${pct}%` }} 
                       />
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
-
-      {min > 0 && <RelevoBreakdown player={player} pos={pos} limits={R.relevo_limits} />}
-
-      <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 flex items-center justify-between shadow-md">
-        <span className="text-white font-bold text-lg">Puntos totales</span>
-        <span className="text-white font-extrabold text-3xl tabular-nums">{fmtPts(total)}</span>
-      </div>
-    </div>
+                  )}
+                </div>
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
   )
-}
-
-/**
- * Puntos RELEVO: los 4 bloques de la posición del jugador y, dentro de cada uno,
- * qué lleva de cada métrica frente al mínimo exigido (ajustado a sus minutos).
- * Basta con superar una métrica del bloque para llevarse su punto; si no supera
- * ninguno de los 4, RELEVO resta 1.
- */
-function RelevoBreakdown({
-  player,
-  pos,
-  limits,
-}: {
-  player: Record<string, any>
-  pos: Position
-  limits: RelevoLimits
-}) {
-  const results = evaluateRelevoBlocks(player, pos, limits)
-  const totalRelevo = Number(player.relevo_points) || 0
-  const blocksWon = results.filter((b) => b.points > 0).length
-
-  const fmt = (v: number, unit: 'count' | 'pct') =>
-    unit === 'pct' ? `${v.toFixed(0)}%` : String(parseFloat(v.toFixed(2)))
 
   return (
-    <div className="rounded-2xl border border-violet-200 bg-white overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-violet-100 bg-violet-50/50">
-        <div className="flex items-center gap-2">
-          <span className="text-lg leading-none">⭐</span>
-          <div>
-            <h4 className="font-bold text-sm text-violet-700">Puntos RELEVO</h4>
-            <p className="text-[11px] text-violet-500">
-              {blocksWon === 0 ? 'Ningún bloque superado · −1' : `${blocksWon} de 4 bloques superados`}
-            </p>
-          </div>
+    <div className="space-y-2">
+      {/* Grid de dos columnas para pantallas de tableta/escritorio */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm overflow-x-auto">
+          {renderTable(leftRows)}
         </div>
-        <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${totalRelevo >= 0 ? 'bg-violet-50 text-violet-700' : 'bg-red-50 text-red-700'}`}>
-          {totalRelevo >= 0 ? '+' : ''}{parseFloat(totalRelevo.toFixed(2))}
-        </span>
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm overflow-x-auto">
+          {renderTable(rightRows)}
+        </div>
       </div>
 
-      <div className="divide-y divide-slate-100">
-        {results.map((block) => (
-          <div key={block.id} className="px-4 py-3">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-sm font-semibold text-slate-800">
-                Bloque {block.id} · {block.title}
-              </p>
-              <span
-                className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${
-                  block.points > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                }`}
-              >
-                {block.points > 0 ? '+1' : '0'}
-              </span>
-            </div>
-
-            {block.note && <p className="text-[11px] text-slate-400 mb-2">{block.note}</p>}
-
-            <div className="space-y-1">
-              {block.metrics.map((m, i) => {
-                const targetVal = m.target;
-                const currentVal = m.value;
-                let pctVal = targetVal > 0 ? (currentVal / targetVal) * 100 : (currentVal > 0 ? 100 : 0);
-                if (pctVal > 100) pctVal = 100;
-
-                return (
-                  <div key={i} className="flex flex-col gap-1.5 py-1.5">
-                    <div className="flex items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {m.met ? (
-                          <Check className="w-4 h-4 shrink-0 text-emerald-600" />
-                        ) : (
-                          <X className="w-4 h-4 shrink-0 text-slate-300" />
-                        )}
-                        <span className={`truncate ${m.met ? 'text-slate-800 font-semibold' : 'text-slate-500'}`}>
-                          {m.label}
-                        </span>
-                      </div>
-                      <span className="shrink-0 tabular-nums text-slate-500">
-                        <span className={m.met ? 'text-emerald-600 font-bold' : 'text-slate-700 font-semibold'}>
-                          {fmt(currentVal, m.unit)}
-                        </span>
-                        {m.detail && <span className="text-slate-400"> ({m.detail})</span>}
-                        <span className="text-slate-400"> / {fmt(targetVal, m.unit)}</span>
-                      </span>
-                    </div>
-                    {/* Barra de progreso visual */}
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex-1 max-w-full">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-500 ${m.met ? 'bg-emerald-500' : 'bg-indigo-400'}`} 
-                        style={{ width: `${pctVal}%` }} 
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        ))}
+      {/* Puntos totales ultra compactos */}
+      <div className="rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 flex items-center justify-between shadow-sm">
+        <span className="text-white font-bold text-xs">Puntos totales</span>
+        <span className="text-white font-extrabold text-base tabular-nums">{fmtPts(total)}</span>
       </div>
     </div>
   )
