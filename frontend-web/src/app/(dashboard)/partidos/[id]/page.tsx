@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -199,6 +199,24 @@ const formatPlayerName = (player: { short_name?: string; first_name?: string; la
   return fullName
 }
 
+// ── Auto-sincronización al abrir el partido ────────────────────────────────
+// Cada sync dispara un workflow de GitHub Actions (cola con concurrencia
+// `sync-live`), así que no se lanza a lo loco: solo para partidos dentro de su
+// ventana de juego y con un margen entre disparos, compartido entre pestañas.
+const AUTO_SYNC_COOLDOWN_MS = 3 * 60 * 1000
+// El motor tarda ~1-2 min en subir los datos: refrescamos varias veces después.
+const POST_SYNC_REFRESH_DELAYS_MS = [30_000, 60_000, 120_000]
+const PLAY_WINDOW_BEFORE_MS = 15 * 60 * 1000
+const PLAY_WINDOW_AFTER_MS = 3 * 60 * 60 * 1000
+
+// Un partido de hace tres jornadas ya no tiene nada que sincronizar; para esos
+// queda el botón manual.
+const isInPlayWindow = (fixture: Fixture): boolean => {
+  if (fixture.status === 'live') return true
+  if (!fixture.start_time) return false
+  const elapsedMs = Date.now() - new Date(fixture.start_time).getTime()
+  return elapsedMs > -PLAY_WINDOW_BEFORE_MS && elapsedMs < PLAY_WINDOW_AFTER_MS
+}
 
 export default function PartidoDetallePage() {
   const [loading, setLoading] = useState(true)
@@ -209,12 +227,46 @@ export default function PartidoDetallePage() {
   const [awayPlayers, setAwayPlayers] = useState<Player[]>([])
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  // Cuándo escribió el motor los datos que estamos viendo (no cuándo los leímos)
+  const [dataTimestamp, setDataTimestamp] = useState<Date | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [matchMinute, setMatchMinute] = useState<number>(0)
   const supabase = createClient()
   const router = useRouter()
   const params = useParams()
+
+  // Partido ya auto-sincronizado en este montaje + refrescos pendientes
+  const autoSyncedFixtureRef = useRef<string | null>(null)
+  const postSyncTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  // El margen entre disparos vive en sessionStorage para que entrar y salir del
+  // partido (o abrirlo en otra pestaña) no encole workflows de más.
+  const autoSyncKey = (fixtureId: string) => `partido-autosync:${fixtureId}`
+
+  const canAutoSync = (fixtureId: string): boolean => {
+    try {
+      const last = Number(sessionStorage.getItem(autoSyncKey(fixtureId)) || 0)
+      return Date.now() - last > AUTO_SYNC_COOLDOWN_MS
+    } catch {
+      return true // sessionStorage bloqueado: no es motivo para no sincronizar
+    }
+  }
+
+  const markAutoSync = (fixtureId: string) => {
+    try {
+      sessionStorage.setItem(autoSyncKey(fixtureId), String(Date.now()))
+    } catch {
+      /* sin persistencia, basta con la ref del montaje */
+    }
+  }
+
+  const schedulePostSyncRefreshes = () => {
+    postSyncTimeoutsRef.current.forEach(clearTimeout)
+    postSyncTimeoutsRef.current = POST_SYNC_REFRESH_DELAYS_MS.map(delay =>
+      setTimeout(() => fetchPartido(), delay)
+    )
+  }
 
   const scoringRules = useScoringRules()
   const R = resolveRates(scoringRules)
@@ -246,6 +298,19 @@ export default function PartidoDetallePage() {
     }
 
     setFixture(fixtureData)
+
+    // 1b. Marca de tiempo del último sync. `fixtures.current_minute` guarda el
+    // minuto del último evento descargado, así que para hacerlo correr entre
+    // sincronizaciones necesitamos saber cuándo se escribió.
+    const { data: lastWrite } = await supabase
+      .from('player_scores')
+      .select('updated_at')
+      .eq('fixture_id', fixtureId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    setDataTimestamp(lastWrite?.updated_at ? new Date(lastWrite.updated_at) : null)
 
     // 2. Obtener equipos con escudos
     const { data: teamsData } = await supabase
@@ -431,20 +496,18 @@ export default function PartidoDetallePage() {
     setLastUpdated(new Date())
   }
 
-  const handleSyncMatch = async () => {
-    if (!fixture) return
-
+  const runSync = async (target: Fixture, { auto = false }: { auto?: boolean } = {}) => {
     setSyncing(true)
     setSyncStatus(null)
 
     try {
-      const matchId = fixture.match_id || fixture.id
+      const matchId = target.match_id || target.id
 
       const response = await fetch('/api/sync-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fixture_id: fixture.id,
+          fixture_id: target.id,
           match_id: matchId
         })
       })
@@ -454,14 +517,19 @@ export default function PartidoDetallePage() {
       if (response.ok) {
         setSyncStatus({
           type: 'success',
-          message: result.message || 'Sincronización lanzada. Los puntos aparecerán en 1-2 min; refresca.'
+          message: auto
+            ? 'Sincronizando en segundo plano… los datos se actualizarán solos en 1-2 min.'
+            : result.message || 'Sincronización lanzada. Los puntos aparecerán en 1-2 min; refresca.'
         })
         // Recargar datos del partido (los nuevos datos llegan en segundo plano)
         await fetchPartido()
+        schedulePostSyncRefreshes()
       } else {
         setSyncStatus({
           type: 'error',
-          message: result.error || 'Error al sincronizar'
+          // `details` lleva la causa real (p.ej. token caducado); sin ella el
+          // fallo es indistinguible de "no pasa nada".
+          message: result.details || result.error || 'Error al sincronizar'
         })
       }
     } catch (error) {
@@ -476,10 +544,38 @@ export default function PartidoDetallePage() {
     }
   }
 
+  const handleSyncMatch = () => {
+    if (!fixture) return
+    autoSyncedFixtureRef.current = fixture.id
+    markAutoSync(fixture.id)
+    return runSync(fixture)
+  }
+
   // Efecto para cargar datos inicialmente
   useEffect(() => {
     fetchPartido()
   }, [params.id])
+
+  // Al abrir un partido dentro de su ventana de juego, lanzamos el sync solo y
+  // vamos recargando los datos según llegan (ver schedulePostSyncRefreshes).
+  useEffect(() => {
+    if (!fixture) return
+    if (autoSyncedFixtureRef.current === fixture.id) return
+    if (!isInPlayWindow(fixture)) return
+    if (!canAutoSync(fixture.id)) return
+
+    autoSyncedFixtureRef.current = fixture.id
+    markAutoSync(fixture.id)
+    runSync(fixture, { auto: true })
+  }, [fixture?.id, fixture?.status, fixture?.start_time])
+
+  // Limpiar los refrescos programados al salir del partido
+  useEffect(() => {
+    return () => {
+      postSyncTimeoutsRef.current.forEach(clearTimeout)
+      postSyncTimeoutsRef.current = []
+    }
+  }, [])
 
   // Efecto para polling cuando el partido está en vivo o cerca de empezar
   useEffect(() => {
@@ -526,20 +622,27 @@ export default function PartidoDetallePage() {
   }
 
   const calculateMatchMinute = () => {
-    if (fixture?.status !== 'live') return 0
-    // Preferimos el último minuto de los datos sincronizados (lo guarda el motor
-    // en fixtures.current_minute). Así el minuto coincide con los eventos subidos
-    // en vez de adelantarse con el reloj del navegador.
-    if (typeof fixture?.current_minute === 'number' && fixture.current_minute > 0) {
-      return fixture.current_minute
-    }
-    // Fallback (aún no se ha sincronizado ningún evento): reloj real.
-    if (!fixture?.start_time) return 0
-    const now = new Date()
-    const kickOff = new Date(fixture.start_time)
-    const diffMs = now.getTime() - kickOff.getTime()
-    const minutes = Math.floor(diffMs / 60000)
-    return Math.min(minutes, 90) // Máximo 90 minutos
+    if (fixture?.status !== 'live' || !fixture?.start_time) return 0
+
+    const kickOff = new Date(fixture.start_time).getTime()
+    const minutesSinceKickOff = Math.floor((Date.now() - kickOff) / 60000)
+
+    const anchorMinute = typeof fixture.current_minute === 'number' ? fixture.current_minute : 0
+
+    // Aún no se ha sincronizado ningún evento: reloj real.
+    if (anchorMinute <= 0) return Math.max(0, Math.min(minutesSinceKickOff, 90))
+
+    // `current_minute` es el minuto del último evento que trajo el motor, y solo
+    // cambia cuando entra un sync (cada ~5 min). Si lo pintamos tal cual, el
+    // marcador parece congelado. Lo usamos como ancla y lo dejamos correr con el
+    // reloj desde que se escribió en la BD.
+    const anchorAt = dataTimestamp?.getTime() ?? Date.now()
+    const driftMin = Math.max(0, Math.floor((Date.now() - anchorAt) / 60000))
+
+    // Dos topes: nunca por delante del reloj real, y sin cruzar el descanso ni
+    // el pitido final hasta que lleguen datos que lo confirmen.
+    const periodEnd = anchorMinute <= 45 ? 45 : 90
+    return Math.min(anchorMinute + driftMin, minutesSinceKickOff, periodEnd)
   }
 
   // Actualizar minuto del partido cada 30 segundos si está en vivo
@@ -551,7 +654,7 @@ export default function PartidoDetallePage() {
       }, 30000)
       return () => clearInterval(interval)
     }
-  }, [fixture?.status, fixture?.start_time, fixture?.current_minute])
+  }, [fixture?.status, fixture?.start_time, fixture?.current_minute, dataTimestamp])
 
   // Mantener actualizado el jugador seleccionado si los datos se recargan
   useEffect(() => {
@@ -746,7 +849,9 @@ export default function PartidoDetallePage() {
                   <Badge className="bg-red-500 text-white animate-pulse">
                     En Juego
                   </Badge>
-                  <span className="text-red-500 font-bold text-sm">{matchMinute}&apos;</span>
+                  <span className="text-yellow-400 font-black text-sm tracking-wide bg-yellow-950/40 border border-yellow-500/20 px-2 py-0.5 rounded shadow-sm">
+                    Min {matchMinute}&apos;
+                  </span>
                 </div>
               ) : (
                 <Badge className={fixture?.status === 'finished' ? 'bg-emerald-500' : 'bg-slate-500'}>
@@ -819,9 +924,14 @@ export default function PartidoDetallePage() {
                 <span>{fixture?.away_score ?? 0}</span>
               </div>
               {fixture?.status === 'live' && (
-                <Badge className="mt-2 bg-red-500 text-white animate-pulse">
-                  En Juego
-                </Badge>
+                <div className="flex flex-col items-center gap-1.5 mt-2">
+                  <Badge className="bg-red-500 text-white animate-pulse">
+                    En Juego
+                  </Badge>
+                  <span className="text-yellow-400 font-black text-xs tracking-wide bg-yellow-950/40 border border-yellow-500/20 px-2 py-0.5 rounded shadow-sm">
+                    Min {matchMinute}&apos;
+                  </span>
+                </div>
               )}
               {fixture?.status === 'finished' && (
                 <Badge className="mt-2 bg-emerald-500 text-white">

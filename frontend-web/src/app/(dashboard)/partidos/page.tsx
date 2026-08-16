@@ -41,6 +41,7 @@ interface Fixture {
   away_team?: { name: string; logo_url?: string } | null
   match_id?: string
   is_complete?: boolean
+  current_minute?: number
   // Lo rellena el trigger de la migración 024. Antes de aplicarla llega undefined
   // y la "última actualización" se calcula solo con player_scores.
   updated_at?: string
@@ -385,13 +386,20 @@ export default function PartidosPage() {
     return `${diffDays}d ${diffHours % 24}h`
   }
 
-  const getStatusBadge = (isComplete?: boolean, status?: string) => {
+  const getStatusBadge = (isComplete?: boolean, status?: string, currentMinute?: number) => {
     if (status === 'live') {
       return (
-        <Badge className="bg-red-600 text-white text-xs flex items-center gap-1.5 animate-pulse">
-          <span className="w-2 h-2 rounded-full bg-white inline-block" />
-          En Juego
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge className="bg-red-600 text-white text-xs flex items-center gap-1.5 animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-white inline-block" />
+            En Juego
+          </Badge>
+          {currentMinute !== undefined && currentMinute !== null && currentMinute > 0 && (
+            <span className="text-yellow-400 font-black text-xs sm:text-sm tracking-wide bg-yellow-950/40 border border-yellow-500/20 px-2 py-0.5 rounded shadow-sm">
+              Min {currentMinute}&apos;
+            </span>
+          )}
+        </div>
       )
     }
     // Hasta que no lleguen las puntuaciones no sabemos si está completo:
@@ -474,7 +482,8 @@ export default function PartidosPage() {
       } else {
         setSyncStatus({
           syncingAll: false,
-          syncMessage: `❌ Error: ${result.error || 'Error desconocido'}`,
+          // `details` trae la causa real (p.ej. token de GitHub caducado)
+          syncMessage: `❌ Error: ${result.details || result.error || 'Error desconocido'}`,
           syncType: 'error',
           syncing: false
         })
@@ -707,7 +716,7 @@ export default function PartidosPage() {
                     <div className="w-full h-full relative z-10" onClick={() => handleMatchClick(fixture)}>
                       {/* Estado y hora */}
                       <div className="flex items-center justify-between mb-4">
-                        {getStatusBadge(fixture.is_complete, fixture.status)}
+                        {getStatusBadge(fixture.is_complete, fixture.status, fixture.current_minute)}
                         <div className="flex items-center gap-1 text-sm text-slate-300">
                           <Clock className="w-4 h-4" />
                           {formatTime(fixture.start_time)}

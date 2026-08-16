@@ -75,6 +75,14 @@ export async function dispatchLiveSync(inputs: DispatchInputs): Promise<void> {
   // GitHub responde 204 No Content cuando el disparo es correcto.
   if (res.status !== 204) {
     const detail = await res.text()
+    // Un token caducado devuelve 401 y, sin este mensaje, en la UI solo se ve
+    // "Error al sincronizar": el sync se queda muerto sin que nadie se entere.
+    if (res.status === 401) {
+      throw new Error('GITHUB_DISPATCH_TOKEN caducado o revocado (401). Genera uno nuevo y actualízalo en Vercel y en .env.local')
+    }
+    if (res.status === 403) {
+      throw new Error('GITHUB_DISPATCH_TOKEN sin permiso para lanzar workflows (403). Necesita Actions = Read and write sobre el repo')
+    }
     throw new Error(`GitHub dispatch falló (${res.status}): ${detail}`)
   }
 }

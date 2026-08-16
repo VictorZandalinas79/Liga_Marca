@@ -59,7 +59,33 @@ Puedes probarlos a mano con **Run workflow** (workflow_dispatch).
 GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained token**:
 - Repository access: solo `Liga_Marca`.
 - Permisos: **Actions = Read and write**.
-- Copia el token y pégalo en Vercel como `GITHUB_DISPATCH_TOKEN`.
+- Apunta la fecha de caducidad: cuando expira, "Sincronizar" deja de lanzar nada.
+
+El mismo valor va en **tres sitios**, y hay que actualizar los tres al rotarlo:
+
+| Dónde | Quién lo lee |
+|-------|--------------|
+| Vercel → Environment Variables (Production, Preview y Development) | `/api/sync-match` y `/api/sync-all-matches` en producción |
+| `frontend-web/.env.local` | las mismas rutas en `npm run dev` (Next **no** lee el `.env` de la raíz) |
+| `.env` de la raíz del repo | `frontend-web/scheduler.py` |
+
+Sin token en `frontend-web/.env.local`, en local el botón no lanza GitHub Actions:
+ejecuta `ci/run_live_sync.py` con el Python del venv. Sirve para depurar, pero no es
+el mismo camino que producción.
+
+### Comprobar que el token funciona
+
+```bash
+cd frontend-web
+npm run check:token             # ¿válido y ve el workflow?
+npm run check:token -- --dispatch   # además lanza un sync real
+```
+
+Para validar el valor que hay en Vercel sin tocar los ficheros:
+
+```bash
+GITHUB_DISPATCH_TOKEN=ghp_xxx npm run check:token
+```
 
 ## 4. Cómo funciona cada objetivo
 
