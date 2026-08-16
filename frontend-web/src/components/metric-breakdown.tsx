@@ -74,12 +74,15 @@ export function MetricBreakdown({
   const min = n(player.minutes_played)
   if (min > 0) {
     const isStarter = player.is_starter === true || player.is_starter === 1 || player.is_starter === 'true'
+    const hasThreshold = min >= R.participation.minutes_threshold
     rows.push({
       block: 'Participación',
-      label: isStarter ? `Titular (${min}')` : `Suplente (${min}')`,
+      label: isStarter 
+        ? (hasThreshold ? `Titular (${min}')` : `Titular (<60') (${min}')`) 
+        : (hasThreshold ? `Suplente (>=60') (${min}')` : `Suplente (${min}')`),
       count: '-',
       unit: '-',
-      points: isStarter ? R.participation.starter_bonus : R.participation.substitute_bonus
+      points: hasThreshold ? R.participation.starter_bonus : R.participation.substitute_bonus
     })
 
     let wb = n(player.win_bonus)

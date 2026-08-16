@@ -116,9 +116,18 @@ def generar_pdf(fixture_id, match_id):
         # Helper rules
         def g(key): return stats.get(key, 0)
         def rule_val(key, default=0):
-            val = R_e.get(key, default)
-            if isinstance(val, dict): return val.get(pos, val.get('all', val.get('MED', default)))
-            return val
+            val = R_e.get(key)
+            if val is not None:
+                if isinstance(val, dict): return val.get(pos, val.get('all', val.get('MED', default)))
+                return val
+            # penalties_per_X check
+            penalties = downloader.scoring_rules.get('penalties_per_X', {})
+            if key in penalties:
+                p_rule = penalties.get(key, {})
+                pos_rule = p_rule.get(pos, p_rule.get('all', {}))
+                if isinstance(pos_rule, dict): return pos_rule.get('points', default)
+                return pos_rule
+            return default
             
         rows = []
         rows.append(["Bloque", "Métrica", "Cant.", "Valor U.", "Puntos"])
@@ -140,8 +149,10 @@ def generar_pdf(fixture_id, match_id):
         # B1: Participación
         mins = p["min"]
         if mins > 0:
+            is_starter = downloader.entry_minutes.get(pid, 999) == 0
             if mins >= R_p.get('minutes_threshold', 60):
-                add("Participación", f"Titular ({mins}')", 0, R_p.get('starter_bonus', 2), flat=True)
+                label_part = f"Titular ({mins}')" if is_starter else f"Suplente (>=60') ({mins}')"
+                add("Participación", label_part, 0, R_p.get('starter_bonus', 2), flat=True)
                 wb = g('win_bonus')
                 db = g('draw_bonus')
                 if wb > 0:
@@ -149,7 +160,8 @@ def generar_pdf(fixture_id, match_id):
                 elif db > 0:
                     add("Participación", "Empate (>=60')", 0, db, flat=True)
             else:
-                add("Participación", f"Suplente ({mins}')", 0, R_p.get('substitute_bonus', 1), flat=True)
+                label_part = f"Titular (<60') ({mins}')" if is_starter else f"Suplente ({mins}')"
+                add("Participación", label_part, 0, R_p.get('substitute_bonus', 1), flat=True)
         else:
             add("Participación", "No jugó", 0, 0, flat=True)
                 
@@ -184,10 +196,11 @@ def generar_pdf(fixture_id, match_id):
         add("Portero", "Paradas", g('saves'), rule_val('saves', 0.5))
         
         # B7: Otras Acciones
-        add("Otras", "Despejes", g('clearances'), rule_val('clearances', 0.1))
-        add("Otras", "Tiros a puerta", g('shots_on_target'), rule_val('shots_on_target', 0.2))
-        add("Otras", "Regates comp.", g('takeons_won'), rule_val('takeons_won', 0.1))
+        add("Otras", "Despejes", g('clearances'), rule_val('clearances', 0.5))
+        add("Otras", "Tiros a puerta", g('shots_on_target'), rule_val('shots_on_target', 0.3))
+        add("Otras", "Regates comp.", g('takeons_won'), rule_val('takeons_won', 0.5))
         add("Otras", "Balones al área", g('box_entries'), rule_val('box_entries', 0.1))
+        add("Otras", "Balón recuperado", g('ball_recoveries'), rule_val('ball_recoveries', 0.1))
         
         # B8: Penalizaciones
         lost = g('dispossessed') + g('bad_touches')

@@ -142,7 +142,7 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
     const partKeys = ['starter_bonus', 'substitute_bonus', 'win_bonus_60', 'draw_bonus_60']
     const partLabels: Record<string, string> = {
       starter_bonus: 'Bono Titular',
-      substitute_bonus: 'Bono Suplente',
+      substitute_bonus: 'Bono Titular-Suplente (< 60 min)',
       win_bonus_60: 'Victoria (>=60 min)',
       draw_bonus_60: 'Empate (>=60 min)'
     }
@@ -226,7 +226,7 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
             <p className="text-sm font-semibold text-slate-700">Participación y Resultado</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <LabeledInput
-                label="Bono Suplente (< 60 min)"
+                label="Bono Titular-Suplente (< 60 min)"
                 value={num(rules.participation, 'substitute_bonus')}
                 onChange={(v) => setParticipationValue('substitute_bonus', v)}
               />

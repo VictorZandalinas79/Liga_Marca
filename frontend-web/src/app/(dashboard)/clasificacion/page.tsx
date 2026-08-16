@@ -460,17 +460,17 @@ export default function ClasificacionPage() {
   }
 
   const getPositionMedal = (position: number, isLast: boolean = false) => {
-    if (position === 1) return <Medal className="w-5 h-5 text-yellow-500" />
-    if (position === 2) return <Medal className="w-5 h-5 text-slate-400" />
-    if (position === 3) return <Medal className="w-5 h-5 text-amber-600" />
-    if (isLast) return <span className="text-4xl leading-none">🐖</span>
-    return <span className="text-lg font-bold text-slate-600 w-5 text-center">{position}</span>
+    if (position === 1) return <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500" />
+    if (position === 2) return <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
+    if (position === 3) return <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
+    if (isLast) return <span className="text-xl sm:text-4xl leading-none">🐖</span>
+    return <span className="text-xs sm:text-lg font-bold text-slate-600 w-4 sm:w-5 text-center">{position}</span>
   }
 
   const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
-    if (trend === 'up') return <TrendingUp className="w-4 h-4 text-emerald-600" />
-    if (trend === 'down') return <TrendingDown className="w-4 h-4 text-red-600" />
-    return <Minus className="w-4 h-4 text-slate-400" />
+    if (trend === 'up') return <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-600" />
+    if (trend === 'down') return <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+    return <Minus className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400" />
   }
 
   const SortIcon = ({ field }: { field: SortField }) => {
@@ -604,69 +604,75 @@ export default function ClasificacionPage() {
             <table className="min-w-max w-full">
               <thead>
                 <tr className="border-b border-slate-700">
-                  <th className="text-left text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap">Pos</th>
-                  <th className="text-left text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap">Jugador</th>
+                  <th className="text-left text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap">Pos</th>
+                  <th className="text-left text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap">Jugador</th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('total_points')}
                   >
-                    <div className="flex items-center justify-end gap-1">
-                      Pts Totales
+                    <div className="flex items-center justify-end gap-0.5">
+                      <span className="hidden sm:inline">Pts Totales</span>
+                      <span className="sm:hidden">Pts</span>
                       <SortIcon field="total_points" />
                     </div>
                   </th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('average_points')}
                   >
-                    <div className="flex items-center justify-end gap-1">
-                      Promedio
+                    <div className="flex items-center justify-end gap-0.5">
+                      <span className="hidden sm:inline">Promedio</span>
+                      <span className="sm:hidden">Prom</span>
                       <SortIcon field="average_points" />
                     </div>
                   </th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('last_3_jornadas_avg')}
                     title="Promedio de las últimas 3 jornadas"
                   >
-                    <div className="flex items-center justify-end gap-1">
-                      Últ. 3
+                    <div className="flex items-center justify-end gap-0.5">
+                      <span>Últ. 3</span>
                       <SortIcon field="last_3_jornadas_avg" />
                     </div>
                   </th>
-                  <th className="text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap" title="Tendencia en las últimas 5 jornadas">Tendencia</th>
+                  <th className="text-center text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap" title="Tendencia en las últimas 5 jornadas">
+                    <span className="hidden sm:inline">Tendencia</span>
+                    <span className="sm:hidden">Tend</span>
+                  </th>
                   <th
-                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-center text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('sanctioned_matchdays')}
                     title="Número total de sanciones"
                   >
-                    <div className="flex items-center justify-center gap-1">
-                      Sanciones
+                    <div className="flex items-center justify-center gap-0.5">
+                      <span className="hidden sm:inline">Sanciones</span>
+                      <span className="sm:hidden">Sanc</span>
                       <SortIcon field="sanctioned_matchdays" />
                     </div>
                   </th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('change_impact_points')}
                     title="Puntos netos ganados o perdidos por cambios"
                   >
-                    <div className="flex items-center justify-end gap-1">
-                      Cambios
+                    <div className="flex items-center justify-end gap-0.5">
+                      <span>Cambios</span>
                       <SortIcon field="change_impact_points" />
                     </div>
                   </th>
                   <th
-                    className="text-right text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('saldo')}
                     title="Saldo disponible (Saldo Inicial Virtual - Cuotas - Sanciones)"
                   >
-                    <div className="flex items-center justify-end gap-1 text-emerald-400">
-                      Saldo
+                    <div className="flex items-center justify-end gap-0.5 text-emerald-400">
+                      <span>Saldo</span>
                       <SortIcon field="saldo" />
                     </div>
                   </th>
                   <th
-                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="hidden sm:table-cell text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('podium_finishes')}
                     title="Veces entre los 3 primeros de una jornada"
                   >
@@ -677,7 +683,7 @@ export default function ClasificacionPage() {
                     </div>
                   </th>
                   <th
-                    className="text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
+                    className="hidden sm:table-cell text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('bottom_finishes')}
                     title="Veces entre los 3 últimos de una jornada"
                   >
@@ -703,65 +709,67 @@ export default function ClasificacionPage() {
                     } cursor-pointer`}
                     onClick={() => handleUserClick(standing.user_id)}
                   >
-                    <td className="px-1 py-1">
+                    <td className="px-0.5 sm:px-1 py-1">
                       {getPositionMedal(standing.current_position, isLast)}
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-0.5 sm:px-1 py-1">
                       <div className="min-w-0">
-                        <p className="font-semibold text-white text-[11px] whitespace-nowrap uppercase">{standing.user_name}</p>
+                        <p className="font-semibold text-white text-[9px] min-[360px]:text-[10px] sm:text-[11px] whitespace-nowrap uppercase">{standing.user_name}</p>
                         {standing.best_matchday_points > 0 && (
-                          <p className="text-[10px] text-amber-400 font-medium whitespace-nowrap">
+                          <p className="hidden sm:block text-[10px] text-amber-400 font-medium whitespace-nowrap">
                             Mejor: {Math.round(standing.best_matchday_points * 10) / 10} pts (J{standing.best_matchday})
                           </p>
                         )}
                       </div>
                     </td>
-                    <td className="px-1 py-1 text-right whitespace-nowrap">
-                      <span className="text-sm font-bold text-emerald-400">
+                    <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
+                      <span className="text-[10px] sm:text-sm font-bold text-emerald-400">
                         {Math.round(standing.total_points * 10) / 10}
                       </span>
-                      <span className="text-[10px] text-slate-400 ml-0.5">pts</span>
+                      <span className="hidden sm:inline text-[10px] text-slate-400 ml-0.5">pts</span>
                     </td>
-                    <td className="px-1 py-1 text-right whitespace-nowrap">
-                      <span className="text-xs font-semibold text-slate-200">
+                    <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
+                      <span className="text-[9px] sm:text-xs font-semibold text-slate-200">
                         {standing.average_points}
                       </span>
-                      <span className="text-[10px] text-slate-400 ml-0.5">pts/j</span>
+                      <span className="hidden sm:inline text-[10px] text-slate-400 ml-0.5">pts/j</span>
                     </td>
-                    <td className="px-1 py-1 text-right whitespace-nowrap">
-                      <span className="text-xs font-semibold text-blue-400">
+                    <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
+                      <span className="text-[9px] sm:text-xs font-semibold text-blue-400">
                         {Math.round(standing.last_3_jornadas_avg * 10) / 10}
                       </span>
                     </td>
-                    <td className="px-1 py-1">
+                    <td className="px-0.5 sm:px-1 py-1">
                       <div className="flex justify-center">
                         {getTrendIcon(standing.last_5_trend)}
                       </div>
                     </td>
-                    <td className="px-1 py-1 text-center whitespace-nowrap">
-                      <span className={`text-sm font-bold ${
+                    <td className="px-0.5 sm:px-1 py-1 text-center whitespace-nowrap">
+                      <span className={`text-[10px] sm:text-sm font-bold ${
                         standing.sanctioned_matchdays > 0 ? 'text-red-400' : 'text-slate-400'
                       }`}>
                         {standing.sanctioned_matchdays}
                       </span>
                     </td>
-                    <td className="px-1 py-1 text-right whitespace-nowrap">
+                    <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
                       <div className="flex flex-col items-end">
-                        <span className={`text-xs font-bold leading-none ${standing.change_impact_points > 0 ? 'text-emerald-400' : standing.change_impact_points < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                        <span className={`text-[9px] sm:text-xs font-bold leading-none ${standing.change_impact_points > 0 ? 'text-emerald-400' : standing.change_impact_points < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                           {standing.change_impact_points > 0 ? '+' : ''}{Math.round(standing.change_impact_points * 10) / 10}
                         </span>
-                        <span className="text-[9px] text-slate-500">{standing.total_changes} cambios</span>
+                        <span className="hidden sm:inline text-[9px] text-slate-500">{standing.total_changes} cambios</span>
+                        <span className="sm:hidden text-[7px] text-slate-500 leading-none mt-0.5">{standing.total_changes} c.</span>
                       </div>
                     </td>
-                    <td className="px-1 py-1 text-right whitespace-nowrap">
-                      <span className={`font-bold text-sm ${((standing.saldo || 0) < 0) ? 'text-red-400' : 'text-emerald-400'}`}>
-                        {standing.saldo?.toFixed(2)}€
+                    <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
+                      <span className={`font-bold text-[10px] sm:text-sm ${((standing.saldo || 0) < 0) ? 'text-red-400' : 'text-emerald-400'}`}>
+                        <span className="hidden sm:inline">{standing.saldo?.toFixed(2)}€</span>
+                        <span className="sm:hidden">{standing.saldo?.toFixed(0)}€</span>
                       </span>
                     </td>
-                    <td className="px-1 py-1 text-center whitespace-nowrap">
+                    <td className="hidden sm:table-cell px-1 py-1 text-center whitespace-nowrap">
                       <span className="text-[11px] font-bold text-yellow-500">{standing.podium_finishes}</span>
                     </td>
-                    <td className="px-1 py-1 text-center whitespace-nowrap">
+                    <td className="hidden sm:table-cell px-1 py-1 text-center whitespace-nowrap">
                       <span className="text-[11px] font-bold text-red-500">{standing.bottom_finishes}</span>
                     </td>
                   </tr>

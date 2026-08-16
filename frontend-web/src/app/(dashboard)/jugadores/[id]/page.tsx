@@ -628,10 +628,13 @@ export default function JugadorDetallePage() {
     // BLOQUE 1: Participación
     const b1: ScoreRow[] = []
     if (score.minutes_played > 0) {
-      const titular = score.minutes_played >= SR.participation.minutes_threshold
+      const isStarter = score.is_starter === true || score.is_starter === 1 || score.is_starter === 'true'
+      const hasThreshold = score.minutes_played >= SR.participation.minutes_threshold
       b1.push({
-        label: titular ? `Participación · ≥60 min (${score.minutes_played}′)` : `Participación · suplente (${score.minutes_played}′)`,
-        count: 0, unit: 0, points: titular ? SR.participation.starter_bonus : SR.participation.substitute_bonus, flat: true,
+        label: isStarter
+          ? (hasThreshold ? `Participación · Titular (≥60 min) (${score.minutes_played}′)` : `Participación · Titular (<60 min) (${score.minutes_played}′)`)
+          : (hasThreshold ? `Participación · Suplente (≥60 min) (${score.minutes_played}′)` : `Participación · Suplente (${score.minutes_played}′)`),
+        count: 0, unit: 0, points: hasThreshold ? SR.participation.starter_bonus : SR.participation.substitute_bonus, flat: true,
       })
       
       if ((score.win_bonus || 0) > 0) {

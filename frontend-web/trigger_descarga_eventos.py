@@ -188,11 +188,37 @@ class MatchEventDownloader:
         self.away_team_id = None
         self.matchday = None
 
-    def get_position_points(self, rule_key: str, position: str) -> int:
+    def get_position_points(self, rule_key: str, position: str) -> float:
         """Obtiene los puntos para una regla y posición específicas."""
-        rule = self.events_rules.get(rule_key, {})
-        # Primero buscar por posición específica, luego por 'all' como fallback
-        return rule.get(position, rule.get('all', 0))
+        # 1) Buscar en self.events_rules (ej. goal, own_goal, assist_goal, save, clearances, etc.)
+        rule = self.events_rules.get(rule_key)
+        if rule is not None:
+            if isinstance(rule, dict):
+                val = rule.get(position, rule.get('all', 0.0))
+                return float(val) if val is not None else 0.0
+            return float(rule)
+
+        # 2) Buscar en self.scoring_rules['penalties_per_X'] (ej. lost_balls)
+        penalties = self.scoring_rules.get('penalties_per_X', {})
+        if rule_key in penalties:
+            p_rule = penalties.get(rule_key, {})
+            pos_rule = p_rule.get(position, p_rule.get('all', {}))
+            if isinstance(pos_rule, dict):
+                val = pos_rule.get('points', 0.0)
+                return float(val) if val is not None else 0.0
+            return float(pos_rule)
+
+        # 3) Fallback para ball_recoveries u otras métricas no definidas en el JSON
+        defaults = {
+            'lost_balls': -0.1,
+            'ball_recoveries': 0.1,
+            'clearances': 0.5,
+            'shots_on_target': 0.3,
+            'takeons_won': 0.5,
+            'box_entries': 0.1,
+            'save': 0.5
+        }
+        return float(defaults.get(rule_key, 0.0))
 
     def load_headers(self):
         headers_path = Path('backend-engine/headers/headers.json')
