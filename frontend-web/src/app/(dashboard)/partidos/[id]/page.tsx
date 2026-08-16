@@ -540,91 +540,97 @@ export default function PartidoDetallePage() {
         <Card className={`hover:shadow-lg transition-all !bg-slate-800 border-slate-700 hover:border-emerald-500 ${
           !player.is_starter ? 'opacity-75' : ''
         }`}>
-          <CardContent className="p-1.5 sm:p-2.5 flex items-center justify-between gap-2 min-h-[56px]">
-            {/* Izquierda: Foto + Info básica */}
-            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-              {/* Foto o dorsal */}
-              {player.photo ? (
-                <img
-                  src={player.photo}
-                  alt={player.short_name || ''}
-                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-slate-600 shrink-0"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none'
-                    ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
-                  }}
-                />
-              ) : null}
-              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-700 flex items-center justify-center text-[10px] sm:text-xs font-bold text-slate-400 border-2 border-slate-600 shrink-0 ${player.photo ? 'hidden' : ''}`}>
-                {player.shirt_number || '?'}
+          <CardContent className="p-1.5 sm:p-2.5 flex flex-col gap-1 sm:gap-1.5 min-h-[64px]">
+            {/* Fila 1: Nombre completo del jugador (toda la línea para él) */}
+            <p className="text-[11px] sm:text-xs font-extrabold text-white truncate leading-none">
+              {player.short_name || `${player.first_name} ${player.last_name}`}
+            </p>
+
+            {/* Fila 2: Foto, demarcación/stats y puntos/eventos */}
+            <div className="grid grid-cols-[auto_1fr_45px] sm:grid-cols-[auto_1fr_55px] items-center gap-1.5 sm:gap-2.5">
+              {/* Col 1: Foto o dorsal (contenedor de tamaño fijo) */}
+              <div className="relative w-8 h-8 sm:w-10 sm:h-10 shrink-0">
+                {player.photo ? (
+                  <img
+                    src={player.photo}
+                    alt={player.short_name || ''}
+                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border border-slate-600 absolute inset-0"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                      ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
+                    }}
+                  />
+                ) : null}
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-700 flex items-center justify-center text-[10px] sm:text-xs font-bold text-slate-400 border border-slate-600 absolute inset-0 ${player.photo ? 'hidden' : ''}`}>
+                  {player.shirt_number || '?'}
+                </div>
               </div>
 
-              {/* Nombre y demarcación/minutos */}
-              <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
-                <p className="text-[11px] sm:text-xs font-bold text-white truncate leading-tight">
-                  {player.short_name || `${player.first_name} ${player.last_name}`}
-                </p>
-                <div className="flex items-center gap-1">
-                  <span className={`inline-flex items-center px-1 rounded text-[8px] font-bold leading-none py-0.5 ${getPositionColor(player.position)}`}>
-                    {getPositionLabel(player.position)}
+              {/* Col 2: Escudo, Demarcación, Minutos */}
+              <div className="min-w-0 flex items-center gap-1.5 flex-wrap text-slate-400">
+                {playerTeam?.logo_url ? (
+                  <img 
+                    src={playerTeam.logo_url} 
+                    alt={playerTeam.name} 
+                    className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain shrink-0" 
+                  />
+                ) : (
+                  <span className="text-[7.5px] text-slate-500 shrink-0 truncate max-w-[35px]">
+                    {playerTeam?.name}
                   </span>
-                  <div className="text-[9px] sm:text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap min-w-0">
-                    <span>{player.is_starter ? 'Tit' : 'Sup'} · {player.minutes_played || 0}'</span>
-                    {((player.goals || 0) > 0 || (player.assists || 0) > 0 || (player.yellow_cards || 0) > 0 || (player.red_cards || 0) > 0 || (player.second_yellow_cards || 0) > 0) && (
-                      <span className="text-slate-600">·</span>
-                    )}
+                )}
+                
+                <span className={`inline-flex items-center px-1 rounded text-[7.5px] font-bold leading-none py-0.5 shrink-0 ${getPositionColor(player.position)}`}>
+                  {getPositionLabel(player.position)}
+                </span>
+                
+                <span className="text-[8.5px] sm:text-[9.5px] shrink-0 leading-none">
+                  {player.is_starter ? 'Tit' : 'Sup'} · {player.minutes_played || 0}'
+                </span>
+              </div>
+
+              {/* Col 3: Puntos y Eventos/Iconos (Alineados a la derecha) */}
+              <div className="flex flex-col items-end justify-center shrink-0 min-w-[45px] sm:min-w-[55px] gap-0.5">
+                <span className="text-sm sm:text-base font-extrabold text-emerald-400 leading-none text-right">
+                  {player.total_points || 0}
+                </span>
+                
+                {/* Eventos debajo de la puntuación */}
+                {((player.goals || 0) > 0 || (player.assists || 0) > 0 || (player.yellow_cards || 0) > 0 || (player.red_cards || 0) > 0 || (player.second_yellow_cards || 0) > 0) && (
+                  <div className="flex items-center gap-1 justify-end flex-wrap max-w-[45px] sm:max-w-[55px]">
                     {(player.goals || 0) > 0 && (
                       <span className="inline-flex items-center gap-0.5 shrink-0" title={`${player.goals} Gol(es)`}>
-                        <span className="text-[10.5px] sm:text-xs">⚽</span>
-                        <span className="text-[9px] sm:text-[10px] font-bold text-white">{player.goals}</span>
+                        <span className="text-[9.5px] sm:text-xs">⚽</span>
+                        <span className="text-[8.5px] sm:text-[9.5px] font-bold text-white">{player.goals}</span>
                       </span>
                     )}
                     {(player.assists || 0) > 0 && (
                       <span className="inline-flex items-center gap-0.5 shrink-0" title={`${player.assists} Asistencia(s)`}>
-                        <span className="text-[10.5px] sm:text-xs">👟</span>
-                        <span className="text-[9px] sm:text-[10px] font-bold text-white">{player.assists}</span>
+                        <span className="text-[9.5px] sm:text-xs">👟</span>
+                        <span className="text-[8.5px] sm:text-[9.5px] font-bold text-white">{player.assists}</span>
                       </span>
                     )}
                     {(player.yellow_cards || 0) > 0 && (
                       <div 
-                        className="w-1.5 h-2.5 sm:w-2 sm:h-3 bg-yellow-500 rounded-[1px] shadow-sm shrink-0 ml-0.5" 
+                        className="w-[6px] h-[9px] sm:w-[8px] sm:h-[12px] bg-yellow-500 rounded-[1px] shadow-sm shrink-0" 
                         title="Tarjeta Amarilla" 
                       />
                     )}
                     {((player.red_cards || 0) > 0 || (player.second_yellow_cards || 0) > 0) && (
                       <div 
-                        className="w-1.5 h-2.5 sm:w-2 sm:h-3 bg-red-500 rounded-[1px] shadow-sm shrink-0 ml-0.5" 
+                        className="w-[6px] h-[9px] sm:w-[8px] sm:h-[12px] bg-red-500 rounded-[1px] shadow-sm shrink-0" 
                         title="Tarjeta Roja" 
                       />
                     )}
                   </div>
-                </div>
+                )}
+
+                {Number(player.relevo_points) < 0 && (
+                  <span className="inline-flex items-center px-1 rounded bg-rose-500/10 text-rose-400 text-[7.5px] font-bold scale-90">
+                    {player.relevo_points}
+                  </span>
+                )}
               </div>
-            </div>
-
-            {/* Derecha: Puntos + Escudo */}
-            <div className="flex flex-col items-end justify-center shrink-0 min-w-[36px]">
-              <span className="text-sm sm:text-base font-extrabold text-emerald-400 leading-none">
-                {player.total_points || 0}
-              </span>
-              
-              {playerTeam?.logo_url ? (
-                <img 
-                  src={playerTeam.logo_url} 
-                  alt={playerTeam.name} 
-                  className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain mt-1 shrink-0" 
-                />
-              ) : (
-                <span className="text-[8px] text-slate-500 mt-1 shrink-0 truncate max-w-[36px]">
-                  {playerTeam?.name}
-                </span>
-              )}
-
-              {Number(player.relevo_points) < 0 && (
-                <span className="inline-flex items-center px-1 rounded bg-rose-500/10 text-rose-400 text-[8px] font-bold mt-1 scale-90">
-                  {player.relevo_points}
-                </span>
-              )}
             </div>
           </CardContent>
         </Card>
