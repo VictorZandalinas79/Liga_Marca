@@ -89,6 +89,7 @@ interface Player {
   fouls_committed?: number
   yellow_cards?: number
   red_cards?: number
+  second_yellow_cards?: number
   // Errores
   errors_leading_to_shot?: number
   errors_leading_to_goal?: number
@@ -96,6 +97,7 @@ interface Player {
   passes_attempted?: number
   pass_accuracy?: number
   challenges_lost?: number
+  relevo_points?: number | string
 }
 
 interface Team {
@@ -566,9 +568,36 @@ export default function PartidoDetallePage() {
                   <span className={`inline-flex items-center px-1 rounded text-[8px] font-bold leading-none py-0.5 ${getPositionColor(player.position)}`}>
                     {getPositionLabel(player.position)}
                   </span>
-                  <span className="text-[9px] sm:text-[10px] text-slate-400 truncate">
-                    {player.is_starter ? 'Tit' : 'Sup'} · {player.minutes_played || 0}' · Rec: {player.ball_recoveries || 0}
-                  </span>
+                  <div className="text-[9px] sm:text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap min-w-0">
+                    <span>{player.is_starter ? 'Tit' : 'Sup'} · {player.minutes_played || 0}'</span>
+                    {((player.goals || 0) > 0 || (player.assists || 0) > 0 || (player.yellow_cards || 0) > 0 || (player.red_cards || 0) > 0 || (player.second_yellow_cards || 0) > 0) && (
+                      <span className="text-slate-600">·</span>
+                    )}
+                    {(player.goals || 0) > 0 && (
+                      <span className="inline-flex items-center gap-0.5 shrink-0" title={`${player.goals} Gol(es)`}>
+                        <span className="text-[10.5px] sm:text-xs">⚽</span>
+                        <span className="text-[9px] sm:text-[10px] font-bold text-white">{player.goals}</span>
+                      </span>
+                    )}
+                    {(player.assists || 0) > 0 && (
+                      <span className="inline-flex items-center gap-0.5 shrink-0" title={`${player.assists} Asistencia(s)`}>
+                        <span className="text-[10.5px] sm:text-xs">👟</span>
+                        <span className="text-[9px] sm:text-[10px] font-bold text-white">{player.assists}</span>
+                      </span>
+                    )}
+                    {(player.yellow_cards || 0) > 0 && (
+                      <div 
+                        className="w-1.5 h-2.5 sm:w-2 sm:h-3 bg-yellow-500 rounded-[1px] shadow-sm shrink-0 ml-0.5" 
+                        title="Tarjeta Amarilla" 
+                      />
+                    )}
+                    {((player.red_cards || 0) > 0 || (player.second_yellow_cards || 0) > 0) && (
+                      <div 
+                        className="w-1.5 h-2.5 sm:w-2 sm:h-3 bg-red-500 rounded-[1px] shadow-sm shrink-0 ml-0.5" 
+                        title="Tarjeta Roja" 
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
