@@ -902,10 +902,6 @@ class MatchEventDownloader:
                 if end_x >= 50:
                     self.apply_points(pid, 'pass_opp_half', 1, current_min)
 
-                # Llegadas al área rival
-                if end_x > 83 and 21.1 <= end_y <= 78.9:
-                    self.apply_points(pid, 'box_entries', 1, current_min)
-
             if is_long:
                 self.apply_points(pid, 'long_balls_completed', 1, current_min)
 
@@ -919,6 +915,7 @@ class MatchEventDownloader:
 
             if is_cross or is_through_ball_into_box:
                 self.apply_points(pid, 'successful_crosses', 1, current_min)
+                self.apply_points(pid, 'box_entries', 1, current_min)
                 
             if is_cross:
                 self.apply_points(pid, 'crosses_completed', 1, current_min)
