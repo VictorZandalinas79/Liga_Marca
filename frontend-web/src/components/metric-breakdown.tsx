@@ -2,6 +2,7 @@
 
 import { RELEVO_BLOCKS, evaluateRelevoBlocks, resolveRates, type Position } from '@/lib/scoring-config'
 import { useScoringRules } from '@/hooks/use-scoring-rules'
+import { CheckCircle2, XCircle, Target, Award, Sparkles, Activity } from 'lucide-react'
 
 export function MetricBreakdown({ 
   player, 
@@ -31,7 +32,7 @@ export function MetricBreakdown({
   const CLEAN_SHEET   = R.clean_sheet
   const GOAL_CONCEDED = R.goal_conceded
 
-  interface Row {
+  interface StandardRow {
     block: string
     label: string
     count: string | number
@@ -39,7 +40,7 @@ export function MetricBreakdown({
     points: number
   }
 
-  const rows: Row[] = []
+  const rows: StandardRow[] = []
 
   // Determinar resultado si fixture está disponible
   let isWin = false
@@ -88,7 +89,6 @@ export function MetricBreakdown({
     let wb = n(player.win_bonus)
     let db = n(player.draw_bonus)
 
-    // Si los bonus no se recuperaron de la BD, inferir del resultado
     if (wb === 0 && db === 0 && hasResult && min >= R.participation.minutes_threshold) {
       if (isWin) {
         wb = R.participation.win_bonus_60
@@ -291,106 +291,8 @@ export function MetricBreakdown({
     points: r2(lostBalls * R.lost_balls)
   })
 
-  // 9. RELEVO
-  if (min > 0) {
-    const lim = R.relevo_limits?.[pos]
-    const relevoBlocks = evaluateRelevoBlocks(player as any, pos, R.relevo_limits)
-
-    const shortLabels: Record<string, string> = {
-      'Paradas': 'Paradas',
-      'Valor de calidad acumulado': 'Calidad P.',
-      'Acierto en el pase': 'Pases',
-      'Pases intentados': 'int.',
-      'Blocajes': 'Blocaje',
-      'Despejes de puños': 'Puños',
-      'Acciones de último hombre': 'Últ. hombre',
-      'Pases hacia adelante': 'Pases adelante',
-      'Duelos aéreos': 'Aéreos',
-      'Duelos por el suelo': 'Terrestres',
-      'Remates a balón parado': 'ABP Remates',
-      'Centros intentados': 'Centros',
-      'Acierto en campo rival': 'Pases campo rival',
-      'Acierto en tiros a puerta': 'Tiros a puerta %',
-      'Acierto en regates': 'Regates %',
-      'Asistencias por minuto': 'Asistencias',
-      'Recuperaciones en campo rival': 'Recup. campo rival',
-      'Remates de cabeza': 'Remates cabeza',
-      'Pases largos': 'Pases largos',
-    }
-
-    relevoBlocks.forEach((blk, idx) => {
-      const blockSpec = RELEVO_BLOCKS[pos]?.[idx]
-      if (!blockSpec) return
-
-      const optionStrings = blockSpec.options.map((opt) => {
-        const metricStrings = opt.metrics.map((m) => {
-          const value = m.value(player)
-          const target = m.label === 'Valor de calidad acumulado' && pos === 'POR'
-            ? (lim?.calidad_parada_multiplier ?? 0.5) * n(player.saves)
-            : m.target(lim, min)
-
-          const labelText = shortLabels[m.label] ?? m.label
-          const cmpSymbol = m.cmp === 'gte' ? '>=' : m.cmp === 'gt' ? '>' : m.cmp
-
-          if (m.unit === 'pct') {
-            return `${labelText ? `${labelText}: ` : ''}${value.toFixed(0)}% (${cmpSymbol} ${target.toFixed(0)}%)`
-          } else {
-            const valPerMin = min > 0 ? (value / min).toFixed(3) : '0.000'
-            const tgtPerMin = min > 0 ? (target / min).toFixed(3) : '0.000'
-
-            if (m.label === 'Pases largos' && pos === 'POR') {
-              return `${value} (${valPerMin}/m ${cmpSymbol} ${tgtPerMin}/m)`
-            } else if (m.label === 'Valor de calidad acumulado' && pos === 'POR') {
-              return `${labelText}: ${valPerMin}/m (${cmpSymbol} ${tgtPerMin}/m)`
-            } else if (m.label === 'Pases intentados') {
-              return `${value} ${labelText} (${valPerMin}/m ${cmpSymbol} ${tgtPerMin}/m)`
-            } else {
-              return `${labelText ? `${labelText}: ` : ''}${value} (${valPerMin}/m ${cmpSymbol} ${tgtPerMin}/m)`
-            }
-          }
-        })
-        return metricStrings.join(opt.requireAll ? ' y ' : ' o ')
-      })
-
-      const desc = optionStrings.join(' OR ')
-
-      rows.push({
-        block: 'RELEVO',
-        label: `Bloque ${blk.id}: ${desc}`,
-        count: '-',
-        unit: '-',
-        points: blk.points
-      })
-    })
-
-    const allZero = relevoBlocks.every((blk) => blk.points <= 0)
-    if (allZero) {
-      rows.push({
-        block: 'RELEVO',
-        label: 'Ningún bloque superado',
-        count: '-',
-        unit: '-',
-        points: -1
-      })
-    }
-  } else {
-    for (let i = 1; i <= 4; i++) {
-      rows.push({
-        block: 'RELEVO',
-        label: `Bloque ${i}`,
-        count: '-',
-        unit: '-',
-        points: 0
-      })
-    }
-  }
-
-  const total = n(player.total_points)
-  const maxAbsPoints = Math.max(...rows.map(r => Math.abs(r.points)), 1)
-
-  // Filtrar las filas: RELEVO siempre visible; las demás solo si tienen al menos un evento (count > 0 o cs o wb/db > 0)
-  const filteredRows = rows.filter(row => {
-    if (row.block === 'RELEVO') return true
+  // Filtrar eventos directos con puntuación/interacción
+  const filteredStandardRows = rows.filter(row => {
     if (row.block === 'Participación') {
       if (row.label.includes('Titular') || row.label.includes('Suplente')) {
         return min > 0
@@ -406,116 +308,333 @@ export function MetricBreakdown({
     return row.points !== 0
   })
 
-  // Separar bloques en columna izquierda y derecha para el diseño dual en desktop
-  // Columna izquierda: todas las métricas excepto RELEVO
-  // Columna derecha: métricas de RELEVO
-  const leftRows = filteredRows.filter(r => r.block !== 'RELEVO')
-  const rightRows = filteredRows.filter(r => r.block === 'RELEVO')
+  // RELEVO Blocks evaluation
+  const relevoEvaluated = evaluateRelevoBlocks(player as any, pos, R.relevo_limits)
+  const blockSpecs = RELEVO_BLOCKS[pos] || []
+  const lim = R.relevo_limits?.[pos] || {}
 
-  const renderTable = (tableRows: Row[]) => (
-    <table className="w-full border-collapse text-left text-[11px] sm:text-xs text-slate-700">
-      <thead className="bg-slate-50 text-[10px] sm:text-[11px] font-bold uppercase text-slate-500 border-b border-slate-200">
-        <tr>
-          <th scope="col" className="px-2 py-1.5 w-[90px]">Bloque</th>
-          <th scope="col" className="px-2 py-1.5">Métrica</th>
-          <th scope="col" className="px-2 py-1.5 text-center w-[45px]">Cant.</th>
-          <th scope="col" className="px-2 py-1.5 text-center w-[50px]">Val U.</th>
-          <th scope="col" className="px-2 py-1.5 text-right w-[95px]">Puntos</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {tableRows.map((row, idx) => {
-          const isPositive = row.points > 0
-          const isNegative = row.points < 0
-          const pct = Math.min((Math.abs(row.points) / maxAbsPoints) * 100, 100)
-          
-          let ptsColor = 'text-slate-500 font-bold'
-          let barColor = 'bg-slate-300'
-          if (isPositive) {
-            ptsColor = 'text-emerald-700 font-extrabold text-xs sm:text-sm'
-            barColor = 'bg-emerald-500'
-          } else if (isNegative) {
-            ptsColor = 'text-rose-700 font-extrabold text-xs sm:text-sm'
-            barColor = 'bg-rose-500'
-          }
+  const relevoCardRows = blockSpecs.map((specBlock, idx) => {
+    const evalBlock = relevoEvaluated[idx] || { points: 0, metrics: [] }
+    
+    let metricCounter = 0
+    const options = specBlock.options.map((optSpec) => {
+      const metrics = optSpec.metrics.map((mSpec) => {
+        const result = evalBlock.metrics[metricCounter] || {
+          label: mSpec.label,
+          unit: mSpec.unit,
+          value: 0,
+          target: 0,
+          met: false
+        }
+        metricCounter++
 
-          const isRelevo = row.block === 'RELEVO'
+        const val = result.value
+        const tgt = pos === 'POR' && specBlock.id === 2
+          ? (lim?.calidad_parada_multiplier ?? 0.5) * n(player.saves)
+          : result.target
 
-          return (
-            <tr 
-              key={idx} 
-              className={`hover:bg-slate-50/50 transition-colors ${
-                isRelevo ? 'bg-violet-50/10' : ''
-              }`}
-            >
-              <td className="px-2 py-1 font-bold text-slate-600 text-[10px] sm:text-[11px]">
-                <span className={`px-1.5 py-0.5 rounded ${
-                  row.block === 'Participación' ? 'bg-slate-100 text-slate-700' :
-                  row.block === 'Goles/Asis' ? 'bg-red-50 text-red-700' :
-                  row.block === 'Defensa' ? 'bg-indigo-50 text-indigo-700' :
-                  row.block === 'Penaltis' ? 'bg-fuchsia-50 text-fuchsia-700' :
-                  row.block === 'Tarjetas' ? 'bg-amber-50 text-amber-700' :
-                  row.block === 'Portero' ? 'bg-cyan-50 text-cyan-700' :
-                  row.block === 'Otras' ? 'bg-emerald-50 text-emerald-700' :
-                  row.block === 'Pérdidas' ? 'bg-rose-50 text-rose-700' :
-                  'bg-violet-50 text-violet-700'
-                }`}>
-                  {row.block}
-                </span>
-              </td>
-              <td className={`px-2 py-1 font-bold text-slate-900 text-xs sm:text-sm leading-snug ${isRelevo ? 'text-violet-950 font-bold' : ''}`}>
-                {row.label}
-              </td>
-              <td className="px-2 py-1 text-center font-bold tabular-nums text-slate-800 text-xs sm:text-sm">
-                {row.count === '-' ? <span className="text-slate-300 font-normal">-</span> : row.count}
-              </td>
-              <td className="px-2 py-1 text-center font-bold tabular-nums text-xs sm:text-sm">
-                {row.unit === '-' ? (
-                  <span className="text-slate-300 font-normal">-</span>
-                ) : (
-                  <span className={Number(row.unit) > 0 ? 'text-emerald-700' : Number(row.unit) < 0 ? 'text-rose-700' : 'text-slate-700'}>
-                    {Number(row.unit) > 0 ? `+${row.unit}` : row.unit}
-                  </span>
-                )}
-              </td>
-              <td className="px-2 py-1 text-right">
-                <div className="flex flex-col items-end gap-0.5">
-                  <span className={`tabular-nums leading-none ${ptsColor}`}>
-                    {isPositive ? `+${fmtPts(row.points)}` : fmtPts(row.points)}
-                  </span>
-                  {Math.abs(row.points) > 0 && (
-                    <div className="w-[45px] h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
-                        style={{ width: `${pct}%` }} 
-                      />
-                    </div>
-                  )}
-                </div>
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
+        const valPerMin = min > 0 ? (val / min).toFixed(3) : '0.000'
+        const tgtPerMin = min > 0 ? (tgt / min).toFixed(3) : '0.000'
+
+        return {
+          label: mSpec.label,
+          unit: mSpec.unit,
+          value: val,
+          valPerMin,
+          target: tgt,
+          tgtPerMin,
+          met: result.met,
+          cmp: mSpec.cmp,
+          detail: result.detail
+        }
+      })
+
+      return {
+        requireAll: optSpec.requireAll,
+        metrics
+      }
+    })
+
+    return {
+      id: specBlock.id,
+      title: specBlock.title,
+      note: specBlock.note,
+      points: evalBlock.points,
+      options
+    }
+  })
+
+  const total = n(player.total_points)
+  const maxAbsPoints = Math.max(
+    ...filteredStandardRows.map(r => Math.abs(r.points)),
+    ...relevoCardRows.map(r => Math.abs(r.points)),
+    1
   )
 
-  return (
-    <div className="space-y-2">
-      {/* Grid de dos columnas para pantallas de tableta/escritorio */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm overflow-x-auto">
-          {renderTable(leftRows)}
+  const renderStandardTable = (tableRows: StandardRow[]) => (
+    <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-2xs">
+      <div className="bg-slate-50/90 px-3 py-2 border-b border-slate-200/80 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Activity className="w-3.5 h-3.5 text-slate-500" />
+          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600">Eventos Directos</span>
         </div>
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm overflow-x-auto">
-          {renderTable(rightRows)}
+        <span className="text-[10px] font-semibold text-slate-400">{tableRows.length} registros</span>
+      </div>
+      <table className="w-full border-collapse text-left text-xs">
+        <thead className="bg-slate-50/50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+          <tr>
+            <th scope="col" className="px-3 py-2 w-[105px]">Bloque</th>
+            <th scope="col" className="px-3 py-2">Métrica</th>
+            <th scope="col" className="px-3 py-2 text-right w-[85px]">Puntos</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {tableRows.length === 0 ? (
+            <tr>
+              <td colSpan={3} className="px-3 py-6 text-center text-xs text-slate-400 italic">
+                Sin eventos directos registrados en este partido.
+              </td>
+            </tr>
+          ) : (
+            tableRows.map((row, idx) => {
+              const isPositive = row.points > 0
+              const isNegative = row.points < 0
+              const pct = Math.min((Math.abs(row.points) / maxAbsPoints) * 100, 100)
+              
+              let ptsColor = 'text-slate-500 font-bold'
+              let barColor = 'bg-slate-300'
+              if (isPositive) {
+                ptsColor = 'text-emerald-600 font-black text-xs sm:text-sm'
+                barColor = 'bg-emerald-500'
+              } else if (isNegative) {
+                ptsColor = 'text-rose-600 font-black text-xs sm:text-sm'
+                barColor = 'bg-rose-500'
+              }
+
+              const blockBadgeStyle = 
+                row.block === 'Participación' ? 'bg-slate-100 text-slate-700 border-slate-200' :
+                row.block === 'Goles/Asis' ? 'bg-rose-50 text-rose-700 border-rose-200/80' :
+                row.block === 'Defensa' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/80' :
+                row.block === 'Penaltis' ? 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200/80' :
+                row.block === 'Tarjetas' ? 'bg-amber-50 text-amber-800 border-amber-200/80' :
+                row.block === 'Portero' ? 'bg-cyan-50 text-cyan-800 border-cyan-200/80' :
+                row.block === 'Otras' ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80' :
+                row.block === 'Pérdidas' ? 'bg-rose-50 text-rose-800 border-rose-200/80' :
+                'bg-violet-50 text-violet-700 border-violet-200'
+
+              const hasCountOrUnit = row.count !== '-' && n(row.count) > 0
+
+              return (
+                <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                  <td className="px-3 py-2 font-bold text-[10px]">
+                    <span className={`px-2 py-0.5 rounded-md border font-extrabold uppercase tracking-wider ${blockBadgeStyle}`}>
+                      {row.block}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 font-medium text-slate-900 text-xs leading-snug">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-bold text-slate-800">{row.label}</span>
+                      {hasCountOrUnit && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                          <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-semibold border border-slate-200/60">
+                            Cant: {row.count}
+                          </span>
+                          {row.unit !== '-' && (
+                            <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium border border-slate-200/60">
+                              Val. U: {Number(row.unit) > 0 ? `+${row.unit}` : row.unit} pts
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className={`tabular-nums leading-none ${ptsColor}`}>
+                        {isPositive ? `+${fmtPts(row.points)}` : fmtPts(row.points)}
+                      </span>
+                      {Math.abs(row.points) > 0 && (
+                        <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
+                            style={{ width: `${pct}%` }} 
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  const renderRelevoMetric = (m: any) => {
+    const isPct = m.unit === 'pct'
+    const cmpSymbol = m.cmp === 'gte' ? '≥' : '>'
+
+    const playerValStr = isPct
+      ? `${m.value.toFixed(0)}%`
+      : `${m.value} (${m.valPerMin}/m)`
+
+    const targetValStr = isPct
+      ? `${cmpSymbol} ${m.target.toFixed(0)}%`
+      : `${cmpSymbol} ${m.tgtPerMin}/m`
+
+    return (
+      <div 
+        key={m.label} 
+        className="flex flex-wrap items-center justify-between gap-1.5 py-1.5 px-2.5 rounded-lg bg-white border border-slate-200/70 shadow-2xs"
+      >
+        <span className="text-[11px] font-semibold text-slate-700 min-w-[110px]">
+          {m.label}
+        </span>
+
+        <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+          {/* Métrica del Jugador */}
+          <div 
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[11px] border transition-all ${
+              m.met
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-slate-100 text-slate-600 border-slate-200'
+            }`}
+            title="Métrica del Jugador"
+          >
+            <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Jugador:</span>
+            <span>{playerValStr}</span>
+            {m.met ? (
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            ) : (
+              <XCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            )}
+          </div>
+
+          {/* Separador */}
+          <span className="text-[10px] font-bold text-slate-300">vs</span>
+
+          {/* Meta a Sobrepasar */}
+          <div 
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-semibold text-[11px] bg-amber-50/80 text-amber-900 border border-amber-200/80"
+            title="Meta a sobrepasar para puntuar"
+          >
+            <Target className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span className="text-[9px] font-extrabold uppercase tracking-wider text-amber-700/80">Meta:</span>
+            <span>{targetValStr}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Container Grid Dual */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Columna Izquierda: Eventos Directos */}
+        {renderStandardTable(filteredStandardRows)}
+
+        {/* Columna Derecha: Bloques RELEVO */}
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-2xs flex flex-col">
+          <div className="bg-violet-50/70 px-3 py-2 border-b border-violet-100 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-violet-900">Bloques RELEVO</span>
+            </div>
+            <span className="text-[10px] font-semibold text-violet-500">Rendimiento por min</span>
+          </div>
+
+          <div className="p-2.5 space-y-2 flex-1">
+            {min === 0 ? (
+              <div className="p-4 text-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                El jugador no disputó minutos (0 min). No hay bloques RELEVO evaluados.
+              </div>
+            ) : (
+              relevoCardRows.map((block) => {
+                const isPositive = block.points > 0
+                const isNegative = block.points < 0
+
+                return (
+                  <div 
+                    key={block.id}
+                    className={`rounded-xl border p-2.5 transition-all shadow-2xs ${
+                      isPositive 
+                        ? 'bg-gradient-to-r from-emerald-50/30 to-white border-emerald-200/80' 
+                        : isNegative 
+                        ? 'bg-gradient-to-r from-rose-50/30 to-white border-rose-200/80'
+                        : 'bg-slate-50/40 border-slate-200/70'
+                    }`}
+                  >
+                    {/* Header del bloque */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-violet-100 text-violet-800 border border-violet-200">
+                          Bloque {block.id}
+                        </span>
+                        <h4 className="text-xs font-bold text-slate-800">
+                          {block.title}
+                        </h4>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-black tabular-nums shadow-2xs ${
+                        isPositive
+                          ? 'bg-emerald-500 text-white'
+                          : isNegative
+                          ? 'bg-rose-500 text-white'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}>
+                        {isPositive ? `+${block.points}` : block.points} pts
+                      </span>
+                    </div>
+
+                    {/* Opciones y Métricas */}
+                    <div className="space-y-1.5">
+                      {block.options.map((opt: any, optIdx: number) => (
+                        <div key={optIdx} className="space-y-1">
+                          {optIdx > 0 && (
+                            <div className="flex items-center justify-center my-1">
+                              <span className="px-2 py-0.2 rounded-full text-[9px] font-black uppercase tracking-widest bg-violet-100 text-violet-700 border border-violet-200">
+                                O
+                              </span>
+                            </div>
+                          )}
+
+                          {opt.requireAll && opt.metrics.length > 1 && (
+                            <div className="text-[10px] font-semibold text-violet-700 bg-violet-50 px-2 py-0.5 rounded border border-violet-100 mb-1 inline-block">
+                              Exige cumplir TODAS las métricas (Y):
+                            </div>
+                          )}
+
+                          {opt.metrics.map((m: any) => renderRelevoMetric(m))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Puntos totales ultra compactos */}
-      <div className="rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 flex items-center justify-between shadow-sm">
-        <span className="text-white font-bold text-xs">Puntos totales</span>
-        <span className="text-white font-extrabold text-base tabular-nums">{fmtPts(total)}</span>
+      {/* Tarjeta de Puntuación Total */}
+      <div className="rounded-xl bg-slate-900 text-white p-3 sm:p-4 flex items-center justify-between shadow-md border border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+            <Award className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Puntuación Total</p>
+            <p className="text-xs font-semibold text-slate-300">Sumatorio de eventos y bloques RELEVO</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <span className="text-2xl sm:text-3xl font-black tracking-tight text-emerald-400 tabular-nums">
+            {fmtPts(total)}
+          </span>
+          <span className="text-xs font-bold text-emerald-500/80 ml-1">pts</span>
+        </div>
       </div>
     </div>
   )

@@ -723,35 +723,17 @@ export default function PartidoDetallePage() {
           )}
           <CardContent className="p-1.5 sm:p-2.5 flex flex-col gap-1 sm:gap-1.5 min-h-[64px]">
             {/* Fila 1: Nombre completo del jugador (toda la línea para él) */}
-            <p className={`text-[11px] sm:text-xs font-extrabold text-white truncate leading-none ${
+            <p className={`text-[11px] sm:text-xs font-extrabold text-white truncate leading-none relative -translate-y-2 sm:translate-y-0 z-20 mb-3 sm:mb-0 drop-shadow-md ${
               isHome ? 'pl-6 sm:pl-8' : 'pr-6 sm:pr-8'
             }`}>
               {formatPlayerName(player)}
             </p>
 
-            {/* Fila 2: Foto, demarcación/stats y puntos/eventos */}
-            <div className="grid grid-cols-[auto_1fr_45px] sm:grid-cols-[auto_1fr_55px] items-center gap-1.5 sm:gap-2.5">
-              {/* Col 1: Foto o dorsal (contenedor de tamaño fijo) */}
-              <div className="relative w-8 h-8 sm:w-9.5 sm:h-9.5 shrink-0">
-                {player.photo ? (
-                  <img
-                    src={player.photo}
-                    alt={player.short_name || ''}
-                    className="w-8 h-8 sm:w-9.5 sm:h-9.5 rounded-full object-cover border border-slate-600 absolute inset-0"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none'
-                      ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
-                    }}
-                  />
-                ) : null}
-                <DorsalBadge
-                  number={player.shirt_number || '?'}
-                  className={`w-8 h-8 sm:w-9.5 sm:h-9.5 rounded-md absolute inset-0 ${player.photo ? 'hidden' : ''}`}
-                />
-              </div>
-
-              {/* Col 2: Escudo, Demarcación, Minutos */}
-              <div className="min-w-0 flex items-center gap-1.5 flex-wrap text-slate-400">
+            {/* Fila 2: stats, Foto, y puntos/eventos */}
+            <div className="grid grid-cols-3 items-center gap-1.5 sm:gap-2.5 w-full">
+              
+              {/* Col 1: Escudo, Demarcación, Minutos */}
+              <div className="min-w-0 flex items-center justify-self-start gap-1.5 flex-wrap text-slate-400 relative z-10">
                 {playerTeam?.logo_url ? (
                   <img 
                     src={playerTeam.logo_url} 
@@ -773,9 +755,29 @@ export default function PartidoDetallePage() {
                 </span>
               </div>
 
+              {/* Col 2: Foto (contenedor de tamaño fijo) */}
+              <div className="relative w-8 h-8 sm:w-9.5 sm:h-9.5 shrink-0 justify-self-center translate-y-2 sm:translate-y-3 z-0">
+                {player.photo ? (
+                  <img
+                    src={player.photo}
+                    alt={player.short_name || ''}
+                    className="w-full h-full object-contain absolute inset-0 scale-[2] origin-bottom z-0 drop-shadow-md"
+                    style={{ maxWidth: 'none' }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                      ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
+                    }}
+                  />
+                ) : null}
+                <DorsalBadge
+                  number={player.shirt_number || '?'}
+                  className={`w-8 h-8 sm:w-9.5 sm:h-9.5 rounded-md absolute inset-0 ${player.photo ? 'hidden' : ''}`}
+                />
+              </div>
+
               {/* Col 3: Puntos y Eventos/Iconos (Alineados a la derecha) */}
-              <div className="flex flex-col items-end justify-center shrink-0 min-w-[45px] sm:min-w-[55px] gap-0.5">
-                <span className="text-sm sm:text-base font-extrabold text-emerald-400 leading-none text-right">
+              <div className="flex flex-col items-end justify-center justify-self-end gap-0.5 relative z-10">
+                <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 leading-none text-right drop-shadow-sm">
                   {player.total_points || 0}
                 </span>
                 
@@ -1109,13 +1111,13 @@ export default function PartidoDetallePage() {
             onClick={e => e.stopPropagation()}
           >
             {/* Cabecera compacta con resumen en la misma línea */}
-            <div className="bg-white border-b border-slate-100 px-3 py-2 sm:px-4 sm:py-2.5 flex justify-between items-center z-10 shrink-0">
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="bg-white border-b border-slate-100 px-3 py-3 sm:px-4 sm:py-3.5 flex justify-between items-center z-10 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
                 {selectedPlayer.photo ? (
                   <img
                     src={selectedPlayer.photo}
                     alt={selectedPlayer.short_name || ''}
-                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-slate-200 shrink-0"
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-slate-200 shrink-0"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none'
                       ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
@@ -1124,36 +1126,36 @@ export default function PartidoDetallePage() {
                 ) : null}
                 <DorsalBadge
                   number={selectedPlayer.shirt_number || '?'}
-                  className={`w-10 h-10 sm:w-12 sm:h-12 rounded-md border-2 border-slate-200 shrink-0 ${selectedPlayer.photo ? 'hidden' : ''}`}
+                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-md border-2 border-slate-200 shrink-0 ${selectedPlayer.photo ? 'hidden' : ''}`}
                 />
                 
-                <div className="min-w-0 flex-1 flex flex-col justify-center">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 truncate max-w-[120px] sm:max-w-[220px] leading-tight">
+                <div className="min-w-0 flex-1 flex flex-col justify-center gap-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <h2 className="text-base sm:text-lg font-extrabold text-slate-900 truncate max-w-[150px] sm:max-w-[250px] leading-tight">
                       {formatPlayerName(selectedPlayer)}
                     </h2>
-                    <span className={`inline-flex items-center px-1 py-0.2 rounded text-[8px] sm:text-[9px] font-bold leading-none ${getPositionColor(selectedPlayer.position)}`}>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-bold leading-none ${getPositionColor(selectedPlayer.position)}`}>
                       {getPositionLabel(selectedPlayer.position)}
                     </span>
-                    <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium">
+                    <span className="text-xs sm:text-sm text-slate-500 font-medium">
                       ({selectedPlayer.is_starter ? 'Titular' : 'Suplente'})
                     </span>
                   </div>
 
                   {/* Resumen al lado del nombre en más pequeño para moviles */}
-                  <div className="flex items-center gap-1.5 sm:gap-2.5 text-[9px] sm:text-[11px] text-slate-600 mt-0.5 leading-none">
-                    <span className="flex items-center gap-0.5">
-                      <strong className="text-emerald-600 font-extrabold">{selectedPlayer.total_points || 0}</strong> pts
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 text-xs sm:text-sm text-slate-600 leading-none mt-0.5">
+                    <span className="flex items-center gap-1">
+                      <strong className="text-emerald-600 font-extrabold text-sm sm:text-base">{selectedPlayer.total_points || 0}</strong> pts
                     </span>
                     <span className="text-slate-300">•</span>
-                    <span><strong>{selectedPlayer.minutes_played || 0}</strong> min</span>
+                    <span><strong className="text-slate-800">{selectedPlayer.minutes_played || 0}</strong> min</span>
                     <span className="text-slate-300">•</span>
-                    <span className="flex items-center gap-0.5">
-                      ⚽ <strong>{selectedPlayer.goals || 0}</strong>
+                    <span className="flex items-center gap-1">
+                      ⚽ <strong className="text-slate-800">{selectedPlayer.goals || 0}</strong>
                     </span>
                     <span className="text-slate-300">•</span>
-                    <span className="flex items-center gap-0.5">
-                      🅰️ <strong>{selectedPlayer.assists || 0}</strong>
+                    <span className="flex items-center gap-1">
+                      🅰️ <strong className="text-slate-800">{selectedPlayer.assists || 0}</strong>
                     </span>
                   </div>
                 </div>
