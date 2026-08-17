@@ -219,10 +219,24 @@ export default async function PuntuacionPage() {
             { accion: 'Parada', detalle: 'Por cada parada del portero', pts: formatPts(rates.per_unit.saves) },
             { accion: 'Tiro a puerta', pts: formatPts(rates.per_unit.shots_on_target) },
             { accion: 'Regate completado', pts: formatPts(rates.per_unit.takeons_won) },
-            { accion: 'Balón al área', pts: formatPts(rates.per_unit.box_entries) },
+            { accion: 'Balón al área', detalle: 'Centros y pases filtrados. Ver detalle.', pts: formatPts(rates.per_unit.box_entries) },
             { accion: 'Despeje', pts: formatPts(rates.per_unit.clearances) },
           ]}
         />
+
+        <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl mt-4">
+          <h3 className="font-bold text-slate-800 text-sm mb-2 flex items-center gap-2">
+            <Info className="w-4 h-4 text-emerald-600" />
+            ¿Qué se considera "Balón al área"?
+          </h3>
+          <div className="text-sm text-slate-600 space-y-2">
+            <p>Se contabiliza toda aquella acción en la que un jugador consigue meter la pelota en el área rival con éxito, bajo estos dos criterios estrictos:</p>
+            <ul className="list-disc pl-5 space-y-2">
+              <li><strong>Centros (balón colgado):</strong> Cualquier balón colgado al área desde los carriles laterales o zonas de tres cuartos que un compañero logra rematar o controlar. Esto incluye tanto los centros en jugada dinámica por la banda, como los centros a balón parado (córners y faltas laterales).</li>
+              <li><strong>El Pase Filtrado / Al Hueco:</strong> Ese pase raso (o picadito) con intención, que rompe líneas defensivas y entra dentro del área de penalti para dejar a un compañero en posición ventajosa de remate.</li>
+            </ul>
+          </div>
+        </div>
       </Section>
 
       {/* 6. Pérdidas de balón */}
