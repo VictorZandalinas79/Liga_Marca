@@ -909,11 +909,19 @@ class MatchEventDownloader:
             if is_long:
                 self.apply_points(pid, 'long_balls_completed', 1, current_min)
 
-            if self.has_qualifier(event, Q_CROSS):
+            is_cross = self.has_qualifier(event, Q_CROSS)
+            
+            is_through_ball_into_box = False
+            if self.has_qualifier(event, Q_THROUGH_BALL):
+                if end_x is not None and end_y is not None:
+                    if end_x >= 83 and 21.1 <= end_y <= 78.9:
+                        is_through_ball_into_box = True
+
+            if is_cross or is_through_ball_into_box:
+                self.apply_points(pid, 'successful_crosses', 1, current_min)
+                
+            if is_cross:
                 self.apply_points(pid, 'crosses_completed', 1, current_min)
-                # Solo suma 'successful_crosses' si NO es córner y NO es falta
-                if not is_corner and not is_free_kick:
-                    self.apply_points(pid, 'successful_crosses', 1, current_min)
 
             assist_val = self.get_qualifier(event, Q_ASSIST)
             if assist_val is not False:
@@ -1042,7 +1050,8 @@ class MatchEventDownloader:
 
     def _handle_shot_target(self, event, current_min):
         self.apply_points(event.get('playerId'), 'shots_total', 1, current_min)
-        self.apply_points(event.get('playerId'), 'shots_on_target', 1, current_min)
+        if not self.has_qualifier(event, 82):
+            self.apply_points(event.get('playerId'), 'shots_on_target', 1, current_min)
         
         x = event.get('x', 50.0)
         y = event.get('y', 50.0)
@@ -1061,7 +1070,6 @@ class MatchEventDownloader:
 
     def _handle_shot_post(self, event, current_min):
         self.apply_points(event.get('playerId'), 'shots_total', 1, current_min)
-        self.apply_points(event.get('playerId'), 'shots_on_target', 1, current_min)
         if self.has_qualifier(event, Q_PENALTY):
             self.apply_points(event.get('playerId'), 'penalties_missed', 1, current_min)
 
