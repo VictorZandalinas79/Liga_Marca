@@ -925,18 +925,22 @@ class MatchEventDownloader:
 
             assist_val = self.get_qualifier(event, Q_ASSIST)
             if assist_val is not False:
+                # 1. Asistencia real (si acabó en gol)
                 if str(assist_val) == '16': 
                     self.apply_points(pid, 'assists', 1, current_min)
-                elif str(assist_val) == '15':
-                    is_valid_fantasy_assist = False
-                    for i in range(self.event_seq, min(self.event_seq + 8, len(self.events))):
-                        next_event = self.events[i]
-                        if next_event.get('typeId') in [13, 14, 15, 16] and next_event.get('contestantId') == event.get('contestantId'):
-                            if next_event.get('typeId') == 15 and not self.has_qualifier(next_event, 82):
-                                is_valid_fantasy_assist = True
-                            break
-                    if is_valid_fantasy_assist:
-                        self.apply_points(pid, 'fantasy_assist', 1, current_min)
+                
+                # 2. Asistencia sin gol (Ocasión Clara Creada / qualifier 214 en el tiro)
+                # Buscamos el tiro resultante para comprobar si Opta lo marcó como Ocasión Clara
+                is_big_chance_created = False
+                for i in range(self.event_seq, min(self.event_seq + 8, len(self.events))):
+                    next_event = self.events[i]
+                    if next_event.get('typeId') in [13, 14, 15, 16] and next_event.get('contestantId') == event.get('contestantId'):
+                        if self.has_qualifier(next_event, 214):
+                            is_big_chance_created = True
+                        break
+                        
+                if is_big_chance_created:
+                    self.apply_points(pid, 'fantasy_assist', 1, current_min)
         else:
             self.apply_points(pid, 'dispossessed', 1, current_min)
 
