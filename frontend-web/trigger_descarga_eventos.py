@@ -801,6 +801,21 @@ class MatchEventDownloader:
                 self.apply_points(player_id, 'relevo_ground_duels_won', 1, current_min)
                 
         if type_id in [13, 14, 15, 16]:
+            # NUEVO: Lógica de Asistencias por qualifier 55
+            related_event_id = next((str(q.get('value')) for q in event.get('qualifier', []) if q.get('qualifierId') == 55), None)
+            if related_event_id:
+                related_key = (event.get('contestantId'), related_event_id)
+                related_event = self.event_dict.get(related_key)
+                if related_event and related_event.get('playerId'):
+                    related_pid = related_event.get('playerId')
+                    # Si es Gol (16) -> Asistencia de gol
+                    if type_id == 16:
+                        self.apply_points(related_pid, 'assists', 1, current_min)
+                    else:
+                        # Si es Ocasión Clara (214) -> Asistencia sin gol
+                        if self.has_qualifier(event, 214):
+                            self.apply_points(related_pid, 'fantasy_assist', 1, current_min)
+
             if self.has_qualifier(event, 24) or self.has_qualifier(event, 25): # Remate ABP
                 self.apply_points(player_id, 'relevo_abp_remates', 1, current_min)
                 
@@ -920,24 +935,6 @@ class MatchEventDownloader:
             if is_cross:
                 self.apply_points(pid, 'crosses_completed', 1, current_min)
 
-            assist_val = self.get_qualifier(event, Q_ASSIST)
-            if assist_val is not False:
-                # 1. Asistencia real (si acabó en gol)
-                if str(assist_val) == '16': 
-                    self.apply_points(pid, 'assists', 1, current_min)
-                
-                # 2. Asistencia sin gol (Ocasión Clara Creada / qualifier 214 en el tiro)
-                # Buscamos el tiro resultante para comprobar si Opta lo marcó como Ocasión Clara
-                is_big_chance_created = False
-                for i in range(self.event_seq, min(self.event_seq + 8, len(self.events))):
-                    next_event = self.events[i]
-                    if next_event.get('typeId') in [13, 14, 15, 16] and next_event.get('contestantId') == event.get('contestantId'):
-                        if self.has_qualifier(next_event, 214):
-                            is_big_chance_created = True
-                        break
-                        
-                if is_big_chance_created:
-                    self.apply_points(pid, 'fantasy_assist', 1, current_min)
         else:
             self.apply_points(pid, 'dispossessed', 1, current_min)
 
@@ -1531,6 +1528,7 @@ class MatchEventDownloader:
             ))
 
             self.events = events
+            self.event_dict = {(e.get('contestantId'), str(e.get('eventId'))): e for e in events}
             self.event_seq = 0
             for event in events:
                 self.event_seq += 1
