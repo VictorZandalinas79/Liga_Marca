@@ -376,13 +376,13 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
   ],
   MED: [
-    { id: 1, title: 'Distribución en campo rival', options: [{ metrics: [passOppPct(50), passOppPerMin(0.5)] }] },
+    { id: 1, title: 'Distribución en campo rival', options: [{ requireAll: true, metrics: [passOppPct(50), passOppPerMin(0.5)] }] },
     { id: 2, title: 'Duelos', options: [{ metrics: [aerialsPct(60), groundDuelsPct(60)] }] },
     { id: 3, title: 'Desequilibrio', options: [{ metrics: [shotsOnPct(50), takeonsPct(35)] }] },
     { id: 4, title: 'Generación de juego', options: [{ metrics: [assists(0.03), crosses(0.02)] }] },
   ],
   DEL: [
-    { id: 1, title: 'Distribución en campo rival', options: [{ metrics: [passOppPct(50), passOppPerMin(0.5)] }] },
+    { id: 1, title: 'Distribución en campo rival', options: [{ requireAll: true, metrics: [passOppPct(50), passOppPerMin(0.5)] }] },
     {
       id: 2,
       title: 'Presión y juego aéreo',

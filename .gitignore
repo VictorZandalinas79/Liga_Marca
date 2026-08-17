@@ -10,3 +10,5 @@ sync_venv/
 .env
 logs/
 .processed_matchdays.json
+data/Partidos_Individuales/
+frontend-web/data/Partidos_Individuales/

@@ -407,9 +407,10 @@ export function MetricBreakdown({
   })
 
   // Separar bloques en columna izquierda y derecha para el diseño dual en desktop
-  const leftBlocks = ['Participación', 'Goles/Asis', 'Defensa', 'Penaltis', 'Tarjetas', 'Portero']
-  const leftRows = filteredRows.filter(r => leftBlocks.includes(r.block))
-  const rightRows = filteredRows.filter(r => !leftBlocks.includes(r.block))
+  // Columna izquierda: todas las métricas excepto RELEVO
+  // Columna derecha: métricas de RELEVO
+  const leftRows = filteredRows.filter(r => r.block !== 'RELEVO')
+  const rightRows = filteredRows.filter(r => r.block === 'RELEVO')
 
   const renderTable = (tableRows: Row[]) => (
     <table className="w-full border-collapse text-left text-[11px] sm:text-xs text-slate-700">
