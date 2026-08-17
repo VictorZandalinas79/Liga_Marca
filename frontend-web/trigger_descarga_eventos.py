@@ -547,7 +547,7 @@ class MatchEventDownloader:
             p_opp = stats.get('pass_opp_half_completed', 0)
             p_opp_att = stats.get('pass_opp_half_attempted', 0)
             p_opp_pct = (p_opp / p_opp_att * 100) if p_opp_att > 0 else 0
-            if p_opp_pct > rules.get('pass_opp_pct', 50):
+            if p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(45.0):
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
                 
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
@@ -574,7 +574,7 @@ class MatchEventDownloader:
             p_opp = stats.get('pass_opp_half_completed', 0)
             p_opp_att = stats.get('pass_opp_half_attempted', 0)
             p_opp_pct = (p_opp / p_opp_att * 100) if p_opp_att > 0 else 0
-            if p_opp_pct > rules.get('pass_opp_pct', 50):
+            if p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(45.0):
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
                 
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
@@ -925,8 +925,18 @@ class MatchEventDownloader:
 
             assist_val = self.get_qualifier(event, Q_ASSIST)
             if assist_val is not False:
-                if str(assist_val) == '16': self.apply_points(pid, 'assists', 1, current_min)
-                else: self.apply_points(pid, 'fantasy_assist', 1, current_min)
+                if str(assist_val) == '16': 
+                    self.apply_points(pid, 'assists', 1, current_min)
+                elif str(assist_val) == '15':
+                    is_valid_fantasy_assist = False
+                    for i in range(self.event_seq, min(self.event_seq + 8, len(self.events))):
+                        next_event = self.events[i]
+                        if next_event.get('typeId') in [13, 14, 15, 16] and next_event.get('contestantId') == event.get('contestantId'):
+                            if next_event.get('typeId') == 15 and not self.has_qualifier(next_event, 82):
+                                is_valid_fantasy_assist = True
+                            break
+                    if is_valid_fantasy_assist:
+                        self.apply_points(pid, 'fantasy_assist', 1, current_min)
         else:
             self.apply_points(pid, 'dispossessed', 1, current_min)
 
@@ -1519,6 +1529,7 @@ class MatchEventDownloader:
                 x.get('timeMin', 0), x.get('timeSec', 0), x.get('id', 0)
             ))
 
+            self.events = events
             self.event_seq = 0
             for event in events:
                 self.event_seq += 1
