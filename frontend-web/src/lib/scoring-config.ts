@@ -99,6 +99,7 @@ export const DEFAULT_RELEVO_LIMITS: RelevoLimits = {
   },
   MED: {
     pass_opp_pct: 50,
+    pass_opp_per_min: 0.5,
     aerials_pct: 60,
     ground_duels_pct: 60,
     shots_on_pct: 50,
@@ -108,6 +109,7 @@ export const DEFAULT_RELEVO_LIMITS: RelevoLimits = {
   },
   DEL: {
     pass_opp_pct: 50,
+    pass_opp_per_min: 0.5,
     aerials_pct: 40,
     recup_opp_per_min: 0.3,
     shots_on_pct: 60,
@@ -200,13 +202,22 @@ const takeonsPct = (fallback: number): RelevoMetricSpec => ({
 })
 
 const passOppPct = (fallback: number): RelevoMetricSpec => ({
-  label: 'Pases buenos en campo rival',
+  label: 'Pases buenos en campo rival (%)',
   unit: 'pct',
   value: (s) => pct(n(s, 'pass_opp_half_completed'), n(s, 'pass_opp_half_attempted')),
   target: flat('pass_opp_pct', fallback),
   cmp: 'gt',
   detail: (s) => `${n(s, 'pass_opp_half_completed')}/${n(s, 'pass_opp_half_attempted')}`,
   describe: (lim) => `más del ${lim?.pass_opp_pct ?? fallback}% de acierto en el pase en campo rival`,
+})
+
+const passOppPerMin = (fallback: number): RelevoMetricSpec => ({
+  label: 'Pases en campo rival por min',
+  unit: 'count',
+  value: (s) => n(s, 'pass_opp_half_completed'),
+  target: perMin('pass_opp_per_min', fallback),
+  cmp: 'gte',
+  describe: (lim) => `${lim?.pass_opp_per_min ?? fallback} pases en campo rival por minuto jugado`,
 })
 
 const longPasses = (fallback: number): RelevoMetricSpec => ({
@@ -365,13 +376,13 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
   ],
   MED: [
-    { id: 1, title: 'Distribución en campo rival', options: [{ metrics: [passOppPct(50)] }] },
+    { id: 1, title: 'Distribución en campo rival', options: [{ metrics: [passOppPct(50), passOppPerMin(0.5)] }] },
     { id: 2, title: 'Duelos', options: [{ metrics: [aerialsPct(60), groundDuelsPct(60)] }] },
     { id: 3, title: 'Desequilibrio', options: [{ metrics: [shotsOnPct(50), takeonsPct(35)] }] },
     { id: 4, title: 'Generación de juego', options: [{ metrics: [assists(0.03), crosses(0.02)] }] },
   ],
   DEL: [
-    { id: 1, title: 'Distribución en campo rival', options: [{ metrics: [passOppPct(50)] }] },
+    { id: 1, title: 'Distribución en campo rival', options: [{ metrics: [passOppPct(50), passOppPerMin(0.5)] }] },
     {
       id: 2,
       title: 'Presión y juego aéreo',

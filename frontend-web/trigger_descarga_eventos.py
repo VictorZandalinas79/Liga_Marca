@@ -547,7 +547,7 @@ class MatchEventDownloader:
             p_opp = stats.get('pass_opp_half_completed', 0)
             p_opp_att = stats.get('pass_opp_half_attempted', 0)
             p_opp_pct = (p_opp / p_opp_att * 100) if p_opp_att > 0 else 0
-            if p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(45.0):
+            if p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(rules.get('pass_opp_per_min', 0.5) * 90):
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
                 
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
@@ -574,7 +574,7 @@ class MatchEventDownloader:
             p_opp = stats.get('pass_opp_half_completed', 0)
             p_opp_att = stats.get('pass_opp_half_attempted', 0)
             p_opp_pct = (p_opp / p_opp_att * 100) if p_opp_att > 0 else 0
-            if p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(45.0):
+            if p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(rules.get('pass_opp_per_min', 0.5) * 90):
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
                 
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)

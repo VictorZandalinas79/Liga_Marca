@@ -424,6 +424,7 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                     <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto)</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       <LabeledInput label="% Pases en campo rival" value={num((rules.relevo_limits as any)?.MED || {}, 'pass_opp_pct') || 50} onChange={(v) => setRelevoLimit('MED', 'pass_opp_pct', v)} step="1" />
+                      <LabeledInput label="Pases en campo rival / min" value={num((rules.relevo_limits as any)?.MED || {}, 'pass_opp_per_min') || 0.5} onChange={(v) => setRelevoLimit('MED', 'pass_opp_per_min', v)} step="0.1" />
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
@@ -455,6 +456,7 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                     <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto)</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       <LabeledInput label="% Pases en campo rival" value={num((rules.relevo_limits as any)?.DEL || {}, 'pass_opp_pct') || 50} onChange={(v) => setRelevoLimit('DEL', 'pass_opp_pct', v)} step="1" />
+                      <LabeledInput label="Pases en campo rival / min" value={num((rules.relevo_limits as any)?.DEL || {}, 'pass_opp_per_min') || 0.5} onChange={(v) => setRelevoLimit('DEL', 'pass_opp_per_min', v)} step="0.1" />
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
