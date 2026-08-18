@@ -237,6 +237,8 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'stats' | 'penalties'>('stats')
   const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>>(new Map())
   const [showWarningsModal, setShowWarningsModal] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentModalCountdown, setPaymentModalCountdown] = useState(30)
   // Las medias históricas de todos los jugadores se cargan bajo demanda (al
   // abrir el modal de cambio) y una sola vez por sesión.
   const playerStatsLoadedRef = useRef(false)
@@ -1073,6 +1075,32 @@ export default function DashboardPage() {
     }
   }, [user?.id, isRegistered, supabase])
 
+  useEffect(() => {
+    if (!user?.id) return
+    const checkPaymentStatus = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('has_paid')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (data && data.has_paid === false) {
+        setShowPaymentModal(true)
+        setPaymentModalCountdown(30)
+      }
+    }
+    checkPaymentStatus()
+  }, [user?.id, supabase])
+
+  useEffect(() => {
+    if (!showPaymentModal) return
+    if (paymentModalCountdown <= 0) {
+      setShowPaymentModal(false)
+      return
+    }
+    const timer = setTimeout(() => setPaymentModalCountdown((c) => c - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [showPaymentModal, paymentModalCountdown])
+
   const saveTeam = async () => {
     if (isUnlockWindowOpen) {
       alert('No se pueden realizar cambios durante el tramo de jornada')
@@ -1719,9 +1747,19 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-2 pb-4 max-w-screen-2xl mx-auto">
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4">
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="absolute top-3 right-3 bg-black/70 text-white text-xs font-bold rounded-full w-8 h-8 flex items-center justify-center z-10">
+              {paymentModalCountdown}
+            </div>
+            <img src="/tebas_paga.png" alt="Pago pendiente" className="w-full h-auto block" />
+          </div>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2 pb-2 border-b border-slate-100/50">
         <div className="flex items-center gap-2 flex-wrap">
-          
+
           {config?.budget_limit > 0 && (
             <span className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 text-slate-650 px-2.5 py-1 rounded-lg text-xs font-bold shadow-xs">
               Presupuesto: <span className="text-slate-900 font-extrabold">{config.budget_limit}M</span>

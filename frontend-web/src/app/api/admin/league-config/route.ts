@@ -22,6 +22,9 @@ const NUMERIC_FIELDS = [
   'div2_lose_percent',
   'div3_win_percent',
   'div3_lose_percent',
+  'div1_descensos',
+  'div2_descensos',
+  'div3_descensos',
 ] as const
 
 export async function GET() {

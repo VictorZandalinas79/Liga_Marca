@@ -27,6 +27,7 @@ export interface UserStanding {
   change_impact_points: number
   podium_finishes: number
   bottom_finishes: number
+  last_place_finishes: number
   best_matchday_points: number
   best_matchday: number
   sanctioned_matchdays: number
@@ -92,6 +93,7 @@ interface SharedData {
   penalties: { user_id: string | null; matchday: any; points: any; description: string | null }[]
   sessionCounts: Map<string, number>
   financeByUser: Map<string, { amount_paid: number; infraction_penalties: number }>
+  lastPlaceCount: Map<string, number>
 }
 
 async function fetchPaginated<T>(
@@ -160,6 +162,7 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     penalties: [],
     sessionCounts: new Map(),
     financeByUser: new Map(),
+    lastPlaceCount: new Map(),
   })
 
   const { rows: teamPlayers, incomplete: tpIncomplete } = await fetchPaginated<TeamPlayerRow>(
@@ -575,11 +578,17 @@ function computeDivisionStandings(
       podiumCount.set(p.userId, (podiumCount.get(p.userId) || 0) + 1)
     }
 
-    // Contar colistas
+    // Contar colistas y bacona (último)
     if (sorted.length > winCount) {
       const losers = sorted.slice(winCount).slice(-loseCount)
       for (const p of losers) {
         bottomCount.set(p.userId, (bottomCount.get(p.userId) || 0) + 1)
+      }
+      const absoluteLast = sorted[sorted.length - 1]
+      if (absoluteLast) {
+        const lastPlaceCountMap = shared.lastPlaceCount || new Map<string, number>()
+        lastPlaceCountMap.set(absoluteLast.userId, (lastPlaceCountMap.get(absoluteLast.userId) || 0) + 1)
+        shared.lastPlaceCount = lastPlaceCountMap
       }
     }
   }
@@ -717,6 +726,7 @@ function computeDivisionStandings(
       change_impact_points: userChangesPointsDiff.get(userId) || 0,
       podium_finishes: podiumCount.get(userId) || 0,
       bottom_finishes: bottomCount.get(userId) || 0,
+      last_place_finishes: shared.lastPlaceCount?.get(userId) || 0,
       current_position: 0,
       previous_position: 0,
       position_change: 0,

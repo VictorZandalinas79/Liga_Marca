@@ -226,6 +226,7 @@ export function LeagueConfigPanel({ onStateChange }: { onStateChange?: (state: a
                   <div className="space-y-2">
                     <NumberField label="Ganan (Nº Primeros)" value={config.div1_win_percent} onChange={(v) => setNum('div1_win_percent', v)} step="1" />
                     <NumberField label="Pierden (Nº Últimos)" value={config.div1_lose_percent} onChange={(v) => setNum('div1_lose_percent', v)} step="1" />
+                    <NumberField label="Descienden (Nº Equipos)" value={config.div1_descensos} onChange={(v) => setNum('div1_descensos', v)} step="1" />
                   </div>
                 </div>
 
@@ -235,6 +236,7 @@ export function LeagueConfigPanel({ onStateChange }: { onStateChange?: (state: a
                   <div className="space-y-2">
                     <NumberField label="Ganan (Nº Primeros)" value={config.div2_win_percent} onChange={(v) => setNum('div2_win_percent', v)} step="1" />
                     <NumberField label="Pierden (Nº Últimos)" value={config.div2_lose_percent} onChange={(v) => setNum('div2_lose_percent', v)} step="1" />
+                    <NumberField label="Descienden (Nº Equipos)" value={config.div2_descensos} onChange={(v) => setNum('div2_descensos', v)} step="1" />
                   </div>
                 </div>
 
@@ -244,6 +246,7 @@ export function LeagueConfigPanel({ onStateChange }: { onStateChange?: (state: a
                   <div className="space-y-2">
                     <NumberField label="Ganan (Nº Primeros)" value={config.div3_win_percent} onChange={(v) => setNum('div3_win_percent', v)} step="1" />
                     <NumberField label="Pierden (Nº Últimos)" value={config.div3_lose_percent} onChange={(v) => setNum('div3_lose_percent', v)} step="1" />
+                    <NumberField label="Descienden (Nº Equipos)" value={config.div3_descensos} onChange={(v) => setNum('div3_descensos', v)} step="1" />
                   </div>
                 </div>
               </div>
@@ -356,7 +359,7 @@ function NumberField({
         type="number"
         min="0"
         step={step}
-        value={value}
+        value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-3 py-2 rounded-lg border-2 border-slate-200 outline-none focus:border-indigo-500 text-sm"
       />

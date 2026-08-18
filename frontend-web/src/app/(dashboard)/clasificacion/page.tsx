@@ -520,6 +520,7 @@ export default function ClasificacionPage() {
   kamikazes.sort((a, b) => (a.kamikaze_score || 0) - (b.kamikaze_score || 0))
   const topKamikaze = kamikazes.slice(0, 3)
   const topOpens = [...standings].filter(u => (u.app_opens || 0) > 0).sort((a, b) => (b.app_opens || 0) - (a.app_opens || 0)).slice(0, 3)
+  const topBacona = [...standings].filter(u => (u.last_place_finishes || 0) > 0).sort((a, b) => (b.last_place_finishes || 0) - (a.last_place_finishes || 0)).slice(0, 3)
 
   return (
     <div className="space-y-3 max-w-5xl mx-auto">
@@ -567,6 +568,7 @@ export default function ClasificacionPage() {
                 {selectedRanking === 'changes' && 'Más Cambios en Total'}
                 {selectedRanking === 'kamikaze' && 'Premio Kamikaze'}
                 {selectedRanking === 'appOpens' && 'Adictos a la App'}
+                {selectedRanking === 'bacona' && 'Bacona Más Gorda'}
               </h2>
               <button onClick={() => setSelectedRanking(null)} className="p-1 hover:bg-indigo-500 rounded-full transition-colors">
                 <X className="w-5 h-5" />
@@ -581,6 +583,7 @@ export default function ClasificacionPage() {
                    case 'changes': list = [...standings].filter(u => u.total_changes > 0).sort((a, b) => b.total_changes - a.total_changes); break;
                    case 'kamikaze': list = [...standings].filter(u => u.kamikaze_score && u.kamikaze_score !== 999999).sort((a, b) => (a.kamikaze_score || Infinity) - (b.kamikaze_score || Infinity)); break;
                    case 'appOpens': list = [...standings].filter(u => (u.app_opens || 0) > 0).sort((a, b) => (b.app_opens || 0) - (a.app_opens || 0)); break;
+                   case 'bacona': list = [...standings].filter(u => (u.last_place_finishes || 0) > 0).sort((a, b) => (b.last_place_finishes || 0) - (a.last_place_finishes || 0)); break;
                 }
                 return list.map((u: any, i: number) => (
                   <div key={u.user_id} className={`flex justify-between items-center py-3 border-b border-slate-100 last:border-0 ${u.user_id === currentUserId ? 'bg-indigo-50/50 -mx-4 px-4 font-bold' : ''}`}>
@@ -596,6 +599,7 @@ export default function ClasificacionPage() {
                       {selectedRanking === 'changes' && u.total_changes}
                       {selectedRanking === 'kamikaze' && formatKamikazeTime(u.kamikaze_score ?? 0)}
                       {selectedRanking === 'appOpens' && `${u.app_opens ?? 0} accesos`}
+                      {selectedRanking === 'bacona' && `${u.last_place_finishes ?? 0} veces colista`}
                     </span>
                   </div>
                 ));
@@ -709,13 +713,36 @@ export default function ClasificacionPage() {
                   const isLast = index === standings.length - 1
                   const isExpanded = expandedUser === standing.user_id
                   const isCurrentUser = currentUserId === standing.user_id
+                  
+                  let bgClass = 'hover:bg-slate-700/50'
+                  let borderClass = 'border-slate-700'
+                  
+                  if (selectedDivision !== DIVISION_COMBINED && selectedDivision !== null) {
+                    const winCount = selectedDivision === 1 ? config.div1_win_percent : selectedDivision === 2 ? config.div2_win_percent : selectedDivision === 3 ? config.div3_win_percent : 0;
+                    const descCount = selectedDivision === 1 ? config.div1_descensos : selectedDivision === 2 ? config.div2_descensos : selectedDivision === 3 ? config.div3_descensos : 0;
+                    
+                    if (index < winCount) {
+                      bgClass = 'bg-gradient-to-r from-emerald-900/60 via-emerald-900/10 to-transparent hover:from-emerald-800/60 [&>td:first-child]:shadow-[inset_3px_0_0_0_#10b981]'
+                      borderClass = 'border-emerald-800/40'
+                    } else if (index >= standings.length - descCount) {
+                      bgClass = 'bg-gradient-to-r from-red-950/70 via-red-900/20 to-transparent hover:from-red-900/70 [&>td:first-child]:shadow-[inset_3px_0_0_0_#ef4444]'
+                      borderClass = 'border-red-900/40'
+                    }
+                  }
+
+                  if (isExpanded) {
+                    bgClass = 'bg-slate-600'
+                  } else if (isCurrentUser) {
+                    if (bgClass === 'hover:bg-slate-700/50') {
+                      bgClass = 'bg-slate-800/60 hover:bg-slate-700/60'
+                    }
+                    bgClass += ' animate-pulse ring-1 ring-inset ring-slate-500/50'
+                  }
+
                   return (
                   <Fragment key={standing.user_id}>
                   <tr
-                    className={`border-b border-slate-700 transition-colors ${
-                      isCurrentUser ? 'bg-emerald-900/30 animate-pulse' :
-                      isExpanded ? 'bg-slate-600' : 'hover:bg-slate-700/50'
-                    } cursor-pointer`}
+                    className={`border-b transition-colors cursor-pointer ${borderClass} ${bgClass}`}
                     onClick={() => handleUserClick(standing.user_id)}
                   >
                     <td className="px-0.5 sm:px-1 py-1">
@@ -963,7 +990,7 @@ export default function ClasificacionPage() {
       </Card>
 
       {/* Estadísticas destacadas - MOVIDAS ABAJO DE LA TABLA */}
-      {(topEvolution.length > 0 || topChanges.length > 0 || topTotalChanges.length > 0 || topKamikaze.length > 0 || topOpens.length > 0) && (
+      {(topEvolution.length > 0 || topChanges.length > 0 || topTotalChanges.length > 0 || topKamikaze.length > 0 || topOpens.length > 0 || topBacona.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {topEvolution.length > 0 && (
             <div onClick={() => setSelectedRanking('avg3')}>
@@ -1081,6 +1108,31 @@ export default function ClasificacionPage() {
                           {i + 1}. {u.user_name}
                         </p>
                         <p className="text-xs text-indigo-700 font-medium whitespace-nowrap pt-0.5">{u.app_opens} accesos</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            </div>
+          )}
+
+          {topBacona.length > 0 && (
+            <div onClick={() => setSelectedRanking('bacona')}>
+              <Card className="!bg-pink-50 border-pink-200 cursor-pointer hover:bg-pink-100 transition-colors">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center shrink-0 mt-1 overflow-hidden shadow-sm border border-pink-200">
+                    <img src="/bacona.png" alt="Bacona" className="w-7 h-7 object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-pink-700 uppercase mb-2">Bacona más gorda</p>
+                    {topBacona.map((u, i) => (
+                      <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-pink-200/50 pb-2 last:border-0 last:pb-0">
+                        <p className="text-sm font-bold text-pink-900 uppercase pr-2 leading-tight">
+                          {i + 1}. {u.user_name}
+                        </p>
+                        <p className="text-xs text-pink-700 font-medium whitespace-nowrap pt-0.5">{u.last_place_finishes} veces colista</p>
                       </div>
                     ))}
                   </div>

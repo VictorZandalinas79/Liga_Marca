@@ -62,7 +62,7 @@ export function PrizesPanel({
     let total = 0
     if (users) {
       for (const u of users) {
-        total += (u.entry_fee_paid || 0) + (u.amount_paid || 0) + (u.infraction_penalties || 0)
+        total += (u.entry_fee_paid || 0)
       }
     }
     setTotalPot(total)
@@ -191,10 +191,8 @@ export function PrizesPanel({
 
         <div className="bg-amber-50 rounded-xl p-6 border-2 border-amber-100 text-center mb-8">
           <h3 className="text-slate-600 font-semibold mb-2 uppercase tracking-wide text-sm">Recaudación Total</h3>
-          <div className="text-4xl font-black text-amber-600 tracking-tight">
-            {totalPot.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-          </div>
-          <p className="text-xs text-amber-700/70 mt-2 font-medium">Bote = Suma de todas las cuotas iniciales + todas las sanciones/multas</p>
+          <p className="text-4xl font-black text-amber-500">{totalPot.toFixed(2).replace('.', ',')} €</p>
+          <p className="text-xs font-semibold text-amber-500/60 mt-1">Suma de todas las cuotas de los usuarios</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -15,6 +15,9 @@ export interface LeagueConfig {
   div2_lose_percent: number
   div3_win_percent: number
   div3_lose_percent: number
+  div1_descensos: number
+  div2_descensos: number
+  div3_descensos: number
   entry_fee: number
   prize_div1_1st: number
   prize_div1_2nd: number
@@ -46,6 +49,9 @@ export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
   div2_lose_percent: 3,
   div3_win_percent: 3,
   div3_lose_percent: 3,
+  div1_descensos: 3,
+  div2_descensos: 3,
+  div3_descensos: 3,
   entry_fee: 50,
   prize_div1_1st: 25,
   prize_div1_2nd: 16,
