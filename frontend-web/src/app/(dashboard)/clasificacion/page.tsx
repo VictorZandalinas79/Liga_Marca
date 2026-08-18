@@ -278,7 +278,7 @@ export default function ClasificacionPage() {
     let scores = null
     const { data: scoresByMatchday } = await supabase
       .from('player_scores')
-      .select('player_id, total_points')
+      .select('player_id, total_points, goals, assists, yellow_cards, red_cards')
       .eq('matchday', actualMatchday)
       .in('player_id', playerIds)
 
@@ -287,15 +287,23 @@ export default function ClasificacionPage() {
     } else if (fixtureIds.length > 0) {
       const { data: scoresByFixture } = await supabase
         .from('player_scores')
-        .select('player_id, total_points')
+        .select('player_id, total_points, goals, assists, yellow_cards, red_cards')
         .in('fixture_id', fixtureIds)
         .in('player_id', playerIds)
       scores = scoresByFixture
     }
 
     const playerPointsMap = new Map<string, number>()
+    const playerEventsMap = new Map<string, { goals: number, assists: number, yellow_cards: number, red_cards: number }>()
     scores?.forEach(s => {
       playerPointsMap.set(s.player_id, (playerPointsMap.get(s.player_id) || 0) + (s.total_points || 0))
+      const evs = playerEventsMap.get(s.player_id) || { goals: 0, assists: 0, yellow_cards: 0, red_cards: 0 }
+      playerEventsMap.set(s.player_id, {
+        goals: evs.goals + (s.goals || 0),
+        assists: evs.assists + (s.assists || 0),
+        yellow_cards: evs.yellow_cards + (s.yellow_cards || 0),
+        red_cards: evs.red_cards + (s.red_cards || 0),
+      })
     })
 
     // Cargar team_players de la jornada anterior de todos los equipos
@@ -386,6 +394,7 @@ export default function ClasificacionPage() {
         originalPuntos: playerPointsMap.get(tp.player_id) ?? 0,
         sanctionReason: undefined as string | undefined,
         replacedPlayer: replacedPlayerObj,
+        events: playerEventsMap.get(tp.player_id) || { goals: 0, assists: 0, yellow_cards: 0, red_cards: 0 },
       }
     })
 
@@ -777,9 +786,9 @@ export default function ClasificacionPage() {
                   {isExpanded && userTeamData[standing.user_id] && (
                     <tr>
                       <td colSpan={11} className="p-0">
-                        <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 px-3 py-2.5">
-                          {/* Cabecera equipo — ancho máximo para no estirarse con la tabla */}
-                          <div className="max-w-xs flex items-center gap-2 mb-2 flex-wrap">
+                        <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 px-3 py-2.5 sticky left-0 w-[calc(100vw-2rem)] sm:w-[400px] max-w-full shadow-lg border-r border-slate-600/50">
+                          {/* Cabecera equipo */}
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
                             <Users className="w-4 h-4 text-emerald-400 shrink-0" />
                             <span className="text-sm font-bold text-white truncate">
                               {userTeamData[standing.user_id]?.teamName}
@@ -799,7 +808,7 @@ export default function ClasificacionPage() {
                           </div>
 
                           {userTeamData[standing.user_id]?.isHidden ? (
-                            <div className="max-w-xs py-4 text-center">
+                            <div className="py-4 text-center">
                               <AlertTriangle className="w-6 h-6 text-amber-500 mx-auto mb-2 opacity-80" />
                               <p className="text-sm text-amber-200/80 font-medium">
                                 {userTeamData[standing.user_id]?.hiddenReason}
@@ -807,21 +816,19 @@ export default function ClasificacionPage() {
                             </div>
                           ) : (
                             <>
-                              {/* Lista de jugadores: grid de 3 columnas con ancho máximo fijo
-                                  col1=foto(24px) col2=nombre(crece) col3=puntos(56px fijos)
-                                  max-w-xs garantiza que la columna de puntos siempre sea visible en móvil */}
-                              <div className="max-w-xs space-y-0.5">
+                              {/* Lista de jugadores */}
+                              <div className="space-y-0.5">
                                 {userTeamData[standing.user_id]?.jugadores.map((player: any) => (
                                   <div
                                     key={player.id}
-                                    className={`grid items-center gap-x-2 py-1 px-1.5 rounded ${
+                                    className={`flex items-center gap-x-2 py-1 px-1.5 rounded ${
                                       player.sanctionReason
                                         ? 'bg-red-950/50 border border-red-800'
                                         : 'bg-slate-700/60'
                                     }`}
-                                    style={{ gridTemplateColumns: '1.5rem 1fr 3.5rem' }}
                                   >
                                     {/* col 1: foto */}
+                                    <div className="shrink-0">
                                     {player.photo ? (
                                       <img src={player.photo} alt={player.short_name} className="w-6 h-6 rounded-full object-cover border border-slate-500" />
                                     ) : (
@@ -829,6 +836,7 @@ export default function ClasificacionPage() {
                                         {player.shirt_number || '?'}
                                       </div>
                                     )}
+                                    </div>
 
                                     {/* col 2: nombre + posición + equipo */}
                                     <div className="min-w-0">
@@ -850,11 +858,14 @@ export default function ClasificacionPage() {
                                           </span>
                                         )}
                                       </div>
-                                      <div className="flex items-center gap-1 mt-0.5">
+                                      <div className="flex items-center gap-1 mt-0.5 min-h-[14px]">
                                         {player.team?.logo_url && (
-                                          <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain shrink-0" />
+                                          <img src={player.team.logo_url} alt={player.team.name} className="w-3.5 h-3.5 object-contain shrink-0" title={player.team.name} />
                                         )}
-                                        <span className="text-[10px] text-slate-400 truncate">{player.team?.name}</span>
+                                        {player.events?.goals > 0 && Array.from({length: player.events.goals}).map((_, i) => <span key={`g-${i}`} className="text-[10px] leading-none" title="Gol">⚽</span>)}
+                                        {player.events?.assists > 0 && Array.from({length: player.events.assists}).map((_, i) => <span key={`a-${i}`} className="text-[10px] leading-none" title="Asistencia">👟</span>)}
+                                        {player.events?.yellow_cards > 0 && Array.from({length: player.events.yellow_cards}).map((_, i) => <div key={`y-${i}`} className="w-2 h-2.5 bg-yellow-400 rounded-sm shadow-sm" title="Tarjeta Amarilla" />)}
+                                        {player.events?.red_cards > 0 && Array.from({length: player.events.red_cards}).map((_, i) => <div key={`r-${i}`} className="w-2 h-2.5 bg-red-500 rounded-sm shadow-sm" title="Tarjeta Roja" />)}
                                       </div>
                                       {player.replacedPlayer && (
                                         <div className="flex items-center gap-1 mt-0.5">
@@ -869,8 +880,8 @@ export default function ClasificacionPage() {
                                       )}
                                     </div>
 
-                                    {/* col 3: puntos en amarillo — columna fija de 3.5rem */}
-                                    <div className="text-right">
+                                    {/* col 3: puntos */}
+                                    <div className="text-right shrink-0 ml-1 mr-auto">
                                       {player.sanctionReason ? (
                                         <>
                                           <span className="text-xs font-bold text-red-400 line-through block leading-none">
@@ -893,29 +904,39 @@ export default function ClasificacionPage() {
 
                               {/* Suplentes */}
                               {userTeamData[standing.user_id]?.suplentes.length > 0 && (
-                                <div className="max-w-xs mt-2 pt-2 border-t border-slate-700">
+                                <div className="mt-2 pt-2 border-t border-slate-700">
                                   <p className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Suplentes</p>
                                   <div className="space-y-0.5">
                                     {userTeamData[standing.user_id]?.suplentes.map((player: any) => (
                                       <div
                                         key={player.id}
-                                        className="grid items-center gap-x-2 py-0.5 px-1.5 rounded bg-slate-800/40"
-                                        style={{ gridTemplateColumns: '1.5rem 1fr 3.5rem' }}
+                                        className="flex items-center gap-x-2 py-1 px-1.5 rounded bg-slate-800/40"
                                       >
-                                        {player.photo ? (
-                                          <img src={player.photo} alt={player.short_name} className="w-5 h-5 rounded-full object-cover border border-slate-600 opacity-70" />
-                                        ) : (
-                                          <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-500">
-                                            {player.shirt_number || '?'}
-                                          </div>
-                                        )}
-                                        <div className="min-w-0 flex items-center gap-1">
+                                        <div className="shrink-0">
+                                          {player.photo ? (
+                                            <img src={player.photo} alt={player.short_name} className="w-5 h-5 rounded-full object-cover border border-slate-600 opacity-70" />
+                                          ) : (
+                                            <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-500">
+                                              {player.shirt_number || '?'}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="min-w-0 flex items-center gap-1 flex-wrap">
                                           <span className="text-[11px] font-medium text-slate-400 truncate">{player.short_name}</span>
                                           <Badge className={`text-[9px] px-1 py-0 leading-tight shrink-0 opacity-70 ${getPositionColor(player.position)}`}>
                                             {getPositionLabel(player.position)}
                                           </Badge>
+                                          <div className="flex items-center gap-1 ml-1 min-h-[14px]">
+                                            {player.team?.logo_url && (
+                                              <img src={player.team.logo_url} alt={player.team.name} className="w-3 h-3 object-contain shrink-0 opacity-70" title={player.team.name} />
+                                            )}
+                                            {player.events?.goals > 0 && Array.from({length: player.events.goals}).map((_, i) => <span key={`g-${i}`} className="text-[9px] leading-none opacity-70" title="Gol">⚽</span>)}
+                                            {player.events?.assists > 0 && Array.from({length: player.events.assists}).map((_, i) => <span key={`a-${i}`} className="text-[9px] leading-none opacity-70" title="Asistencia">👟</span>)}
+                                            {player.events?.yellow_cards > 0 && Array.from({length: player.events.yellow_cards}).map((_, i) => <div key={`y-${i}`} className="w-1.5 h-2 bg-yellow-400/70 rounded-[1px] shadow-sm" title="Tarjeta Amarilla" />)}
+                                            {player.events?.red_cards > 0 && Array.from({length: player.events.red_cards}).map((_, i) => <div key={`r-${i}`} className="w-1.5 h-2 bg-red-500/70 rounded-[1px] shadow-sm" title="Tarjeta Roja" />)}
+                                          </div>
                                         </div>
-                                        <div className="text-right">
+                                        <div className="text-right shrink-0 ml-1 mr-auto">
                                           <span className="text-xs font-bold text-yellow-500/60">
                                             {Math.round((player.puntos || 0) * 10) / 10}
                                           </span>

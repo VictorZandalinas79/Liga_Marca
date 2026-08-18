@@ -282,7 +282,7 @@ export function MetricBreakdown({
   })
 
   // 8. Pérdidas
-  const lostBalls = n(player.dispossessed) + n(player.bad_touches)
+  const lostBalls = n(player.dispossessed) + n(player.bad_touches) + n(player.takeons_lost)
   rows.push({
     block: 'Pérdidas',
     label: 'Pérdida de balón',

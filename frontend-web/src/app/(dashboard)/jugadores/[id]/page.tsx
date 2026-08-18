@@ -693,7 +693,7 @@ export default function JugadorDetallePage() {
 
     // BLOQUE 8: Pérdidas
     const b8: ScoreRow[] = []
-    const lostBalls = (score.dispossessed || 0) + (score.bad_touches || 0)
+    const lostBalls = (score.dispossessed || 0) + (score.bad_touches || 0) + (score.takeons_lost || 0)
     if (lostBalls > 0) b8.push(u(lostBalls, SR.lost_balls, 'Balón perdido'))
 
     // BLOQUE 9: Puntos RELEVO. Un bloque superado = 1 punto; ninguno = -1.
@@ -979,7 +979,7 @@ export default function JugadorDetallePage() {
   type AnyScore = PlayerScore & Record<string, unknown>
   const nv = (s: AnyScore, k: string): number => Number(s[k]) || 0
   const assistNoGoal = (s: AnyScore) => nv(s, 'fantasy_assist') || nv(s, 'intent_assists')
-  const lostBallsOf = (s: AnyScore) => nv(s, 'dispossessed') + nv(s, 'bad_touches')
+  const lostBallsOf = (s: AnyScore) => nv(s, 'dispossessed') + nv(s, 'bad_touches') + nv(s, 'takeons_lost')
 
   // Bonus por resultado: si la BD no lo trae, se deduce del marcador (igual
   // que en MetricBreakdown), para que el acumulado no se quede corto.
@@ -1186,7 +1186,7 @@ export default function JugadorDetallePage() {
       case 'paradas':
         return n(score.saves)
       case 'perdidas':
-        return n(score.dispossessed) + n(score.bad_touches)
+        return n(score.dispossessed) + n(score.bad_touches) + n(score.takeons_lost)
       case 'pases_adelante':
         return n(score.forward_passes)
       case 'balones_area':

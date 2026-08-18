@@ -720,7 +720,7 @@ class MatchEventDownloader:
         # ============================================
         # === PENALIZACIONES ===
         # ============================================
-        lost_balls = stats.get('dispossessed', 0) + stats.get('bad_touches', 0)
+        lost_balls = stats.get('dispossessed', 0) + stats.get('bad_touches', 0) + stats.get('takeons_lost', 0)
         points += lost_balls * self.get_position_points('lost_balls', pos)
 
         # ============================================
@@ -828,6 +828,7 @@ class MatchEventDownloader:
 
         handlers = {
             1: self._handle_pass,
+            2: self._handle_offside_pass,
             3: self._handle_takeon,
             4: self._handle_foul,
             7: self._handle_tackle,
@@ -938,6 +939,11 @@ class MatchEventDownloader:
         else:
             self.apply_points(pid, 'dispossessed', 1, current_min)
 
+    def _handle_offside_pass(self, event, current_min):
+        pid = event.get('playerId')
+        if event.get('outcome', 1) == 0:
+            self.apply_points(pid, 'dispossessed', 1, current_min)
+
     def _handle_takeon(self, event, current_min):
         pid = event.get('playerId')
         if event.get('outcome', 0) == 1:
@@ -946,7 +952,9 @@ class MatchEventDownloader:
             self.apply_points(pid, 'takeons_lost', 1, current_min)
 
     def _handle_dispossessed(self, event, current_min):
-        self.apply_points(event.get('playerId'), 'dispossessed', 1, current_min)
+        pid = event.get('playerId')
+        if event.get('outcome', 1) == 1:
+            self.apply_points(pid, 'dispossessed', 1, current_min)
 
     def _handle_ball_touch(self, event, current_min):
         if event.get('outcome', 1) == 0:

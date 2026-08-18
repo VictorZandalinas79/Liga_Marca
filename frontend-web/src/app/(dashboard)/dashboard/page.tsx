@@ -34,7 +34,7 @@ function formatPlayerName(name: string): string {
   return trimmed
 }
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell } from 'lucide-react'
+import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 import { getStandings } from '@/lib/standings'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
@@ -110,12 +110,12 @@ function PitchPlayerCard({
           <img
             src={player.team.logo_url}
             alt={player.team?.name || ''}
-            className="absolute -bottom-0.5 -left-1.5 sm:-left-2 md:-bottom-1 md:-left-2.5 lg:-bottom-1 lg:-left-3 w-4.5 h-4.5 sm:w-5 sm:h-5 md:w-5.5 md:h-5.5 lg:w-6 lg:h-6 object-contain drop-shadow-md transition-all duration-300"
+            className="absolute -bottom-0.5 -left-3 sm:-left-2 md:-bottom-1 md:-left-2.5 lg:-bottom-1 lg:-left-3 w-4.5 h-4.5 sm:w-5 sm:h-5 md:w-5.5 md:h-5.5 lg:w-6 lg:h-6 object-contain drop-shadow-md transition-all duration-300"
           />
         )}
 
         {/* Precio (a la derecha) */}
-        <div className="absolute top-1/2 -right-3.5 sm:-right-4 md:-right-4.5 lg:-right-5 -translate-y-1/2 bg-emerald-600 text-white font-black text-[9px] sm:text-[10px] md:text-[11px] lg:text-[12px] flex items-center justify-center rounded-full w-[25px] h-[25px] sm:w-[28px] sm:h-[28px] md:w-[30px] md:h-[30px] lg:w-[32px] lg:h-[32px] shadow-xl transition-all duration-300 z-20">
+        <div className="absolute top-1/2 -right-5.5 sm:-right-4 md:-right-4.5 lg:-right-5 -translate-y-1/2 bg-emerald-600 text-white font-black text-[9px] sm:text-[10px] md:text-[11px] lg:text-[12px] flex items-center justify-center rounded-full w-[25px] h-[25px] sm:w-[28px] sm:h-[28px] md:w-[30px] md:h-[30px] lg:w-[32px] lg:h-[32px] shadow-xl transition-all duration-300 z-20">
           {player.precio ? `${player.precio}M` : '-'}
         </div>
 
@@ -234,13 +234,22 @@ export default function DashboardPage() {
   const [userRanks, setUserRanks] = useState<any>(null)
   const [loadingRanks, setLoadingRanks] = useState(true)
   const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'stats' | 'penalties'>('stats')
   const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>>(new Map())
   const [showWarningsModal, setShowWarningsModal] = useState(false)
   // Las medias históricas de todos los jugadores se cargan bajo demanda (al
   // abrir el modal de cambio) y una sola vez por sesión.
   const playerStatsLoadedRef = useRef(false)
   const supabase = createClient()
-  const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMatchday: activeMatchday, currentMomento, upcomingLocks } = useMatchdayLock()
+  const { currentMatchday: activeMatchday } = useMatchdayLock()
+  const [selectedMatchday, setSelectedMatchday] = useState<number>(1)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  useEffect(() => {
+    if (typeof activeMatchday === 'number' && activeMatchday > 0) {
+      setSelectedMatchday(activeMatchday)
+    }
+  }, [activeMatchday])
+  const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, upcomingLocks } = useMatchdayLock(selectedMatchday)
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
   // Estos jugadores no se pueden cambiar aunque el mercado general esté abierto.
   const lockedTeams = useLockedTeams()
@@ -275,7 +284,7 @@ export default function DashboardPage() {
   
   useEffect(() => {
     const fetchHistory = async () => {
-      if (!userTeamId || typeof activeMatchday !== 'number') return;
+      if (!userTeamId || typeof selectedMatchday !== 'number') return;
 
       // Jornada en la que arranca el juego: antes de ella los equipos de los
       // usuarios no contabilizan, aunque los jugadores ya estén puntuando.
@@ -300,7 +309,7 @@ export default function DashboardPage() {
       allTeamsData?.forEach(t => teamToUserId.set(t.id, t.user_id));
 
       const maxMd = Math.max(...allTpData.map(t => t.matchday || 1));
-      const targetMaxMd = typeof activeMatchday === 'number' ? activeMatchday - 1 : maxMd;
+      const targetMaxMd = typeof selectedMatchday === 'number' ? selectedMatchday - 1 : maxMd;
       
       const tpByTeamAndMatchday = new Map<string, Map<number, typeof allTpData>>();
       allTpData.forEach(t => {
@@ -790,11 +799,11 @@ export default function DashboardPage() {
       setLoading(false)
     }
 
-    // Esperar a que el hook calcule la jornada activa (0 = aún no resuelto)
-    if (typeof activeMatchday === 'number' && activeMatchday > 0) {
-      fetchInitialData(activeMatchday)
+    // Esperar a que el hook calcule la jornada seleccionada
+    if (typeof selectedMatchday === 'number' && selectedMatchday > 0) {
+      fetchInitialData(selectedMatchday)
     }
-  }, [user?.id, activeMatchday])
+  }, [user?.id, selectedMatchday])
 
   // Cargar puntos de los jugadores cuando la jornada está en curso
   useEffect(() => {
@@ -804,7 +813,7 @@ export default function DashboardPage() {
         return
       }
 
-      const matchdayToLoad = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+      const matchdayToLoad = typeof selectedMatchday === 'number' && selectedMatchday > 0 ? selectedMatchday : 1
 
       // Buscar fixtures: primero por matchday (jornadas numéricas). Si no hay resultados
       // y es una jornada de tipo "momento" (matchday=null en BD), buscar por momento.
@@ -838,24 +847,15 @@ export default function DashboardPage() {
         return
       }
 
-      // Para jornadas numéricas: filtrar por matchday directamente (más preciso, evita acumulados).
-      // Para jornadas "momento" (matchday=null en BD): filtrar por fixture_id.
-      let scores: { player_id: string; total_points: number }[] | null = null
-      if (currentMomento) {
-        const { data } = await supabase
-          .from('player_scores')
-          .select('player_id, total_points')
-          .in('player_id', selectedPlayers)
-          .in('fixture_id', fixtureIds)
-        scores = data
-      } else {
-        const { data } = await supabase
-          .from('player_scores')
-          .select('player_id, total_points')
-          .in('player_id', selectedPlayers)
-          .eq('matchday', matchdayToLoad)
-        scores = data
-      }
+      // Para cualquier tipo de jornada, filtramos por los fixtureIds encontrados.
+      // player_scores usa fixture_id, y matchday frecuentemente es null.
+      const { data } = await supabase
+        .from('player_scores')
+        .select('player_id, total_points')
+        .in('player_id', selectedPlayers)
+        .in('fixture_id', fixtureIds)
+      
+      const scores = data
 
       const pointsMap = new Map<string, number>()
       scores?.forEach(s => {
@@ -875,7 +875,7 @@ export default function DashboardPage() {
     }, 45000)
 
     return () => clearInterval(interval)
-  }, [isUnlockWindowOpen, userTeamId, selectedPlayers, activeMatchday, currentMomento])
+  }, [isUnlockWindowOpen, userTeamId, selectedPlayers, activeMatchday, selectedMatchday, currentMomento])
 
   // Carga los jugadores vetados por exclusividad: los tenía otro usuario en la
   // jornada previa comprometida y yo no (si yo lo tenía, lo retengo). En J1 no aplica.
@@ -942,7 +942,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchLiveInfractions = async () => {
       try {
-        const res = await fetch('/api/penalties/live')
+        const res = await fetch(`/api/penalties/live?matchday=${selectedMatchday}&division=${userDivision}`)
         if (res.ok) {
           const data = await res.json()
           setLiveInfractions(data.infractions || [])
@@ -950,7 +950,7 @@ export default function DashboardPage() {
       } catch {}
     }
     fetchLiveInfractions()
-  }, [activeMatchday])
+  }, [selectedMatchday, userDivision])
 
   useEffect(() => {
     const fetchOnlineUsers = async () => {
@@ -1489,7 +1489,7 @@ export default function DashboardPage() {
     prevPenaltiesForSanctions,
     lineupPrevSet,
     zeroedPrevSet,
-    activeMatchday === Math.max(1, config.fantasy_starting_matchday)
+    selectedMatchday === Math.max(1, config.fantasy_starting_matchday)
   )
 
   // Calcular estadísticas del equipo (solo visibles durante el tramo de jornada)
@@ -1719,663 +1719,729 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-2 pb-4 max-w-screen-2xl mx-auto">
-      {/* Encabezado con usuarios en línea */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 w-full">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-3xl font-bold text-slate-900">Mi Equipo</h1>
-            {config?.budget_limit > 0 && (
-              <div className="bg-emerald-100 border border-emerald-300 text-emerald-800 px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm">
-                Tope Presupuesto: <span className="text-emerald-900 text-base">{config.budget_limit}M</span>
-              </div>
-            )}
-            {warnings.length > 0 && (
-              <button
-                onClick={() => setShowWarningsModal(true)}
-                className="flex items-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1.5 rounded-lg border border-amber-300 font-semibold text-sm animate-pulse transition-colors"
-                title="Avisos sobre partidos descolocados"
-              >
-                <Bell className="w-4 h-4" />
-                Avisos ({warnings.length})
-              </button>
-            )}
-          </div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2 pb-2 border-b border-slate-100/50">
+        <div className="flex items-center gap-2 flex-wrap">
           
-          {/* Mensaje de estado de cambios */}
-          <div className="flex-1">
-            {isUnlockWindowOpen ? (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 flex items-center gap-3 shadow-sm">
-                <Lock className="w-5 h-5 text-amber-600 animate-pulse shrink-0" />
-                <p className="text-sm font-semibold text-amber-900 hidden lg:block">
-                  Los cambios están bloqueados
-                </p>
-                {timeUntilLock && timeUntilLock !== 'Finalizada' && (
-                  <div className="bg-amber-100 px-4 py-2 rounded-xl ml-auto flex flex-col items-end shadow-sm">
-                    <p className="text-base font-bold text-amber-900 leading-none mb-1">
-                      Finaliza en: <span className="text-lg">{timeUntilLock}</span>
-                    </p>
-                    {lockTime && (
-                      <p className="text-sm font-bold text-amber-800">
-                        {lockTime.toLocaleDateString('es-ES', {weekday: 'long', day:'numeric', month:'long'})} a las {lockTime.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              timeUntilUnlock && (
-                <div className="flex flex-col gap-1.5">
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2 flex items-center gap-3 shadow-sm">
-                    <Unlock className="w-5 h-5 text-emerald-600 shrink-0" />
-                    <p className="text-sm font-semibold text-emerald-955 hidden lg:block">
-                      Se bloquean los cambios en...
-                    </p>
-                    <div className="bg-emerald-100 px-4 py-2 rounded-xl ml-auto flex flex-col items-end shadow-sm">
-                      <p className="text-base font-bold text-emerald-900 leading-none mb-1">
-                        <span className="text-lg font-mono">{timeUntilUnlock}</span>
-                      </p>
-                      {unlockTime && (
-                        <p className="text-sm font-bold text-emerald-800">
-                          {unlockTime.toLocaleDateString('es-ES', {weekday: 'long', day:'numeric', month:'long'})} a las {unlockTime.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            )}
-          </div>
+          {config?.budget_limit > 0 && (
+            <span className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 text-slate-650 px-2.5 py-1 rounded-lg text-xs font-bold shadow-xs">
+              Presupuesto: <span className="text-slate-900 font-extrabold">{config.budget_limit}M</span>
+            </span>
+          )}
+          
+          {warnings.length > 0 && (
+            <button
+              onClick={() => setShowWarningsModal(true)}
+              className="inline-flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-red-600 px-2.5 py-1 rounded-lg border border-slate-200 font-bold text-xs shadow-xs transition-colors cursor-pointer"
+            >
+              <Bell className="w-3.5 h-3.5 animate-bounce shrink-0" />
+              <span>Avisos ({warnings.length})</span>
+            </button>
+          )}
+
+          {/* Estado de cambios en la misma línea */}
+          {isUnlockWindowOpen ? (
+            <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-650 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-xs">
+              <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span className="text-slate-800 font-bold">Cambios Bloqueados</span>
+              {timeUntilLock && timeUntilLock !== 'Finalizada' && (
+                <span className="text-slate-400 font-normal">
+                  (hace <span className="font-bold text-slate-600 font-mono">{timeUntilLock}</span>)
+                </span>
+              )}
+            </span>
+          ) : (
+            timeUntilUnlock && (
+              <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-650 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-xs animate-pulse">
+                <Unlock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="text-emerald-700 font-bold">Cambios Abiertos</span>
+                <span className="text-slate-400 font-normal">
+                  (cierre en <span className="font-bold text-slate-600 font-mono">{timeUntilUnlock}</span>)
+                </span>
+              </span>
+            )
+          )}
         </div>
       </div>
 
-
       {/* ================= CONTENEDOR PRINCIPAL ================= */}
-      <div className="w-full space-y-4 mt-2">
-      {/* Once inicial - Grid responsive ordenado por posiciones */}
-      <Card className="border-0 sm:border-2 border-emerald-200 shadow-none sm:shadow-md bg-transparent sm:bg-white mx-[-1rem] sm:mx-0">
-        <CardContent className="p-0 sm:p-2">
-          <div className="flex items-center justify-between mb-2 px-3 sm:px-0">
-            <span className="text-sm font-bold text-slate-900">{currentMomento ? `${currentMomento} · J${activeMatchday}` : `Jornada ${activeMatchday}`}</span>
-            <span className="text-xs text-slate-500">{selectedPlayersData.length}/11</span>
-          </div>
+      <div className="flex flex-col lg:flex-row gap-6 items-stretch w-full mt-0">
+        {/* Columna Izquierda: Campograma */}
+        <div className="w-full lg:w-[50%] xl:w-[55%] 2xl:w-[55%] shrink-0 flex flex-col gap-4">
+          <Card className="border-0 sm:border-2 border-emerald-200 shadow-none sm:shadow-md bg-transparent sm:bg-white mx-[-1rem] sm:mx-0">
+          <CardContent className="p-0 sm:p-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 px-3 sm:px-0 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 relative">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Jornada:</span>
+                {typeof activeMatchday === 'number' && activeMatchday > 0 ? (
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 text-xs font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      <span>Jornada {selectedMatchday} {selectedMatchday === activeMatchday ? '(Activa)' : ''}</span>
+                      <ChevronDown className={`w-3 h-3 text-slate-500 shrink-0 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
 
-          {isUnlockWindowOpen ? (
-            <div className="flex flex-col lg:flex-row gap-4 items-start">
-              {/* Pitch */}
-              <div className={`relative w-full lg:flex-1 max-w-full ${userDivision === 1 ? 'sm:max-w-lg' : 'sm:max-w-md'} mx-auto border-y-2 sm:border-2 border-white rounded-none sm:rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]`} style={{
-                backgroundImage: userDivision === 1 ? 'url(/pitches/pitch_div1.png)' : userDivision === 2 ? 'url(/pitches/pitch_div2.png)' : userDivision === 3 ? 'url(/pitches/pitch_div3_large.png)' : 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
-                backgroundSize: userDivision === 1 || userDivision === 2 || userDivision === 3 ? '100% 100%' : 'auto',
-                backgroundColor: userDivision === 1 ? 'transparent' : userDivision === 2 ? '#dfd6a7' : userDivision === 3 ? '#8B5A2B' : '#43a047',
-                backgroundBlendMode: userDivision === 2 ? 'multiply' : 'normal',
-              }}>
-              {/* Soccer field markings */}
-              <div className={`absolute inset-0 border-2 border-white/40 m-4 pointer-events-none rounded-sm ${userDivision === 1 || userDivision === 2 || userDivision === 3 ? 'hidden' : ''}`}>
-                {/* Center Line */}
-                <div className="absolute top-1/2 left-0 right-0 h-[2px] bg-white/40 -translate-y-1/2"></div>
-                {/* Center Circle */}
-                <div className="absolute top-1/2 left-1/2 w-24 h-24 sm:w-32 sm:h-32 border-2 border-white/40 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
-                {/* Center dot */}
-                <div className="absolute top-1/2 left-1/2 w-2 h-2 bg-white/60 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
-                
-                {/* Top Penalty Area */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-44 h-16 sm:w-56 sm:h-20 border-b-2 border-x-2 border-white/40 z-10"></div>
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-6 sm:w-24 sm:h-8 border-b-2 border-x-2 border-white/40"></div>
-                {/* Top Penalty Arc */}
-                <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 w-16 h-8 sm:w-20 sm:h-10 border-b-2 border-x-2 border-white/40 rounded-b-full"></div>
-                
-                {/* Bottom Penalty Area */}
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-44 h-16 sm:w-56 sm:h-20 border-t-2 border-x-2 border-white/40 z-10"></div>
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-6 sm:w-24 sm:h-8 border-t-2 border-x-2 border-white/40"></div>
-                {/* Bottom Penalty Arc */}
-                <div className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 w-16 h-8 sm:w-20 sm:h-10 border-t-2 border-x-2 border-white/40 rounded-t-full"></div>
+                    {isDropdownOpen && (
+                      <>
+                        {/* Overlay invisible para cerrar el menú al hacer clic fuera */}
+                        <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
+                        
+                        <div className="absolute left-0 mt-1.5 w-48 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-1.5 max-h-56 overflow-y-auto scrollbar-none animate-in fade-in slide-in-from-top-2 duration-150">
+                          {Array.from({ length: activeMatchday }, (_, i) => i + 1).map((md) => {
+                            const isCurrent = md === selectedMatchday
+                            const isActive = md === activeMatchday
+                            return (
+                              <button
+                                key={md}
+                                onClick={() => {
+                                  setSelectedMatchday(md)
+                                  setIsDropdownOpen(false)
+                                }}
+                                className={`flex items-center justify-between w-full text-left px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ${
+                                  isCurrent
+                                    ? 'bg-emerald-50 text-emerald-800'
+                                    : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                                }`}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                                  Jornada {md} {isActive ? '(Activa)' : ''}
+                                </span>
+                                {isCurrent && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs font-extrabold text-slate-800">Cargando...</span>
+                )}
               </div>
-
-              {/* Player rows (top-down: Delanteros -> Mediocampistas -> Defensas -> Porteros) */}
-              <div 
-                className={`relative z-10 flex flex-col justify-between h-full -translate-x-2 sm:-translate-x-3 md:-translate-x-4 lg:-translate-x-5 ${
-                  userDivision === 1 
-                    ? 'pt-[23%] pb-[23%] px-0 scale-[0.85] origin-bottom sm:pt-[25%] sm:pb-[20%] sm:scale-[0.83] sm:origin-center' 
-                    : 'px-6 pt-24 pb-12 sm:px-2 sm:pt-20 sm:pb-4 md:px-0 md:pt-24 md:pb-6 lg:pt-28 lg:pb-8'
-                }`}
-                style={userDivision === 1 ? { filter: 'drop-shadow(0 25px 20px rgba(0,0,0,0.6))' } : {}}
-              >
-                {/* Delanteros */}
-                <div className="flex flex-col items-center gap-2 w-full sm:translate-y-8">
-                  {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD')).map((subRow, rowIdx, rowsArr) => {
-                    const isSplit = rowsArr.length > 1
-                    return (
-                      <div 
-                        key={rowIdx} 
-                        className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, true, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[15%]' : ''}`}
-                      >
-                        {subRow.map((player, idx) => (
-                          <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
-                            <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  })}
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
-                    <div className="text-[10px] text-white/30 italic">Sin Delanteros</div>
-                  )}
-                </div>
-
-                {/* Mediocampistas */}
-                <div className="flex flex-col items-center gap-2 w-full">
-                  {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID')).map((subRow, rowIdx, rowsArr) => {
-                    const isSplit = rowsArr.length > 1
-                    return (
-                      <div 
-                        key={rowIdx} 
-                        className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''}`}
-                      >
-                        {subRow.map((player, idx) => (
-                          <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
-                            <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  })}
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
-                    <div className="text-[10px] text-white/30 italic">Sin Centrocampistas</div>
-                  )}
-                </div>
-
-                {/* Defensas */}
-                <div className="flex flex-col items-center gap-2 w-full">
-                  {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF')).map((subRow, rowIdx, rowsArr) => {
-                    const isSplit = rowsArr.length > 1
-                    return (
-                      <div 
-                        key={rowIdx} 
-                        className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-0 -translate-y-4 sm:-translate-y-6' : ''}`}
-                      >
-                        {subRow.map((player, idx) => (
-                          <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
-                            <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  })}
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
-                    <div className="text-[10px] text-white/30 italic">Sin Defensas</div>
-                  )}
-                </div>
-
-                {/* Portero */}
-                <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? '-translate-y-4 sm:-translate-y-6' : ''}`}>
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
-                    <PitchPlayerCard key={player._uniqueKey} player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
-                  ))}
-                  {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
-                    <div className="text-[10px] text-white/30 italic">Sin Portero</div>
-                  )}
-                </div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                <span>{selectedPlayersData.length}/11 jugadores</span>
               </div>
             </div>
 
-            {/* Estadísticas del equipo (Columna 2 en PC, debajo en móvil) */}
-          <div className="w-full lg:w-64 shrink-0 px-3 sm:px-0">
-            <Card className="!bg-emerald-50 border-emerald-200">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Trophy className="w-4 h-4 text-emerald-600" />
-                    <h3 className="text-sm font-bold text-emerald-900">Estadísticas de tu Equipo</h3>
+            {isUnlockWindowOpen ? (
+              <div className="flex justify-center w-full">
+                {/* Pitch */}
+                <div className={`relative w-full max-w-full ${userDivision === 1 ? 'sm:max-w-lg' : 'sm:max-w-md'} mx-auto border-y-2 sm:border-2 border-white rounded-none sm:rounded-xl overflow-hidden p-2 sm:p-3 select-none flex flex-col justify-between shadow-2xl aspect-[2/3]`} style={{
+                  backgroundImage: userDivision === 1 ? 'url(/pitches/pitch_div1.png)' : userDivision === 2 ? 'url(/pitches/pitch_div2.png)' : userDivision === 3 ? 'url(/pitches/pitch_div3_large.png)' : 'repeating-linear-gradient(0deg, transparent, transparent 10%, rgba(0,0,0,0.05) 10%, rgba(0,0,0,0.05) 20%)',
+                  backgroundSize: userDivision === 1 || userDivision === 2 || userDivision === 3 ? '100% 100%' : 'auto',
+                  backgroundColor: userDivision === 1 ? 'transparent' : userDivision === 2 ? '#dfd6a7' : userDivision === 3 ? '#8B5A2B' : '#43a047',
+                  backgroundBlendMode: userDivision === 2 ? 'multiply' : 'normal',
+                }}>
+                  {/* Soccer field markings */}
+                  <div className={`absolute inset-0 border-2 border-white/40 m-4 pointer-events-none rounded-sm ${userDivision === 1 || userDivision === 2 || userDivision === 3 ? 'hidden' : ''}`}>
+                    {/* Center Line */}
+                    <div className="absolute top-1/2 left-0 right-0 h-[2px] bg-white/40 -translate-y-1/2"></div>
+                    {/* Center Circle */}
+                    <div className="absolute top-1/2 left-1/2 w-24 h-24 sm:w-32 sm:h-32 border-2 border-white/40 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                    {/* Center dot */}
+                    <div className="absolute top-1/2 left-1/2 w-2 h-2 bg-white/60 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                    
+                    {/* Top Penalty Area */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-44 h-16 sm:w-56 sm:h-20 border-b-2 border-x-2 border-white/40 z-10"></div>
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-6 sm:w-24 sm:h-8 border-b-2 border-x-2 border-white/40"></div>
+                    {/* Top Penalty Arc */}
+                    <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 w-16 h-8 sm:w-20 sm:h-10 border-b-2 border-x-2 border-white/40 rounded-b-full"></div>
+                    
+                    {/* Bottom Penalty Area */}
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-44 h-16 sm:w-56 sm:h-20 border-t-2 border-x-2 border-white/40 z-10"></div>
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-6 sm:w-24 sm:h-8 border-t-2 border-x-2 border-white/40"></div>
+                    {/* Bottom Penalty Arc */}
+                    <div className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 w-16 h-8 sm:w-20 sm:h-10 border-t-2 border-x-2 border-white/40 rounded-t-full"></div>
                   </div>
-                  <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
-                    <div className="bg-white rounded-lg p-3 border border-emerald-100">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Users className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-xs text-slate-500 font-medium">Sistema</span>
-                      </div>
-                      <p className="text-lg font-bold text-slate-900">{teamStats.formacion}</p>
-                    </div>
-                    <div className="bg-white rounded-lg p-3 border border-emerald-100">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-xs text-slate-500 font-medium">Valor Equipo</span>
-                      </div>
-                      <p className="text-lg font-bold text-slate-900">{teamStats.precioTotal > 0 ? `${teamStats.precioTotal}M` : '-'}</p>
-                    </div>
-                    <div className="bg-white rounded-lg p-3 border border-emerald-100">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Trophy className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-xs text-slate-500 font-medium">Puntos Totales</span>
-                      </div>
-                      <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.puntosTotales * 10) / 10}</p>
-                    </div>
-                    <div className="bg-white rounded-lg p-3 border border-emerald-100">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-xs text-slate-500 font-medium">Media por Jugador</span>
-                      </div>
-                      <p className="text-lg font-bold text-emerald-600">{Math.round(teamStats.mediaPuntos * 10) / 10}</p>
-                    </div>
 
-                    {/* Jugadores por Equipo */}
-                    <div className="col-span-2 lg:col-span-1 bg-white rounded-lg p-3 border border-emerald-100">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Users className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-xs text-slate-500 font-medium">Jugadores por Equipo</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(() => {
-                          const byTeam = new Map<string, { name: string; logo_url?: string; count: number }>()
-                          selectedPlayersData.forEach(p => {
-                            if (!p.team_id) return
-                            const entry = byTeam.get(p.team_id)
-                            if (entry) {
-                              entry.count++
-                            } else {
-                              byTeam.set(p.team_id, {
-                                name: p.team?.name || '',
-                                logo_url: p.team?.logo_url,
-                                count: 1,
-                              })
-                            }
-                          })
-                          return Array.from(byTeam.entries())
-                            .sort((a, b) => b[1].count - a[1].count)
-                            .map(([teamId, info]) => {
-                              const overLimit = info.count > config.max_players_per_team
-                              return (
-                                <div
-                                  key={teamId}
-                                  title={info.name}
-                                  className={`flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-semibold transition-colors ${
-                                    overLimit
-                                      ? 'bg-red-50 border-red-300 text-red-700'
-                                      : 'bg-slate-50 border-slate-200 text-slate-700'
-                                  }`}
-                                >
-                                  {info.logo_url ? (
-                                    <img src={info.logo_url} alt={info.name} className="w-4 h-4 object-contain shrink-0" />
-                                  ) : (
-                                    <div className="w-4 h-4 rounded-full bg-slate-200 shrink-0" />
-                                  )}
-                                  <span className={`tabular-nums font-bold ${overLimit ? 'text-red-600' : 'text-slate-800'}`}>
-                                    {info.count}
-                                  </span>
-                                </div>
-                              )
-                            })
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Tus Rankings (Columna 3 en PC, debajo en móvil) */}
-            <div className="w-full lg:w-64 shrink-0 px-3 sm:px-0">
-              <Card className="!bg-indigo-50 border-indigo-200">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Trophy className="w-4 h-4 text-indigo-600" />
-                    <h3 className="text-sm font-bold text-indigo-900">Tus Rankings</h3>
-                  </div>
-                  {loadingRanks ? (
-                    <div className="text-center text-xs text-indigo-500 py-4">Cargando rankings...</div>
-                  ) : userRanks ? (
-                    <div className="space-y-2">
-                      <div 
-                        className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition-colors"
-                        onClick={() => setSelectedRanking('avg3')}
-                      >
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase">Promedio (Últ. 3)</p>
-                          <p className="text-xs font-semibold text-slate-800">{Math.round(userRanks.avg3.value * 10) / 10} pts</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-black text-indigo-600">#{userRanks.avg3.position}</p>
-                        </div>
-                      </div>
-                      <div 
-                        className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition-colors"
-                        onClick={() => setSelectedRanking('impact')}
-                      >
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase">Impacto Cambios</p>
-                          <p className="text-xs font-semibold text-slate-800">{userRanks.impact.value > 0 ? '+' : ''}{Math.round(userRanks.impact.value * 10) / 10} pts</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-black text-indigo-600">#{userRanks.impact.position}</p>
-                        </div>
-                      </div>
-                      <div 
-                        className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition-colors"
-                        onClick={() => setSelectedRanking('changes')}
-                      >
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase">Cambios Totales</p>
-                          <p className="text-xs font-semibold text-slate-800">{userRanks.changes.value}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-black text-indigo-600">#{userRanks.changes.position}</p>
-                        </div>
-                      </div>
-                      <div 
-                        className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition-colors"
-                        onClick={() => setSelectedRanking('kamikaze')}
-                      >
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase">Premio Kamikaze</p>
-                          <p className="text-xs font-semibold text-slate-800">{formatKamikazeTime(userRanks.kamikaze.value)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-black text-indigo-600">#{userRanks.kamikaze.position}</p>
-                        </div>
-                      </div>
-                      <div 
-                        className="bg-white rounded-lg p-2 border border-indigo-100 flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition-colors"
-                        onClick={() => setSelectedRanking('appOpens')}
-                      >
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase">Adictos a la App</p>
-                          <p className="text-xs font-semibold text-slate-800">{userRanks.appOpens.value} accesos</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-black text-indigo-600">#{userRanks.appOpens.position}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center text-xs text-indigo-500 py-4">Sin datos</div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-          ) : (
-            <div 
-              className="relative grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-4 sm:gap-6 lg:gap-8 p-6 sm:p-8 md:p-10 rounded-3xl shadow-[inset_0_10px_30px_rgba(0,0,0,0.6)] border-[4px] border-[#064e3b]" 
-              style={{
-                backgroundImage: 'repeating-linear-gradient(0deg, #15803d, #15803d 40px, #14532d 40px, #14532d 80px)',
-              }}
-            >
-              <div className="absolute inset-0 rounded-3xl pointer-events-none shadow-[inset_0_0_60px_rgba(0,0,0,0.7)]" />
-              {selectedPlayersData.map((player, idx) => {
-                const isChanged = !unchangedKeys.has(player._uniqueKey)
-                const isLockedPlayer = isTeamLocked(player.team_id)
-                const replacedPlayer = isChanged ? replacedPlayerByUniqueKey.get(player._uniqueKey) : undefined
-                const displayName = formatPlayerName(player.short_name || player.first_name || '')
-                return (
-                  <div
-                    key={player._uniqueKey}
-                    onClick={() => openPlayerSelector(player.id, player._originalIndex)}
-                    className={`@container relative z-10 w-full aspect-[5/7] transition-all duration-300 group ${
-                      isUnlockWindowOpen || isLockedPlayer
-                        ? 'cursor-not-allowed opacity-70'
-                        : 'cursor-pointer hover:scale-105 hover:-translate-y-2 hover:z-50'
+                  {/* Player rows (top-down: Delanteros -> Mediocampistas -> Defensas -> Porteros) */}
+                  <div 
+                    className={`relative z-10 flex flex-col justify-between h-full -translate-x-2 sm:-translate-x-3 md:-translate-x-4 lg:-translate-x-5 ${
+                      userDivision === 1 
+                        ? 'pt-[23%] pb-[23%] px-0 scale-[0.85] origin-bottom sm:pt-[25%] sm:pb-[20%] sm:scale-[0.83] sm:origin-center' 
+                        : 'px-6 pt-24 pb-12 sm:px-2 sm:pt-20 sm:pb-4 md:px-0 md:pt-24 md:pb-6 lg:pt-28 lg:pb-8'
                     }`}
-                    style={{
-                      filter: 'drop-shadow(0 25px 25px rgba(0,0,0,0.9)) drop-shadow(0 10px 10px rgba(0,0,0,0.7))'
-                    }}
+                    style={userDivision === 1 ? { filter: 'drop-shadow(0 25px 20px rgba(0,0,0,0.6))' } : {}}
                   >
-                    {/* === CONTENIDO INTERNO DE LA TARJETA (Recortado) === */}
-                    <div className={`absolute inset-0 overflow-hidden rounded-xl border ${
-                      isUnlockWindowOpen
-                        ? 'bg-slate-900 border-slate-800'
-                        : isLockedPlayer
-                          ? 'bg-slate-900 border-red-900'
-                          : isChanged
-                            ? 'bg-gradient-to-br from-emerald-900/90 to-slate-900 border-emerald-500/50'
-                            : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 group-hover:border-amber-500/50'
-                    }`}>
-                      {/* Fondo de escudo del equipo (Watermark) */}
-                      {player.team?.logo_url && (
-                        <img 
-                          src={player.team.logo_url} 
-                          alt="Fondo" 
-                          className="absolute left-1/2 -translate-x-1/2 top-[-25%] w-[110%] h-[110%] object-contain opacity-20 pointer-events-none filter blur-[2px]"
-                        />
+                    {/* Delanteros */}
+                    <div className="flex flex-col items-center gap-2 w-full sm:translate-y-8">
+                      {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD')).map((subRow, rowIdx, rowsArr) => {
+                        const isSplit = rowsArr.length > 1
+                        return (
+                          <div 
+                            key={rowIdx} 
+                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, true, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[15%]' : ''}`}
+                          >
+                            {subRow.map((player, idx) => (
+                              <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
+                                <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })}
+                      {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
+                        <div className="text-[10px] text-white/30 italic">Sin Delanteros</div>
                       )}
+                    </div>
 
-                      {/* Gradiente y fondo sólido inferior para legibilidad del texto */}
-                      <div className="absolute inset-x-0 bottom-0 h-[30%] bg-black z-10 pointer-events-none" />
-                      <div className="absolute inset-x-0 bottom-[30%] h-[30%] bg-gradient-to-t from-black via-black/80 to-transparent z-10 pointer-events-none" />
+                    {/* Mediocampistas */}
+                    <div className="flex flex-col items-center gap-2 w-full">
+                      {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID')).map((subRow, rowIdx, rowsArr) => {
+                        const isSplit = rowsArr.length > 1
+                        return (
+                          <div 
+                            key={rowIdx} 
+                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''}`}
+                          >
+                            {subRow.map((player, idx) => (
+                              <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
+                                <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })}
+                      {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
+                        <div className="text-[10px] text-white/30 italic">Sin Centrocampistas</div>
+                      )}
+                    </div>
 
-                      {/* Fila Superior Izquierda (Stats estilo FUT) */}
-                      <div className="absolute top-[3cqw] left-[3cqw] flex flex-row items-center gap-[1.5cqw] z-20 drop-shadow-md">
-                        {/* Índice */}
-                        <div className="bg-black/60 rounded flex items-center justify-center px-[2cqw] py-[1cqw]">
-                          <span className="text-[10cqw] font-black text-white leading-none">
-                            {idx + 1}
-                          </span>
+                    {/* Defensas */}
+                    <div className="flex flex-col items-center gap-2 w-full">
+                      {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF')).map((subRow, rowIdx, rowsArr) => {
+                        const isSplit = rowsArr.length > 1
+                        return (
+                          <div 
+                            key={rowIdx} 
+                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-0 -translate-y-4 sm:-translate-y-6' : ''}`}
+                          >
+                            {subRow.map((player, idx) => (
+                              <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
+                                <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })}
+                      {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
+                        <div className="text-[10px] text-white/30 italic">Sin Defensas</div>
+                      )}
+                    </div>
+
+                    {/* Portero */}
+                    <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? '-translate-y-4 sm:-translate-y-6' : ''}`}>
+                      {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
+                        <PitchPlayerCard key={player._uniqueKey} player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
+                      ))}
+                      {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
+                        <div className="text-[10px] text-white/30 italic">Sin Portero</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div 
+                className="relative grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-4 sm:gap-6 lg:gap-8 p-6 sm:p-8 md:p-10 rounded-3xl shadow-[inset_0_10px_30px_rgba(0,0,0,0.6)] border-[4px] border-[#064e3b]" 
+                style={{
+                  backgroundImage: 'repeating-linear-gradient(0deg, #15803d, #15803d 40px, #14532d 40px, #14532d 80px)',
+                }}
+              >
+                <div className="absolute inset-0 rounded-3xl pointer-events-none shadow-[inset_0_0_60px_rgba(0,0,0,0.7)]" />
+                {selectedPlayersData.map((player, idx) => {
+                  const isChanged = !unchangedKeys.has(player._uniqueKey)
+                  const isLockedPlayer = isTeamLocked(player.team_id)
+                  const replacedPlayer = isChanged ? replacedPlayerByUniqueKey.get(player._uniqueKey) : undefined
+                  const displayName = formatPlayerName(player.short_name || player.first_name || '')
+                  return (
+                    <div
+                      key={player._uniqueKey}
+                      onClick={() => openPlayerSelector(player.id, player._originalIndex)}
+                      className={`@container relative z-10 w-full aspect-[5/7] transition-all duration-300 group ${
+                        isUnlockWindowOpen || isLockedPlayer
+                          ? 'cursor-not-allowed opacity-70'
+                          : 'cursor-pointer hover:scale-105 hover:-translate-y-2 hover:z-50'
+                      }`}
+                      style={{
+                        filter: 'drop-shadow(0 25px 25px rgba(0,0,0,0.9)) drop-shadow(0 10px 10px rgba(0,0,0,0.7))'
+                      }}
+                    >
+                      <div className={`absolute inset-0 overflow-hidden rounded-xl border ${
+                        isUnlockWindowOpen
+                          ? 'bg-slate-900 border-slate-800'
+                          : isLockedPlayer
+                            ? 'bg-slate-900 border-red-900'
+                            : isChanged
+                              ? 'bg-gradient-to-br from-emerald-900/90 to-slate-900 border-emerald-500/50'
+                              : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 group-hover:border-amber-500/50'
+                      }`}>
+                        {player.team?.logo_url && (
+                          <img 
+                            src={player.team.logo_url} 
+                            alt="Fondo" 
+                            className="absolute left-1/2 -translate-x-1/2 top-[-25%] w-[110%] h-[110%] object-contain opacity-20 pointer-events-none filter blur-[2px]"
+                          />
+                        )}
+
+                        <div className="absolute inset-x-0 bottom-0 h-[30%] bg-black z-10 pointer-events-none" />
+                        <div className="absolute inset-x-0 bottom-[30%] h-[30%] bg-gradient-to-t from-black via-black/80 to-transparent z-10 pointer-events-none" />
+
+                        <div className="absolute top-[3cqw] left-[3cqw] flex flex-row items-center gap-[1.5cqw] z-20 drop-shadow-md">
+                          <div className="bg-black/60 rounded flex items-center justify-center px-[2cqw] py-[1cqw]">
+                            <span className="text-[10cqw] font-black text-white leading-none">
+                              {idx + 1}
+                            </span>
+                          </div>
+                          <div className={`text-[8cqw] px-[2cqw] py-[1cqw] font-bold text-white rounded-sm drop-shadow-md ${getPositionColor(player.position)}`}>
+                            {getPositionLabel(player.position)}
+                          </div>
                         </div>
-                        {/* Posición */}
-                        <div className={`text-[8cqw] px-[2cqw] py-[1cqw] font-bold text-white rounded-sm drop-shadow-md ${getPositionColor(player.position)}`}>
-                          {getPositionLabel(player.position)}
+
+                        <div className="absolute inset-x-0 bottom-[20%] top-[10%] px-1 flex justify-center items-end z-10 pointer-events-none">
+                          {player.photo ? (
+                            <img
+                              src={player.photo}
+                              alt={player.short_name || ''}
+                              className="w-full h-full object-contain object-bottom drop-shadow-2xl"
+                            />
+                          ) : (
+                            <div className="h-[50%] aspect-square rounded-full bg-slate-800/80 text-slate-300 flex items-center justify-center text-[25cqw] font-bold shadow-2xl border-2 border-slate-600">
+                              {player.shirt_number || '?'}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="absolute inset-x-0 bottom-[2cqw] flex flex-col items-center z-20 px-[2cqw] w-full">
+                          <div className="w-full bg-black/95 rounded-lg py-[2cqw] px-[2cqw] flex flex-col items-center shadow-2xl">
+                            <p className={`font-black text-amber-50 uppercase text-center w-full leading-tight truncate tracking-tight drop-shadow-lg ${
+                                displayName.length > 14
+                                  ? 'text-[9cqw]'
+                                  : displayName.length > 10
+                                  ? 'text-[11cqw]'
+                                  : 'text-[13cqw]'
+                              }`}
+                              style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
+                            >
+                              {displayName}
+                            </p>
+                            
+                            <div className="w-11/12 h-[1px] bg-amber-500/40 my-[1cqw]" />
+
+                            <div className="w-full flex justify-between items-center px-[1cqw]">
+                              <div className="flex-1 flex justify-start">
+                                <span className="font-black text-emerald-400 text-[14cqw] drop-shadow-md">
+                                  {player.precio ? `${player.precio}M` : '-'}
+                                </span>
+                              </div>
+                              <div className="flex-1 flex justify-end">
+                                {player.team?.logo_url ? (
+                                  <img
+                                    src={player.team.logo_url}
+                                    alt={player.team?.name || ''}
+                                    className="w-[14cqw] h-[14cqw] object-contain drop-shadow-lg"
+                                  />
+                                ) : <div className="w-[14cqw] h-[14cqw]" />}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Foto del jugador */}
-                      <div className="absolute inset-x-0 bottom-[20%] top-[10%] px-1 flex justify-center items-end z-10 pointer-events-none">
-                        {player.photo ? (
-                          <img
-                            src={player.photo}
-                            alt={player.short_name || ''}
-                            className="w-full h-full object-contain object-bottom drop-shadow-2xl"
-                          />
-                        ) : (
-                          <div className="h-[50%] aspect-square rounded-full bg-slate-800/80 text-slate-300 flex items-center justify-center text-[25cqw] font-bold shadow-2xl border-2 border-slate-600">
-                            {player.shirt_number || '?'}
+                      <div className="absolute -top-[4cqw] -right-[4cqw] z-40 flex items-center gap-[1cqw]">
+                        {isLockedPlayer && (
+                          <div className="w-[12cqw] h-[12cqw] bg-red-500 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20" title="Jugador bloqueado: partido fuera de jornada">
+                            <Lock className="w-[6cqw] h-[6cqw] text-white" />
                           </div>
+                        )}
+                        {isChanged && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setCancelConfirmUniqueKey(player._uniqueKey) }}
+                            className="w-[12cqw] h-[12cqw] bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20 transition-colors"
+                            title="Cancelar cambio"
+                          >
+                            <X className="w-[6cqw] h-[6cqw] text-white" />
+                          </button>
                         )}
                       </div>
 
-                      {/* Nombre, Valor, Dorsal, Escudo (Zona inferior) */}
-                      <div className="absolute inset-x-0 bottom-[2cqw] flex flex-col items-center z-20 px-[2cqw] w-full">
-                        <div className="w-full bg-black/95 rounded-lg py-[2cqw] px-[2cqw] flex flex-col items-center shadow-2xl">
-                          <p className={`font-black text-amber-50 uppercase text-center w-full leading-tight truncate tracking-tight drop-shadow-lg ${
-                              displayName.length > 14
-                                ? 'text-[9cqw]'
-                                : displayName.length > 10
-                                ? 'text-[11cqw]'
-                                : 'text-[13cqw]'
-                            }`}
-                            style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
-                          >
-                            {displayName}
-                          </p>
-                          
-                          <div className="w-11/12 h-[1px] bg-amber-500/40 my-[1cqw]" />
-
-                          <div className="w-full flex justify-between items-center px-[1cqw]">
-                            {/* Valor */}
-                            <div className="flex-1 flex justify-start">
-                              <span className="font-black text-emerald-400 text-[14cqw] drop-shadow-md">
-                                {player.precio ? `${player.precio}M` : '-'}
-                              </span>
-                            </div>
-                            {/* Escudo */}
-                            <div className="flex-1 flex justify-end">
-                              {player.team?.logo_url ? (
-                                <img
-                                  src={player.team.logo_url}
-                                  alt={player.team?.name || ''}
-                                  className="w-[14cqw] h-[14cqw] object-contain drop-shadow-lg"
-                                />
-                              ) : <div className="w-[14cqw] h-[14cqw]" />}
-                            </div>
+                      {replacedPlayer && (
+                        <div className="absolute z-40 flex flex-col items-center pointer-events-none drop-shadow-xl 
+                          -top-5 sm:-top-[8cqw] left-1/2 -translate-x-1/2 
+                          md:top-[9cqw] md:left-auto md:-right-[4cqw] md:translate-x-0 md:items-center
+                        ">
+                          <div className="relative">
+                            {replacedPlayer.photo ? (
+                              <img
+                                src={replacedPlayer.photo}
+                                className="w-5 h-5 sm:w-7 sm:h-7 md:w-10 md:h-10 rounded-full object-cover border-[1.5px] border-red-400 shadow-xl bg-slate-200 grayscale-[10%]"
+                              />
+                            ) : (
+                              <div className="w-5 h-5 sm:w-7 sm:h-7 md:w-10 md:h-10 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[8px] sm:text-[10px] font-bold border-[1.5px] border-red-400 shadow-xl">
+                                {replacedPlayer.shirt_number || '?'}
+                              </div>
+                            )}
+                            {replacedPlayer.team?.logo_url && (
+                              <img
+                                src={replacedPlayer.team.logo_url}
+                                className="absolute -bottom-1 -left-1 w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 object-contain bg-white rounded-full p-[1px] shadow-sm"
+                              />
+                            )}
+                          </div>
+                          <div className="mt-0.5 md:mt-1 bg-black/95 rounded px-1.5 md:px-1.5 py-0.5 flex flex-col items-center shadow-xl border border-red-500/30">
+                            <p className="font-bold text-red-100 text-[5px] sm:text-[7px] md:text-[7px] leading-tight truncate text-center max-w-[35px] sm:max-w-[45px]">
+                              {replacedPlayer.short_name || replacedPlayer.first_name}
+                            </p>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                    {/* === FIN CONTENIDO INTERNO === */}
-
-                    {/* === CONTROLES FLOTANTES EXTERNOS (Sobresalen de la tarjeta) === */}
-                    <div className="absolute -top-[4cqw] -right-[4cqw] z-40 flex items-center gap-[1cqw]">
-                      {isLockedPlayer && (
-                        <div className="w-[12cqw] h-[12cqw] bg-red-500 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20" title="Jugador bloqueado: partido fuera de jornada">
-                          <Lock className="w-[6cqw] h-[6cqw] text-white" />
-                        </div>
-                      )}
-                      {isChanged && (
-                        <button
-                          onClick={e => { e.stopPropagation(); setCancelConfirmUniqueKey(player._uniqueKey) }}
-                          className="w-[12cqw] h-[12cqw] bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20 transition-colors"
-                          title="Cancelar cambio"
-                        >
-                          <X className="w-[6cqw] h-[6cqw] text-white" />
-                        </button>
                       )}
                     </div>
-
-                    {/* Jugador reemplazado (mini tarjeta) */}
-                    {replacedPlayer && (
-                      <div className="absolute z-40 flex flex-col items-center pointer-events-none drop-shadow-xl 
-                        -top-5 sm:-top-[8cqw] left-1/2 -translate-x-1/2 
-                        md:top-[9cqw] md:left-auto md:-right-[4cqw] md:translate-x-0 md:items-center
-                      ">
-                        <div className="relative">
-                          {replacedPlayer.photo ? (
-                            <img
-                              src={replacedPlayer.photo}
-                              className="w-5 h-5 sm:w-7 sm:h-7 md:w-10 md:h-10 rounded-full object-cover border-[1.5px] border-red-400 shadow-xl bg-slate-200 grayscale-[10%]"
-                            />
-                          ) : (
-                            <div className="w-5 h-5 sm:w-7 sm:h-7 md:w-10 md:h-10 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[8px] sm:text-[10px] font-bold border-[1.5px] border-red-400 shadow-xl">
-                              {replacedPlayer.shirt_number || '?'}
-                            </div>
-                          )}
-                          {replacedPlayer.team?.logo_url && (
-                            <img
-                              src={replacedPlayer.team.logo_url}
-                              className="absolute -bottom-1 -left-1 w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 object-contain bg-white rounded-full p-[1px] shadow-sm"
-                            />
-                          )}
-                        </div>
-                        <div className="mt-0.5 md:mt-1 bg-black/95 rounded px-1.5 md:px-1.5 py-0.5 flex flex-col items-center shadow-xl border border-red-500/30">
-                          <p className="font-bold text-red-100 text-[5px] sm:text-[7px] md:text-[7px] leading-tight truncate text-center max-w-[35px] sm:max-w-[45px]">
-                            {replacedPlayer.short_name || replacedPlayer.first_name}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    {/* === FIN CONTROLES EXTERNOS === */}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Indicador de cambios guardados automáticamente */}
-      {!isUnlockWindowOpen && (
-        <div className={`flex items-center gap-2 justify-between ${isUnlockWindowOpen ? 'opacity-50 pointer-events-none' : ''}`}>
-          <div className="text-xs text-slate-500">
-            Los cambios se guardan automáticamente
-          </div>
-          {actualChangesCount > 0 && (
-            <div className="flex items-center gap-2">
-              {changedCount > 0 && (
-                <button
-                  onClick={undoLastChange}
-                  className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
-                >
-                  <X className="w-4 h-4" />
-                  <span className="hidden sm:inline">Deshacer ({changedCount})</span>
-                </button>
-              )}
-              <span className="text-sm text-emerald-600 font-medium">
-                {actualChangesCount} cambio{actualChangesCount !== 1 ? 's' : ''} {changesLimit !== Infinity ? `/ ${changesLimit}` : ''}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-        </div>
-
-        {/* ================= SANCIONES (ABAJO) ================= */}
-        <div className="w-full grid grid-cols-1 xl:grid-cols-2 gap-4 mt-8 mb-8">
-      {/* Tus Sanciones (Jornada Activa) - Solo visible en jornada activa */}
-      {isUnlockWindowOpen && (
-        <Card className="!bg-red-50 border-red-200 mt-2 shadow-sm">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-2 pb-1.5 border-b border-red-100">
-              <AlertTriangle className="w-4 h-4 text-red-600" />
-              <h3 className="text-sm font-bold text-red-900">Tus Sanciones (Jornada Activa J{activeMatchday})</h3>
-            </div>
-            {allPenalties.filter(p => p.user_id === user?.id && p.matchday === activeMatchday).length === 0 &&
-             liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday)).length === 0 ? (
-              <p className="text-xs text-emerald-800 font-medium bg-emerald-50 border border-emerald-100 p-2 rounded">
-                ¡Estás libre de sanciones en esta jornada!
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {/* Sanciones consolidadas en BD */}
-                {allPenalties
-                  .filter(p => p.user_id === user?.id && p.matchday === activeMatchday)
-                  .map((p) => (
-                    <div key={p.id} className="flex justify-between items-start text-xs bg-red-100 rounded p-2 border border-red-200">
-                      <div>
-                        <span className="font-bold text-red-900 mr-2">J{p.matchday}:</span>
-                        <span className="text-red-955 font-semibold">{p.description}</span>
-                      </div>
-                      <span className={`font-bold shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : 'text-amber-600 text-[10px] uppercase'}`}>
-                        {p.points > 0 ? `-${p.points} pts` : 'Pendiente'}
-                      </span>
-                    </div>
-                  ))}
-
-                {/* Advertencias dinámicas activas (infracciones actuales del usuario) */}
-                {liveInfractions
-                  .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday))
-                  .map((inf) => (
-                    <div key={inf.id} className="flex justify-between items-start text-xs bg-amber-100 rounded p-2 border border-amber-200">
-                      <div>
-                        <span className="font-bold text-amber-900 mr-2">J{activeMatchday}:</span>
-                        <span className="text-amber-955 font-semibold">{inf.description}</span>
-                      </div>
-                      <span className="font-bold text-amber-600 shrink-0 ml-2 text-[10px] uppercase">Pendiente</span>
-                    </div>
-                  ))}
+                  )
+                })}
               </div>
             )}
           </CardContent>
         </Card>
+
+        {/* INDICADOR DE CAMBIOS GUARDADOS AUTOMÁTICAMENTE */}
+        {!isUnlockWindowOpen && (
+          <div className="flex items-center gap-2 justify-between mt-2 px-3 sm:px-0 animate-in fade-in duration-200 bg-slate-50 border border-slate-100 rounded-xl p-3 shadow-sm">
+            <div className="text-xs text-slate-500 font-medium">
+              Los cambios se guardan automáticamente
+            </div>
+            {actualChangesCount > 0 && (
+              <div className="flex items-center gap-2">
+                {changedCount > 0 && (
+                  <button
+                    onClick={undoLastChange}
+                    className="flex items-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+                  >
+                    <X className="w-4 h-4" />
+                    <span className="hidden sm:inline">Deshacer ({changedCount})</span>
+                  </button>
+                )}
+                <span className="text-sm text-emerald-600 font-bold">
+                  {actualChangesCount} cambio{actualChangesCount !== 1 ? 's' : ''} {changesLimit !== Infinity ? `/ ${changesLimit}` : ''}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Columna Derecha: Rendimiento y Sanciones */}
+      <div className="w-full lg:flex-1 lg:self-stretch flex flex-col">
+        {/* ================= PESTAÑAS SUB-NAVEGACIÓN (RESPONSIVE GRID) ================= */}
+        <div className="grid grid-cols-2 gap-1.5 sm:gap-3 bg-slate-100/90 p-1.5 rounded-xl shadow-inner border border-slate-200/50 mb-6 shrink-0">
+          <button
+            onClick={() => setActiveTab('stats')}
+            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeTab === 'stats'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-650 hover:bg-white/55 hover:text-slate-900'
+            }`}
+          >
+            <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Rendimiento</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('penalties')}
+            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeTab === 'penalties'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-650 hover:bg-white/55 hover:text-slate-900'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Sanciones</span>
+          </button>
+        </div>
+
+        {/* Contenedor de contenido de pestañas con scroll independiente en ordenador */}
+        <div className="lg:flex-1 lg:max-h-[640px] xl:max-h-[710px] 2xl:max-h-[720px] lg:overflow-y-auto pr-1 scrollbar-none pb-2">
+
+      {/* VISTA 2: RENDIMIENTO Y RANKINGS */}
+      {activeTab === 'stats' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Tarjetas de Estadísticas Principales */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <div className="bg-white border border-slate-100 rounded-2xl p-3 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-4 hover:shadow-md transition-shadow">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <Users className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] sm:text-xs text-slate-500 font-semibold uppercase tracking-wider truncate">Formación</p>
+                <p className="text-base sm:text-xl font-black text-slate-900 mt-0.5 truncate">{teamStats.formacion}</p>
+              </div>
+            </div>
+            
+            <div className="bg-white border border-slate-100 rounded-2xl p-3 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-4 hover:shadow-md transition-shadow">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] sm:text-xs text-slate-500 font-semibold uppercase tracking-wider truncate">Valor Plantilla</p>
+                <p className="text-base sm:text-xl font-black text-slate-900 mt-0.5 truncate">{teamStats.precioTotal > 0 ? `${teamStats.precioTotal}M` : '-'}</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-100 rounded-2xl p-3 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-4 hover:shadow-md transition-shadow">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] sm:text-xs text-slate-500 font-semibold uppercase tracking-wider truncate">Puntos Totales</p>
+                <p className="text-base sm:text-xl font-black text-slate-900 mt-0.5 truncate">{Math.round(teamStats.puntosTotales * 10) / 10}</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-100 rounded-2xl p-3 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-4 hover:shadow-md transition-shadow">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] sm:text-xs text-slate-500 font-semibold uppercase tracking-wider truncate">Media por Jugador</p>
+                <p className="text-base sm:text-xl font-black text-slate-900 mt-0.5 truncate">{Math.round(teamStats.mediaPuntos * 10) / 10} pts</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Rankings de la Liga */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <Trophy className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-slate-900 text-base">Tus Rankings en la Liga</h3>
+              </div>
+
+              {loadingRanks ? (
+                <div className="text-center text-sm text-slate-400 py-8">Cargando rankings...</div>
+              ) : userRanks ? (
+                <div className="flex flex-col gap-2">
+                  <div 
+                    className="bg-slate-50 hover:bg-emerald-50/50 rounded-xl p-3 border border-slate-100 flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] gap-3"
+                    onClick={() => setSelectedRanking('avg3')}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-800">Promedio (Últ. 3)</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{Math.round(userRanks.avg3.value * 10) / 10} pts</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="inline-flex items-center justify-center bg-emerald-100 text-emerald-800 text-sm font-extrabold px-2.5 py-1 rounded-lg min-w-[42px]">
+                        #{userRanks.avg3.position}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div 
+                    className="bg-slate-50 hover:bg-emerald-50/50 rounded-xl p-3 border border-slate-100 flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] gap-3"
+                    onClick={() => setSelectedRanking('impact')}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-800">Impacto Cambios</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{userRanks.impact.value > 0 ? '+' : ''}{Math.round(userRanks.impact.value * 10) / 10} pts</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="inline-flex items-center justify-center bg-emerald-100 text-emerald-800 text-sm font-extrabold px-2.5 py-1 rounded-lg min-w-[42px]">
+                        #{userRanks.impact.position}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div 
+                    className="bg-slate-50 hover:bg-emerald-50/50 rounded-xl p-3 border border-slate-100 flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] gap-3"
+                    onClick={() => setSelectedRanking('changes')}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-800">Cambios Totales</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{userRanks.changes.value} cambios</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="inline-flex items-center justify-center bg-emerald-100 text-emerald-800 text-sm font-extrabold px-2.5 py-1 rounded-lg min-w-[42px]">
+                        #{userRanks.changes.position}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div 
+                    className="bg-slate-50 hover:bg-emerald-50/50 rounded-xl p-3 border border-slate-100 flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] gap-3"
+                    onClick={() => setSelectedRanking('kamikaze')}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-800">Premio Kamikaze</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{formatKamikazeTime(userRanks.kamikaze.value)}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="inline-flex items-center justify-center bg-emerald-100 text-emerald-800 text-sm font-extrabold px-2.5 py-1 rounded-lg min-w-[42px]">
+                        #{userRanks.kamikaze.position}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div 
+                    className="bg-slate-50 hover:bg-emerald-50/50 rounded-xl p-3 border border-slate-100 flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] gap-3"
+                    onClick={() => setSelectedRanking('appOpens')}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-800">Adictos a la App</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{userRanks.appOpens.value} accesos</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="inline-flex items-center justify-center bg-emerald-100 text-emerald-800 text-sm font-extrabold px-2.5 py-1 rounded-lg min-w-[42px]">
+                        #{userRanks.appOpens.position}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center text-sm text-slate-400 py-4">Sin datos</div>
+              )}
+            </div>
+
+            {/* Distribución por Equipos */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <Users className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-slate-900 text-base">Distribución por Equipos</h3>
+              </div>
+              <p className="text-xs text-slate-500">
+                Límite actual: <span className="font-bold">{config.max_players_per_team} jugadores</span> por club real de LaLiga en tu plantilla.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {(() => {
+                  const byTeam = new Map<string, { name: string; logo_url?: string; count: number }>()
+                  selectedPlayersData.forEach(p => {
+                    if (!p.team_id) return
+                    const entry = byTeam.get(p.team_id)
+                    if (entry) {
+                      entry.count++
+                    } else {
+                      byTeam.set(p.team_id, {
+                        name: p.team?.name || '',
+                        logo_url: p.team?.logo_url,
+                        count: 1,
+                      })
+                    }
+                  })
+
+                  if (byTeam.size === 0) {
+                    return <p className="text-sm text-slate-400 italic py-2">No tienes jugadores alineados.</p>
+                  }
+
+                  return Array.from(byTeam.entries())
+                    .sort((a, b) => b[1].count - a[1].count)
+                    .map(([teamId, info]) => {
+                      const overLimit = info.count > config.max_players_per_team
+                      return (
+                        <div
+                          key={teamId}
+                          title={info.name}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-sm font-semibold transition-all shadow-sm ${
+                            overLimit
+                              ? 'bg-red-50 border-red-200 text-red-700'
+                              : 'bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {info.logo_url ? (
+                            <img src={info.logo_url} alt={info.name} className="w-5 h-5 object-contain shrink-0" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-slate-200 shrink-0" />
+                          )}
+                          <span className="text-slate-800 font-bold">{info.name}</span>
+                          <span className={`tabular-nums font-black px-1.5 py-0.5 rounded-md text-xs ${overLimit ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-600'}`}>
+                            {info.count}
+                          </span>
+                        </div>
+                      )
+                    })
+                })()}
+              </div>
+            </div>
+          </div>
+
+        </div>
       )}
 
-      {/* Historial de Sanciones (Liga) - Colapsable (Ahora debajo de los jugadores) */}
-      <Card className="!bg-slate-50 border-slate-200 mt-2 shadow-sm">
-        <CardContent className="p-4">
-          <button
-            onClick={() => setShowAllHistory(!showAllHistory)}
-            className="w-full flex items-center justify-between font-bold text-slate-800 hover:text-slate-900 focus:outline-none cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-slate-500" />
-              <span className="text-sm">Historial de Sanciones (Liga)</span>
-            </div>
-            <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${showAllHistory ? 'rotate-180' : ''}`} />
-          </button>
+      {/* VISTA 3: SANCIONES Y MULTAS */}
+      {activeTab === 'penalties' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Tus Sanciones (Jornada Activa) */}
+          <Card className="border border-red-200 bg-red-50/35 rounded-2xl shadow-sm">
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-center gap-2 pb-2.5 border-b border-red-100">
+                <AlertTriangle className="w-5 h-5 text-red-600 animate-pulse" />
+                <h3 className="text-base font-bold text-red-900">Sanciones Activas en J{activeMatchday}</h3>
+              </div>
+              
+              {allPenalties.filter(p => p.user_id === user?.id && p.matchday === activeMatchday).length === 0 &&
+               liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday)).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-6 text-center bg-emerald-50/50 rounded-xl border border-emerald-100 p-4">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center mb-2">
+                    <Check className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <p className="text-sm text-emerald-800 font-bold">¡Buen trabajo!</p>
+                  <p className="text-xs text-emerald-700 mt-0.5">Estás completamente al día y libre de sanciones en esta jornada.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {/* Sanciones consolidadas en BD */}
+                  {allPenalties
+                    .filter(p => p.user_id === user?.id && p.matchday === activeMatchday)
+                    .map((p) => (
+                      <div key={p.id} className="flex justify-between items-center text-sm bg-white rounded-xl p-3 border border-red-100 shadow-sm">
+                        <div className="flex items-center gap-2.5">
+                          <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{p.matchday}</span>
+                          <span className="text-slate-800 font-semibold">{p.description}</span>
+                        </div>
+                        <span className={`font-black text-sm shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : 'text-amber-600 text-xs uppercase'}`}>
+                          {p.points > 0 ? `-${p.points} pts` : 'Pendiente'}
+                        </span>
+                      </div>
+                    ))}
 
-          {showAllHistory && (
-            <div className="mt-3 pt-3 border-t border-slate-200 space-y-3">
-              <p className="text-xs font-bold text-slate-500 uppercase">Tus Sanciones</p>
+                  {/* Advertencias dinámicas activas (infracciones actuales del usuario) */}
+                  {liveInfractions
+                    .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday))
+                    .map((inf) => (
+                      <div key={inf.id} className="flex justify-between items-center text-sm bg-white rounded-xl p-3 border border-amber-200 shadow-sm animate-pulse">
+                        <div className="flex items-center gap-2.5">
+                          <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{activeMatchday}</span>
+                          <span className="text-slate-800 font-semibold">{inf.description}</span>
+                        </div>
+                        <span className="font-bold text-amber-600 shrink-0 ml-2 text-xs uppercase">Pendiente</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Historial de Sanciones (Liga) */}
+          <Card className="border border-slate-100 bg-white rounded-2xl shadow-sm">
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-center gap-2 pb-2.5 border-b border-slate-100">
+                <AlertTriangle className="w-5 h-5 text-slate-500" />
+                <h3 className="text-base font-bold text-slate-900">Historial Completo de Sanciones (Liga)</h3>
+              </div>
+
               {allPenalties.filter(p => p.user_id === user?.id && !(p.matchday === activeMatchday && isUnlockWindowOpen)).length === 0 &&
                liveInfractions.filter(inf => inf.user_id === user?.id && !(inf.matchday === activeMatchday && isUnlockWindowOpen) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday)).length === 0 ? (
-                <p className="text-xs text-slate-500 italic">No tienes sanciones registradas.</p>
+                <p className="text-sm text-slate-500 italic text-center py-6">No tienes sanciones registradas en tu historial.</p>
               ) : (
-                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
                   {/* Sanciones dinámicas activas del usuario */}
                   {liveInfractions
                     .filter(inf => inf.user_id === user?.id && !(inf.matchday === activeMatchday && isUnlockWindowOpen) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday))
                     .map((inf) => (
-                    <div key={inf.id} className="flex justify-between items-start text-xs bg-amber-50 rounded p-2 border border-amber-200 shadow-sm animate-pulse">
-                      <div>
-                        <span className="font-bold text-amber-900 mr-1">[{inf.full_name || 'Tú'}]</span>
-                        <span className="font-semibold text-amber-955 mr-2">J{inf.matchday}:</span>
-                        <span className="text-amber-800 font-medium">{inf.description}</span>
+                    <div key={inf.id} className="flex justify-between items-center text-sm bg-slate-50 rounded-xl p-3 border border-amber-100 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{inf.matchday}</span>
+                        <span className="text-slate-800 font-semibold">{inf.description}</span>
                       </div>
-                      <span className="font-bold text-amber-600 shrink-0 ml-2 text-[10px] uppercase">Pendiente</span>
+                      <span className="font-bold text-amber-600 shrink-0 ml-2 text-xs uppercase">Pendiente</span>
                     </div>
                   ))}
 
@@ -2386,13 +2452,12 @@ export default function DashboardPage() {
                       const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
                       const userName = profileObj?.full_name || 'Tú'
                       return (
-                        <div key={p.id} className="flex justify-between items-start text-xs bg-white rounded p-2 border border-slate-100 shadow-sm">
-                          <div>
-                            <span className="font-bold text-slate-800 mr-1">[{userName}]</span>
-                            <span className="font-semibold text-red-955 mr-2">J{p.matchday}:</span>
-                            <span className="text-slate-700 font-medium">{p.description}</span>
+                        <div key={p.id} className="flex justify-between items-center text-sm bg-white rounded-xl p-3 border border-slate-100 shadow-sm hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{p.matchday}</span>
+                            <span className="text-slate-800 font-semibold">{p.description}</span>
                           </div>
-                          <span className={`font-bold shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : p.matchday === activeMatchday ? 'text-amber-600 text-[10px] uppercase' : 'text-slate-500'}`}>
+                          <span className={`font-black text-sm shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : p.matchday === activeMatchday ? 'text-amber-600 text-xs uppercase' : 'text-slate-400'}`}>
                             {p.points > 0 ? `-${p.points} pts` : p.matchday === activeMatchday ? 'Pendiente' : '0 pts'}
                           </span>
                         </div>
@@ -2400,13 +2465,99 @@ export default function DashboardPage() {
                     })}
                 </div>
               )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
+            </CardContent>
+          </Card>
         </div>
-      {/* ================= FIN SANCIONES ================= */}
+      )}
+
+      </div>
+      </div>
+      </div>
+
+      {/* Gráfica de evolución - siempre visible a todo lo ancho */}
+      {(historicalPoints.length > 0 || typeof activeMatchday === 'number') && (
+        <Card className="w-full mt-6 border border-slate-100 rounded-2xl shadow-sm overflow-hidden animate-in fade-in duration-300">
+          <CardContent className="p-5">
+            <h3 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+              Evolución de Puntos
+            </h3>
+            <div className="w-full h-[250px] sm:h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={[
+                    ...historicalPoints,
+                    (typeof selectedMatchday === 'number' && teamStats?.puntosTotales !== undefined) 
+                      ? { matchday: selectedMatchday, name: `J${selectedMatchday}`, points: teamStats.puntosTotales, hasPenalty: sanctionResult?.zeroedPlayers?.size > 0 || liveInfractions.some(i => i.user_id === user?.id) }
+                      : null
+                  ].filter(Boolean)}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fontSize: 12, fill: '#64748b' }} 
+                    axisLine={false} 
+                    tickLine={false} 
+                    dy={10}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 12, fill: '#64748b' }} 
+                    axisLine={false} 
+                    tickLine={false} 
+                  />
+                  <RechartsTooltip 
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value: any, name: any) => {
+                      if (name === 'avgPoints') return [`${value} pts`, 'Media Liga']
+                      return [`${value} pts`, 'Mis Puntos']
+                    }}
+                    labelStyle={{ color: '#64748b', fontWeight: 'bold', marginBottom: '4px' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="avgPoints" 
+                    stroke="#94a3b8" 
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    dot={false}
+                    activeDot={{ r: 4, stroke: '#94a3b8', strokeWidth: 2, fill: 'white' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="points" 
+                    stroke="#10b981" 
+                    strokeWidth={3}
+                    dot={(props: any) => {
+                      const { cx, cy, payload } = props;
+                      if (!cx || !cy) return null;
+                      if (payload.hasPenalty) {
+                        return <circle key={`dot-${payload.name}`} cx={cx} cy={cy} r={6} stroke="#ef4444" strokeWidth={2} fill="#ef4444" className="animate-pulse" />;
+                      }
+                      return <circle key={`dot-${payload.name}`} cx={cx} cy={cy} r={4} stroke="#10b981" strokeWidth={2} fill="white" />;
+                    }}
+                    activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2, fill: 'white' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex justify-center items-center gap-4 mt-4 text-xs text-slate-500">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full border-2 border-emerald-500 bg-white"></div>
+                <span>Mis puntos</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-0.5 border-t-2 border-dashed border-slate-400"></div>
+                <span>Media liga</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-500"></div>
+                <span>Multa en jornada</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Modal de selector de jugador con filtros */}
       {playerToSwap && (
@@ -2599,91 +2750,7 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-      {/* Gráfica de evolución */}
-      {(historicalPoints.length > 0 || typeof activeMatchday === 'number') && (
-        <Card className="mt-6 border-slate-200">
-          <CardContent className="p-6">
-            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-emerald-600" />
-              Evolución de Puntos
-            </h3>
-            <div className="w-full h-[250px] sm:h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={[
-                    ...historicalPoints,
-                    // Incluir la jornada actual si ya ha empezado (tiene puntos o datos en el store)
-                    (typeof activeMatchday === 'number' && teamStats?.puntosTotales !== undefined) 
-                      ? { matchday: activeMatchday, name: `J${activeMatchday}`, points: teamStats.puntosTotales, hasPenalty: sanctionResult?.zeroedPlayers?.size > 0 || liveInfractions.some(i => i.user_id === user?.id) }
-                      : null
-                  ].filter(Boolean)}
-                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis 
-                    dataKey="name" 
-                    tick={{ fontSize: 12, fill: '#64748b' }} 
-                    axisLine={false} 
-                    tickLine={false} 
-                    dy={10}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12, fill: '#64748b' }} 
-                    axisLine={false} 
-                    tickLine={false} 
-                  />
-                  <RechartsTooltip 
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: any, name: any) => {
-                      if (name === 'avgPoints') return [`${value} pts`, 'Media Liga']
-                      return [`${value} pts`, 'Mis Puntos']
-                    }}
-                    labelStyle={{ color: '#64748b', fontWeight: 'bold', marginBottom: '4px' }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="avgPoints" 
-                    stroke="#94a3b8" 
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    activeDot={{ r: 4, stroke: '#94a3b8', strokeWidth: 2, fill: 'white' }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="points" 
-                    stroke="#10b981" 
-                    strokeWidth={3}
-                    dot={(props: any) => {
-                      const { cx, cy, payload } = props;
-                      if (!cx || !cy) return null;
-                      if (payload.hasPenalty) {
-                        return <circle key={`dot-${payload.name}`} cx={cx} cy={cy} r={6} stroke="#ef4444" strokeWidth={2} fill="#ef4444" className="animate-pulse" />;
-                      }
-                      return <circle key={`dot-${payload.name}`} cx={cx} cy={cy} r={4} stroke="#10b981" strokeWidth={2} fill="white" />;
-                    }}
-                    activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2, fill: 'white' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex justify-center items-center gap-4 mt-4 text-xs text-slate-500">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full border-2 border-emerald-500 bg-white"></div>
-                <span>Mis puntos</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-0.5 border-t-2 border-dashed border-slate-400"></div>
-                <span>Media liga</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-500"></div>
-                <span>Multa en jornada</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+
 
       {/* Modal de confirmación de cambio de jugador */}
       {showSwapConfirm && pendingSwap && (() => {

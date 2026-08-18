@@ -54,6 +54,7 @@ interface PlayerStats {
   penalties_won: number
   dispossessed: number
   bad_touches: number
+  takeons_lost: number
   own_goals: number
   forward_passes: number
   box_entries: number
@@ -283,7 +284,7 @@ export default function JugadoresPage() {
       while (true) {
         const { data: page, error } = await supabase
           .from('player_scores')
-          .select('player_id, total_points, goals, assists, yellow_cards, red_cards, minutes_played, shots_on_target, passes_completed, passes_attempted, tackles_won, interceptions, saves, clearances, takeons_won, ball_recoveries, key_passes, big_chances_created, aerials_won, penalties_won, dispossessed, bad_touches, own_goals, forward_passes, box_entries, recoveries_high, recoveries_med, recoveries_low, interceptions_high, interceptions_med, interceptions_low, set_pieces_taken, successful_crosses, long_balls_completed')
+          .select('player_id, total_points, goals, assists, yellow_cards, red_cards, minutes_played, shots_on_target, passes_completed, passes_attempted, tackles_won, interceptions, saves, clearances, takeons_won, ball_recoveries, key_passes, big_chances_created, aerials_won, penalties_won, dispossessed, bad_touches, takeons_lost, own_goals, forward_passes, box_entries, recoveries_high, recoveries_med, recoveries_low, interceptions_high, interceptions_med, interceptions_low, set_pieces_taken, successful_crosses, long_balls_completed')
           .range(scoresFrom, scoresFrom + PAGE_SIZE - 1)
         if (error || !page || page.length === 0) break
         allScores.push(...page)
@@ -309,7 +310,7 @@ export default function JugadoresPage() {
           tackles_won: 0, interceptions: 0, saves: 0, clearances: 0,
           takeons_won: 0, ball_recoveries: 0, key_passes: 0,
           big_chances_created: 0, aerials_won: 0, penalties_won: 0,
-          dispossessed: 0, bad_touches: 0, own_goals: 0,
+          dispossessed: 0, bad_touches: 0, takeons_lost: 0, own_goals: 0,
           forward_passes: 0, box_entries: 0, recoveries_high: 0, recoveries_med: 0, recoveries_low: 0,
           interceptions_high: 0, interceptions_med: 0, interceptions_low: 0,
           set_pieces_taken: 0, successful_crosses: 0, long_balls_completed: 0,
@@ -339,6 +340,7 @@ export default function JugadoresPage() {
           penalties_won: acc.penalties_won + (s.penalties_won || 0),
           dispossessed: acc.dispossessed + (s.dispossessed || 0),
           bad_touches: acc.bad_touches + (s.bad_touches || 0),
+          takeons_lost: acc.takeons_lost + (s.takeons_lost || 0),
           own_goals: acc.own_goals + (s.own_goals || 0),
           forward_passes: acc.forward_passes + (s.forward_passes || 0),
           box_entries: acc.box_entries + (s.box_entries || 0),
@@ -773,7 +775,7 @@ export default function JugadoresPage() {
 
                       {renderSection('Penaltis y Disciplina', '🟨')}
                       {renderMetricBar(per90Mode ? 'Penaltis provocados / 90' : 'Penaltis provocados', sA.penalties_won, sB.penalties_won)}
-                      {renderMetricBar(per90Mode ? 'Balones perdidos / 90' : 'Balones perdidos', (sA.dispossessed + sA.bad_touches), (sB.dispossessed + sB.bad_touches), true)}
+                      {renderMetricBar(per90Mode ? 'Balones perdidos / 90' : 'Balones perdidos', (sA.dispossessed + sA.bad_touches + sA.takeons_lost), (sB.dispossessed + sB.bad_touches + sB.takeons_lost), true)}
                       {renderMetricBar('T. Amarillas', sA.yellow_cards, sB.yellow_cards, true, true)}
                       {renderMetricBar('T. Rojas', sA.red_cards, sB.red_cards, true, true)}
                     </div>

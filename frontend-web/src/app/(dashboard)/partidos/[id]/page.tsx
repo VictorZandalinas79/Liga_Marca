@@ -730,10 +730,10 @@ export default function PartidoDetallePage() {
             </p>
 
             {/* Fila 2: stats, Foto, y puntos/eventos */}
-            <div className="grid grid-cols-3 items-center gap-1.5 sm:gap-2.5 w-full">
+            <div className="grid grid-cols-[1fr_auto_1fr] sm:grid-cols-3 items-center sm:gap-2.5 w-full -mx-1.5 sm:mx-0 px-0.5 sm:px-0">
               
               {/* Col 1: Escudo, Demarcación, Minutos */}
-              <div className="min-w-0 flex items-center justify-self-start gap-1.5 flex-wrap text-slate-400 relative z-10">
+              <div className="min-w-0 flex flex-col items-start sm:flex-row sm:items-center justify-self-start gap-1 sm:gap-1.5 flex-wrap text-slate-400 relative z-10">
                 {playerTeam?.logo_url ? (
                   <img 
                     src={playerTeam.logo_url} 
@@ -776,7 +776,7 @@ export default function PartidoDetallePage() {
               </div>
 
               {/* Col 3: Puntos y Eventos/Iconos (Alineados a la derecha) */}
-              <div className="flex flex-col items-end justify-center justify-self-end gap-0.5 relative z-10">
+              <div className="flex flex-col items-end justify-center justify-self-end gap-0.5 relative z-10 -mr-2 sm:mr-0">
                 <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 leading-none text-right drop-shadow-sm">
                   {player.total_points || 0}
                 </span>
