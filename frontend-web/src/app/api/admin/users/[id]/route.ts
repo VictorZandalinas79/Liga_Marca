@@ -77,19 +77,29 @@ export async function PATCH(
     // Las divisiones se congelan al cerrar el mercado de la primera jornada del
     // juego. Cambiarlas después reescribiría sanciones ya cobradas —las del
     // usuario y las de sus rivales, porque la exclusividad depende de con quién
-    // comparte tabla—, así que se rechaza aquí y no solo en la interfaz.
+    // comparte tabla.
+    // EXCEPCIÓN: Se permite asignar división a NUEVOS usuarios (que actualmente
+    // tienen division = null) para que puedan empezar a jugar en el próximo tramo abierto.
     const lock = await getDivisionLockState(admin)
+    const raw = body.division
+    
     if (lock.locked) {
-      return NextResponse.json(
-        {
-          error: `Las divisiones quedaron cerradas al empezar la jornada ${lock.startingMatchday}. Ya no se puede cambiar a ningún usuario de división.`,
-        },
-        { status: 409 }
-      )
+      // Obtenemos la división actual del usuario para comprobar si es nuevo
+      const { data: currentProfile } = await admin.from('profiles').select('division').eq('id', id).single()
+      const isNewUser = currentProfile?.division === null
+      
+      // Si el candado está activo y no es un usuario nuevo (o estamos intentando quitarle la división)
+      if (!isNewUser || (raw === null || raw === '' || raw === undefined)) {
+        return NextResponse.json(
+          {
+            error: `Las divisiones quedaron cerradas al empezar la jornada ${lock.startingMatchday}. Solo se permite asignar división a usuarios nuevos que no tenían ninguna.`,
+          },
+          { status: 409 }
+        )
+      }
     }
 
     // null / '' => sin asignar; solo se aceptan las divisiones 1, 2 y 3.
-    const raw = body.division
     if (raw === null || raw === '' || raw === undefined) {
       update.division = null
     } else {

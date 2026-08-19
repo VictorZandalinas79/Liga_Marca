@@ -214,7 +214,7 @@ def compute_team_sanctions(lineup, prev_mine, held_by_others_prev, points, playe
                             best_of_lineup = best_player(lineup, zeroed, points)
                             introduced = [pid for pid in team_players if pid not in prev_mine]
                             exclude = zeroed | ({best_of_lineup} if best_of_lineup else set())
-                            best_introduced = best_player(introduced, exclude, points)
+                            best_introduced = best_player(introduced or team_players, exclude, points)
                             lbl = desc if desc.endswith(" (no cambiado)") else f"{desc} (no cambiado)"
                             zero([best_of_lineup, best_introduced], lbl)
                             unresolved_types.add("max_players")
@@ -280,7 +280,7 @@ def compute_team_sanctions(lineup, prev_mine, held_by_others_prev, points, playe
                 best_of_lineup = best_player(lineup, zeroed, points)
                 introduced = [p for p in team_players if p not in prev_mine]
                 exclude = zeroed | ({best_of_lineup} if best_of_lineup else set())
-                best_introduced = best_player(introduced, exclude, points)
+                best_introduced = best_player(introduced or team_players, exclude, points)
                 zero([best_of_lineup, best_introduced],
                      f"Más de {cfg['max_players_per_team']} jugadores de un mismo equipo ({count})")
 

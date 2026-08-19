@@ -29,6 +29,7 @@ type AdminUser = {
   infraction_penalties: number
   collected_by: string | null
   created_at: string
+  saldo?: number
 }
 
 const DIVISION_LABELS: Record<number, string> = { 1: '1ª División', 2: '2ª División', 3: '3ª División' }
@@ -323,14 +324,13 @@ export default function AdminPage() {
     })
     
     const rows = sortedForCsv.map((u) => {
-      const sanciones = -((u.amount_paid || 0) + (u.infraction_penalties || 0))
-      const dineroActual = sanciones
+      const balance = u.saldo ?? ((config.starting_balance ?? 40) - ((u.amount_paid || 0) + (u.infraction_penalties || 0)))
       return [
         u.full_name, u.email, u.phone,
         divisionLabel(u.division),
         u.has_paid ? 'Sí' : 'No',
         (u.entry_fee_paid || 0).toFixed(2).replace('.', ','),
-        dineroActual.toFixed(2).replace('.', ','),
+        balance.toFixed(2).replace('.', ','),
         formatDate(u.paid_at),
         u.collected_by || '',
         formatDate(u.created_at),
@@ -358,15 +358,14 @@ export default function AdminPage() {
     })
 
     const rows = sortedForPdf.map(u => {
-      const sanciones = -((u.amount_paid || 0) + (u.infraction_penalties || 0))
-      const dineroActual = sanciones
+      const balance = u.saldo ?? ((config.starting_balance ?? 40) - ((u.amount_paid || 0) + (u.infraction_penalties || 0)))
       return [
         u.full_name || u.email,
         u.phone || '',
         divisionLabel(u.division),
         u.has_paid ? 'Sí' : 'No',
         `${(u.entry_fee_paid || 0).toFixed(2)}€`,
-        `${dineroActual.toFixed(2)}€`,
+        `${balance.toFixed(2)}€`,
         formatDate(u.paid_at),
         u.collected_by || ''
       ]
@@ -565,8 +564,8 @@ export default function AdminPage() {
                     <td className="px-2 py-2">
                       <select
                         value={u.division ?? ''}
-                        disabled={savingId === u.id || Boolean(divisionLock?.locked)}
-                        title={divisionLock?.locked ? 'Las divisiones se cerraron al empezar la primera jornada' : undefined}
+                        disabled={savingId === u.id || (Boolean(divisionLock?.locked) && u.division !== null)}
+                        title={divisionLock?.locked && u.division !== null ? 'Las divisiones se cerraron al empezar la primera jornada' : undefined}
                         onChange={(e) => {
                           const v = e.target.value === '' ? null : Number(e.target.value)
                           if (v !== (u.division ?? null)) saveUser(u.id, { division: v }).catch(() => {})
@@ -612,10 +611,15 @@ export default function AdminPage() {
 
                     {/* Balance (readonly) */}
                     <td className="px-2 py-2 text-center whitespace-nowrap">
-                      <div className={`font-bold ${-((u.amount_paid || 0) + (u.infraction_penalties || 0)) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {-((u.amount_paid || 0) + (u.infraction_penalties || 0)) < 0 ? '' : '+'}
-                        {-((u.amount_paid || 0) + (u.infraction_penalties || 0)).toFixed(2)}€
-                      </div>
+                      {(() => {
+                        const balance = u.saldo ?? ((config.starting_balance ?? 40) - ((u.amount_paid || 0) + (u.infraction_penalties || 0)))
+                        return (
+                          <div className={`font-bold ${balance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                            {balance < 0 ? '' : '+'}
+                            {balance.toFixed(2)}€
+                          </div>
+                        )
+                      })()}
                     </td>
 
                     {/* Fecha de pago editable */}

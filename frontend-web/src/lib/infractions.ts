@@ -430,7 +430,7 @@ export function applySanctionsToTeam(
             const lbl = getNoCambiadoLabel(desc)
             zero([offenderId], lbl)
             if (rest) {
-              zero([rest.id], `${lbl} (Mejor del resto)`)
+              zero([rest.id], lbl)
             }
             unresolvedTypes.add("exclusivity")
           }
@@ -475,7 +475,7 @@ export function applySanctionsToTeam(
               if (bestOfLineup) excludeWithBest.set(bestOfLineup.id, true)
               const bestIntroduced = bestPlayer(introduced, excludeWithBest)
               if (bestIntroduced) {
-                zero([bestIntroduced.id], `${lbl} (Fichaje)`)
+                zero([bestIntroduced.id], lbl)
               }
               unresolvedTypes.add("max_players")
             }
@@ -574,7 +574,7 @@ export function applySanctionsToTeam(
       const reason = `Jugador de ${ownersStr}: ${playerName}`
       zero([offender.id], reason)
       if (rest) {
-        zero([rest.id], `${reason} (Mejor del resto)`)
+        zero([rest.id], reason)
       }
     }
   })
@@ -605,7 +605,7 @@ export function applySanctionsToTeam(
         if (bestOfLineup) excludeWithBest.set(bestOfLineup.id, true)
         const bestIntroduced = bestPlayer(introduced, excludeWithBest)
         if (bestIntroduced) {
-          zero([bestIntroduced.id], `${reason} (Fichaje)`)
+          zero([bestIntroduced.id], reason)
         }
       }
     }

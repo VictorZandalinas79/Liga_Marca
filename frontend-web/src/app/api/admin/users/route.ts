@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-admin'
 import { createAdminSupabase } from '@/lib/supabase/admin'
 import { getDivisionLockState } from '@/lib/divisions'
+import { getStandings } from '@/lib/standings'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +28,7 @@ export type AdminUser = {
   infraction_penalties: number
   collected_by: string | null
   created_at: string
+  saldo?: number
 }
 
 // Lista todos los usuarios registrados con su estado de pago.
@@ -85,9 +87,20 @@ export async function GET() {
   // Más recientes primero.
   users.sort((a, b) => b.created_at.localeCompare(a.created_at))
 
-  // Estado del cierre de divisiones + quién se ha quedado sin asignar. Como las
-  // divisiones se congelan al empezar la primera jornada, el panel tiene que
-  // avisar mientras aún se está a tiempo de corregirlo.
+  // Obtener saldo exacto desde Clasificación
+  const standingsResult = await getStandings(admin)
+  const saldoMap = new Map<string, number>()
+  for (const st of standingsResult.standings) {
+    if (st.saldo !== undefined) {
+      saldoMap.set(st.user_id, st.saldo)
+    }
+  }
+
+  for (const u of users) {
+    u.saldo = saldoMap.has(u.id) ? saldoMap.get(u.id) : undefined
+  }
+
+  // Estado del cierre de divisiones + quién se ha quedado sin asignar.
   const divisionLock = await getDivisionLockState(admin)
   const unassigned = users.filter((u) => u.division == null).length
 
