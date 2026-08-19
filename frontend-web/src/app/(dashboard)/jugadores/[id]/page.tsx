@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, TrendingUp, Goal, Ticket, X, Calendar, MapPin, Clock } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
-import { evaluateRelevoBlocks, resolveRates } from '@/lib/scoring-config'
+import { evaluateRelevoBlocks, resolveRates, RELEVO_BLOCKS } from '@/lib/scoring-config'
 import { useScoringRules } from '@/hooks/use-scoring-rules'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 
@@ -178,7 +178,18 @@ interface ScoreBlock {
   rows: ScoreRow[]
 }
 
+
+const getPositionLabelHelper = (position: string) => {
+  const posLower = (position || '').toLowerCase()
+  if (posLower.includes('goalkeeper') || posLower === 'gk' || posLower === 'por') return 'POR'
+  if (posLower.includes('defender') || posLower === 'def') return 'DEF'
+  if (posLower.includes('midfielder') || posLower === 'med' || posLower === 'mid') return 'MED'
+  if (posLower.includes('forward') || posLower === 'del' || posLower === 'fwd') return 'DEL'
+  return 'MED'
+}
+
 export default function JugadorDetallePage() {
+
   const [loading, setLoading] = useState(true)
   const [player, setPlayer] = useState<Player | null>(null)
   const [scores, setScores] = useState<PlayerScore[]>([])
@@ -190,7 +201,9 @@ export default function JugadorDetallePage() {
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [compareTarget, setCompareTarget] = useState<string>('media-pos')
   const [compareScores, setCompareScores] = useState<PlayerScore[]>([])
+  const [compareScores, setCompareScores] = useState<PlayerScore[]>([])
   const [comparePlayer, setComparePlayer] = useState<Player | null>(null)
+  const [rankInfo, setRankInfo] = useState<{ global: number, positional: number, totalPlayers: number, totalPositionalPlayers: number } | null>(null)
   // Tarifas de puntuación desde scoring_config (editables en Admin)
   const scoringRules = useScoringRules()
   const supabase = createClient()
@@ -349,6 +362,39 @@ export default function JugadorDetallePage() {
           .order('short_name', { ascending: true })
         if (playersList) {
           setAllPlayers(playersList)
+
+          // Fetch all scores for ranking
+          const { data: rankScores } = await supabase
+            .from('player_scores')
+            .select('player_id, total_points')
+          
+          if (rankScores) {
+            const pointsByPlayer = new Map<string, number>()
+            rankScores.forEach(s => {
+              pointsByPlayer.set(s.player_id, (pointsByPlayer.get(s.player_id) || 0) + (Number(s.total_points) || 0))
+            })
+
+            const allPlayersRanked = playersList.map(p => ({
+              id: p.id,
+              points: pointsByPlayer.get(p.id) || 0,
+              position: getPositionLabelHelper(p.position)
+            })).sort((a, b) => b.points - a.points)
+            
+            const globalRank = allPlayersRanked.findIndex(p => p.id === playerId) + 1
+            
+            const posCode = getPositionLabelHelper(playerData.position)
+            const posPlayersRanked = allPlayersRanked.filter(p => p.position === posCode)
+            const positionalRank = posPlayersRanked.findIndex(p => p.id === playerId) + 1
+
+            if (globalRank > 0 && positionalRank > 0) {
+              setRankInfo({
+                global: globalRank,
+                positional: positionalRank,
+                totalPlayers: allPlayersRanked.length,
+                totalPositionalPlayers: posPlayersRanked.length
+              })
+            }
+          }
         }
 
         setScores(mapped)
@@ -1105,7 +1151,41 @@ export default function JugadorDetallePage() {
   // Minutos totales expresados en "partidos de 90′"
   const per90Base = totalStats.minutes_played > 0 ? totalStats.minutes_played / 90 : 0
 
-  const scoringMetrics = SCORING_METRICS.map(def => {
+  const relevoSubMetrics = (RELEVO_BLOCKS[mainPos] || []).flatMap(block => 
+    block.options.flatMap(opt => 
+      opt.metrics.map(m => ({
+        key: `relevo_${block.id}_${m.label.replace(/\s+/g, '_')}`,
+        label: `↳ ${m.label}`,
+        group: 'bonus' as MetricGroupId,
+        count: () => 0,
+        points: () => 0,
+        flat: true,
+        isRelevoSubMetric: true,
+        relevoSpec: m
+      }))
+    )
+  )
+
+  const FULL_SCORING_METRICS = [...SCORING_METRICS, ...relevoSubMetrics as any[]]
+
+  const scoringMetrics = FULL_SCORING_METRICS.map(def => {
+    if ((def as any).isRelevoSubMetric) {
+      const m = (def as any).relevoSpec
+      let globalVal = 0
+      if (m.unit === 'pct') {
+        globalVal = m.value(totalStats as any)
+      } else {
+        const totalCount = m.value(totalStats as any)
+        globalVal = per90Base > 0 ? totalCount / per90Base : 0
+      }
+      return {
+        ...def,
+        count: m.unit === 'pct' ? `${r2(globalVal)}%` : r2(globalVal),
+        points: 0,
+        per90: m.unit === 'pct' ? r2(globalVal) : r2(globalVal),
+        rateValue: null,
+      }
+    }
     let count = 0
     let points = 0
     for (const raw of scores) {
