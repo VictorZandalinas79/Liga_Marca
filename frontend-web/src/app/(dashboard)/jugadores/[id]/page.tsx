@@ -201,7 +201,6 @@ export default function JugadorDetallePage() {
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [compareTarget, setCompareTarget] = useState<string>('media-pos')
   const [compareScores, setCompareScores] = useState<PlayerScore[]>([])
-  const [compareScores, setCompareScores] = useState<PlayerScore[]>([])
   const [comparePlayer, setComparePlayer] = useState<Player | null>(null)
   const [rankInfo, setRankInfo] = useState<{ global: number, positional: number, totalPlayers: number, totalPositionalPlayers: number } | null>(null)
   // Tarifas de puntuación desde scoring_config (editables en Admin)
