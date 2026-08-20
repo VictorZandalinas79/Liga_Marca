@@ -1804,7 +1804,7 @@ export default function DashboardPage() {
               <span className="text-slate-800 font-bold">Cambios Bloqueados</span>
               {timeUntilLock && timeUntilLock !== 'Finalizada' && (
                 <span className="text-slate-400 font-normal">
-                  (hace <span className="font-bold text-slate-600 font-mono">{timeUntilLock}</span>)
+                  (abren en <span className="font-bold text-slate-600 font-mono">{timeUntilLock}</span>)
                 </span>
               )}
             </span>

@@ -264,14 +264,21 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       interface LockBlock { start: number; end: number }
       const blocks: LockBlock[] = []
       
-      const regularFixtures = fixtures.filter(f => !outOfOrderIds.has(f.id))
-      if (regularFixtures.length > 0) {
-        blocks.push({
-          start: new Date(regularFixtures[0].start_time).getTime() - unlockOffsetMs,
-          end: new Date(regularFixtures[regularFixtures.length - 1].start_time).getTime() + lockOffsetMs
-        })
+      // Añadir los bloques regulares de TODAS las jornadas
+      // Esto hace que si la Jornada 1 y la Jornada 2 se solapan (o una engloba a la otra),
+      // el mercado global no se abra hasta que terminen AMBAS.
+      for (const jornada of allJornadas) {
+        const regularFixtures = jornada.fixtures.filter(f => !outOfOrderIds.has(f.id))
+        if (regularFixtures.length > 0) {
+          const sorted = regularFixtures.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+          blocks.push({
+            start: new Date(sorted[0].start_time).getTime() - unlockOffsetMs,
+            end: new Date(sorted[sorted.length - 1].start_time).getTime() + lockOffsetMs
+          })
+        }
       }
       
+      // Añadir partidos out-of-order de la jornada actual que estamos viendo
       const oooFixtures = fixtures.filter(f => outOfOrderIds.has(f.id))
       for (const f of oooFixtures) {
         blocks.push({
