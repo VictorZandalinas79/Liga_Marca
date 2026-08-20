@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
-import { useLockedTeams } from '@/lib/locked-teams'
+import { useLockedTeams, useOpenMatchdays } from '@/lib/locked-teams'
 import { useLeagueConfig } from '@/lib/league-config'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isInMarket } from '@/lib/market'
@@ -246,11 +246,32 @@ export default function DashboardPage() {
   const { currentMatchday: activeMatchday } = useMatchdayLock()
   const [selectedMatchday, setSelectedMatchday] = useState<number>(1)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const { openMatchdays, recommendedMatchday, loaded: openMatchdaysLoaded } = useOpenMatchdays()
+  // Jornadas que se listan en el selector: la activa (siempre, para poder
+  // hacer los cambios de mercado) + las que estén "abiertas" (con partidos ya
+  // jugados y por jugar), p.ej. la jornada anterior aún sin terminar.
+  const selectableMatchdays = useMemo(() => {
+    const set = new Set(openMatchdays)
+    if (typeof activeMatchday === 'number' && activeMatchday > 0) set.add(activeMatchday)
+    return [...set].sort((a, b) => a - b)
+  }, [openMatchdays, activeMatchday])
+  // Al resolver los datos por primera vez, se posiciona en la jornada abierta
+  // con el partido más cercano/en juego (si hay alguna); si no, en la activa.
+  // Si la jornada activa cambia más adelante en la sesión (rollover), se sigue
+  // sincronizando con ella como antes.
+  const initialMatchdaySetRef = useRef(false)
   useEffect(() => {
-    if (typeof activeMatchday === 'number' && activeMatchday > 0) {
+    if (typeof activeMatchday !== 'number' || activeMatchday <= 0) return
+    if (!initialMatchdaySetRef.current) {
+      // Espera a conocer las jornadas abiertas para no posicionar primero en
+      // la activa y "saltar" un instante después a la recomendada.
+      if (!openMatchdaysLoaded) return
+      setSelectedMatchday(recommendedMatchday ?? activeMatchday)
+      initialMatchdaySetRef.current = true
+    } else {
       setSelectedMatchday(activeMatchday)
     }
-  }, [activeMatchday])
+  }, [activeMatchday, recommendedMatchday, openMatchdaysLoaded])
   const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, upcomingLocks } = useMatchdayLock(selectedMatchday)
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
   // Estos jugadores no se pueden cambiar aunque el mercado general esté abierto.
@@ -1827,7 +1848,7 @@ export default function DashboardPage() {
                         <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
                         
                         <div className="absolute left-0 mt-1.5 w-48 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-1.5 max-h-56 overflow-y-auto scrollbar-none animate-in fade-in slide-in-from-top-2 duration-150">
-                          {Array.from({ length: activeMatchday }, (_, i) => i + 1).map((md) => {
+                          {selectableMatchdays.map((md) => {
                             const isCurrent = md === selectedMatchday
                             const isActive = md === activeMatchday
                             return (

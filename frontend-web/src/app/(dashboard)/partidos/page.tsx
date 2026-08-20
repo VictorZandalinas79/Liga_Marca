@@ -675,19 +675,27 @@ export default function PartidosPage() {
       )}
 
       {/* Partidos agrupados por fecha */}
-      {Object.entries(fixturesByDate).map(([date, dateFixtures]) => (
-        <div key={date}>
+      {Object.entries(fixturesByDate).map(([date, dateFixtures]) => {
+        const isToday = new Date(date + 'T00:00:00').toDateString() === new Date(now).toDateString()
+        return (
+        <div
+          key={date}
+          className={isToday ? 'rounded-2xl border-2 border-emerald-500 bg-emerald-50/60 shadow-lg shadow-emerald-500/20 p-4' : ''}
+        >
           {/* Fecha */}
           <div className="flex items-center gap-2 mb-4">
-            <div className="flex-1 h-px bg-slate-200"></div>
-            <span className="text-sm font-semibold text-slate-600 capitalize">
+            <div className={`flex-1 h-px ${isToday ? 'bg-emerald-400' : 'bg-slate-200'}`}></div>
+            <span className={`text-sm font-semibold capitalize ${isToday ? 'text-emerald-700' : 'text-slate-600'}`}>
               {new Date(date).toLocaleDateString('es-ES', {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long'
               })}
+              {isToday && (
+                <span className="ml-2 text-emerald-600 font-bold animate-pulse">(Hoy)</span>
+              )}
             </span>
-            <div className="flex-1 h-px bg-slate-200"></div>
+            <div className={`flex-1 h-px ${isToday ? 'bg-emerald-400' : 'bg-slate-200'}`}></div>
           </div>
 
           {/* Cards de partidos */}
@@ -796,7 +804,8 @@ export default function PartidosPage() {
             })}
           </div>
         </div>
-      ))}
+        )
+      })}
 
       {/* Sin partidos */}
       {fixtures.length === 0 && (
@@ -884,15 +893,23 @@ function pickDefaultMatchday(
   matchdays: number[],
   hookMatchday: number
 ): number {
+  const nowMs = Date.now()
+  const datedFixtures = allFixtures.filter(f => f.matchday > 0 && f.start_time)
+
+  // Prioridad máxima: si hoy hay algún partido programado, abrir esa jornada
+  // (por encima incluso de la jornada "activa" según useMatchdayLock: si hoy
+  // juega la J2 aunque la J1 siga "en curso" según el bloqueo, se abre la J2).
+  const todayStr = new Date(nowMs).toDateString()
+  const todayFixture = datedFixtures.find(f => new Date(f.start_time).toDateString() === todayStr)
+  if (todayFixture) return todayFixture.matchday
+
   if (hookMatchday && hookMatchday > 0 && matchdays.includes(hookMatchday)) {
     return hookMatchday
   }
 
   const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
   const PRE_MATCH_LEAD_MS = 2 * 60 * 60 * 1000
-  const nowMs = Date.now()
 
-  const datedFixtures = allFixtures.filter(f => f.matchday > 0 && f.start_time)
   const matchdayWindows = new Map<number, { first: number; last: number }>()
   for (const f of datedFixtures) {
     const t = new Date(f.start_time).getTime()
