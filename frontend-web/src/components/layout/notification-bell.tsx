@@ -192,19 +192,70 @@ export function NotificationBell() {
     } catch {}
   }
 
+  useEffect(() => {
+    if (open) {
+      const unreadInTab = notifications.filter(n => !n.read_at && (
+        activeTab === 'partidos' ? isPartido(n) :
+        activeTab === 'jugadores' ? isJugador(n) :
+        isSancion(n)
+      ))
+      if (unreadInTab.length > 0) {
+        markTabRead(activeTab)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeTab, notifications])
+
+  async function markTabRead(tab: Tab) {
+    const unreadInTab = notifications.filter(n => !n.read_at && (
+      tab === 'partidos' ? isPartido(n) :
+      tab === 'jugadores' ? isJugador(n) :
+      isSancion(n)
+    ))
+
+    if (unreadInTab.length === 0) return
+
+    const now = new Date().toISOString()
+    const currentIds = unreadInTab.map(n => n.id)
+    const dbIds = currentIds.filter(id => !isDerived(id))
+
+    // 1. Guardar en localStorage para persistencia rápida y derivadas
+    try {
+      let readIds: string[] = []
+      const stored = localStorage.getItem('read_notifications')
+      if (stored) readIds = JSON.parse(stored)
+      const newReadIds = Array.from(new Set([...readIds, ...currentIds]))
+      localStorage.setItem('read_notifications', JSON.stringify(newReadIds))
+    } catch {}
+
+    // 2. Marcar en estado local inmediatamente
+    setNotifications(prev =>
+      prev.map(n => currentIds.includes(n.id) ? { ...n, read_at: n.read_at ?? now } : n)
+    )
+
+    // 3. Notificaciones estándar en base de datos
+    if (dbIds.length > 0) {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: dbIds }),
+      })
+    }
+  }
+
   async function markRead(id: string) {
-    if (isDerived(id)) {
-      // Guardar en localStorage las dinámicas que no están en sync_notifications
-      try {
-        let readIds: string[] = []
-        const stored = localStorage.getItem('read_notifications')
-        if (stored) readIds = JSON.parse(stored)
-        if (!readIds.includes(id)) {
-          readIds.push(id)
-          localStorage.setItem('read_notifications', JSON.stringify(readIds))
-        }
-      } catch {}
-    } else {
+    // Guardar SIEMPRE en localStorage para asegurar que no vuelva a salir como no leído
+    try {
+      let readIds: string[] = []
+      const stored = localStorage.getItem('read_notifications')
+      if (stored) readIds = JSON.parse(stored)
+      if (!readIds.includes(id)) {
+        readIds.push(id)
+        localStorage.setItem('read_notifications', JSON.stringify(readIds))
+      }
+    } catch {}
+
+    if (!isDerived(id)) {
       // Notificación estándar en base de datos
       await fetch('/api/notifications', {
         method: 'PATCH',

@@ -141,7 +141,7 @@ export async function PATCH(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json().catch(() => ({}))
-  const { id } = body
+  const { id, ids } = body
   const now = new Date().toISOString()
 
   // Las notificaciones derivadas (sanciones en vivo, bloqueos por partido
@@ -151,7 +151,15 @@ export async function PATCH(request: NextRequest) {
   }
 
   const query = supabase.from('sync_notifications').update({ read_at: now }).is('read_at', null)
-  const { error } = id ? await query.eq('id', id) : await query
+  
+  let error;
+  if (id) {
+    ({ error } = await query.eq('id', id));
+  } else if (ids && Array.isArray(ids) && ids.length > 0) {
+    ({ error } = await query.in('id', ids));
+  } else {
+    ({ error } = await query);
+  }
 
   if (error) {
     // Hay despliegues donde sync_notifications no tiene columna read_at: el

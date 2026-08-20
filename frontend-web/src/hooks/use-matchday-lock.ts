@@ -106,10 +106,8 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       const outOfOrderIds = new Set(outOfOrderLocks.map(l => l.fixtureId))
       const VOID_STATUSES = new Set(['cancelled', 'postponed'])
 
-      // Usamos solo los fixtures "normales" para calcular los tiempos de la jornada
-      // omitiendo adelantados, aplazados, y cancelados, para que no estiren la jornada.
+      // Usamos todos los fixtures que no estén cancelados
       const validFixtures = allFixtures.filter(f => {
-        if (outOfOrderIds.has(f.id)) return false
         if (f.status && VOID_STATUSES.has(f.status.toLowerCase())) return false
         return true
       })
@@ -263,13 +261,70 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
       )
 
-      const firstMatchTime = new Date(fixtures[0].start_time)
-      const lastMatchTime = new Date(fixtures[fixtures.length - 1].start_time)
+      interface LockBlock { start: number; end: number }
+      const blocks: LockBlock[] = []
+      
+      const regularFixtures = fixtures.filter(f => !outOfOrderIds.has(f.id))
+      if (regularFixtures.length > 0) {
+        blocks.push({
+          start: new Date(regularFixtures[0].start_time).getTime() - unlockOffsetMs,
+          end: new Date(regularFixtures[regularFixtures.length - 1].start_time).getTime() + lockOffsetMs
+        })
+      }
+      
+      const oooFixtures = fixtures.filter(f => outOfOrderIds.has(f.id))
+      for (const f of oooFixtures) {
+        blocks.push({
+          start: new Date(f.start_time).getTime() - unlockOffsetMs,
+          end: new Date(f.start_time).getTime() + lockOffsetMs
+        })
+      }
+      
+      blocks.sort((a, b) => a.start - b.start)
+      const mergedBlocks: LockBlock[] = []
+      if (blocks.length > 0) {
+         let current = blocks[0]
+         for (let i = 1; i < blocks.length; i++) {
+            if (blocks[i].start <= current.end) {
+               current.end = Math.max(current.end, blocks[i].end)
+            } else {
+               mergedBlocks.push(current)
+               current = blocks[i]
+            }
+         }
+         mergedBlocks.push(current)
+      }
 
-      const unlockTimeDate = new Date(firstMatchTime.getTime() - unlockOffsetMs)
-      const lockTimeDate = new Date(lastMatchTime.getTime() + lockOffsetMs)
+      let isUnlockWindowOpen = false
+      let unlockTimeDate = new Date(mergedBlocks[0].start)
+      let lockTimeDate = new Date(mergedBlocks[mergedBlocks.length - 1].end)
+      let nextBlockIndex = -1
 
-      const isUnlockWindowOpen = now.getTime() >= unlockTimeDate.getTime() && now.getTime() <= lockTimeDate.getTime()
+      for (let i = 0; i < mergedBlocks.length; i++) {
+         const b = mergedBlocks[i]
+         if (now.getTime() >= b.start && now.getTime() <= b.end) {
+            isUnlockWindowOpen = true
+            unlockTimeDate = new Date(b.start) // Cuando empezó el bloqueo actual
+            lockTimeDate = new Date(b.end)     // Cuando terminará este bloqueo
+            break
+         }
+         if (now.getTime() < b.start && nextBlockIndex === -1) {
+            nextBlockIndex = i
+         }
+      }
+
+      if (!isUnlockWindowOpen) {
+         if (nextBlockIndex !== -1) {
+            // Hueco ANTES de un bloqueo
+            unlockTimeDate = new Date(mergedBlocks[nextBlockIndex].start)
+            lockTimeDate = new Date(mergedBlocks[nextBlockIndex].end)
+         } else {
+            // Ya pasaron todos los bloqueos
+            unlockTimeDate = new Date(mergedBlocks[mergedBlocks.length - 1].start)
+            lockTimeDate = new Date(mergedBlocks[mergedBlocks.length - 1].end)
+         }
+      }
+
       const isLocked = !isUnlockWindowOpen
 
       // Se recalcula cada segundo, así que solo se traza cuando algo cambia:
@@ -293,9 +348,9 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
         const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
         timeUntilUnlock = `${diffHours}h ${diffMins}min`
-      } else if (now.getTime() > lockTimeDate.getTime()) {
+      } else if (now.getTime() > mergedBlocks[mergedBlocks.length - 1].end) {
         timeUntilLock = 'Finalizada'
-      } else {
+      } else if (isUnlockWindowOpen) {
         const diffMs = lockTimeDate.getTime() - now.getTime()
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
         const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))

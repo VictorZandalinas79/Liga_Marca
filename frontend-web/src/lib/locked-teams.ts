@@ -89,7 +89,8 @@ export function useOpenMatchdays(): OpenMatchdaysState {
       const byMatchday = new Map<number, FixtureLite[]>()
       for (const f of fixtures) {
         if (!f.matchday || f.matchday <= 0 || !f.start_time) continue
-        if (outOfOrderIds.has(f.id)) continue
+        // Eliminada la exclusión de outOfOrderIds para que las jornadas
+        // con partidos adelantados puedan aparecer como "abiertas".
         if (!byMatchday.has(f.matchday)) byMatchday.set(f.matchday, [])
         byMatchday.get(f.matchday)!.push(f)
       }
@@ -98,18 +99,26 @@ export function useOpenMatchdays(): OpenMatchdaysState {
       let recommendedMatchday: number | null = null
       let bestDistance = Infinity
 
+      const startOffsetMs = offsets.startHoursBefore * 60 * 60 * 1000
+      const endOffsetMs = offsets.endHoursAfter * 60 * 60 * 1000
+
       for (const [md, fs] of byMatchday) {
-        const played = fs.filter(f => new Date(f.start_time).getTime() <= now)
-        const unplayed = fs.filter(f => new Date(f.start_time).getTime() > now)
-        if (played.length === 0 || unplayed.length === 0) continue
+        const times = fs.map(f => new Date(f.start_time).getTime())
+        const minStart = Math.min(...times)
+        const maxStart = Math.max(...times)
+        const unlockTime = minStart - startOffsetMs
+        const lockTime = maxStart + endOffsetMs
 
-        openMatchdays.push(md)
+        // Está "abierta" si hemos entrado en su ventana de mercado y aún no la hemos superado
+        if (now >= unlockTime && now <= lockTime) {
+          openMatchdays.push(md)
 
-        for (const f of fs) {
-          const distance = f.status === 'live' ? 0 : Math.abs(new Date(f.start_time).getTime() - now)
-          if (distance < bestDistance) {
-            bestDistance = distance
-            recommendedMatchday = md
+          for (const f of fs) {
+            const distance = f.status === 'live' ? 0 : Math.abs(new Date(f.start_time).getTime() - now)
+            if (distance < bestDistance) {
+              bestDistance = distance
+              recommendedMatchday = md
+            }
           }
         }
       }

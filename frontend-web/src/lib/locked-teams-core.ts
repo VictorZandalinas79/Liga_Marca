@@ -195,23 +195,23 @@ export function computeOutOfOrderLocks(
       })
     } else {
       // ADELANTADO: pertenece a una jornada posterior pero se juega antes.
-      // Bloqueado desde el inicio de la jornada en la que cae (playedSlot) 
+      // Bloqueado desde X horas antes del primer partido adelantado de esta jornada
       // hasta que cierra su jornada lógica (ownMatchday).
-      const slotSiblings = byMatchday.get(playedSlot)!.filter(x => {
+      const advancedSiblings = byMatchday.get(ownMatchday)!.filter(x => {
         const xTime = new Date(x.start_time).getTime();
-        return slotFor(xTime, playedSlot) === playedSlot;
+        return slotFor(xTime, ownMatchday) < ownMatchday;
       });
-      const slotStartBase = slotSiblings.length > 0
-        ? Math.min(...slotSiblings.map(x => new Date(x.start_time).getTime()))
-        : repTime.get(playedSlot)!;
-      const slotStart = slotStartBase - startOffsetMs;
+      const earliestAdvancedBase = advancedSiblings.length > 0
+        ? Math.min(...advancedSiblings.map(x => new Date(x.start_time).getTime()))
+        : t;
+      const lockStart = earliestAdvancedBase - startOffsetMs;
 
       locks.push({
         fixtureId: f.id,
         type: 'advanced',
         ownMatchday,
         playedSlot,
-        from: new Date(slotStart),
+        from: new Date(lockStart),
         until: new Date(ownClose),
         kickoff: new Date(t),
         teamIds,
