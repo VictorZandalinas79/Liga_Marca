@@ -124,13 +124,13 @@ def load_scoring_rules():
     print("⚠️ No se encontró scoring_rules.json, usando reglas por defecto")
     return {
         "version": "default",
-        "participation": {"starter_bonus": 2, "substitute_bonus": 1, "minutes_threshold": 60},
+        "participation": {"starter_bonus": 2, "substitute_bonus": 1, "minutes_threshold": 59},
         "events": {
             "goal": {"POR": 6, "DEF": 6, "MED": 5, "DEL": 4},
             "own_goal": {"all": -2},
             "assist_goal": {"all": 3},
             "assist_no_goal": {"all": 1},
-            "clean_sheet": {"POR": 4, "DEF": 3, "MED": 2, "DEL": 1, "min_minutes": 60},
+            "clean_sheet": {"POR": 4, "DEF": 3, "MED": 2, "DEL": 1, "min_minutes": 59},
             "goal_conceded": {"POR": -2, "DEF": -2, "MED": -1, "DEL": -1},
             "save_per_2": {"all": 1},
             "penalty_save": {"all": 5},
@@ -664,9 +664,9 @@ class MatchEventDownloader:
 
         # --- PORTERÍA A CERO ---
         goals_conc = stats.get('goals_conceded', 0)
-        clean_sheet_min = rules.get('clean_sheet', {}).get('min_minutes', 60)
+        clean_sheet_min = rules.get('clean_sheet', {}).get('min_minutes', 59)
 
-        if mins_played > clean_sheet_min and goals_conc == 0:
+        if mins_played >= clean_sheet_min and goals_conc == 0:
             self.stats[player_id]['clean_sheet'] = 1
             points += self.get_position_points('clean_sheet', pos)
         else:
@@ -822,7 +822,7 @@ class MatchEventDownloader:
         if type_id in [13, 14, 15, 16, 24] and self.has_qualifier(event, 15): # Remates de cabeza
             self.apply_points(player_id, 'relevo_remates_cabeza', 1, current_min)
             
-        if type_id == 49 and event.get('x', 0) > 50: # Recuperación campo rival
+        if type_id in (49, 8) and event.get('x', 0) > 50: # Recuperación campo rival
             self.apply_points(player_id, 'relevo_recup_campo_rival', 1, current_min)
         # -------------------------------
 
@@ -992,6 +992,7 @@ class MatchEventDownloader:
 
         # Contador agregado (para estadísticas)
         self.apply_points(pid, 'interceptions', 1, current_min)
+        self.apply_points(pid, 'ball_recoveries', 1, current_min)
 
     def _handle_recovery(self, event, current_min):
         pid = event.get('playerId')
@@ -1305,7 +1306,8 @@ class MatchEventDownloader:
             aerial_success_rate = (aerials_won / aerials_total * 100) if aerials_total > 0 else 0
 
             is_starter = self.entry_minutes.get(player_id, 999) == 0
-            clean_sheet = mins_played > 60 and stats.get('goals_conceded', 0) == 0
+            clean_sheet_min = self.events_rules.get('clean_sheet', {}).get('min_minutes', 59)
+            clean_sheet = mins_played >= clean_sheet_min and stats.get('goals_conceded', 0) == 0
 
             player_score_data = {
                 'player_id': db_player_id,  # Usar ID local mapeado
@@ -1548,6 +1550,14 @@ class MatchEventDownloader:
             
             for pid in list(self.on_pitch):
                 self.remove_player(pid, current_minute)
+
+            # Recalculo final: un jugador sustituido/expulsado antes de un gol
+            # posterior (p.ej. el empate en el descuento) se queda con el
+            # win_bonus/draw_bonus de cuando salió del campo, porque solo se
+            # recalcula al recibir un evento propio. Forzamos un recalculo con
+            # el marcador ya definitivo para todos los jugadores con stats.
+            for pid in list(self.stats.keys()):
+                self.recalculate_player_points(pid, current_minute)
 
             self.upload_to_supabase()
 

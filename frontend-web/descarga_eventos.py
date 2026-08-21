@@ -641,7 +641,7 @@ class FantasyEngine:
             self.apply_points(pid, 'YELLOW_CARD')
 
     # ================== PORTERÍA A CERO ==================
-    def compute_clean_sheets(self, min_minutes_for_def=60):
+    def compute_clean_sheets(self, min_minutes_for_def=59):
         """Aplica bonus de portería a cero al finalizar el partido."""
         for pid in list(self.points.keys()):
             team_id = self.players_team.get(pid)

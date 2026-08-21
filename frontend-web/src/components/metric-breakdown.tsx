@@ -79,8 +79,8 @@ export function MetricBreakdown({
     rows.push({
       block: 'Participación',
       label: isStarter 
-        ? (hasThreshold ? `Titular (${min}')` : `Titular (<60') (${min}')`) 
-        : (hasThreshold ? `Suplente (>=60') (${min}')` : `Suplente (${min}')`),
+        ? (hasThreshold ? `Titular (${min}')` : `Titular (<${R.participation.minutes_threshold}') (${min}')`) 
+        : (hasThreshold ? `Suplente (>=${R.participation.minutes_threshold}') (${min}')` : `Suplente (${min}')`),
       count: '-',
       unit: '-',
       points: hasThreshold ? R.participation.starter_bonus : R.participation.substitute_bonus

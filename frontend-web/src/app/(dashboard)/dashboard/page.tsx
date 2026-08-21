@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
+import { MetricBreakdown } from '@/components/metric-breakdown'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 import { useLockedTeams, useOpenMatchdays } from '@/lib/locked-teams'
 import { useLeagueConfig } from '@/lib/league-config'
@@ -228,6 +230,9 @@ export default function DashboardPage() {
   const [priceMaxFilter, setPriceMaxFilter] = useState<number | ''>('')
   const [playerPoints, setPlayerPoints] = useState<Map<string, number>>(new Map())
   const [teamMatchStatus, setTeamMatchStatus] = useState<Map<string, boolean>>(new Map())
+  const [teamFixtureMap, setTeamFixtureMap] = useState<Map<string, string>>(new Map())
+  const [statsModalPlayer, setStatsModalPlayer] = useState<any | null>(null)
+  const [statsModalFixture, setStatsModalFixture] = useState<any | null>(null)
   const [usersOnline, setUsersOnline] = useState<Array<{ id: string; full_name: string }>>([])
   const [onlineCount, setOnlineCount] = useState(0)
   const [showOnlineList, setShowOnlineList] = useState(false)
@@ -243,6 +248,7 @@ export default function DashboardPage() {
   // abrir el modal de cambio) y una sola vez por sesión.
   const playerStatsLoadedRef = useRef(false)
   const supabase = createClient()
+  const router = useRouter()
   const { currentMatchday: activeMatchday } = useMatchdayLock()
   const [selectedMatchday, setSelectedMatchday] = useState<number>(1)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -856,14 +862,18 @@ export default function DashboardPage() {
 
       const fixtureIds = fixtures?.map(f => f.id) || []
       const teamStatusMap = new Map<string, boolean>()
+      const fixtureMap = new Map<string, string>()
       fixtures?.forEach(f => {
         const statusLower = (f.status || '').toLowerCase()
         // El script de sincronización pone 'finished' al recibir typeId 37 (Match ended).
         const hasStarted = statusLower !== 'scheduled' && statusLower !== 'postponed' && statusLower !== 'fixture'
         teamStatusMap.set(String(f.home_team_id), hasStarted)
         teamStatusMap.set(String(f.away_team_id), hasStarted)
+        fixtureMap.set(String(f.home_team_id), String(f.id))
+        fixtureMap.set(String(f.away_team_id), String(f.id))
       })
       setTeamMatchStatus(teamStatusMap)
+      setTeamFixtureMap(fixtureMap)
 
       if (fixtureIds.length === 0) {
         setPlayerPoints(new Map())
@@ -1362,8 +1372,31 @@ export default function DashboardPage() {
     setShowSwapConfirm(false)
   }
 
-  const openPlayerSelector = (playerId: string, playerIndex: number) => {
+  const openPlayerSelector = async (playerId: string, playerIndex: number, playerTeamId?: string) => {
     if (isUnlockWindowOpen) {
+      if (playerTeamId) {
+        const fixtureId = teamFixtureMap.get(String(playerTeamId))
+        if (fixtureId) {
+          const [{ data: scoreData }, { data: fixtureData }] = await Promise.all([
+            supabase.from('player_scores').select('*').eq('fixture_id', fixtureId).eq('player_id', playerId).maybeSingle(),
+            supabase.from('fixtures').select('*').eq('id', fixtureId).maybeSingle()
+          ])
+
+          if (scoreData) {
+            const playerBase = players.find(p => p.id === playerId)
+            if (playerBase) {
+              const fullPlayer = {
+                ...scoreData,
+                ...playerBase,
+                calc_position: scoreData.position || playerBase.position,
+              }
+              setStatsModalPlayer(fullPlayer)
+              setStatsModalFixture(fixtureData)
+              return
+            }
+          }
+        }
+      }
       alert('No se pueden realizar cambios durante el tramo de jornada')
       return
     }
@@ -1935,7 +1968,11 @@ export default function DashboardPage() {
                             className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, true, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[15%]' : ''}`}
                           >
                             {subRow.map((player, idx) => (
-                              <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
+                              <div 
+                                key={player._uniqueKey} 
+                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20 cursor-pointer`}
+                                onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
+                              >
                                 <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
                               </div>
                             ))}
@@ -1957,7 +1994,11 @@ export default function DashboardPage() {
                             className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''}`}
                           >
                             {subRow.map((player, idx) => (
-                              <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
+                              <div 
+                                key={player._uniqueKey} 
+                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20 cursor-pointer`}
+                                onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
+                              >
                                 <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
                               </div>
                             ))}
@@ -1979,7 +2020,11 @@ export default function DashboardPage() {
                             className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-0 -translate-y-4 sm:-translate-y-6' : ''}`}
                           >
                             {subRow.map((player, idx) => (
-                              <div key={player._uniqueKey} className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20`}>
+                              <div 
+                                key={player._uniqueKey} 
+                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20 cursor-pointer`}
+                                onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
+                              >
                                 <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
                               </div>
                             ))}
@@ -1994,7 +2039,13 @@ export default function DashboardPage() {
                     {/* Portero */}
                     <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? '-translate-y-4 sm:-translate-y-6' : ''}`}>
                       {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
-                        <PitchPlayerCard key={player._uniqueKey} player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
+                        <div 
+                          key={player._uniqueKey} 
+                          className="cursor-pointer" 
+                          onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
+                        >
+                          <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
+                        </div>
                       ))}
                       {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
                         <div className="text-[10px] text-white/30 italic">Sin Portero</div>
@@ -2019,7 +2070,7 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={player._uniqueKey}
-                      onClick={() => openPlayerSelector(player.id, player._originalIndex)}
+                      onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
                       className={`@container relative z-10 w-full aspect-[5/7] transition-all duration-300 group ${
                         isUnlockWindowOpen || isLockedPlayer
                           ? 'cursor-not-allowed opacity-70'
@@ -2980,6 +3031,147 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+      {statsModalPlayer && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4"
+          onClick={() => setStatsModalPlayer(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Cabecera compacta con resumen en la misma línea */}
+            <div className="bg-white border-b border-slate-100 px-3 py-3 sm:px-4 sm:py-3.5 flex justify-between items-center z-10 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                {statsModalPlayer.photo ? (
+                  <img
+                    src={statsModalPlayer.photo}
+                    alt={statsModalPlayer.short_name || ''}
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-slate-200 shrink-0"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                      ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
+                    }}
+                  />
+                ) : null}
+                <DorsalBadge
+                  number={statsModalPlayer.shirt_number || '?'}
+                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-md border-2 border-slate-200 shrink-0 ${statsModalPlayer.photo ? 'hidden' : ''}`}
+                />
+                
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-sm sm:text-lg font-black text-slate-800 truncate" style={{ fontFamily: 'var(--font-outfit)' }}>
+                      {formatPlayerName(statsModalPlayer.short_name || statsModalPlayer.first_name)}
+                    </h2>
+                    <span className={`text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded text-white ${getPositionColor(statsModalPlayer.calc_position || statsModalPlayer.position)}`}>
+                      {getPositionLabel(statsModalPlayer.calc_position || statsModalPlayer.position)}
+                    </span>
+                    <span className="text-xs sm:text-sm text-slate-500 font-medium">
+                      ({statsModalPlayer.is_starter ? 'Titular' : 'Suplente'})
+                    </span>
+                  </div>
+
+                  {/* Resumen al lado del nombre en más pequeño para moviles */}
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 text-xs sm:text-sm text-slate-600 leading-none mt-0.5">
+                    <span className="flex items-center gap-1">
+                      <strong className={`font-extrabold text-sm sm:text-base ${
+                        (statsModalPlayer.total_points || 0) < 0 ? 'text-red-600' : (statsModalPlayer.total_points || 0) >= 0 && (statsModalPlayer.total_points || 0) <= 1 ? 'text-orange-600' : 'text-emerald-600'
+                      }`}>{statsModalPlayer.total_points || 0}</strong> pts
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span><strong className="text-slate-800">{statsModalPlayer.minutes_played || 0}</strong> min</span>
+                    <span className="text-slate-300">•</span>
+                    <span className="flex items-center gap-1">
+                      ⚽ <strong className="text-slate-800">{statsModalPlayer.goals || 0}</strong>
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className="flex items-center gap-1">
+                      🅰️ <strong className="text-slate-800">{statsModalPlayer.assists || 0}</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setStatsModalPlayer(null)}
+                className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-500 shrink-0 ml-2 border border-slate-200/50"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Cuerpo scrollable internamente y muy compacto */}
+            <div className="p-2 sm:p-3 overflow-y-auto space-y-2 flex-1">
+              <MetricBreakdown player={statsModalPlayer} fixture={statsModalFixture || undefined} />
+
+              <button
+                onClick={() => {
+                  router.push(`/jugadores/${statsModalPlayer.id}`)
+                  setStatsModalPlayer(null)
+                }}
+                className="w-full py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-semibold rounded-lg transition-colors mt-2"
+              >
+                Ver perfil completo con historial
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const DorsalBadge = ({ number, className = '' }: { number: number | string; className?: string }) => {
+  const numberStr = String(number)
+  const isLong = numberStr.length > 2
+  const fontSize = isLong ? '55' : '70'
+  const strokeWidthOuter = isLong ? '5' : '7'
+  const strokeWidthInner = isLong ? '1.4' : '1.8'
+
+  return (
+    <div className={`bg-white border border-slate-200 shadow-sm flex items-center justify-center overflow-hidden shrink-0 ${className}`}>
+      <svg viewBox="0 0 100 100" className="w-full h-full p-0.5">
+        <text
+          x="50"
+          y="52"
+          dominantBaseline="middle"
+          textAnchor="middle"
+          className="font-black"
+          fontSize={fontSize}
+          fill="#154734"
+          stroke="#154734"
+          strokeWidth={strokeWidthOuter}
+          strokeLinejoin="round"
+        >
+          {numberStr}
+        </text>
+        <text
+          x="50"
+          y="52"
+          dominantBaseline="middle"
+          textAnchor="middle"
+          className="font-black"
+          fontSize={fontSize}
+          fill="#154734"
+          stroke="white"
+          strokeWidth={strokeWidthInner}
+          strokeLinejoin="round"
+        >
+          {numberStr}
+        </text>
+        <text
+          x="50"
+          y="52"
+          dominantBaseline="middle"
+          textAnchor="middle"
+          className="font-black"
+          fontSize={fontSize}
+          fill="#154734"
+        >
+          {numberStr}
+        </text>
+      </svg>
     </div>
   )
 }

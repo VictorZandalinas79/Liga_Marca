@@ -38,7 +38,7 @@ type Tab = 'partidos' | 'jugadores' | 'sanciones'
  * leído se guarda en localStorage.
  */
 const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-']
-const isDerived = (id: string) => DERIVED_ID_PREFIXES.some(p => id.startsWith(p))
+const isDerived = (id: string | number) => DERIVED_ID_PREFIXES.some(p => String(id).startsWith(p))
 
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])

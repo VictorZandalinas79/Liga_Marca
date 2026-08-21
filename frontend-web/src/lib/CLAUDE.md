@@ -46,4 +46,13 @@
 | #3837 | " | ✅ | Add loaded state to OpenMatchdaysState interface | ~237 |
 | #3834 | 5:23 PM | 🟣 | Added useOpenMatchdays hook to identify and recommend partially-completed matchdays | ~417 |
 | #3833 | " | 🟣 | Added useOpenMatchdays hook to detect matchdays in progress | ~392 |
+
+### Aug 21, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #3864 | 4:53 PM | 🔵 | Automated match sync has multiple silent failure points causing stale scoring data | ~581 |
+| #3863 | 4:52 PM | 🔵 | Sync dispatch supports local fallback in development mode | ~435 |
+| #3860 | 4:50 PM | 🔵 | Root cause identified: sync success toast doesn't guarantee backend completion | ~564 |
+| #3857 | 4:49 PM | 🔵 | Frontend scoring rules loaded from hook with default fallback values | ~382 |
 </claude-mem-context>

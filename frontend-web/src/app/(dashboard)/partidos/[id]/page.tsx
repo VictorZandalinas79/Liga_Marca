@@ -189,14 +189,16 @@ const DorsalBadge = ({ number, className = '' }: { number: number | string; clas
 
 
 const formatPlayerName = (player: { short_name?: string; first_name?: string; last_name?: string }) => {
-  const fullName = player.short_name || `${player.first_name || ''} ${player.last_name || ''}`.trim()
-  const nameParts = fullName.split(/\s+/)
-  if (nameParts.length > 1) {
-    const firstName = nameParts[0]
-    const lastName = nameParts.slice(1).join(' ')
-    return `${firstName.charAt(0).toUpperCase()}. ${lastName}`
+  if (player.short_name) return player.short_name;
+  
+  const first = player.first_name?.trim() || '';
+  const last = player.last_name?.trim() || '';
+  
+  if (first && last) {
+    return `${first.charAt(0).toUpperCase()}. ${last}`;
   }
-  return fullName
+  
+  return first || last || 'Desconocido';
 }
 
 // ── Auto-sincronización al abrir el partido ────────────────────────────────
@@ -714,54 +716,56 @@ export default function PartidoDetallePage() {
           {player.shirt_number !== undefined && player.shirt_number !== null && player.photo && (
             <DorsalBadge
               number={player.shirt_number}
-              className={`absolute top-0 z-10 w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 ${
+              className={`absolute top-0 z-10 w-5 h-5 sm:w-6 sm:h-6 ${
                 isHome 
                   ? 'left-0 rounded-br-md border-r border-b' 
                   : 'right-0 rounded-bl-md border-l border-b'
               }`}
             />
           )}
-          <CardContent className="p-1.5 sm:p-2.5 flex flex-col gap-1 sm:gap-1.5 min-h-[64px]">
+          {playerTeam?.logo_url && (
+            <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.12] pointer-events-none overflow-hidden">
+              <img src={playerTeam.logo_url} alt={playerTeam.name} className="w-32 h-32 sm:w-40 sm:h-40 object-contain -rotate-12 scale-125 grayscale" />
+            </div>
+          )}
+          <CardContent className="px-1 pt-2.5 pb-1 sm:p-2.5 flex flex-col gap-3 sm:gap-4">
             {/* Fila 1: Nombre completo del jugador (toda la línea para él) */}
-            <p className={`text-[11px] sm:text-xs font-extrabold text-white truncate leading-none relative -translate-y-2 sm:translate-y-0 z-20 mb-3 sm:mb-0 drop-shadow-md ${
-              isHome ? 'pl-6 sm:pl-8' : 'pr-6 sm:pr-8'
-            }`}>
+            <p className="text-[10.5px] sm:text-xs font-black uppercase tracking-wider text-white leading-tight relative z-20 drop-shadow-md text-center px-6 sm:px-7 w-full -mt-1 sm:mt-0">
               {formatPlayerName(player)}
             </p>
 
             {/* Fila 2: stats, Foto, y puntos/eventos */}
-            <div className="grid grid-cols-[1fr_auto_1fr] sm:grid-cols-3 items-center sm:gap-2.5 w-full -mx-1.5 sm:mx-0 px-0.5 sm:px-0">
+            <div className="grid grid-cols-[1fr_auto_1fr] sm:grid-cols-3 items-center gap-1 sm:gap-2 w-full px-0.5 sm:px-0">
               
               {/* Col 1: Escudo, Demarcación, Minutos */}
-              <div className="min-w-0 flex flex-col items-start sm:flex-row sm:items-center justify-self-start gap-1 sm:gap-1.5 flex-wrap text-slate-400 relative z-10">
-                {playerTeam?.logo_url ? (
-                  <img 
-                    src={playerTeam.logo_url} 
-                    alt={playerTeam.name} 
-                    className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain shrink-0" 
-                  />
-                ) : (
-                  <span className="text-[7.5px] text-slate-500 shrink-0 truncate max-w-[35px]">
-                    {playerTeam?.name}
-                  </span>
-                )}
-                
+              <div className="min-w-0 flex flex-col items-start sm:flex-row sm:items-center justify-self-start gap-1 sm:gap-1.5 flex-wrap text-slate-400 relative z-10 -ml-1 sm:-ml-2 -mt-1 sm:-mt-1.5">
                 <span className={`inline-flex items-center px-1 rounded text-[7.5px] font-bold leading-none py-0.5 shrink-0 ${getPositionColor(player.position)}`}>
                   {getPositionLabel(player.position)}
                 </span>
                 
-                <span className="text-[8.5px] sm:text-[9.5px] shrink-0 leading-none">
-                  {player.is_starter ? 'Tit' : 'Sup'} · {player.minutes_played || 0}'
+                <span className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-1 shrink-0">
+                  <span className={`rounded px-1 py-0.5 leading-none font-bold text-[7.5px] uppercase tracking-wide border ${
+                    player.is_starter
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                      : 'bg-red-500/15 text-red-400 border-red-500/30'
+                  }`}>
+                    {player.is_starter ? 'Tit' : 'Sup'}
+                  </span>
+                  <span className={`text-[10px] sm:text-[11px] font-bold leading-none ${
+                    (player.minutes_played || 0) >= 59 ? 'text-emerald-400' : 'text-red-400'
+                  }`}>
+                    {player.minutes_played || 0}'
+                  </span>
                 </span>
               </div>
 
               {/* Col 2: Foto (contenedor de tamaño fijo) */}
-              <div className="relative w-8 h-8 sm:w-9.5 sm:h-9.5 shrink-0 justify-self-center translate-y-2 sm:translate-y-3 z-0">
+              <div className="relative w-10 h-10 sm:w-11 sm:h-11 shrink-0 justify-self-center z-0 translate-y-1 sm:translate-y-1.5">
                 {player.photo ? (
                   <img
                     src={player.photo}
                     alt={player.short_name || ''}
-                    className="w-full h-full object-contain absolute inset-0 scale-[2] origin-bottom z-0 drop-shadow-md"
+                    className="w-full h-full object-contain absolute inset-0 scale-[1.5] sm:scale-[1.6] origin-bottom z-0 drop-shadow-md"
                     style={{ maxWidth: 'none' }}
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none'
@@ -771,12 +775,12 @@ export default function PartidoDetallePage() {
                 ) : null}
                 <DorsalBadge
                   number={player.shirt_number || '?'}
-                  className={`w-8 h-8 sm:w-9.5 sm:h-9.5 rounded-md absolute inset-0 ${player.photo ? 'hidden' : ''}`}
+                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-md absolute inset-0 ${player.photo ? 'hidden' : ''}`}
                 />
               </div>
 
               {/* Col 3: Puntos y Eventos/Iconos (Alineados a la derecha) */}
-              <div className="flex flex-col items-end justify-center justify-self-end gap-0.5 relative z-10 -mr-2 sm:mr-0">
+              <div className="flex flex-col items-end justify-center justify-self-end gap-0.5 relative z-10">
                 <span className={`text-2xl sm:text-3xl font-extrabold leading-none text-right drop-shadow-sm ${
                   (player.total_points || 0) < 0 ? 'text-red-500' : (player.total_points || 0) >= 0 && (player.total_points || 0) <= 1 ? 'text-orange-500' : 'text-emerald-400'
                 }`}>
@@ -813,8 +817,13 @@ export default function PartidoDetallePage() {
                   </div>
                 )}
 
-                {Number(player.relevo_points) < 0 && (
-                  <span className="inline-flex items-center px-1 rounded bg-rose-500/10 text-rose-400 text-[7.5px] font-bold scale-90">
+                {player.relevo_points !== undefined && player.relevo_points !== null && (
+                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[10px] sm:text-[11px] font-extrabold leading-none shadow-sm ${
+                    Number(player.relevo_points) < 0
+                      ? 'bg-rose-500/15 text-rose-400 border-rose-500/40'
+                      : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
+                  }`}>
+                    <span className="text-[8px] sm:text-[9px] font-bold opacity-80">R</span>
                     {player.relevo_points}
                   </span>
                 )}

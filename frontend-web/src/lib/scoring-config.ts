@@ -29,7 +29,7 @@ export type EditableEvent = {
 // Eventos editables (claves de `events`). El orden define el del formulario.
 export const EDITABLE_EVENTS: EditableEvent[] = [
   { key: 'goal', label: 'Gol', kind: 'positional' },
-  { key: 'clean_sheet', label: 'Portería a cero (≥60 min)', kind: 'positional' },
+  { key: 'clean_sheet', label: 'Portería a cero (≥59 min)', kind: 'positional' },
   { key: 'goal_conceded', label: 'Gol encajado (penaliza por total si > 1)', kind: 'positional' },
   { key: 'assist_goal', label: 'Asistencia de gol', kind: 'single' },
   { key: 'assist_no_goal', label: 'Asistencia (sin gol)', kind: 'single' },
@@ -530,7 +530,7 @@ export interface ScoringRates {
 
 // Valores por defecto (espejo de scoring_rules.json) usados como fallback.
 export const DEFAULT_RATES: ScoringRates = {
-  participation: { starter_bonus: 2, substitute_bonus: 1, minutes_threshold: 60, win_bonus_60: 1, draw_bonus_60: 0.5 },
+  participation: { starter_bonus: 2, substitute_bonus: 1, minutes_threshold: 59, win_bonus_60: 1, draw_bonus_60: 0.5 },
   goal: { POR: 6, DEF: 6, MED: 5, DEL: 4 },
   own_goal: -2,
   assist_goal: 3,

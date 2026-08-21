@@ -677,15 +677,15 @@ export default function JugadorDetallePage() {
       const hasThreshold = score.minutes_played >= SR.participation.minutes_threshold
       b1.push({
         label: isStarter
-          ? (hasThreshold ? `Participación · Titular (≥60 min) (${score.minutes_played}′)` : `Participación · Titular (<60 min) (${score.minutes_played}′)`)
-          : (hasThreshold ? `Participación · Suplente (≥60 min) (${score.minutes_played}′)` : `Participación · Suplente (${score.minutes_played}′)`),
+          ? (hasThreshold ? `Participación · Titular (≥${SR.participation.minutes_threshold} min) (${score.minutes_played}′)` : `Participación · Titular (<${SR.participation.minutes_threshold} min) (${score.minutes_played}′)`)
+          : (hasThreshold ? `Participación · Suplente (≥${SR.participation.minutes_threshold} min) (${score.minutes_played}′)` : `Participación · Suplente (${score.minutes_played}′)`),
         count: 0, unit: 0, points: hasThreshold ? SR.participation.starter_bonus : SR.participation.substitute_bonus, flat: true,
       })
       
       if ((score.win_bonus || 0) > 0) {
-        b1.push({ label: `Victoria (≥60 min)`, count: 0, unit: 0, points: score.win_bonus!, flat: true })
+        b1.push({ label: `Victoria (≥${SR.participation.minutes_threshold} min)`, count: 0, unit: 0, points: score.win_bonus!, flat: true })
       } else if ((score.draw_bonus || 0) > 0) {
-        b1.push({ label: `Empate (≥60 min)`, count: 0, unit: 0, points: score.draw_bonus!, flat: true })
+        b1.push({ label: `Empate (≥${SR.participation.minutes_threshold} min)`, count: 0, unit: 0, points: score.draw_bonus!, flat: true })
       }
     }
 
@@ -698,7 +698,7 @@ export default function JugadorDetallePage() {
 
     // BLOQUE 3: Defensa y Portería a Cero
     const b3: ScoreRow[] = []
-    if (score.clean_sheet) b3.push({ label: `Portería a cero · +60 min (${pos})`, count: 0, unit: 0, points: SR.clean_sheet[pos], flat: true })
+    if (score.clean_sheet) b3.push({ label: `Portería a cero · ≥${SR.participation.minutes_threshold} min (${pos})`, count: 0, unit: 0, points: SR.clean_sheet[pos], flat: true })
     if (score.goals_conceded > 1) b3.push(u(score.goals_conceded, SR.goal_conceded[pos], `Gol encajado (${pos})`))
 
     // BLOQUE 4: Penaltis

@@ -150,17 +150,18 @@ def generar_pdf(fixture_id, match_id):
         mins = p["min"]
         if mins > 0:
             is_starter = downloader.entry_minutes.get(pid, 999) == 0
-            if mins >= R_p.get('minutes_threshold', 60):
-                label_part = f"Titular ({mins}')" if is_starter else f"Suplente (>=60') ({mins}')"
+            threshold = R_p.get('minutes_threshold', 60)
+            if mins >= threshold:
+                label_part = f"Titular ({mins}')" if is_starter else f"Suplente (>={threshold}') ({mins}')"
                 add("Participación", label_part, 0, R_p.get('starter_bonus', 2), flat=True)
                 wb = g('win_bonus')
                 db = g('draw_bonus')
                 if wb > 0:
-                    add("Participación", "Victoria (>=60')", 0, wb, flat=True)
+                    add("Participación", f"Victoria (>={threshold}')", 0, wb, flat=True)
                 elif db > 0:
-                    add("Participación", "Empate (>=60')", 0, db, flat=True)
+                    add("Participación", f"Empate (>={threshold}')", 0, db, flat=True)
             else:
-                label_part = f"Titular (<60') ({mins}')" if is_starter else f"Suplente ({mins}')"
+                label_part = f"Titular (<{threshold}') ({mins}')" if is_starter else f"Suplente ({mins}')"
                 add("Participación", label_part, 0, R_p.get('substitute_bonus', 1), flat=True)
         else:
             add("Participación", "No jugó", 0, 0, flat=True)
