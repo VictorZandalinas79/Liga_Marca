@@ -817,15 +817,16 @@ export default function PartidoDetallePage() {
                   </div>
                 )}
 
-                {player.relevo_points !== undefined && player.relevo_points !== null && (
-                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[10px] sm:text-[11px] font-extrabold leading-none shadow-sm ${
-                    Number(player.relevo_points) < 0
-                      ? 'bg-rose-500/15 text-rose-400 border-rose-500/40'
-                      : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
-                  }`}>
-                    <span className="text-[8px] sm:text-[9px] font-bold opacity-80">R</span>
-                    {player.relevo_points}
-                  </span>
+                {player.relevo_points !== undefined && player.relevo_points !== null && Number(player.relevo_points) !== 0 && (
+                  <div className="flex items-center gap-0.5 shrink-0" title={`Relevo: ${player.relevo_points} pt(s)`}>
+                    {Number(player.relevo_points) < 0 ? (
+                      <span className="text-[10px] sm:text-[12px] drop-shadow-md" title="Relevo Negativo">❌</span>
+                    ) : (
+                      Array.from({ length: Math.max(0, Number(player.relevo_points)) }).map((_, i) => (
+                        <span key={i} className="text-yellow-400 drop-shadow-md text-[11px] sm:text-[13px] leading-none">★</span>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
             </div>
