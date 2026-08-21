@@ -1352,9 +1352,6 @@ export default function JornadaPage() {
                                     {player.is_captain && (
                                       <Badge className="text-[9px] px-1 py-0 bg-yellow-500 text-white shrink-0 leading-none">C</Badge>
                                     )}
-                                    {player.hasPlayed && (
-                                      <Badge className="text-[9px] px-1 py-0 bg-emerald-500 text-white shrink-0 leading-none">J</Badge>
-                                    )}
                                   </div>
                                   
                                   {/* Row 2: Metadata (Order, Shirt, Photo, Team, Value) */}

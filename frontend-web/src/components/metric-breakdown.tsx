@@ -435,15 +435,23 @@ export function MetricBreakdown({
                     <div className="flex flex-col gap-0.5">
                       <span className="font-bold text-slate-800">{row.label}</span>
                       {hasCountOrUnit && (
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                          <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-semibold border border-slate-200/60">
-                            Cant: {row.count}
-                          </span>
-                          {row.unit !== '-' && (
-                            <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium border border-slate-200/60">
-                              Val. U: {Number(row.unit) > 0 ? `+${row.unit}` : row.unit} pts
-                            </span>
-                          )}
+                        <div className="flex items-center mt-1.5">
+                          <div className="flex items-center rounded-lg border border-slate-200/80 shadow-sm overflow-hidden text-[11px] font-bold">
+                            <div className="px-2.5 py-1 text-slate-800 bg-slate-100 border-r border-slate-200/80 flex items-center gap-1.5">
+                              <span className="text-slate-500 font-bold text-[9px] uppercase tracking-wider">Cant</span>
+                              <span className="text-sm">{row.count}</span>
+                            </div>
+                            {row.unit !== '-' && (
+                              <div className={`px-2.5 py-1 flex items-center gap-1.5 ${
+                                Number(row.unit) > 0 ? 'text-emerald-700 bg-emerald-50' :
+                                Number(row.unit) < 0 ? 'text-rose-700 bg-rose-50' :
+                                'text-slate-700 bg-slate-50'
+                              }`}>
+                                <span className="opacity-60 font-bold text-[9px] uppercase tracking-wider">Valor</span>
+                                <span className="text-sm">{Number(row.unit) > 0 ? `+${row.unit}` : row.unit}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

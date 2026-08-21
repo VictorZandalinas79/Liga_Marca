@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Medal, Trophy, Star, ChevronDown, ChevronUp, Minus, Search, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, MousePointerClick, History, Target, Users, AlertTriangle, ArrowUpDown, CheckCircle, X } from 'lucide-react'
+import { Medal, Trophy, Star, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Minus, Search, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, MousePointerClick, History, Target, Users, AlertTriangle, ArrowUpDown, CheckCircle, X } from 'lucide-react'
 
 function formatKamikazeTime(totalMinutes: number): string {
   if (totalMinutes === Infinity || totalMinutes === 999999) return '-'
@@ -66,6 +66,7 @@ export default function ClasificacionPage() {
   const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   const [expandedUser, setExpandedUser] = useState<string | null>(null)
+  const [expandedMatchday, setExpandedMatchday] = useState<number | null>(null)
   const [userTeamData, setUserTeamData] = useState<Record<string, any>>({})
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   // División seleccionada (pestaña). Las clasificaciones son independientes por
@@ -192,9 +193,10 @@ export default function ClasificacionPage() {
     }
   }
 
-  const handleUserClick = async (userId: string) => {
-    if (expandedUser === userId) {
+  const handleUserClick = async (userId: string, targetMatchdayOverride?: number) => {
+    if (!targetMatchdayOverride && expandedUser === userId) {
       setExpandedUser(null)
+      setExpandedMatchday(null)
       return
     }
 
@@ -203,10 +205,13 @@ export default function ClasificacionPage() {
     // Determinar la jornada a mostrar:
     // Si la jornada está en juego (isLeagueOpen === false), mostramos la jornada actual (currentMatchday).
     // Si la jornada está abierta para cambios (isLeagueOpen === true), mostramos la jornada anterior (currentMatchday - 1).
-    let targetMatchday = currentMatchday
+    let maxTargetMatchday = currentMatchday
     if (isLeagueOpen) {
-      targetMatchday = currentMatchday - 1
+      maxTargetMatchday = currentMatchday - 1
     }
+
+    let targetMatchday = targetMatchdayOverride ?? maxTargetMatchday
+    setExpandedMatchday(targetMatchday)
 
     // Obtener los equipos del usuario
     const { data: userTeamsData } = await supabase
@@ -821,16 +826,40 @@ export default function ClasificacionPage() {
                               {userTeamData[standing.user_id]?.teamName}
                             </span>
                             {!userTeamData[standing.user_id]?.isHidden && (
-                              <>
-                                <Badge className="bg-emerald-600 text-white text-xs shrink-0">
-                                  {Math.round((userTeamData[standing.user_id]?.totalPoints || 0) * 10) / 10} pts · J{userTeamData[standing.user_id]?.matchday}
+                              <div className="flex items-center gap-1.5 ml-auto">
+                                <Badge className="bg-emerald-600 text-white text-xs shrink-0 flex items-center gap-1 px-1.5 py-0.5">
+                                  <span>{Math.round((userTeamData[standing.user_id]?.totalPoints || 0) * 10) / 10} pts</span>
+                                  <span className="text-emerald-200">·</span>
+                                  <div className="flex items-center">
+                                    <button
+                                      disabled={expandedMatchday! <= 1}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleUserClick(standing.user_id, expandedMatchday! - 1)
+                                      }}
+                                      className="p-0.5 hover:bg-emerald-500 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                    >
+                                      <ChevronLeft className="w-3.5 h-3.5" />
+                                    </button>
+                                    <span className="px-1">J{userTeamData[standing.user_id]?.matchday}</span>
+                                    <button
+                                      disabled={expandedMatchday! >= (isLeagueOpen ? currentMatchday - 1 : currentMatchday)}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleUserClick(standing.user_id, expandedMatchday! + 1)
+                                      }}
+                                      className="p-0.5 hover:bg-emerald-500 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                    >
+                                      <ChevronRight className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </Badge>
                                 {userTeamData[standing.user_id]?.penalties > 0 && (
                                   <Badge className="bg-red-600 text-white text-xs shrink-0">
                                     -{Math.round((userTeamData[standing.user_id]?.penalties || 0) * 10) / 10} pts multa
                                   </Badge>
                                 )}
-                              </>
+                              </div>
                             )}
                           </div>
 
