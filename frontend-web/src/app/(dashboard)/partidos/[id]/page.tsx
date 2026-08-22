@@ -208,7 +208,7 @@ const formatPlayerName = (player: { short_name?: string; first_name?: string; la
 const AUTO_SYNC_COOLDOWN_MS = 3 * 60 * 1000
 // El motor tarda ~1-2 min en subir los datos: refrescamos varias veces después.
 const POST_SYNC_REFRESH_DELAYS_MS = [30_000, 60_000, 120_000]
-const PLAY_WINDOW_BEFORE_MS = 15 * 60 * 1000
+const PLAY_WINDOW_BEFORE_MS = 30 * 60 * 1000
 const PLAY_WINDOW_AFTER_MS = 3 * 60 * 60 * 1000
 
 // Un partido de hace tres jornadas ya no tiene nada que sincronizar; para esos
@@ -579,32 +579,20 @@ export default function PartidoDetallePage() {
     }
   }, [])
 
-  // Efecto para polling cuando el partido está en vivo o cerca de empezar
+  // Efecto para polling cuando el partido está en vivo o cerca de empezar.
+  // El intervalo se arma siempre que quede algo por ver y decide en cada tick
+  // si toca releer: así una pestaña abierta una hora antes empieza a refrescar
+  // sola al entrar en la ventana, sin depender de que cambie el fixture.
   useEffect(() => {
     if (!fixture) return
+    if (!fixture.start_time) return
+    if (fixture.status === 'finished') return
 
-    const now = new Date()
-    const matchTime = fixture.start_time ? new Date(fixture.start_time) : null
+    const interval = setInterval(() => {
+      if (isInPlayWindow(fixture)) fetchPartido()
+    }, 30000) // 30 segundos
 
-    if (!matchTime) return
-
-    const diffMs = matchTime.getTime() - now.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-
-    // Hacer polling si:
-    // - El partido empezó (diffMins <= 0)
-    // - O falta <= 5 minutos para empezar
-    const matchStarted = diffMins <= 0
-    const matchStartingSoon = diffMins > 0 && diffMins <= 5
-    const matchFinished = fixture.status === 'finished'
-
-    if ((matchStarted || matchStartingSoon) && !matchFinished) {
-      const interval = setInterval(() => {
-        fetchPartido()
-      }, 30000) // 30 segundos
-
-      return () => clearInterval(interval)
-    }
+    return () => clearInterval(interval)
   }, [fixture?.status, fixture?.start_time])
 
   const formatDateTime = (dateString: string) => {

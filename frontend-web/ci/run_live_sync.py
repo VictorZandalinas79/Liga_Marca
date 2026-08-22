@@ -42,8 +42,11 @@ SDAPI_OUTLET_KEY = _clean(os.environ.get("SDAPI_OUTLET_KEY"))
 SCRIPT = "trigger_descarga_eventos.py"
 
 # Ventanas de tiempo (minutos)
-UPCOMING_WINDOW = 6     # empieza dentro de los próximos 6 min
-LIVE_WINDOW = 140       # empezó hace menos de 140 min y sigue en juego
+UPCOMING_WINDOW = 30    # empieza dentro de los próximos 30 min (alineaciones)
+# 90' + descanso + descuento + retrasos de kick-off. Solo actúa como tope para
+# los partidos que nunca llegaron a marcarse 'live'; los que sí lo están se
+# siguen refrescando por la red de seguridad (b) hasta pasar a 'finished'.
+LIVE_WINDOW = 180
 
 TERMINAL_STATUSES = {"finished", "cancelled", "postponed"}
 

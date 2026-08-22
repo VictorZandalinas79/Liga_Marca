@@ -1,12 +1,13 @@
 name: Sync Live Matches
 
-# on:
-#   schedule:
-#     # Red de seguridad. Los crons de GitHub se retrasan y se saltan ejecuciones,
-#     # así que el disparador fiable es un cron externo (cron-job.org) que llama al
-#     # workflow_dispatch de abajo cada 5 min. Este schedule queda como respaldo.
-#     # - cron: '*/5 * * * *'
 on:
+  schedule:
+    # Cada 5 min. El runner (ci/run_live_sync.py) sale enseguida si no hay
+    # ningún partido en ventana, así que las ejecuciones vacías son baratas.
+    # Ojo: los crons de GitHub se retrasan y a veces se saltan huecos; si se
+    # quiere precisión, un cron externo (cron-job.org) llamando al
+    # workflow_dispatch de abajo es más fiable y este schedule queda de respaldo.
+    - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       fixture_ids:

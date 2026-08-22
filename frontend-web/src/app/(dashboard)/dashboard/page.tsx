@@ -1991,7 +1991,7 @@ export default function DashboardPage() {
                         return (
                           <div 
                             key={rowIdx} 
-                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''}`}
+                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''} ${isSplit && rowIdx === 0 ? 'translate-y-2 sm:translate-y-4' : ''}`}
                           >
                             {subRow.map((player, idx) => (
                               <div 
@@ -2017,7 +2017,7 @@ export default function DashboardPage() {
                         return (
                           <div 
                             key={rowIdx} 
-                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-0 -translate-y-4 sm:-translate-y-6' : ''}`}
+                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-0 -translate-y-1 sm:-translate-y-2' : ''}`}
                           >
                             {subRow.map((player, idx) => (
                               <div 
