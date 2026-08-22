@@ -380,103 +380,105 @@ export function MetricBreakdown({
         </div>
         <span className="text-[10px] font-semibold text-slate-400">{tableRows.length} registros</span>
       </div>
-      <table className="w-full border-collapse text-left text-xs">
-        <thead className="bg-slate-50/50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
-          <tr>
-            <th scope="col" className="px-3 py-2 w-[105px]">Bloque</th>
-            <th scope="col" className="px-3 py-2">Métrica</th>
-            <th scope="col" className="px-3 py-2 text-right w-[85px]">Puntos</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {tableRows.length === 0 ? (
+      <div className="overflow-x-auto max-w-full">
+        <table className="w-full border-collapse text-left text-xs">
+          <thead className="bg-slate-50/50 text-[9px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
             <tr>
-              <td colSpan={3} className="px-3 py-6 text-center text-xs text-slate-400 italic">
-                Sin eventos directos registrados en este partido.
-              </td>
+              <th scope="col" className="px-1.5 sm:px-2 py-2 whitespace-nowrap">Bloque</th>
+              <th scope="col" className="px-1.5 sm:px-2 py-2 w-full">Métrica</th>
+              <th scope="col" className="px-1.5 sm:px-2 py-2 text-right whitespace-nowrap">Puntos</th>
             </tr>
-          ) : (
-            tableRows.map((row, idx) => {
-              const isPositive = row.points > 0
-              const isNegative = row.points < 0
-              const pct = Math.min((Math.abs(row.points) / maxAbsPoints) * 100, 100)
-              
-              let ptsColor = 'text-slate-500 font-bold'
-              let barColor = 'bg-slate-300'
-              if (isPositive) {
-                ptsColor = 'text-emerald-600 font-black text-xs sm:text-sm'
-                barColor = 'bg-emerald-500'
-              } else if (isNegative) {
-                ptsColor = 'text-rose-600 font-black text-xs sm:text-sm'
-                barColor = 'bg-rose-500'
-              }
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {tableRows.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="px-3 py-6 text-center text-xs text-slate-400 italic">
+                  Sin eventos directos registrados en este partido.
+                </td>
+              </tr>
+            ) : (
+              tableRows.map((row, idx) => {
+                const isPositive = row.points > 0
+                const isNegative = row.points < 0
+                const pct = Math.min((Math.abs(row.points) / maxAbsPoints) * 100, 100)
+                
+                let ptsColor = 'text-slate-500 font-bold'
+                let barColor = 'bg-slate-300'
+                if (isPositive) {
+                  ptsColor = 'text-emerald-600 font-black text-xs sm:text-sm'
+                  barColor = 'bg-emerald-500'
+                } else if (isNegative) {
+                  ptsColor = 'text-rose-600 font-black text-xs sm:text-sm'
+                  barColor = 'bg-rose-500'
+                }
 
-              const blockBadgeStyle = 
-                row.block === 'Participación' ? 'bg-slate-100 text-slate-700 border-slate-200' :
-                row.block === 'Goles/Asis' ? 'bg-rose-50 text-rose-700 border-rose-200/80' :
-                row.block === 'Defensa' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/80' :
-                row.block === 'Penaltis' ? 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200/80' :
-                row.block === 'Tarjetas' ? 'bg-amber-50 text-amber-800 border-amber-200/80' :
-                row.block === 'Portero' ? 'bg-cyan-50 text-cyan-800 border-cyan-200/80' :
-                row.block === 'Otras' ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80' :
-                row.block === 'Pérdidas' ? 'bg-rose-50 text-rose-800 border-rose-200/80' :
-                'bg-violet-50 text-violet-700 border-violet-200'
+                const blockBadgeStyle = 
+                  row.block === 'Participación' ? 'bg-slate-100 text-slate-700 border-slate-200' :
+                  row.block === 'Goles/Asis' ? 'bg-rose-50 text-rose-700 border-rose-200/80' :
+                  row.block === 'Defensa' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/80' :
+                  row.block === 'Penaltis' ? 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200/80' :
+                  row.block === 'Tarjetas' ? 'bg-amber-50 text-amber-800 border-amber-200/80' :
+                  row.block === 'Portero' ? 'bg-cyan-50 text-cyan-800 border-cyan-200/80' :
+                  row.block === 'Otras' ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80' :
+                  row.block === 'Pérdidas' ? 'bg-rose-50 text-rose-800 border-rose-200/80' :
+                  'bg-violet-50 text-violet-700 border-violet-200'
 
-              const hasCountOrUnit = row.count !== '-' && n(row.count) > 0
+                const hasCountOrUnit = row.count !== '-' && n(row.count) > 0
 
-              return (
-                <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="px-3 py-2 font-bold text-[10px]">
-                    <span className={`px-2 py-0.5 rounded-md border font-extrabold uppercase tracking-wider ${blockBadgeStyle}`}>
-                      {row.block}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 font-medium text-slate-900 text-xs leading-snug">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-bold text-slate-800">{row.label}</span>
-                      {hasCountOrUnit && (
-                        <div className="flex items-center mt-1.5">
-                          <div className="flex items-center rounded-lg border border-slate-200/80 shadow-sm overflow-hidden text-[11px] font-bold">
-                            <div className="px-2.5 py-1 text-slate-800 bg-slate-100 border-r border-slate-200/80 flex items-center gap-1.5">
-                              <span className="text-slate-500 font-bold text-[9px] uppercase tracking-wider">Cant</span>
-                              <span className="text-sm">{row.count}</span>
-                            </div>
-                            {row.unit !== '-' && (
-                              <div className={`px-2.5 py-1 flex items-center gap-1.5 ${
-                                Number(row.unit) > 0 ? 'text-emerald-700 bg-emerald-50' :
-                                Number(row.unit) < 0 ? 'text-rose-700 bg-rose-50' :
-                                'text-slate-700 bg-slate-50'
-                              }`}>
-                                <span className="opacity-60 font-bold text-[9px] uppercase tracking-wider">Valor</span>
-                                <span className="text-sm">{Number(row.unit) > 0 ? `+${row.unit}` : row.unit}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span className={`tabular-nums leading-none ${ptsColor}`}>
-                        {isPositive ? `+${fmtPts(row.points)}` : fmtPts(row.points)}
+                return (
+                  <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-1.5 sm:px-2 py-2 font-bold text-[9px]">
+                      <span className={`px-1.5 py-0.5 rounded-md border font-extrabold uppercase tracking-wider ${blockBadgeStyle}`}>
+                        {row.block}
                       </span>
-                      {Math.abs(row.points) > 0 && (
-                        <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
-                            style={{ width: `${pct}%` }} 
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              )
-            })
-          )}
-        </tbody>
-      </table>
+                    </td>
+                    <td className="px-1.5 sm:px-2 py-2 font-medium text-slate-900 text-[11px] leading-snug">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-bold text-slate-800">{row.label}</span>
+                        {hasCountOrUnit && (
+                          <div className="flex items-center mt-1.5">
+                            <div className="flex items-center rounded-lg border border-slate-200/80 shadow-sm overflow-hidden text-[10px] font-bold">
+                              <div className="px-2 py-1 text-slate-800 bg-slate-100 border-r border-slate-200/80 flex items-center gap-1.5">
+                                <span className="text-slate-500 font-bold text-[8px] uppercase tracking-wider">Cant</span>
+                                <span className="text-xs">{row.count}</span>
+                              </div>
+                              {row.unit !== '-' && (
+                                <div className={`px-2 py-1 flex items-center gap-1.5 ${
+                                  Number(row.unit) > 0 ? 'text-emerald-700 bg-emerald-50' :
+                                  Number(row.unit) < 0 ? 'text-rose-700 bg-rose-50' :
+                                  'text-slate-700 bg-slate-50'
+                                }`}>
+                                  <span className="opacity-60 font-bold text-[8px] uppercase tracking-wider">Valor</span>
+                                  <span className="text-xs">{Number(row.unit) > 0 ? `+${row.unit}` : row.unit}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-1.5 sm:px-2 py-2 text-right">
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className={`tabular-nums leading-none ${ptsColor}`}>
+                          {isPositive ? `+${fmtPts(row.points)}` : fmtPts(row.points)}
+                        </span>
+                        {Math.abs(row.points) > 0 && (
+                          <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
+                              style={{ width: `${pct}%` }} 
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 
