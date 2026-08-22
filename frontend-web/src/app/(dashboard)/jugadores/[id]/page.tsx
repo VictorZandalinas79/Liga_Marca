@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { applyMarketFilter } from '@/lib/market'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,6 +10,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { evaluateRelevoBlocks, resolveRates, RELEVO_BLOCKS } from '@/lib/scoring-config'
 import { useScoringRules } from '@/hooks/use-scoring-rules'
 import { MetricBreakdown } from '@/components/metric-breakdown'
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, ZAxis } from 'recharts'
 
 interface Player {
   id: string
@@ -203,6 +204,30 @@ export default function JugadorDetallePage() {
   const [compareScores, setCompareScores] = useState<PlayerScore[]>([])
   const [comparePlayer, setComparePlayer] = useState<Player | null>(null)
   const [rankInfo, setRankInfo] = useState<{ global: number, positional: number, totalPlayers: number, totalPositionalPlayers: number } | null>(null)
+  
+  // Scatter plot states
+  const [positionScores, setPositionScores] = useState<PlayerScore[]>([])
+  const [xAxisMetric, setXAxisMetric] = useState('recuperaciones')
+  const [yAxisMetric, setYAxisMetric] = useState('tiros')
+  const [scatterMode, setScatterMode] = useState<'total' | 'avg' | 'p90'>('p90')
+
+  const mainPos = player ? normPos(player.position) : 'MED'
+
+  const relevoSubMetrics = (RELEVO_BLOCKS[mainPos] || []).flatMap(block => 
+    block.options.flatMap(opt => 
+      opt.metrics.map(m => ({
+        key: `relevo_${block.id}_${m.label.replace(/\s+/g, '_')}`,
+        label: `↳ ${m.label}`,
+        group: 'bonus' as MetricGroupId,
+        count: () => 0,
+        points: () => 0,
+        flat: false,
+        isRelevoSubMetric: true,
+        relevoSpec: m
+      }))
+    )
+  )
+
   // Tarifas de puntuación desde scoring_config (editables en Admin)
   const scoringRules = useScoringRules()
   const supabase = createClient()
@@ -452,7 +477,182 @@ export default function JugadorDetallePage() {
     }
   }, [compareTarget, allPlayers, player?.position])
 
-  const getPositionLabel = (position: string) => {
+  useEffect(() => {
+    const loadPositionScores = async () => {
+      if (!player?.position) return
+      const posCode = getPositionLabel(player.position)
+      const { data } = await supabase
+        .from('player_scores')
+        .select(`
+          *,
+          players (
+            short_name,
+            first_name,
+            last_name,
+            real_teams (
+              name,
+              logo_url
+            )
+          )
+        `)
+        .eq('position', posCode)
+      if (data) {
+        setPositionScores(data as any[])
+      }
+    }
+    loadPositionScores()
+  }, [player?.position])
+
+  const scatterData = useMemo(() => {
+    if (positionScores.length === 0) return []
+    
+    // Group scores by player_id
+    const playerStatsMap = new Map<string, {
+      id: string
+      name: string
+      teamLogo: string | null
+      teamName: string
+      totalMins: number
+      xSum: number
+      ySum: number
+      matches: number
+    }>()
+    
+    for (const s of positionScores) {
+      const rawS = s as any
+      const pId = rawS.player_id
+      if (!pId) continue
+      
+      const xVal = getMetricValue(s, xAxisMetric)
+      const yVal = getMetricValue(s, yAxisMetric)
+      const mins = Number(rawS.minutes_played) || 0
+      
+      const playerObj = Array.isArray(rawS.players) ? rawS.players[0] : rawS.players
+      const name = playerObj?.short_name || 
+                   (playerObj?.first_name ? `${playerObj.first_name} ${playerObj.last_name}` : '') ||
+                   allPlayers.find(pl => pl.id === pId)?.short_name || 
+                   'Jugador'
+                   
+      const teamObj = Array.isArray(playerObj?.real_teams) ? playerObj.real_teams[0] : playerObj?.real_teams
+      const teamLogo = teamObj?.logo_url || null
+      const teamName = teamObj?.name || ''
+      
+      const existing = playerStatsMap.get(pId)
+      if (existing) {
+        existing.totalMins += mins
+        existing.xSum += xVal
+        existing.ySum += yVal
+        if (mins > 0) {
+          existing.matches += 1
+        }
+      } else {
+        playerStatsMap.set(pId, {
+          id: pId,
+          name,
+          teamLogo,
+          teamName,
+          totalMins: mins,
+          xSum: xVal,
+          ySum: yVal,
+          matches: mins > 0 ? 1 : 0
+        })
+      }
+    }
+    
+    const pointsList: any[] = []
+    
+    playerStatsMap.forEach((p) => {
+      // Only include players with at least 90 minutes played to avoid outliers skewing per-90 metrics
+      if (p.totalMins < 90) return
+      
+      let xFinal = 0
+      let yFinal = 0
+      
+      if (scatterMode === 'total') {
+        xFinal = p.xSum
+        yFinal = p.ySum
+      } else if (scatterMode === 'avg') {
+        xFinal = p.matches > 0 ? p.xSum / p.matches : 0
+        yFinal = p.matches > 0 ? p.ySum / p.matches : 0
+      } else { // p90
+        const p90Base = p.totalMins / 90
+        xFinal = p90Base > 0 ? p.xSum / p90Base : 0
+        yFinal = p90Base > 0 ? p.ySum / p90Base : 0
+      }
+      
+      pointsList.push({
+        id: p.id,
+        name: p.name,
+        teamLogo: p.teamLogo,
+        teamName: p.teamName,
+        x: r2(xFinal),
+        y: r2(yFinal),
+        isCurrent: p.id === player?.id,
+        isCompare: p.id === compareTarget
+      })
+    })
+    
+    return pointsList
+  }, [positionScores, xAxisMetric, yAxisMetric, scatterMode, player?.id, compareTarget, allPlayers])
+
+  const renderCustomDot = (props: any) => {
+    const { cx, cy, payload } = props
+    if (!cx || !cy) return null
+
+    const isCurrent = payload.isCurrent
+    const isCompare = payload.isCompare
+    const isSpecial = isCurrent || isCompare
+    const size = isSpecial ? 30 : 20
+    const offset = size / 2
+
+    return (
+      <g>
+        {isCurrent && (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={18}
+            fill="none"
+            stroke="#10b981"
+            strokeWidth={2}
+          />
+        )}
+        {isCompare && (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={18}
+            fill="none"
+            stroke="#f97316"
+            strokeWidth={2}
+          />
+        )}
+        {payload.teamLogo ? (
+          <image
+            x={cx - offset}
+            y={cy - offset}
+            width={size}
+            height={size}
+            href={payload.teamLogo}
+            xlinkHref={payload.teamLogo}
+            style={{ cursor: 'pointer' }}
+          />
+        ) : (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={isSpecial ? 8 : 4}
+            fill={isCurrent ? '#10b981' : isCompare ? '#f97316' : '#cbd5e1'}
+            stroke="#ffffff"
+            strokeWidth={1}
+            style={{ cursor: 'pointer' }}
+          />
+        )}
+      </g>
+    )
+  }
+
+  function getPositionLabel(position: string) {
     const posLower = position.toLowerCase()
     if (posLower.includes('goalkeeper') || posLower === 'gk') return 'POR'
     if (posLower.includes('defender') || posLower === 'def') return 'DEF'
@@ -556,6 +756,17 @@ export default function JugadorDetallePage() {
       second_yellow_cards: acc.second_yellow_cards + n(s.second_yellow_cards),
       red_cards: acc.red_cards + n(s.red_cards),
       relevo_points: acc.relevo_points + n(s.relevo_points),
+      ground_duels_won: acc.ground_duels_won + n((s as any).ground_duels_won),
+      ground_duels_total: acc.ground_duels_total + n((s as any).ground_duels_total),
+      shots_total: acc.shots_total + n((s as any).shots_total),
+      pass_opp_half_completed: acc.pass_opp_half_completed + n((s as any).pass_opp_half_completed),
+      pass_opp_half_attempted: acc.pass_opp_half_attempted + n((s as any).pass_opp_half_attempted),
+      fantasy_assist: acc.fantasy_assist + n((s as any).fantasy_assist),
+      calidad_parada: acc.calidad_parada + n((s as any).calidad_parada),
+      def_actions_last_man: acc.def_actions_last_man + n((s as any).def_actions_last_man),
+      set_piece_shots: acc.set_piece_shots + n((s as any).set_piece_shots),
+      recoveries_opp_half: acc.recoveries_opp_half + n((s as any).recoveries_opp_half),
+      header_shots: acc.header_shots + n((s as any).header_shots),
     }
   }, {
     total_points: 0,
@@ -638,9 +849,20 @@ export default function JugadorDetallePage() {
     second_yellow_cards: 0,
     red_cards: 0,
     relevo_points: 0,
+    ground_duels_won: 0,
+    ground_duels_total: 0,
+    shots_total: 0,
+    pass_opp_half_completed: 0,
+    pass_opp_half_attempted: 0,
+    fantasy_assist: 0,
+    calidad_parada: 0,
+    def_actions_last_man: 0,
+    set_piece_shots: 0,
+    recoveries_opp_half: 0,
+    header_shots: 0,
   } as any)
 
-  const matchesPlayed = scores.length
+  const matchesPlayed = scores.filter(s => (s.minutes_played || 0) > 0).length
   const avgPoints = matchesPlayed > 0 ? Math.round((totalStats.total_points / matchesPlayed) * 10) / 10 : 0
 
   // ============================================================
@@ -652,10 +874,14 @@ export default function JugadorDetallePage() {
   // Tarifas resueltas desde scoring_config (con fallback a los valores oficiales).
   // Reflejan lo editado en Admin, así que el "× valor" de cada métrica cuadra.
   const SR = resolveRates(scoringRules)
-  const r2 = (v: number) => Math.round(v * 100) / 100
-  const fmtPts = (v: number): string => String(parseFloat(r2(v).toFixed(2)))
+  function r2(v: number): number {
+    return Math.round(v * 100) / 100
+  }
+  function fmtPts(v: number): string {
+    return String(parseFloat(r2(v).toFixed(2)))
+  }
 
-  const normPos = (position?: string): Pos => {
+  function normPos(position?: string): Pos {
     const p = (position || '').toUpperCase()
     if (p === 'POR' || p === 'DEF' || p === 'MED' || p === 'DEL') return p
     return getPositionLabel(position || '') as Pos
@@ -673,7 +899,7 @@ export default function JugadorDetallePage() {
     // BLOQUE 1: Participación
     const b1: ScoreRow[] = []
     if (score.minutes_played > 0) {
-      const isStarter = score.is_starter === true || score.is_starter === 1 || score.is_starter === 'true'
+      const isStarter = score.is_starter === true || (score.is_starter as any) === 1 || (score.is_starter as any) === 'true'
       const hasThreshold = score.minutes_played >= SR.participation.minutes_threshold
       b1.push({
         label: isStarter
@@ -1146,42 +1372,23 @@ export default function JugadorDetallePage() {
       points: s => nv(s, 'own_goals') * SR.own_goal },
   ]
 
-  const mainPos = normPos(player.position)
   // Minutos totales expresados en "partidos de 90′"
   const per90Base = totalStats.minutes_played > 0 ? totalStats.minutes_played / 90 : 0
-
-  const relevoSubMetrics = (RELEVO_BLOCKS[mainPos] || []).flatMap(block => 
-    block.options.flatMap(opt => 
-      opt.metrics.map(m => ({
-        key: `relevo_${block.id}_${m.label.replace(/\s+/g, '_')}`,
-        label: `↳ ${m.label}`,
-        group: 'bonus' as MetricGroupId,
-        count: () => 0,
-        points: () => 0,
-        flat: true,
-        isRelevoSubMetric: true,
-        relevoSpec: m
-      }))
-    )
-  )
 
   const FULL_SCORING_METRICS = [...SCORING_METRICS, ...relevoSubMetrics as any[]]
 
   const scoringMetrics = FULL_SCORING_METRICS.map(def => {
     if ((def as any).isRelevoSubMetric) {
       const m = (def as any).relevoSpec
-      let globalVal = 0
-      if (m.unit === 'pct') {
-        globalVal = m.value(totalStats as any)
-      } else {
-        const totalCount = m.value(totalStats as any)
-        globalVal = per90Base > 0 ? totalCount / per90Base : 0
-      }
+      const totalCount = m.value(totalStats as any)
+      const per90 = m.unit === 'pct' 
+        ? totalCount 
+        : (per90Base > 0 ? totalCount / per90Base : 0)
       return {
         ...def,
-        count: m.unit === 'pct' ? `${r2(globalVal)}%` : r2(globalVal),
+        count: m.unit === 'pct' ? `${r2(totalCount)}%` : r2(totalCount),
         points: 0,
-        per90: m.unit === 'pct' ? r2(globalVal) : r2(globalVal),
+        per90: r2(per90),
         rateValue: null,
       }
     }
@@ -1219,31 +1426,38 @@ export default function JugadorDetallePage() {
   ]
 
   // Configuración de la gráfica de evolución
+  const dynamicRelevoMetricsForChart = relevoSubMetrics.map(m => ({
+    key: m.key,
+    label: m.label.replace('↳ ', '') + ' (RELEVO)',
+    icon: '📊'
+  }))
+
   const chartMetrics = [
-    { key: 'puntos', label: 'Puntos', icon: '⭐' },
-    { key: 'minutos', label: 'Minutos', icon: '⏱️' },
+    { key: 'puntos', label: 'Puntos Totales', icon: '⭐' },
+    { key: 'relevo', label: 'Puntos RELEVO', icon: '⭐' },
     { key: 'goles', label: 'Goles', icon: '⚽' },
-    { key: 'asistencias', label: 'Asistencias', icon: '🅰️' },
+    { key: 'asistencias', label: 'Asistencias de gol', icon: '🅰️' },
     { key: 'tiros', label: 'Tiros a puerta', icon: '🎯' },
-    { key: 'pases', label: 'Pases comp.', icon: '📈' },
-    { key: 'regates', label: 'Regates gan.', icon: '👟' },
+    { key: 'regates', label: 'Regates completados', icon: '👟' },
+    { key: 'balones_area', label: 'Balones al área', icon: '🎯' },
     { key: 'despejes', label: 'Despejes', icon: '🛡️' },
-    { key: 'recuperaciones', label: 'Recup.', icon: '🔄' },
-    { key: 'interceptaciones', label: 'Interc.', icon: '🛑' },
+    { key: 'recuperaciones', label: 'Balones recuperados', icon: '🔄' },
     { key: 'paradas', label: 'Paradas', icon: '🧤' },
-    { key: 'perdidas', label: 'Pérdidas', icon: '📉' },
-    { key: 'pases_adelante', label: 'Pases adel.', icon: '▶️' },
-    { key: 'balones_area', label: 'Balones área', icon: '🎯' },
-    { key: 'pases_largos', label: 'Pases largos', icon: '🚀' },
-    { key: 'centros', label: 'Centros', icon: '🔀' },
-    { key: 'balon_parado', label: 'Balón parado', icon: '⛳' },
+    { key: 'perdidas', label: 'Balones perdidos', icon: '📉' },
+    ...dynamicRelevoMetricsForChart
   ]
 
-  const getMetricValue = (score: PlayerScore, key: string): number => {
+  function getMetricValue(score: PlayerScore, key: string): number {
+    if (key.startsWith('relevo_')) {
+      const match = relevoSubMetrics.find(m => m.key === key)
+      return match ? Number(match.relevoSpec.value(score as any)) || 0 : 0
+    }
     const n = (val: any) => Number(val) || 0
     switch (key) {
       case 'puntos':
         return Math.round((score.total_points || 0) * 10) / 10
+      case 'relevo':
+        return n(score.relevo_points)
       case 'minutos':
         return n(score.minutes_played)
       case 'goles':
@@ -1510,6 +1724,15 @@ export default function JugadorDetallePage() {
                   </span>
                 </div>
 
+                {/* Table Header (only visible on sm and up) */}
+                <div className="hidden sm:grid grid-cols-12 gap-2 px-4 py-2 bg-slate-50/50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <div className="col-span-4">Métrica</div>
+                  <div className="col-span-2 text-right">Total</div>
+                  <div className="col-span-2 text-right">Media/part</div>
+                  <div className="col-span-2 text-right">Por 90′</div>
+                  <div className="col-span-2 text-right">Puntos</div>
+                </div>
+
                 <CardContent className="divide-y divide-slate-100 p-4 pt-2">
                   {items.map(m => {
                     const share = Math.min(100, (Math.abs(m.points) / maxAbsMetricPoints) * 100)
@@ -1517,28 +1740,97 @@ export default function JugadorDetallePage() {
                       ? 'bg-emerald-50 text-emerald-700'
                       : m.points < 0 ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-400'
 
+                    const totalVal = m.flat ? m.points : m.count
+                    const isPct = m.isRelevoSubMetric && m.relevoSpec.unit === 'pct'
+                    
+                    let totalStr = ''
+                    let avgStr = ''
+                    let per90Str = ''
+                    
+                    if (isPct) {
+                      totalStr = `${totalVal}`
+                      avgStr = '—'
+                      per90Str = `${m.per90}%`
+                    } else {
+                      const totalNum = Number(totalVal) || 0
+                      totalStr = String(r2(totalNum))
+                      
+                      const avgNum = matchesPlayed > 0 ? totalNum / matchesPlayed : 0
+                      avgStr = fmtPts(avgNum)
+                      
+                      per90Str = m.per90 !== null ? fmtPts(m.per90) : '—'
+                    }
+
                     return (
                       <div
                         key={m.key}
                         className="-mx-2 rounded-lg px-2 py-2.5 transition-colors duration-150 hover:bg-slate-50/70"
-                        title={`${m.count} en total · ${totalStats.minutes_played}′ jugados`}
+                        title={`${totalStr} en total · ${totalStats.minutes_played}′ jugados`}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-700">
-                            {m.label}
-                          </span>
-                          {m.rateValue !== null && (
-                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-slate-500">
-                              ×{fmtPts(m.rateValue)}
+                        {/* Desktop grid layout */}
+                        <div className="hidden sm:grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-4 flex items-center gap-1.5 min-w-0">
+                            <span className="truncate text-[13px] font-semibold text-slate-700">
+                              {m.label}
                             </span>
-                          )}
-                          <span className="w-16 shrink-0 text-right text-lg font-black leading-none tabular-nums text-slate-900">
-                            {m.per90 !== null ? fmtPts(m.per90) : '—'}
-                          </span>
-                          <span className={`w-[62px] shrink-0 rounded-md py-0.5 text-center text-[11px] font-extrabold tabular-nums ${ptsTone}`}>
-                            {m.points > 0 ? `+${fmtPts(m.points)}` : fmtPts(m.points)}
-                          </span>
+                            {m.rateValue !== null && (
+                              <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-slate-500">
+                                ×{fmtPts(m.rateValue)}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="col-span-2 text-right text-xs font-medium text-slate-500 tabular-nums">
+                            {totalStr}
+                          </div>
+                          
+                          <div className="col-span-2 text-right text-xs font-medium text-slate-500 tabular-nums">
+                            {avgStr}
+                          </div>
+                          
+                          <div className="col-span-2 text-right text-sm font-bold text-slate-900 tabular-nums">
+                            {per90Str}
+                          </div>
+                          
+                          <div className="col-span-2 flex justify-end">
+                            <span className={`w-[62px] shrink-0 rounded-md py-0.5 text-center text-[11px] font-extrabold tabular-nums ${ptsTone}`}>
+                              {m.points > 0 ? `+${fmtPts(m.points)}` : fmtPts(m.points)}
+                            </span>
+                          </div>
                         </div>
+
+                        {/* Mobile layout */}
+                        <div className="sm:hidden space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="truncate text-[13px] font-semibold text-slate-700">
+                                {m.label}
+                              </span>
+                              {m.rateValue !== null && (
+                                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-slate-500">
+                                  ×{fmtPts(m.rateValue)}
+                                </span>
+                              )}
+                            </div>
+                            <span className={`w-[62px] shrink-0 rounded-md py-0.5 text-center text-[11px] font-extrabold tabular-nums ${ptsTone}`}>
+                              {m.points > 0 ? `+${fmtPts(m.points)}` : fmtPts(m.points)}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                            <div>
+                              Tot: <span className="font-bold text-slate-700">{totalStr}</span>
+                            </div>
+                            <div>
+                              Med: <span className="font-bold text-slate-700">{avgStr}</span>
+                            </div>
+                            <div>
+                              90′: <span className="font-bold text-slate-900">{per90Str}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar (shared) */}
                         <div className="mt-1.5 flex items-center gap-2">
                           <div className="h-1 flex-1 overflow-hidden rounded-full bg-slate-100">
                             <div
@@ -1546,9 +1838,6 @@ export default function JugadorDetallePage() {
                               style={{ width: `${share}%` }}
                             />
                           </div>
-                          <span className="shrink-0 text-[10px] font-medium tabular-nums text-slate-400">
-                            {m.flat ? `${m.count} part.` : `${m.count} tot.`} · {m.flat ? 'pts/90' : 'por 90′'}
-                          </span>
                         </div>
                       </div>
                     )
@@ -1559,7 +1848,7 @@ export default function JugadorDetallePage() {
           })}
 
           {/* Tarjeta de Gráfico de Radar de Comparativa */}
-          <Card className="overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow duration-300">
+          <Card className="col-span-1 md:col-span-2 overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow duration-300">
             <div className="px-4 py-3 border-b flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <span className="text-xl leading-none">🕸️</span>
@@ -1781,6 +2070,161 @@ export default function JugadorDetallePage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Tarjeta de Gráfico de Dispersión */}
+          <Card className="col-span-1 md:col-span-2 overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow duration-300">
+            <div className="px-4 py-3 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between bg-slate-50/50 gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl leading-none">🎯</span>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">Comparativa de Dispersión</h3>
+                  <p className="text-[10px] font-medium text-slate-400">Posición: {player?.position ? getPositionLabel(player.position) : '—'}</p>
+                </div>
+              </div>
+              
+              {/* Selector de Modo */}
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold self-end sm:self-auto">
+                <button
+                  onClick={() => setScatterMode('total')}
+                  className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                    scatterMode === 'total' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Acumulado
+                </button>
+                <button
+                  onClick={() => setScatterMode('avg')}
+                  className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                    scatterMode === 'avg' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Por part.
+                </button>
+                <button
+                  onClick={() => setScatterMode('p90')}
+                  className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                    scatterMode === 'p90' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Por 90′
+                </button>
+              </div>
+            </div>
+
+            <CardContent className="p-4 space-y-4">
+              {/* Selectores de métricas para los ejes X e Y */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Eje X (Horizontal)</label>
+                  <select
+                    value={xAxisMetric}
+                    onChange={(e) => setXAxisMetric(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  >
+                    {chartMetrics.map(m => (
+                      <option key={m.key} value={m.key}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Eje Y (Vertical)</label>
+                  <select
+                    value={yAxisMetric}
+                    onChange={(e) => setYAxisMetric(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  >
+                    {chartMetrics.map(m => (
+                      <option key={m.key} value={m.key}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Contenedor del gráfico */}
+              <div className="h-[350px] w-full mt-2 relative">
+                {scatterData.length === 0 ? (
+                  <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-slate-400">
+                    Cargando comparativa...
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ScatterChart
+                      margin={{ top: 20, right: 20, bottom: 20, left: 10 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis 
+                        type="number" 
+                        dataKey="x" 
+                        name={chartMetrics.find(m => m.key === xAxisMetric)?.label || xAxisMetric} 
+                        stroke="#94a3b8"
+                        fontSize={10}
+                        tickLine={false}
+                      />
+                      <YAxis 
+                        type="number" 
+                        dataKey="y" 
+                        name={chartMetrics.find(m => m.key === yAxisMetric)?.label || yAxisMetric} 
+                        stroke="#94a3b8"
+                        fontSize={10}
+                        tickLine={false}
+                      />
+                      <ZAxis type="number" range={[50, 200]} />
+                      
+                      <RechartsTooltip 
+                        cursor={{ strokeDasharray: '3 3', stroke: '#cbd5e1' }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload
+                            const xLabel = chartMetrics.find(m => m.key === xAxisMetric)?.label || xAxisMetric
+                            const yLabel = chartMetrics.find(m => m.key === yAxisMetric)?.label || yAxisMetric
+                            return (
+                              <div className="bg-slate-900 text-white px-3 py-2 rounded-xl border border-slate-700 shadow-xl text-xs space-y-1">
+                                <div className="flex items-center gap-1.5 border-b border-slate-700 pb-1 mb-1">
+                                  {data.teamLogo && (
+                                    <img src={data.teamLogo} alt={data.teamName} className="w-4 h-4 object-contain shrink-0" />
+                                  )}
+                                  <p className="font-bold text-emerald-400">{data.name}</p>
+                                </div>
+                                <div className="space-y-0.5 text-slate-300 font-medium">
+                                  <p>{xLabel}: <span className="font-bold text-white">{data.x}</span></p>
+                                  <p>{yLabel}: <span className="font-bold text-white">{data.y}</span></p>
+                                </div>
+                              </div>
+                            )
+                          }
+                          return null
+                        }}
+                      />
+
+                      <Scatter name="Jugadores" data={scatterData} shape={renderCustomDot} />
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+
+              {/* Leyenda explicativa */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 justify-center border-t border-slate-100 pt-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white shadow-sm" />
+                  <span>{player?.short_name || 'Este jugador'}</span>
+                </div>
+                {comparePlayer && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500 border border-white shadow-sm" />
+                    <span>{compareLabel}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-slate-300" />
+                  <span>Otros {player?.position ? getPositionLabel(player.position) + 's' : 'jugadores'}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -1857,6 +2301,10 @@ export default function JugadorDetallePage() {
               <div className="w-full overflow-hidden">
                 <svg width="100%" height="100%" viewBox={`0 0 ${svgW} ${svgH}`} className="overflow-visible">
                   <defs>
+                    <linearGradient id="grad-relevo" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#a78bfa" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#7c3aed" stopOpacity="1" />
+                    </linearGradient>
                     <linearGradient id="grad-puntos" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#34d399" stopOpacity="1" />
                       <stop offset="100%" stopColor="#059669" stopOpacity="1" />
@@ -2003,7 +2451,9 @@ export default function JugadorDetallePage() {
 
                     const fillUrl = (selectedMetric === 'puntos' && val < 0)
                       ? 'url(#grad-puntos-neg)'
-                      : `url(#grad-${selectedMetric})`
+                      : (selectedMetric.startsWith('relevo')
+                         ? 'url(#grad-relevo)'
+                         : `url(#grad-${selectedMetric})`)
 
                     return (
                       <g key={i}>
