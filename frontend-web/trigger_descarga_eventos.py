@@ -1231,13 +1231,20 @@ class MatchEventDownloader:
         except Exception as e:
             print(f"      ❌ Fallo promocionando {prov_id} a {real_id}: {e}")
 
-    def update_match_score(self, match_ended=False, current_minute=0):
+    def update_match_score(self, match_ended=False, current_minute=0, match_started=True):
         """Actualiza el marcador del partido en la tabla fixtures.
 
         match_ended=True solo cuando la API ha emitido el evento de tiempo
         completo. Mientras el partido sigue en juego dejamos status='live'
         para que el sincronizador automático lo siga refrescando cada pocos
         minutos; al terminar lo marcamos 'finished' y el cron deja de tocarlo.
+
+        match_started=False cuando la única cosa que ha publicado la API son
+        las alineaciones (periodId 16, pre-partido). El cron ya sincroniza
+        desde 30 min antes del pitido inicial, así que sin esta comprobación el
+        partido se marcaba 'live' con un 0-0 media hora antes de empezar y la
+        página Partidos lo pintaba "En Juego". En ese caso NO se toca el
+        estado: se queda como esté (scheduled) hasta que ruede el balón.
         """
         print("\n📊 Actualizando marcador del partido...")
 
@@ -1249,18 +1256,27 @@ class MatchEventDownloader:
         home_goals = self.team_goals_scored.get(self.home_team_id, 0)
         away_goals = self.team_goals_scored.get(self.away_team_id, 0)
 
-        new_status = 'finished' if match_ended else 'live'
+        if match_ended:
+            new_status = 'finished'
+        elif match_started:
+            new_status = 'live'
+        else:
+            new_status = None  # Pre-partido: no se toca el estado
+
         print(f"   Marcador calculado: Local ({self.home_team_id}) {home_goals} - {away_goals} Visitante ({self.away_team_id})")
-        print(f"   (Local marcó: {home_goals}, Visitante marcó: {away_goals}) → status='{new_status}'")
+        print(f"   (Local marcó: {home_goals}, Visitante marcó: {away_goals}) → status={new_status or 'sin cambios (aún no ha empezado)'}")
+
+        payload = {
+            'home_score': home_goals,
+            'away_score': away_goals,
+            'current_minute': current_minute,
+        }
+        if new_status:
+            payload['status'] = new_status
 
         # Actualizar la tabla fixtures
         try:
-            response = self.supabase.table('fixtures').update({
-                'home_score': home_goals,
-                'away_score': away_goals,
-                'status': new_status,
-                'current_minute': current_minute
-            }).eq('id', self.fixture_id).execute()
+            response = self.supabase.table('fixtures').update(payload).eq('id', self.fixture_id).execute()
 
             if response.data:
                 print(f"   ✅ Marcador actualizado en fixtures")
@@ -1538,6 +1554,10 @@ class MatchEventDownloader:
             ))
 
             self.events = events
+            # ¿Ha empezado de verdad? Los eventos de pre-partido llegan con
+            # periodId 16 (alineaciones); cualquier periodId de juego (1ª/2ª
+            # parte, prórroga, penaltis) significa que el balón ya rueda.
+            match_started = any(e.get('periodId') in (1, 2, 3, 4, 5) for e in events)
             self.event_dict = {(e.get('contestantId'), str(e.get('eventId'))): e for e in events}
             self.event_seq = 0
             for event in events:
@@ -1562,7 +1582,11 @@ class MatchEventDownloader:
             self.upload_to_supabase()
 
             # Actualizar marcador del partido (solo 'finished' si llegó el tiempo completo)
-            self.update_match_score(match_ended=match_ended, current_minute=current_minute)
+            self.update_match_score(
+                match_ended=match_ended,
+                current_minute=current_minute,
+                match_started=match_started,
+            )
 
             print(f"\n{'='*60}")
             print(f"✅ Descarga completada - Minuto {current_minute}'")

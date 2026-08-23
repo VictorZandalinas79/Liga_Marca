@@ -234,8 +234,8 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     if (!teamPlayersByMatchday.get(tp.team_id)!.has(md)) teamPlayersByMatchday.get(tp.team_id)!.set(md, [])
     teamPlayersByMatchday.get(tp.team_id)!.get(md)!.push(tp)
 
-    // Kamikaze tracking
-    if (tp.created_at && md > 0) {
+    // Kamikaze tracking (solo desde la jornada en la que arranca el juego)
+    if (tp.created_at && md >= fantasyStart) {
       const created = new Date(tp.created_at)
       const deadline = matchdayToDeadline.get(md)
       if (deadline && created < deadline) {
@@ -345,6 +345,7 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     penalties: (penaltiesData ?? []) as SharedData['penalties'],
     sessionCounts,
     financeByUser,
+    lastPlaceCount: new Map(),
   }
 }
 

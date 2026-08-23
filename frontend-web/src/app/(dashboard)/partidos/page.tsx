@@ -49,6 +49,16 @@ interface Fixture {
 
 // Cada cuánto se refrescan marcadores y puntos mientras hay partidos en juego
 const LIVE_REFRESH_MS = 45_000
+// Desde cuándo se considera que un partido está "en directo" a efectos de
+// refresco. Media hora antes del pitido inicial, igual que la ventana del cron
+// de sincronización (ci/run_live_sync.py -> UPCOMING_WINDOW = 30): así la
+// página ya está refrescando cuando llegan las alineaciones.
+const PREMATCH_WINDOW_MS = 30 * 60 * 1000
+// Hasta cuándo se sigue refrescando un partido que nunca llegó a marcarse
+// 'live' (90' + descanso + descuento + retrasos de kick-off).
+const POSTMATCH_WINDOW_MS = 3 * 60 * 60 * 1000
+// Estados en los que el partido ya no da más datos: se deja de refrescar.
+const TERMINAL_STATUSES = new Set(['finished', 'cancelled', 'postponed'])
 // Cada cuánto se recalcula el "ahora" (ventana de juego, minutos transcurridos).
 // Sin esto la página no se enteraba de que un partido había empezado hasta que
 // algo la re-renderizaba, y el auto-refresco no llegaba a arrancar nunca.
@@ -306,10 +316,15 @@ export default function PartidosPage() {
   // apaga sin necesidad de recargar la página.
   const hasLiveFixtures = fixtures.some(f => f.status === 'live')
   const hasFixturesInPlayWindow = fixtures.some(f => {
-    if (f.is_complete || !f.start_time) return false
+    if (!f.start_time) return false
+    // Se mira el estado real del partido, NO `is_complete`: ese flag solo dice
+    // que hay más de 18 jugadores puntuados, y eso ya se cumple en cuanto
+    // llegan las alineaciones (antes incluso de empezar). Usarlo aquí apagaba
+    // el auto-refresco justo cuando empezaban a entrar los datos del directo.
+    if (TERMINAL_STATUSES.has((f.status || '').toLowerCase())) return false
     const elapsedMs = now - new Date(f.start_time).getTime()
-    // Desde 5 min antes del pitido inicial hasta 3 h después
-    return elapsedMs > -5 * 60 * 1000 && elapsedMs < 3 * 60 * 60 * 1000
+    // Desde media hora antes del pitido inicial hasta 3 h después
+    return elapsedMs > -PREMATCH_WINDOW_MS && elapsedMs < POSTMATCH_WINDOW_MS
   })
   const shouldAutoRefresh = hasLiveFixtures || hasFixturesInPlayWindow || now < pollUntil
 
@@ -386,7 +401,12 @@ export default function PartidosPage() {
     return `${diffDays}d ${diffHours % 24}h`
   }
 
-  const getStatusBadge = (isComplete?: boolean, status?: string, currentMinute?: number) => {
+  const getStatusBadge = (
+    isComplete?: boolean,
+    status?: string,
+    currentMinute?: number,
+    startTime?: string
+  ) => {
     if (status === 'live') {
       return (
         <div className="flex items-center gap-2">
@@ -400,6 +420,17 @@ export default function PartidosPage() {
             </span>
           )}
         </div>
+      )
+    }
+    // Antes del pitido inicial no tiene sentido hablar de completo/incompleto:
+    // las alineaciones ya crean 22 puntuaciones a 0, así que `isComplete` es
+    // true media hora antes de empezar y el partido salía marcado "Completo".
+    if (startTime && new Date(startTime).getTime() > now) {
+      return (
+        <Badge className="bg-slate-600 text-white text-xs flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          Por jugar
+        </Badge>
       )
     }
     // Hasta que no lleguen las puntuaciones no sabemos si está completo:
@@ -430,8 +461,13 @@ export default function PartidosPage() {
   const handleSyncAll = async () => {
     if (fixtures.length === 0) return
 
-    // Filtrar solo los partidos que NO están completos (pendientes de sincronizar)
-    const pendingFixtures = fixtures.filter(f => !f.is_complete)
+    // Pendiente = todavía puede dar datos nuevos. Un partido en juego tiene ya
+    // más de 18 jugadores puntuados (`is_complete`), así que con el filtro
+    // anterior el botón contestaba "todos sincronizados" en pleno directo,
+    // justo cuando más falta hace pulsarlo.
+    const pendingFixtures = fixtures.filter(
+      f => !TERMINAL_STATUSES.has((f.status || '').toLowerCase()) || !f.is_complete
+    )
 
     if (pendingFixtures.length === 0) {
       setSyncStatus({
@@ -724,7 +760,7 @@ export default function PartidosPage() {
                     <div className="w-full h-full relative z-10" onClick={() => handleMatchClick(fixture)}>
                       {/* Estado y hora */}
                       <div className="flex items-center justify-between mb-4">
-                        {getStatusBadge(fixture.is_complete, fixture.status, fixture.current_minute)}
+                        {getStatusBadge(fixture.is_complete, fixture.status, fixture.current_minute, fixture.start_time)}
                         <div className="flex items-center gap-1 text-sm text-slate-300">
                           <Clock className="w-4 h-4" />
                           {formatTime(fixture.start_time)}

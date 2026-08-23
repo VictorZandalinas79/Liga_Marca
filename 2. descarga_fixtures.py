@@ -318,6 +318,8 @@ if __name__ == "__main__":
     print(f"   Squads:   {'✅' if squads_ok else '❌'}")
 
     if fixtures_ok or squads_ok:
-        print("\n✅ Ahora puedes ejecutar: python3 sync_fixtures.py")
+        # sync_fixtures.py se eliminó: subía el calendario pisando el estado
+        # 'live'/'finished' de los partidos. Ahora descarga y subida van juntas.
+        print("\n✅ Para subirlo a Supabase: python3 '2. descarga_fixtures_y_sync.py'")
     else:
         print("\n❌ La descarga falló. Verifica tu conexión o credenciales.")

@@ -442,6 +442,31 @@ def descargar_squads(season_id: str):
     print(f"✅ ÉXITO: {len(all_squads_data)} squads obtenidos en memoria")
     return len(all_squads_data) > 0, all_squads_data
 
+# Estados de Opta -> vocabulario propio de la tabla `fixtures`.
+OPTA_STATUS_MAP = {
+    "fixture": "scheduled",
+    "playing": "live",
+    "played": "finished",
+    "postponed": "postponed",
+    "cancelled": "cancelled",
+    "canceled": "cancelled",
+    "abandoned": "cancelled",
+    "suspended": "postponed",
+}
+
+# Estados que NUNCA deben retroceder a 'scheduled' en un upsert de calendario:
+# los escribe el motor de directo (trigger_descarga_eventos.py) y son la única
+# señal que tiene la página Partidos para saber que hay partido en juego.
+PROTECTED_STATUSES = {"live", "finished"}
+
+
+def normalize_status(raw):
+    """Traduce el estado de Opta. Si no viene o no se reconoce, 'scheduled'."""
+    if not raw:
+        return "scheduled"
+    return OPTA_STATUS_MAP.get(str(raw).strip().lower(), "scheduled")
+
+
 def upload_fixtures_to_supabase(matches):
     """Sube los fixtures a la tabla fixtures de Supabase."""
     print(f"\n📤 Subiendo fixtures a Supabase (tabla 'fixtures')...")
@@ -480,7 +505,7 @@ def upload_fixtures_to_supabase(matches):
             "home_team_id": contestants[0].get('id') if len(contestants) > 0 else None,
             "away_team_id": contestants[1].get('id') if len(contestants) > 1 else None,
             "start_time": full_timestamp,
-            "status": info.get('status', 'scheduled')
+            "status": normalize_status(info.get('status'))
         })
 
     if not fixtures_payload:
@@ -525,10 +550,22 @@ def upload_fixtures_to_supabase(matches):
 
     # Detectar cambios de horario antes del upsert
     try:
-        existing_resp = supabase.table("fixtures").select("id,start_time").execute()
+        existing_resp = supabase.table("fixtures").select("id,start_time,status").execute()
         existing_map = {r['id']: r['start_time'] for r in (existing_resp.data or [])}
+        existing_status = {r['id']: (r.get('status') or '') for r in (existing_resp.data or [])}
     except Exception:
         existing_map = {}
+        existing_status = {}
+
+    # No pisar el estado del directo. Este upsert corre cada 2 días sobre TODO
+    # el calendario y el feed de calendario no trae `status`, así que devolvía
+    # todos los partidos a 'scheduled': los que el motor de directo había
+    # marcado 'live' o 'finished' perdían el estado y la página Partidos no
+    # llegaba a ver nunca un partido en juego.
+    for f in fixtures_payload:
+        prev = existing_status.get(f.get('id'))
+        if prev in PROTECTED_STATUSES and f['status'] == 'scheduled':
+            f['status'] = prev
 
     # Partidos que quedan fuera del orden de su jornada (aplazados/adelantados).
     out_of_order = detect_out_of_order(fixtures_payload)

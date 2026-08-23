@@ -12,3 +12,9 @@ logs/
 .processed_matchdays.json
 data/Partidos_Individuales/
 frontend-web/data/Partidos_Individuales/
+
+# Volcados de eventos de Opta generados por trigger_descarga_eventos.py
+*_events.json
+# Scripts desechables de pruebas
+scratch_*.py
+scratch_*.js
