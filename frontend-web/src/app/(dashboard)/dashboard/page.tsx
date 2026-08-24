@@ -2241,6 +2241,26 @@ export default function DashboardPage() {
                     </div>
                   )
                 })}
+                {Array.from({ length: Math.max(0, 11 - selectedPlayersData.length) }).map((_, i) => {
+                  const emptyIdx = selectedPlayersData.length + i
+                  return (
+                    <div
+                      key={`empty-${emptyIdx}`}
+                      onClick={() => openPlayerSelector('', emptyIdx)}
+                      className="@container relative z-10 w-full aspect-[5/7] transition-all duration-300 group cursor-pointer hover:scale-105 hover:-translate-y-2 hover:z-50"
+                      style={{
+                        filter: 'drop-shadow(0 25px 25px rgba(0,0,0,0.9)) drop-shadow(0 10px 10px rgba(0,0,0,0.7))'
+                      }}
+                    >
+                      <div className="absolute inset-0 overflow-hidden rounded-xl border bg-slate-800/50 border-slate-700 border-dashed flex flex-col items-center justify-center gap-[2cqw] group-hover:bg-slate-700/50 group-hover:border-emerald-500/50 transition-colors">
+                        <div className="w-[15cqw] h-[15cqw] rounded-full bg-slate-700/60 flex items-center justify-center text-slate-400 group-hover:bg-emerald-500/20 group-hover:text-emerald-400 transition-colors">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="50%" height="50%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                        </div>
+                        <span className="text-[9cqw] font-black text-slate-400 group-hover:text-emerald-400 transition-colors uppercase tracking-wider">Fichar</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </CardContent>
