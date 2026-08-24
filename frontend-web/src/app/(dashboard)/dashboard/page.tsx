@@ -681,6 +681,8 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    let isMounted = true
+
     const fetchInitialData = async (matchday: number) => {
       // Esperar a que la autenticación esté lista
       if (authLoading) return
@@ -701,10 +703,14 @@ export default function DashboardPage() {
       // Si no existe equipo, el usuario NO está registrado
       if (!teamData) {
         console.log('[CARGAR] Usuario no tiene equipo - no está registrado')
-        setIsRegistered(false)
-        setLoading(false)
+        if (isMounted) {
+          setIsRegistered(false)
+          setLoading(false)
+        }
         return
       }
+
+      if (!isMounted) return
 
       // El usuario SÍ está registrado
       setIsRegistered(true)
@@ -752,26 +758,29 @@ export default function DashboardPage() {
       }
 
       // 2. Alineación de la JORNADA ANTERIOR (base para resaltar cambios)
-      const { data: prevPlayers } = await supabase
-        .from('team_players')
-        .select('player_id, matchday, order')
-        .eq('team_id', teamData.id)
-        .eq('is_starter', true)
-        .lt('matchday', matchday)
-        .order('matchday', { ascending: false })
-
+      // Solo aplica si estamos en una jornada posterior al inicio de la liga
       let baseIds: string[] = []
-      if (prevPlayers && prevPlayers.length > 0) {
-        const prevMd = prevPlayers[0].matchday
-        baseIds = prevPlayers
-          .filter(tp => tp.matchday === prevMd)
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-          .map(tp => tp.player_id)
-        // Descartar IDs duplicados (filas repetidas en BD) para no inflar la
-        // lista de salientes y que un mismo jugador aparezca varias veces.
-        baseIds = [...new Set(baseIds)]
+      if (matchday > config.fantasy_starting_matchday) {
+        const { data: prevPlayers } = await supabase
+          .from('team_players')
+          .select('player_id, matchday, order')
+          .eq('team_id', teamData.id)
+          .eq('is_starter', true)
+          .lt('matchday', matchday)
+          .order('matchday', { ascending: false })
+
+        if (prevPlayers && prevPlayers.length > 0) {
+          const prevMd = prevPlayers[0].matchday
+          baseIds = prevPlayers
+            .filter(tp => tp.matchday === prevMd)
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+            .map(tp => tp.player_id)
+          baseIds = [...new Set(baseIds)]
+        }
       }
-      setBasePlayers(baseIds)
+      if (isMounted) {
+        setBasePlayers(baseIds)
+      }
 
       // 3. Alineación de la JORNADA ACTIVA
       const { data: currentPlayers } = await supabase
@@ -787,16 +796,19 @@ export default function DashboardPage() {
         const ids = sorted.map(tp => tp.player_id)
         
         const replacedMap: Record<number, string> = {}
-        sorted.forEach(tp => {
-          if (tp.replaced_player_id) {
-            replacedMap[tp.order ?? 0] = tp.replaced_player_id
-          }
-        })
-        setDbReplacedPlayers(replacedMap)
-        
-        setSelectedPlayers(ids)
-        setSavedPlayers(ids)
-        setLoading(false)
+        if (matchday > config.fantasy_starting_matchday) {
+          sorted.forEach(tp => {
+            if (tp.replaced_player_id) {
+              replacedMap[tp.order ?? 0] = tp.replaced_player_id
+            }
+          })
+        }
+        if (isMounted) {
+          setDbReplacedPlayers(replacedMap)
+          setSelectedPlayers(ids)
+          setSavedPlayers(ids)
+          setLoading(false)
+        }
         return
       }
 
@@ -823,9 +835,11 @@ export default function DashboardPage() {
         }))
         const { error } = await supabase.from('team_players').insert(rows)
         if (error) console.error('[CARGAR] Error heredando alineación:', error)
-        setSelectedPlayers(baseIds)
-        setSavedPlayers(baseIds)
-        setLoading(false)
+        if (isMounted) {
+          setSelectedPlayers(baseIds)
+          setSavedPlayers(baseIds)
+          setLoading(false)
+        }
         return
       }
 
@@ -833,17 +847,21 @@ export default function DashboardPage() {
       //    y guardarlo en la jornada activa.
       if (playersWithTeam.length > 0) {
         await selectRandomPlayers(playersWithTeam, formation, true, matchday, teamData.id)
-        setBasePlayers([]) // equipo inicial => nada se marca como "cambio"
+        if (isMounted) setBasePlayers([]) // equipo inicial => nada se marca como "cambio"
       }
 
-      setLoading(false)
+      if (isMounted) setLoading(false)
     }
 
-    // Esperar a que el hook calcule la jornada seleccionada
-    if (typeof selectedMatchday === 'number' && selectedMatchday > 0) {
+    // Esperar a que el hook calcule la jornada seleccionada y cargue la config
+    if (config._isLoaded && typeof selectedMatchday === 'number' && selectedMatchday > 0) {
       fetchInitialData(selectedMatchday)
     }
-  }, [user?.id, selectedMatchday])
+
+    return () => {
+      isMounted = false
+    }
+  }, [user?.id, selectedMatchday, config._isLoaded])
 
   // Cargar puntos de los jugadores cuando la jornada está en curso
   useEffect(() => {
@@ -1330,7 +1348,10 @@ export default function DashboardPage() {
     if (!pendingSwap) return
 
     const { outId, inId, index } = pendingSwap
-    const newChangeHistory = [...changeHistory, { outId, inId, index }]
+    const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+    const newChangeHistory = (activeMatchday && config && matchdayToSave > config.fantasy_starting_matchday) 
+      ? [...changeHistory, { outId, inId, index }]
+      : []
     setChangeHistory(newChangeHistory)
     
     const newSelected = [...selectedPlayers]
@@ -1338,8 +1359,6 @@ export default function DashboardPage() {
     setSelectedPlayers(newSelected)
 
     if (!userTeamId) return
-
-    const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
 
     const teamPlayersData = newSelected.map((playerId, i) => {
       let replacedId = null

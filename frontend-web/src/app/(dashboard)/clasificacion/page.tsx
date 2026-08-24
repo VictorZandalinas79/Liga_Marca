@@ -224,10 +224,12 @@ export default function ClasificacionPage() {
     const teamId = userTeamsData[0].id
     const teamName = userTeamsData[0].name
 
-    if (targetMatchday < 1) {
+    const fantasyStart = config?.fantasy_starting_matchday ?? 1
+
+    if (targetMatchday < fantasyStart) {
       setUserTeamData(prev => ({
         ...prev,
-        [userId]: { teamName, isHidden: true, hiddenReason: 'Sin jornadas anteriores.' }
+        [userId]: { teamName, isHidden: true, hiddenReason: `Sin plantillas (la liga empieza en la J${fantasyStart}).` }
       }))
       setTimeout(() => {
         teamRefs.current[userId]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -236,11 +238,13 @@ export default function ClasificacionPage() {
     }
 
     // Obtener jugadores del equipo en la jornada seleccionada o anterior disponible
+    // respetando el límite inferior de la jornada de inicio de liga
     let { data: teamPlayersData } = await supabase
       .from('team_players')
       .select('player_id, is_starter, is_captain, matchday, replaced_player_id')
       .eq('team_id', teamId)
       .lte('matchday', targetMatchday)
+      .gte('matchday', fantasyStart)
       .order('matchday', { ascending: false })
 
     if (teamPlayersData && teamPlayersData.length > 0) {
@@ -249,7 +253,13 @@ export default function ClasificacionPage() {
     }
 
     if (!teamPlayersData || teamPlayersData.length === 0) {
-      setUserTeamData(prev => ({ ...prev, [userId]: null }))
+      setUserTeamData(prev => ({
+        ...prev,
+        [userId]: { teamName, isHidden: true, hiddenReason: `Aún no hay plantilla guardada (J${fantasyStart}).` }
+      }))
+      setTimeout(() => {
+        teamRefs.current[userId]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
       return
     }
 

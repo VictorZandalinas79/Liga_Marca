@@ -206,13 +206,16 @@ export default function JornadaPage() {
 
     const allInfos = [...numericInfos, ...momentoInfos]
 
-    // Solo mostramos jornadas que YA han empezado (en directo o finalizadas).
+    // Solo mostramos jornadas que YA han empezado (en directo o finalizadas)
+    // y que pertenezcan a la liga oficial (>= fantasy_starting_matchday).
     // Las futuras quedan ocultas hasta su primer partido.
-    const startedInfos = allInfos.filter(m => m.started)
+    const startedInfos = allInfos.filter(m => m.started && (typeof m.matchday === 'number' ? m.matchday >= (config?.fantasy_starting_matchday ?? 1) : true))
 
     setAvailableMatchdays(startedInfos)
 
     if (startedInfos.length === 0) {
+      setSelectedMatchday(0)
+      setUserTeams([])
       setLoading(false)
       return
     }
@@ -665,17 +668,18 @@ export default function JornadaPage() {
       }
     }
     getCurrentUser()
-  }, [config.matchday_start_hours_before])
+  }, [config.matchday_start_hours_before, config.fantasy_starting_matchday])
 
   useEffect(() => {
+    let isActive = true
     if (selectedMatchday > 0 && selectedDivision != null) {
-      loadUserTeamsForMatchday(selectedMatchday)
+      loadUserTeamsForMatchday(selectedMatchday).then(() => {
+        if (!isActive) return
+        const fetchInfractions = async () => {
+          const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
+          if (!info) return
 
-      const fetchInfractions = async () => {
-        const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
-        if (!info) return
-
-        let infractionsData: any[] = []
+          let infractionsData: any[] = []
         // 1. Siempre intentar obtener las sanciones consolidadas de la base de datos.
         //    Las multas guardan su división, así que se filtran directamente.
         let query = supabase
@@ -701,10 +705,14 @@ export default function JornadaPage() {
             infractionsData = data.infractions || []
           }
         }
-        setMatchdayInfractions(infractionsData)
+        if (isActive) {
+          setMatchdayInfractions(infractionsData)
+        }
       }
       fetchInfractions()
+    })
     }
+    return () => { isActive = false }
   }, [selectedMatchday, availableMatchdays, config, selectedDivision])
 
   // Polling en tiempo real cuando la jornada seleccionada está en directo

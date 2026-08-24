@@ -19,7 +19,7 @@ export function useLeagueConfig(): LeagueConfig {
         .maybeSingle()
       
       if (!error && data && mounted) {
-        setConfig({ ...DEFAULT_LEAGUE_CONFIG, ...data })
+        setConfig({ ...DEFAULT_LEAGUE_CONFIG, ...data, _isLoaded: true })
       }
     }
 
@@ -34,7 +34,7 @@ export function useLeagueConfig(): LeagueConfig {
         { event: '*', schema: 'public', table: 'league_config' },
         (payload) => {
           if (mounted && payload.new) {
-            setConfig(c => ({ ...c, ...(payload.new as any) }))
+            setConfig(c => ({ ...c, ...(payload.new as any), _isLoaded: true }))
           }
         }
       )

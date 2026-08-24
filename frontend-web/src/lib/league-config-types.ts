@@ -30,6 +30,7 @@ export interface LeagueConfig {
   prize_div3_3rd: number
   starting_balance: number
   infraction_penalty_cost: number
+  _isLoaded?: boolean
 }
 
 export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
