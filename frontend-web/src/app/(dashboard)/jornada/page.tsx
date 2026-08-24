@@ -124,6 +124,7 @@ export default function JornadaPage() {
 
   // Obtener todas las jornadas disponibles (ya empezadas: en directo o finalizadas)
   const fetchMatchdays = async () => {
+    if (!config._isLoaded) return
     const { data: fixtures } = await supabase
       .from('fixtures')
       .select('id, matchday, momento, start_time, status')
