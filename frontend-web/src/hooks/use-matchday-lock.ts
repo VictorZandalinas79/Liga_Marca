@@ -264,10 +264,12 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       interface LockBlock { start: number; end: number }
       const blocks: LockBlock[] = []
       
-      // Añadir los bloques regulares de TODAS las jornadas
-      // Esto hace que si la Jornada 1 y la Jornada 2 se solapan (o una engloba a la otra),
-      // el mercado global no se abra hasta que terminen AMBAS.
+      // Añadir los bloques regulares de TODAS las jornadas que pertenecen al juego.
+      // Si la liga reinició (fantasyStart > 1), ignoramos los partidos de jornadas anteriores
+      // porque para el juego estamos en 'pretemporada' y el mercado debe estar abierto.
       for (const jornada of allJornadas) {
+        if (jornada.matchday < fantasyStart) continue
+        
         const regularFixtures = jornada.fixtures.filter(f => !outOfOrderIds.has(f.id))
         if (regularFixtures.length > 0) {
           const sorted = regularFixtures.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
@@ -279,12 +281,15 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       }
       
       // Añadir partidos out-of-order de la jornada actual que estamos viendo
-      const oooFixtures = fixtures.filter(f => outOfOrderIds.has(f.id))
-      for (const f of oooFixtures) {
-        blocks.push({
-          start: new Date(f.start_time).getTime() - unlockOffsetMs,
-          end: new Date(f.start_time).getTime() + lockOffsetMs
-        })
+      // (solo si esta jornada ya forma parte de la liga activa)
+      if (targetMatchday >= fantasyStart) {
+        const oooFixtures = fixtures.filter(f => outOfOrderIds.has(f.id))
+        for (const f of oooFixtures) {
+          blocks.push({
+            start: new Date(f.start_time).getTime() - unlockOffsetMs,
+            end: new Date(f.start_time).getTime() + lockOffsetMs
+          })
+        }
       }
       
       blocks.sort((a, b) => a.start - b.start)

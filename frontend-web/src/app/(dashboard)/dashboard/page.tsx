@@ -253,14 +253,18 @@ export default function DashboardPage() {
   const [selectedMatchday, setSelectedMatchday] = useState<number>(1)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const { openMatchdays, recommendedMatchday, loaded: openMatchdaysLoaded } = useOpenMatchdays()
+  const config = useLeagueConfig()
+
   // Jornadas que se listan en el selector: la activa (siempre, para poder
   // hacer los cambios de mercado) + las que estén "abiertas" (con partidos ya
   // jugados y por jugar), p.ej. la jornada anterior aún sin terminar.
   const selectableMatchdays = useMemo(() => {
     const set = new Set(openMatchdays)
     if (typeof activeMatchday === 'number' && activeMatchday > 0) set.add(activeMatchday)
-    return [...set].sort((a, b) => a - b)
-  }, [openMatchdays, activeMatchday])
+    return [...set]
+      .sort((a, b) => a - b)
+      .filter(md => md >= (config?.fantasy_starting_matchday ?? 1))
+  }, [openMatchdays, activeMatchday, config?.fantasy_starting_matchday])
   // Al resolver los datos por primera vez, se posiciona en la jornada abierta
   // con el partido más cercano/en juego (si hay alguna); si no, en la activa.
   // Si la jornada activa cambia más adelante en la sesión (rollover), se sigue
@@ -278,11 +282,18 @@ export default function DashboardPage() {
       setSelectedMatchday(activeMatchday)
     }
   }, [activeMatchday, recommendedMatchday, openMatchdaysLoaded])
-  const { isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, upcomingLocks } = useMatchdayLock(selectedMatchday)
+  const { isLocked, isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, upcomingLocks } = useMatchdayLock(selectedMatchday)
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
   // Estos jugadores no se pueden cambiar aunque el mercado general esté abierto.
   const lockedTeams = useLockedTeams()
-  const config = useLeagueConfig()
+
+  useEffect(() => {
+    // Si isUnlockWindowOpen es FALSE, el mercado está ABIERTO (no hay partidos en juego).
+    // En ese caso, ocultamos Rendimiento y forzamos Sanciones.
+    if (!isUnlockWindowOpen && activeTab === 'stats') {
+      setActiveTab('penalties')
+    }
+  }, [isUnlockWindowOpen, activeTab])
   // Jugadores vetados por exclusividad: los tiene otro usuario en la jornada
   // previa comprometida y yo no (modelo de retención; en J1 no aplica).
   const [offLimitPlayerIds, setOffLimitPlayerIds] = useState<Set<string>>(new Set())
@@ -1856,9 +1867,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ================= CONTENEDOR PRINCIPAL ================= */}
-      <div className="flex flex-col lg:flex-row gap-6 items-stretch w-full mt-0">
+      <div className={`flex flex-col ${isUnlockWindowOpen ? 'lg:flex-row' : ''} gap-6 items-stretch w-full mt-0`}>
         {/* Columna Izquierda: Campograma */}
-        <div className="w-full lg:w-[50%] xl:w-[55%] 2xl:w-[55%] shrink-0 flex flex-col gap-4">
+        <div className={`w-full ${isUnlockWindowOpen ? 'lg:w-[50%] xl:w-[55%] 2xl:w-[55%]' : ''} shrink-0 flex flex-col gap-4`}>
           <Card className="border-0 sm:border-2 border-emerald-200 shadow-none sm:shadow-md bg-transparent sm:bg-white mx-[-1rem] sm:mx-0">
           <CardContent className="p-0 sm:p-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 px-3 sm:px-0 border-b border-slate-100 pb-3">
@@ -2245,18 +2256,20 @@ export default function DashboardPage() {
       {/* Columna Derecha: Rendimiento y Sanciones */}
       <div className="w-full lg:flex-1 lg:self-stretch flex flex-col">
         {/* ================= PESTAÑAS SUB-NAVEGACIÓN (RESPONSIVE GRID) ================= */}
-        <div className="grid grid-cols-2 gap-1.5 sm:gap-3 bg-slate-100/90 p-1.5 rounded-xl shadow-inner border border-slate-200/50 mb-6 shrink-0">
-          <button
-            onClick={() => setActiveTab('stats')}
-            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-              activeTab === 'stats'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'text-slate-650 hover:bg-white/55 hover:text-slate-900'
-            }`}
-          >
-            <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Rendimiento</span>
-          </button>
+        <div className={`grid ${!isUnlockWindowOpen ? 'grid-cols-1' : 'grid-cols-2'} gap-1.5 sm:gap-3 bg-slate-100/90 p-1.5 rounded-xl shadow-inner border border-slate-200/50 mb-6 shrink-0`}>
+          {isUnlockWindowOpen && (
+            <button
+              onClick={() => setActiveTab('stats')}
+              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                activeTab === 'stats'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-slate-650 hover:bg-white/55 hover:text-slate-900'
+              }`}
+            >
+              <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>Rendimiento</span>
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('penalties')}
             className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
@@ -2478,56 +2491,58 @@ export default function DashboardPage() {
       {/* VISTA 3: SANCIONES Y MULTAS */}
       {activeTab === 'penalties' && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          {/* Tus Sanciones (Jornada Activa) */}
-          <Card className="border border-red-200 bg-red-50/35 rounded-2xl shadow-sm">
-            <CardContent className="p-5 space-y-4">
-              <div className="flex items-center gap-2 pb-2.5 border-b border-red-100">
-                <AlertTriangle className="w-5 h-5 text-red-600 animate-pulse" />
-                <h3 className="text-base font-bold text-red-900">Sanciones Activas en J{activeMatchday}</h3>
-              </div>
-              
-              {allPenalties.filter(p => p.user_id === user?.id && p.matchday === activeMatchday).length === 0 &&
-               liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday)).length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-6 text-center bg-emerald-50/50 rounded-xl border border-emerald-100 p-4">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center mb-2">
-                    <Check className="w-5 h-5 text-emerald-600" />
+          {/* Tus Sanciones (Jornada Activa) solo se muestran si el mercado está cerrado (en juego) */}
+          {isUnlockWindowOpen && (
+            <Card className="border border-red-200 bg-red-50/35 rounded-2xl shadow-sm">
+              <CardContent className="p-5 space-y-4">
+                <div className="flex items-center gap-2 pb-2.5 border-b border-red-100">
+                  <AlertTriangle className="w-5 h-5 text-red-600 animate-pulse" />
+                  <h3 className="text-base font-bold text-red-900">Sanciones Activas en J{activeMatchday}</h3>
+                </div>
+                
+                {allPenalties.filter(p => p.user_id === user?.id && p.matchday === activeMatchday).length === 0 &&
+                 liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday)).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center bg-emerald-50/50 rounded-xl border border-emerald-100 p-4">
+                    <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center mb-2">
+                      <Check className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <p className="text-sm text-emerald-800 font-bold">¡Buen trabajo!</p>
+                    <p className="text-xs text-emerald-700 mt-0.5">Estás completamente al día y libre de sanciones en esta jornada.</p>
                   </div>
-                  <p className="text-sm text-emerald-800 font-bold">¡Buen trabajo!</p>
-                  <p className="text-xs text-emerald-700 mt-0.5">Estás completamente al día y libre de sanciones en esta jornada.</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {/* Sanciones consolidadas en BD */}
-                  {allPenalties
-                    .filter(p => p.user_id === user?.id && p.matchday === activeMatchday)
-                    .map((p) => (
-                      <div key={p.id} className="flex justify-between items-center text-sm bg-white rounded-xl p-3 border border-red-100 shadow-sm">
-                        <div className="flex items-center gap-2.5">
-                          <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{p.matchday}</span>
-                          <span className="text-slate-800 font-semibold">{p.description}</span>
+                ) : (
+                  <div className="space-y-2">
+                    {/* Sanciones consolidadas en BD */}
+                    {allPenalties
+                      .filter(p => p.user_id === user?.id && p.matchday === activeMatchday)
+                      .map((p) => (
+                        <div key={p.id} className="flex justify-between items-center text-sm bg-white rounded-xl p-3 border border-red-100 shadow-sm">
+                          <div className="flex items-center gap-2.5">
+                            <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{p.matchday}</span>
+                            <span className="text-slate-800 font-semibold">{p.description}</span>
+                          </div>
+                          <span className={`font-black text-sm shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : 'text-amber-600 text-xs uppercase'}`}>
+                            {p.points > 0 ? `-${p.points} pts` : 'Pendiente'}
+                          </span>
                         </div>
-                        <span className={`font-black text-sm shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : 'text-amber-600 text-xs uppercase'}`}>
-                          {p.points > 0 ? `-${p.points} pts` : 'Pendiente'}
-                        </span>
-                      </div>
-                    ))}
+                      ))}
 
-                  {/* Advertencias dinámicas activas (infracciones actuales del usuario) */}
-                  {liveInfractions
-                    .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday))
-                    .map((inf) => (
-                      <div key={inf.id} className="flex justify-between items-center text-sm bg-white rounded-xl p-3 border border-amber-200 shadow-sm animate-pulse">
-                        <div className="flex items-center gap-2.5">
-                          <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{activeMatchday}</span>
-                          <span className="text-slate-800 font-semibold">{inf.description}</span>
+                    {/* Advertencias dinámicas activas (infracciones actuales del usuario) */}
+                    {liveInfractions
+                      .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday))
+                      .map((inf) => (
+                        <div key={inf.id} className="flex justify-between items-center text-sm bg-white rounded-xl p-3 border border-amber-200 shadow-sm animate-pulse">
+                          <div className="flex items-center gap-2.5">
+                            <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{activeMatchday}</span>
+                            <span className="text-slate-800 font-semibold">{inf.description}</span>
+                          </div>
+                          <span className="font-bold text-amber-600 shrink-0 ml-2 text-xs uppercase">Pendiente</span>
                         </div>
-                        <span className="font-bold text-amber-600 shrink-0 ml-2 text-xs uppercase">Pendiente</span>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                      ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Historial de Sanciones (Liga) */}
           <Card className="border border-slate-100 bg-white rounded-2xl shadow-sm">
