@@ -407,14 +407,19 @@ export default function PartidosPage() {
     currentMinute?: number,
     startTime?: string
   ) => {
-    if (status === 'live') {
+    const s = (status || '').toLowerCase()
+    const isLiveStr = ['live', '1h', '2h', 'ht', 'in play', 'playing'].includes(s)
+    const hasLiveMinute = currentMinute !== undefined && currentMinute !== null && currentMinute > 0
+    const isFinished = s === 'finished' || s === 'ft' || s === 'completed'
+    
+    if ((isLiveStr || hasLiveMinute) && !isFinished) {
       return (
         <div className="flex items-center gap-2">
           <Badge className="bg-red-600 text-white text-xs flex items-center gap-1.5 animate-pulse">
             <span className="w-2 h-2 rounded-full bg-white inline-block" />
             En Juego
           </Badge>
-          {currentMinute !== undefined && currentMinute !== null && currentMinute > 0 && (
+          {hasLiveMinute && (
             <span className="text-yellow-400 font-black text-xs sm:text-sm tracking-wide bg-yellow-950/40 border border-yellow-500/20 px-2 py-0.5 rounded shadow-sm">
               Min {currentMinute}&apos;
             </span>
