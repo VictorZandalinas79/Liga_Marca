@@ -155,7 +155,7 @@
     "DEL": {
       "pass_opp_pct": 50,
       "aerials_pct": 40,
-      "recup_opp_per_min": 0.3,
+      "recup_opp_per_min": 0.02,
       "shots_on_pct": 60,
       "head_shots_per_min": 0.02,
       "assists_per_min": 0.03,

@@ -11,7 +11,7 @@ load_dotenv()
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
-BASE_OUTPUT_PATH = Path("../data/Partidos_Individuales")
+BASE_OUTPUT_PATH = Path("./data/Partidos_Individuales")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -51,9 +51,9 @@ def main():
     # But wait, force_sync.py uses Path("./data/Partidos_Individuales").
     # It seems data is inside frontend-web/data OR root/data? Let's check where data is.
 
-    base_path = Path("../data/Partidos_Individuales")
+    base_path = Path("./data/Partidos_Individuales")
     if not base_path.exists():
-        base_path = Path("./data/Partidos_Individuales")
+        base_path = Path("../data/Partidos_Individuales")
         
     match_folders = [
         f for f in base_path.iterdir()

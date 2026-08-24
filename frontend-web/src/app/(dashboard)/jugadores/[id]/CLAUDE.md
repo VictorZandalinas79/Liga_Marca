@@ -7,6 +7,22 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #2750 | 9:18 PM | 🟣 | Add Box Entries Display to Player Performance Breakdown | ~248 |
-| #2747 | 9:17 PM | 🔴 | Correct Penalty Points Display in Player Detail Frontend | ~329 |
+| #2764 | 9:42 PM | ✅ | Passes bonus threshold increased from 10 to 20 completed passes | ~320 |
+| #2756 | 9:22 PM | ✅ | Scoring system changes staged for commit and stale file removed | ~285 |
+| #2748 | 9:17 PM | 🟣 | Box entries bonus added to frontend scoring rules | ~271 |
+| #2746 | " | ✅ | TypeScript interface updated for box_entries metric | ~227 |
+
+### Jun 12, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #2908 | 4:47 PM | ✅ | Committed and Pushed 9-Block RELEVO Scoring Display to Main Branch | ~437 |
+
+### Jun 16, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #2996 | 4:54 PM | 🔄 | Player Detail Page Imports Dynamic Scoring Rule Functions | ~322 |
+| #2994 | " | 🟣 | Dynamic Scoring Rules Hook Added to Player Detail Page | ~355 |
+| #2973 | 4:28 PM | ✅ | Player Detail Page Type Updated for Interception Zones | ~282 |
 </claude-mem-context>

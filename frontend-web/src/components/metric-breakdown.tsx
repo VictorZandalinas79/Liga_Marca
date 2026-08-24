@@ -89,7 +89,7 @@ export function MetricBreakdown({
     let wb = n(player.win_bonus)
     let db = n(player.draw_bonus)
 
-    if (wb === 0 && db === 0 && hasResult && min >= R.participation.minutes_threshold) {
+    if (wb === 0 && db === 0 && hasResult) {
       if (isWin) {
         wb = R.participation.win_bonus_60
       } else if (isDraw) {
@@ -100,7 +100,7 @@ export function MetricBreakdown({
     if (wb > 0) {
       rows.push({
         block: 'Participación',
-        label: 'Victoria (>=60\')',
+        label: 'Victoria',
         count: '-',
         unit: '-',
         points: wb
@@ -108,15 +108,15 @@ export function MetricBreakdown({
     } else if (db > 0) {
       rows.push({
         block: 'Participación',
-        label: 'Empate (>=60\')',
+        label: 'Empate',
         count: '-',
         unit: '-',
         points: db
       })
-    } else if (min >= R.participation.minutes_threshold) {
+    } else if (hasResult) {
       rows.push({
         block: 'Participación',
-        label: isWin ? 'Victoria (>=60\')' : isDraw ? 'Empate (>=60\')' : 'Derrota (>=60\')',
+        label: isWin ? 'Victoria' : isDraw ? 'Empate' : 'Derrota',
         count: '-',
         unit: '-',
         points: 0

@@ -25,4 +25,12 @@
 | #3866 | 4:56 PM | 🔵 | Frontend calculates per-unit direct event points for defensive and offensive actions | ~386 |
 | #3857 | 4:49 PM | 🔵 | Frontend scoring rules loaded from hook with default fallback values | ~382 |
 | #3851 | 4:41 PM | 🔵 | Root cause identified: total_points database field is stale vs client-side recomputed breakdown | ~569 |
+
+### Aug 24, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #3915 | 10:50 PM | 🔵 | Frontend client-side win/draw bonus fallback calculation | ~430 |
+| #3913 | 10:45 PM | 🔵 | RELEVO block scoring discrepancy root cause identified | ~432 |
+| #3910 | 10:40 PM | 🔵 | Hardcoded Relevo metric fallbacks prevent dynamic scoring updates | ~504 |
 </claude-mem-context>

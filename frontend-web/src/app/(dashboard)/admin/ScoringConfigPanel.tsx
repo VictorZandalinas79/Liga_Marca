@@ -462,7 +462,7 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                     <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 2 (1 punto) - Condición OR</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       <LabeledInput label="% Duelos aéreos ganados" value={num((rules.relevo_limits as any)?.DEL || {}, 'aerials_pct') || 40} onChange={(v) => setRelevoLimit('DEL', 'aerials_pct', v)} step="1" />
-                      <LabeledInput label="Recup campo rival / min jugados" value={num((rules.relevo_limits as any)?.DEL || {}, 'recup_opp_per_min') || 0.3} onChange={(v) => setRelevoLimit('DEL', 'recup_opp_per_min', v)} step="0.1" />
+                      <LabeledInput label="Recup campo rival / min jugados" value={num((rules.relevo_limits as any)?.DEL || {}, 'recup_opp_per_min') || 0.02} onChange={(v) => setRelevoLimit('DEL', 'recup_opp_per_min', v)} step="0.01" />
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
