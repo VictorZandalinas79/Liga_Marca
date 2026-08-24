@@ -179,7 +179,7 @@ class MatchEventDownloader:
         self.processed_events = set()
         self.provisional_players = {} # team_id -> [prov_players]
         self.event_seq = 0 # Secuencia global de eventos procesados
-        self.recent_shots = [] # Para tracking de Calidad Parada (Relevo)
+        self.shots_by_event_id = {} # Mapeo eventId -> (x, y) para tracking de Calidad Parada
         self.player_calidad_parada = {} # player_id -> valor acumulado (Relevo)
         self.team_goals_conceded = {}
         self.team_goals_scored = {}
@@ -501,29 +501,36 @@ class MatchEventDownloader:
         rules = self.scoring_rules.get('relevo_limits', {}).get(pos, {})
 
         if pos == 'POR':
-            if stats.get('saves', 0) >= req(rules.get('saves_per_min', 0.06) * 90):
+            if stats.get('saves', 0) >= req(rules.get('saves_per_min', 0.07) * 90):
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
             
             calidad = self.player_calidad_parada.get(player_id, 0.0)
             saves = stats.get('saves', 0)
-            if saves > 0 and (calidad / mins_played) > (rules.get('calidad_parada_multiplier', 0.5) * (saves / mins_played)):
+
+            if saves > 0 and calidad > (saves / rules.get('calidad_parada_divisor', 3)):
                 completed_blocks += 1; breakdown['block_2_pts'] = 1.0
-                
+
             long_passes = stats.get('long_balls_completed', 0)
             passes_completed = stats.get('passes_completed', 0)
             passes_attempted = stats.get('passes_attempted', 0)
             p_pct = (passes_completed / passes_attempted * 100) if passes_attempted > 0 else 0
-            if (long_passes >= req(rules.get('long_passes_per_min', 0.05) * 90)) or (p_pct > rules.get('pass_pct', 65) and passes_attempted >= req(rules.get('pass_att_per_min', 0.3) * 90)):
+            if (long_passes >= req(rules.get('long_passes_per_min', 0.12) * 90)) or (p_pct > rules.get('pass_pct', 65) and passes_attempted >= req(rules.get('pass_att_per_min', 0.3) * 90)):
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
-                
-            claims = stats.get('claims', 0)
+
+            # Bloque 4: (blocajes typeId 11 + puños typeId 41) / min > 0.03,
+            # o (salidas fuera área typeId 59 + cubrir balón y blocar typeId 54) / min > 0.03
+            blocajes = stats.get('claims', 0)
             punches = stats.get('punches_ok', 0) + stats.get('punches_fail', 0)
-            if (claims >= req(rules.get('claims_per_min', 0.02) * 90)) or (punches >= req(rules.get('punches_per_min', 0.03) * 90)):
+            salidas = stats.get('sweepers', 0)
+            cubrir = stats.get('relevo_cubrir_blocar', 0)
+            cond_a = mins_played > 0 and ((blocajes + punches) / mins_played) > rules.get('block_punch_per_min', 0.03)
+            cond_b = mins_played > 0 and ((salidas + cubrir) / mins_played) > rules.get('sweeper_cover_per_min', 0.03)
+            if cond_a or cond_b:
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
         elif pos == 'DEF':
             last_man = stats.get('relevo_def_action_last_man', 0)
-            if last_man >= req(rules.get('last_man_per_min', 0.02) * 90):
+            if last_man >= req(rules.get('last_man_per_min', 0.01) * 90):
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
                 
             long_passes = stats.get('long_balls_completed', 0)
@@ -532,9 +539,10 @@ class MatchEventDownloader:
                 completed_blocks += 1; breakdown['block_2_pts'] = 1.0
                 
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
-            a_pct = (a_won / (a_won + a_lost) * 100) if (a_won + a_lost) > 0 else 0
+            a_tot = a_won + a_lost
+            a_pct = (a_won / a_tot * 100) if a_tot >= 3 else 0
             g_won = stats.get('relevo_ground_duels_won', 0); g_tot = stats.get('relevo_ground_duels_total', 0)
-            g_pct = (g_won / g_tot * 100) if g_tot > 0 else 0
+            g_pct = (g_won / g_tot * 100) if g_tot >= 3 else 0
             if (a_pct > rules.get('aerials_pct', 60)) or (g_pct > rules.get('ground_duels_pct', 60)):
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
                 
@@ -551,9 +559,10 @@ class MatchEventDownloader:
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
                 
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
-            a_pct = (a_won / (a_won + a_lost) * 100) if (a_won + a_lost) > 0 else 0
+            a_tot = a_won + a_lost
+            a_pct = (a_won / a_tot * 100) if a_tot >= 3 else 0
             g_won = stats.get('relevo_ground_duels_won', 0); g_tot = stats.get('relevo_ground_duels_total', 0)
-            g_pct = (g_won / g_tot * 100) if g_tot > 0 else 0
+            g_pct = (g_won / g_tot * 100) if g_tot >= 3 else 0
             if (a_pct > rules.get('aerials_pct', 60)) or (g_pct > rules.get('ground_duels_pct', 60)):
                 completed_blocks += 1; breakdown['block_2_pts'] = 1.0
                 
@@ -561,7 +570,7 @@ class MatchEventDownloader:
             s_pct = (shots_on / shots_tot * 100) if shots_tot > 0 else 0
             t_won = stats.get('takeons_won', 0); t_lost = stats.get('takeons_lost', 0); t_over = stats.get('takeons_overrun', 0)
             t_tot = t_won + t_lost + t_over
-            t_pct = (t_won / t_tot * 100) if t_tot > 0 else 0
+            t_pct = (t_won / t_tot * 100) if t_tot >= 2 else 0
             if (s_pct > rules.get('shots_on_pct', 50)) or (t_pct > rules.get('takeons_pct', 35)):
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
                 
@@ -578,7 +587,8 @@ class MatchEventDownloader:
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
                 
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
-            a_pct = (a_won / (a_won + a_lost) * 100) if (a_won + a_lost) > 0 else 0
+            a_tot = a_won + a_lost
+            a_pct = (a_won / a_tot * 100) if a_tot >= 3 else 0
             rec_opp = stats.get('relevo_recup_campo_rival', 0)
             if (a_pct > rules.get('aerials_pct', 40)) or (rec_opp >= req(rules.get('recup_opp_per_min', 0.3) * 90)):
                 completed_blocks += 1; breakdown['block_2_pts'] = 1.0
@@ -592,7 +602,7 @@ class MatchEventDownloader:
             assists = stats.get('assists', 0) + stats.get('fantasy_assist', 0)
             t_won = stats.get('takeons_won', 0); t_lost = stats.get('takeons_lost', 0); t_over = stats.get('takeons_overrun', 0)
             t_tot = t_won + t_lost + t_over
-            t_pct = (t_won / t_tot * 100) if t_tot > 0 else 0
+            t_pct = (t_won / t_tot * 100) if t_tot >= 2 else 0
             if (assists >= req(rules.get('assists_per_min', 0.03) * 90)) or (t_pct > rules.get('takeons_pct', 35)):
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
@@ -672,8 +682,8 @@ class MatchEventDownloader:
         else:
             self.stats[player_id]['clean_sheet'] = 0
 
-        # --- GOLES RECIBIDOS (por gol) ---
-        if goals_conc > 1:
+        # --- GOLES RECIBIDOS (a partir del 2º gol) ---
+        if goals_conc >= 2:
             gc_rule = self.get_position_points('goal_conceded', pos)
             points += goals_conc * gc_rule
 
@@ -799,6 +809,9 @@ class MatchEventDownloader:
             self.apply_points(player_id, 'relevo_ground_duels_total', 1, current_min)
             if event.get('outcome') == 1:
                 self.apply_points(player_id, 'relevo_ground_duels_won', 1, current_min)
+
+        if type_id == 54: # Cubrir balón y blocar (portero, bloque 4)
+            self.apply_points(player_id, 'relevo_cubrir_blocar', 1, current_min)
                 
         if type_id in [13, 14, 15, 16]:
             # NUEVO: Lógica de Asistencias por qualifier 55
@@ -1015,17 +1028,16 @@ class MatchEventDownloader:
             player_id = event.get('playerId')
             self.apply_points(player_id, 'saves', 1, current_min)
             
-            # Lógica Calidad Parada (Relevo)
+            # Lógica Calidad Parada (Relevo) usando qualifier 233
             closest_shot = None
-            min_diff = 9999
-            for shot_seq, sx, sy in self.recent_shots:
-                # Buscar disparos que ocurrieron antes de la parada (shot_seq < event_seq)
-                # y como máximo 4 eventos antes (event_seq - shot_seq <= 4)
-                seq_diff = self.event_seq - shot_seq
-                if 0 < seq_diff <= 4:
-                    if seq_diff < min_diff:
-                        min_diff = seq_diff
-                        closest_shot = (sx, sy)
+            q_233 = next((q for q in event.get('qualifier', []) if q.get('qualifierId') == 233), None)
+            if q_233 and q_233.get('value'):
+                try:
+                    shot_event_id = int(q_233.get('value'))
+                    if shot_event_id in self.shots_by_event_id:
+                        closest_shot = self.shots_by_event_id[shot_event_id]
+                except ValueError:
+                    pass
             
             if closest_shot:
                 sx, sy = closest_shot
@@ -1037,6 +1049,7 @@ class MatchEventDownloader:
                 self.player_calidad_parada[player_id] = self.player_calidad_parada.get(player_id, 0.0) + val
                 # Espejo en stats para poder subirlo a player_scores.
                 self.stats[player_id]['calidad_parada'] = self.player_calidad_parada[player_id]
+                self.recalculate_player_points(player_id, current_min)
 
 
     def _handle_claim(self, event, current_min):
@@ -1072,8 +1085,7 @@ class MatchEventDownloader:
         
         x = event.get('x', 50.0)
         y = event.get('y', 50.0)
-        self.recent_shots.append((self.event_seq, x, y))
-        self.recent_shots = self.recent_shots[-10:]
+        self.shots_by_event_id[event.get('eventId')] = (x, y)
         
         # typeId 15 = "Attempt Saved": si es un penalti a puerta (no gol), lo ha
         # parado el portero -> cuenta como penalti fallado para el lanzador.
@@ -1103,8 +1115,7 @@ class MatchEventDownloader:
             
             x = event.get('x', 50.0)
             y = event.get('y', 50.0)
-            self.recent_shots.append((self.event_seq, x, y))
-            self.recent_shots = self.recent_shots[-10:]
+            self.shots_by_event_id[event.get('eventId')] = (x, y)
 
         if is_own_goal:
             self.apply_points(pid, 'own_goals', 1, current_min)
@@ -1376,6 +1387,7 @@ class MatchEventDownloader:
                 'smothers': stats.get('smothers', 0),
                 'sweepers_ok': stats.get('sweepers', 0),
                 'sweepers_fail': stats.get('sweepers_fail', 0),
+                'cubrir_balon_blocar': stats.get('relevo_cubrir_blocar', 0),
                 'parries_safe': stats.get('parries_safe', 0),
                 'parries_danger': stats.get('parries_danger', 0),
 
@@ -1559,6 +1571,21 @@ class MatchEventDownloader:
             # parte, prórroga, penaltis) significa que el balón ya rueda.
             match_started = any(e.get('periodId') in (1, 2, 3, 4, 5) for e in events)
             self.event_dict = {(e.get('contestantId'), str(e.get('eventId'))): e for e in events}
+            
+            # Pre-populamos las coordenadas de los disparos para asegurar su disponibilidad
+            # en las paradas del mismo segundo que se procesen antes en el loop.
+            for e in events:
+                type_id = e.get('typeId')
+                if type_id in (13, 14, 15, 16):
+                    if type_id == 16:
+                        # Gol en propia puerta no cuenta como tiro a puerta
+                        is_own_goal = any(q.get('qualifierId') == Q_OWN_GOAL for q in e.get('qualifier', []))
+                        if is_own_goal:
+                            continue
+                    x = e.get('x', 50.0)
+                    y = e.get('y', 50.0)
+                    self.shots_by_event_id[e.get('eventId')] = (x, y)
+
             self.event_seq = 0
             for event in events:
                 self.event_seq += 1

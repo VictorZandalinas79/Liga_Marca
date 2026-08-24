@@ -126,13 +126,13 @@
   "relevo_limits": {
     "_description": "Umbrales de los 4 bloques de Puntos RELEVO por posición. Cada bloque superado suma 1 punto; si no se supera ninguno, -1. Las claves '*_per_min' se multiplican por los minutos jugados para obtener el mínimo exigido; las claves '*_pct' son porcentajes absolutos.",
     "POR": {
-      "saves_per_min": 0.06,
-      "calidad_parada_multiplier": 0.5,
-      "long_passes_per_min": 0.05,
+      "saves_per_min": 0.07,
+      "calidad_parada_divisor": 3,
+      "long_passes_per_min": 0.12,
       "pass_pct": 65,
       "pass_att_per_min": 0.3,
-      "claims_per_min": 0.02,
-      "punches_per_min": 0.03
+      "block_punch_per_min": 0.03,
+      "sweeper_cover_per_min": 0.03
     },
     "DEF": {
       "last_man_per_min": 0.02,

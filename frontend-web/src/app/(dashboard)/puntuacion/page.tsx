@@ -98,7 +98,7 @@ export default async function PuntuacionPage() {
   
   const { data: configData } = await supabase.from('league_config').select('*').eq('id', 1).maybeSingle()
   const leagueConfig = { ...DEFAULT_LEAGUE_CONFIG, ...(configData || {}) }
-  const porteroMultiplier = num((rules?.relevo_limits as any)?.POR, 'calidad_parada_multiplier') || 0.33
+  const calidadDivisor = num((rules?.relevo_limits as any)?.POR, 'calidad_parada_divisor') || 3
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -273,12 +273,12 @@ export default async function PuntuacionPage() {
         <div className="mb-6">
           <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Portero (POR)</h3>
           <ul className="text-sm text-slate-600 space-y-4 pl-2">
-            <li><span className="font-semibold">Bloque 1:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'saves_per_min') || 0.06} paradas por min. jugado.</li>
+            <li><span className="font-semibold">Bloque 1:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'saves_per_min') || 0.07} paradas por min. jugado.</li>
             <li className="space-y-3">
               <div>
-                <span className="font-semibold text-slate-900">Bloque 2:</span> Ratio de Calidad de Parada supera el multiplicador de {porteroMultiplier} respecto a sus paradas/min.
+                <span className="font-semibold text-slate-900">Bloque 2:</span> Valor acumulado de Calidad de Parada supera la {calidadDivisor === 3 ? 'tercera parte' : `1/${calidadDivisor} parte`} del número de paradas realizadas.
                 <p className="mt-1 text-slate-500 text-xs leading-relaxed">
-                  Se busca un tiro rival en los 5 segundos previos a cada parada. Ese tiro recibe un <strong>Valor de Importancia</strong> según su zona (ver mapa). Se suman todos los valores y se dividen por los minutos jugados. Si este ratio supera una fracción (multiplicador) de las paradas por minuto, gana 1 punto.
+                  Se busca un tiro rival en los 5 segundos previos a cada parada. Ese tiro recibe un <strong>Valor de Importancia</strong> según su zona (ver mapa). Se suma ese valor en cada parada. Si el acumulado supera (nº de paradas / {calidadDivisor}), gana 1 punto.
                 </p>
               </div>
 
@@ -289,31 +289,31 @@ export default async function PuntuacionPage() {
                 </div>
 
                 <div className="w-full md:w-1/2 space-y-3">
-                  {/* Multiplicador Badge / Info */}
+                  {/* Umbral Badge / Info */}
                   <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
-                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Multiplicador Configurado</span>
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Divisor configurado</span>
                     <span className="text-2xl font-black text-amber-600">
-                      {porteroMultiplier}
+                      {calidadDivisor}
                     </span>
-                    <span className="text-xs text-slate-500 ml-2">({porteroMultiplier === 0.5 ? 'la mitad' : porteroMultiplier === 0.33 ? 'una tercera parte' : `fracción de ${porteroMultiplier}`})</span>
                   </div>
 
                   {/* Ejemplo de la regla */}
                   <div className="text-xs text-slate-600 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
                     <strong className="text-slate-800 font-bold">Ejemplo de la regla:</strong>
                     <div className="mt-1.5 space-y-1">
-                      <p>• El portero promedia <strong className="text-slate-800">0,06 paradas</strong> por minuto jugado.</p>
-                      <p>• En sus paradas acumula un "valor de calidad" que equivale a <strong className="text-slate-800">0,04 por minuto jugado</strong>.</p>
-                      <p>• Como la calidad (0,04) es mayor que la fracción de sus paradas (0,06 x {porteroMultiplier} = {(0.06 * porteroMultiplier).toFixed(3)}), entonces <strong className="text-emerald-600 font-bold">supera la métrica y suma 1 punto</strong>.</p>
+                      <p>• El portero realiza <strong className="text-slate-800">6 paradas</strong>.</p>
+                      <p>• El umbral exigido es 6 / {calidadDivisor} = <strong className="text-slate-800">{(6 / calidadDivisor).toFixed(2)}</strong>.</p>
+                      <p>• En sus paradas acumula un "valor de calidad" total de <strong className="text-slate-800">{(6 / calidadDivisor + 0.4).toFixed(2)}</strong>.</p>
+                      <p>• Como su valor es mayor que el umbral, entonces <strong className="text-emerald-600 font-bold">supera la métrica y suma 1 punto</strong>.</p>
                     </div>
                   </div>
                 </div>
               </div>
             </li>
             <li>
-              <span className="font-semibold">Bloque 3:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'long_passes_per_min') || 0.05} pases largos/min, O BIEN (≥ {num((rules?.relevo_limits as any)?.POR, 'pass_pct') || 65}% acierto de pase Y ≥ {num((rules?.relevo_limits as any)?.POR, 'pass_att_per_min') || 0.3} pases/min).
+              <span className="font-semibold">Bloque 3:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'long_passes_per_min') || 0.12} pases largos/min, O BIEN (&gt; {num((rules?.relevo_limits as any)?.POR, 'pass_pct') || 65}% acierto de pase Y ≥ {num((rules?.relevo_limits as any)?.POR, 'pass_att_per_min') || 0.3} pases/min).
             </li>
-            <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'claims_per_min') || 0.02} blocajes/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.POR, 'punches_per_min') || 0.03} despejes puños/min.</li>
+            <li><span className="font-semibold">Bloque 4:</span> (blocajes + despejes de puños) / min &gt; {num((rules?.relevo_limits as any)?.POR, 'block_punch_per_min') || 0.03}, O BIEN (salidas fuera del área + cubrir balón y blocar) / min &gt; {num((rules?.relevo_limits as any)?.POR, 'sweeper_cover_per_min') || 0.03}.</li>
           </ul>
         </div>
 
@@ -321,9 +321,9 @@ export default async function PuntuacionPage() {
         <div className="mb-6">
           <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Defensa (DEF)</h3>
           <ul className="text-sm text-slate-600 space-y-2 pl-2">
-            <li><span className="font-semibold">Bloque 1:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'last_man_per_min') || 0.02} acciones de último hombre/min.</li>
+            <li><span className="font-semibold">Bloque 1:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'last_man_per_min') || 0.01} acciones de último hombre/min.</li>
             <li><span className="font-semibold">Bloque 2:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'long_passes_per_min') || 0.05} pases largos/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEF, 'forward_passes_per_min') || 0.05} pases hacia adelante/min.</li>
-            <li><span className="font-semibold">Bloque 3:</span> &gt; {num((rules?.relevo_limits as any)?.DEF, 'aerials_pct') || 60}% duelos aéreos ganados, O BIEN &gt; {num((rules?.relevo_limits as any)?.DEF, 'ground_duels_pct') || 60}% duelos suelo ganados.</li>
+            <li><span className="font-semibold">Bloque 3:</span> &gt; {num((rules?.relevo_limits as any)?.DEF, 'aerials_pct') || 60}% duelos aéreos ganados (mín. 3), O BIEN &gt; {num((rules?.relevo_limits as any)?.DEF, 'ground_duels_pct') || 60}% duelos suelo ganados (mín. 3).</li>
             <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'abp_remates_per_min') || 0.01} remates a balón parado/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEF, 'crosses_per_min') || 0.02} centros buenos/min.</li>
           </ul>
         </div>
@@ -333,8 +333,8 @@ export default async function PuntuacionPage() {
           <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Medio (MED)</h3>
           <ul className="text-sm text-slate-600 space-y-2 pl-2">
             <li><span className="font-semibold">Bloque 1:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'pass_opp_pct') || 50}% pases en campo rival y &ge; {num((rules?.relevo_limits as any)?.MED, 'pass_opp_per_min') || 0.5} pases/min.</li>
-            <li><span className="font-semibold">Bloque 2:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'aerials_pct') || 60}% duelos aéreos ganados, O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'ground_duels_pct') || 60}% duelos suelo ganados.</li>
-            <li><span className="font-semibold">Bloque 3:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'shots_on_pct') || 50}% remates a puerta, O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'takeons_pct') || 35}% regates completados.</li>
+            <li><span className="font-semibold">Bloque 2:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'aerials_pct') || 60}% duelos aéreos ganados (mín. 3), O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'ground_duels_pct') || 60}% duelos suelo ganados (mín. 3).</li>
+            <li><span className="font-semibold">Bloque 3:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'shots_on_pct') || 50}% remates a puerta, O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'takeons_pct') || 35}% regates completados (mín. 2).</li>
             <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.MED, 'assists_per_min') || 0.03} asistencias/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.MED, 'crosses_per_min') || 0.02} centros buenos/min.</li>
           </ul>
         </div>
@@ -344,9 +344,9 @@ export default async function PuntuacionPage() {
           <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Delantero (DEL)</h3>
           <ul className="text-sm text-slate-600 space-y-2 pl-2">
             <li><span className="font-semibold">Bloque 1:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'pass_opp_pct') || 50}% pases en campo rival y &ge; {num((rules?.relevo_limits as any)?.DEL, 'pass_opp_per_min') || 0.5} pases/min.</li>
-            <li><span className="font-semibold">Bloque 2:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'aerials_pct') || 40}% duelos aéreos ganados, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'recup_opp_per_min') || 0.3} recuperaciones campo rival/min.</li>
+            <li><span className="font-semibold">Bloque 2:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'aerials_pct') || 40}% duelos aéreos ganados (mín. 3), O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'recup_opp_per_min') || 0.3} recuperaciones campo rival/min.</li>
             <li><span className="font-semibold">Bloque 3:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'shots_on_pct') || 60}% remates a puerta, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'head_shots_per_min') || 0.02} remates de cabeza/min.</li>
-            <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.DEL, 'assists_per_min') || 0.03} asistencias/min, O BIEN &gt; {num((rules?.relevo_limits as any)?.DEL, 'takeons_pct') || 35}% regates completados.</li>
+            <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.DEL, 'assists_per_min') || 0.03} asistencias/min, O BIEN &gt; {num((rules?.relevo_limits as any)?.DEL, 'takeons_pct') || 35}% regates completados (mín. 2).</li>
           </ul>
         </div>
 

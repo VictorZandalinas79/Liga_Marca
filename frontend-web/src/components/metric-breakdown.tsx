@@ -174,10 +174,10 @@ export function MetricBreakdown({
   const gcCount = n(player.goals_conceded)
   rows.push({
     block: 'Defensa',
-    label: `Gol Encajado (${pos})`,
+    label: `Gol Encajado (≥2) (${pos})`,
     count: gcCount,
     unit: GOAL_CONCEDED[pos],
-    points: gcCount > 1 ? r2(gcCount * GOAL_CONCEDED[pos]) : 0
+    points: gcCount >= 2 ? r2(gcCount * GOAL_CONCEDED[pos]) : 0
   })
 
   // 4. Penaltis
@@ -329,9 +329,7 @@ export function MetricBreakdown({
         metricCounter++
 
         const val = result.value
-        const tgt = pos === 'POR' && specBlock.id === 2
-          ? (lim?.calidad_parada_multiplier ?? 0.5) * n(player.saves)
-          : result.target
+        const tgt = result.target
 
         const valPerMin = min > 0 ? (val / min).toFixed(3) : '0.000'
         const tgtPerMin = min > 0 ? (tgt / min).toFixed(3) : '0.000'
@@ -487,7 +485,7 @@ export function MetricBreakdown({
     const cmpSymbol = m.cmp === 'gte' ? '≥' : '>'
 
     const playerValStr = isPct
-      ? `${m.value.toFixed(0)}%`
+      ? `${m.value.toFixed(0)}%${m.detail ? ` (${m.detail})` : ''}`
       : `${m.value} (${m.valPerMin}/m)`
 
     const targetValStr = isPct

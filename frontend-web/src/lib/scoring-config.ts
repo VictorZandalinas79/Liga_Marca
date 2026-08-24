@@ -30,7 +30,7 @@ export type EditableEvent = {
 export const EDITABLE_EVENTS: EditableEvent[] = [
   { key: 'goal', label: 'Gol', kind: 'positional' },
   { key: 'clean_sheet', label: 'Portería a cero (≥59 min)', kind: 'positional' },
-  { key: 'goal_conceded', label: 'Gol encajado (penaliza por total si > 1)', kind: 'positional' },
+  { key: 'goal_conceded', label: 'Gol encajado (penaliza si recibe 2 o más)', kind: 'positional' },
   { key: 'assist_goal', label: 'Asistencia de gol', kind: 'single' },
   { key: 'assist_no_goal', label: 'Asistencia (sin gol)', kind: 'single' },
   { key: 'own_goal', label: 'Gol en propia', kind: 'single' },
@@ -80,16 +80,16 @@ export type RelevoLimits = Record<Position, Record<string, number>>
 
 export const DEFAULT_RELEVO_LIMITS: RelevoLimits = {
   POR: {
-    saves_per_min: 0.06,
-    calidad_parada_multiplier: 0.5,
-    long_passes_per_min: 0.05,
+    saves_per_min: 0.07,
+    calidad_parada_divisor: 3,
+    long_passes_per_min: 0.12,
     pass_pct: 65,
     pass_att_per_min: 0.3,
-    claims_per_min: 0.02,
-    punches_per_min: 0.03,
+    block_punch_per_min: 0.03,
+    sweeper_cover_per_min: 0.03,
   },
   DEF: {
-    last_man_per_min: 0.02,
+    last_man_per_min: 0.01,
     long_passes_per_min: 0.05,
     forward_passes_per_min: 0.05,
     aerials_pct: 60,
@@ -128,8 +128,8 @@ export interface RelevoMetricSpec {
   unit: 'count' | 'pct'
   /** Valor logrado por el jugador. */
   value: (s: ScoreRow) => number
-  /** Mínimo exigido, dados los umbrales de su posición y los minutos jugados. */
-  target: (lim: Record<string, number>, mins: number) => number
+  /** Mínimo exigido, dados los umbrales de su posición, los minutos jugados y la fila del jugador. */
+  target: (lim: Record<string, number>, mins: number, s: ScoreRow) => number
   /** El motor usa `>=` en los acumulados y `>` estricto en los porcentajes. */
   cmp: 'gte' | 'gt'
   /** Detalle opcional para el desglose, p. ej. "8/14". */
@@ -159,26 +159,32 @@ const pct = (won: number, total: number): number => (total > 0 ? (won / total) *
 const perMin = (key: string, fallback: number) => (lim: Record<string, number>, mins: number) =>
   (lim?.[key] ?? fallback) * mins
 
-const flat = (key: string, fallback: number) => (lim: Record<string, number>) => lim?.[key] ?? fallback
+const flat = (key: string, fallback: number) => (lim: Record<string, number>, _mins?: number) => lim?.[key] ?? fallback
 
 const aerialsPct = (fallback: number): RelevoMetricSpec => ({
-  label: 'Duelos aéreos ganados',
+  label: 'Duelos aéreos ganados (mín. 3)',
   unit: 'pct',
-  value: (s) => pct(n(s, 'aerials_won'), n(s, 'aerials_won') + n(s, 'aerials_lost')),
+  value: (s) => {
+    const total = n(s, 'aerials_won') + n(s, 'aerials_lost')
+    return total >= 3 ? pct(n(s, 'aerials_won'), total) : 0
+  },
   target: flat('aerials_pct', fallback),
   cmp: 'gt',
-  detail: (s) => `${n(s, 'aerials_won')}/${n(s, 'aerials_won') + n(s, 'aerials_lost')}`,
-  describe: (lim) => `más del ${lim?.aerials_pct ?? fallback}% de duelos aéreos ganados`,
+  detail: (s) => `${n(s, 'aerials_won')}/${n(s, 'aerials_won') + n(s, 'aerials_lost')} (mín. 3)`,
+  describe: (lim) => `más del ${lim?.aerials_pct ?? fallback}% de duelos aéreos ganados (mín. 3 duelos)`,
 })
 
 const groundDuelsPct = (fallback: number): RelevoMetricSpec => ({
-  label: 'Duelos por el suelo ganados',
+  label: 'Duelos por el suelo ganados (mín. 3)',
   unit: 'pct',
-  value: (s) => pct(n(s, 'ground_duels_won'), n(s, 'ground_duels_total')),
+  value: (s) => {
+    const total = n(s, 'ground_duels_total')
+    return total >= 3 ? pct(n(s, 'ground_duels_won'), total) : 0
+  },
   target: flat('ground_duels_pct', fallback),
   cmp: 'gt',
-  detail: (s) => `${n(s, 'ground_duels_won')}/${n(s, 'ground_duels_total')}`,
-  describe: (lim) => `más del ${lim?.ground_duels_pct ?? fallback}% de duelos por el suelo ganados`,
+  detail: (s) => `${n(s, 'ground_duels_won')}/${n(s, 'ground_duels_total')} (mín. 3)`,
+  describe: (lim) => `más del ${lim?.ground_duels_pct ?? fallback}% de duelos por el suelo ganados (mín. 3 duelos)`,
 })
 
 const shotsOnPct = (fallback: number): RelevoMetricSpec => ({
@@ -192,13 +198,19 @@ const shotsOnPct = (fallback: number): RelevoMetricSpec => ({
 })
 
 const takeonsPct = (fallback: number): RelevoMetricSpec => ({
-  label: 'Regates completados',
+  label: 'Regates completados (mín. 2)',
   unit: 'pct',
-  value: (s) => pct(n(s, 'takeons_won'), n(s, 'takeons_won') + n(s, 'takeons_lost') + n(s, 'takeons_overrun')),
+  value: (s) => {
+    const total = n(s, 'takeons_won') + n(s, 'takeons_lost') + n(s, 'takeons_overrun')
+    return total >= 2 ? pct(n(s, 'takeons_won'), total) : 0
+  },
   target: flat('takeons_pct', fallback),
   cmp: 'gt',
-  detail: (s) => `${n(s, 'takeons_won')}/${n(s, 'takeons_won') + n(s, 'takeons_lost') + n(s, 'takeons_overrun')}`,
-  describe: (lim) => `más del ${lim?.takeons_pct ?? fallback}% de regates completados`,
+  detail: (s) => {
+    const total = n(s, 'takeons_won') + n(s, 'takeons_lost') + n(s, 'takeons_overrun')
+    return `${n(s, 'takeons_won')}/${total} (mín. 2)`
+  },
+  describe: (lim) => `más del ${lim?.takeons_pct ?? fallback}% de regates completados (mín. 2 regates)`,
 })
 
 const passOppPct = (fallback: number): RelevoMetricSpec => ({
@@ -257,24 +269,23 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
         label: 'Paradas',
         unit: 'count',
         value: (s) => n(s, 'saves'),
-        target: perMin('saves_per_min', 0.06),
+        target: perMin('saves_per_min', 0.07),
         cmp: 'gte',
-        describe: (lim) => `${lim?.saves_per_min ?? 0.06} paradas por minuto jugado`,
+        describe: (lim) => `${lim?.saves_per_min ?? 0.07} paradas por minuto jugado`,
       }] }],
     },
     {
       id: 2,
       title: 'Calidad de parada',
-      note: 'Cada parada suma un valor según la zona desde la que se remató; el total debe superar una fracción de sus paradas.',
+      note: 'Cada parada suma un valor según la zona desde la que se remató; el valor acumulado debe superar un tercio del número de paradas realizadas.',
       options: [{ metrics: [{
         label: 'Valor de calidad acumulado',
         unit: 'count',
         value: (s) => n(s, 'calidad_parada'),
-        // El umbral real depende de sus propias paradas y lo calcula
-        // evaluateRelevoBlocks: (calidad/min) > mult × (paradas/min).
-        target: () => 0,
+        target: (lim, mins, s) => n(s, 'saves') / (lim?.calidad_parada_divisor ?? 3),
         cmp: 'gt',
-        describe: (lim) => `valor de calidad superior al ${((lim?.calidad_parada_multiplier ?? 0.5) * 100).toFixed(0)}% de sus paradas`,
+        detail: (s) => `${n(s, 'calidad_parada')} / (${n(s, 'saves')} paradas ÷ ${DEFAULT_RELEVO_LIMITS.POR.calidad_parada_divisor ?? 3})`,
+        describe: (lim) => `valor de calidad acumulado superior a la tercera parte de las paradas realizadas`,
       }] }],
     },
     {
@@ -282,7 +293,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
       title: 'Distribución',
       note: 'Basta con la opción A, o cumplir las dos métricas de la opción B.',
       options: [
-        { metrics: [longPasses(0.05)] },
+        { metrics: [longPasses(0.12)] },
         {
           requireAll: true,
           metrics: [
@@ -309,23 +320,24 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 4,
-      title: 'Juego aéreo del portero',
+      title: 'Blocajes, puños y salidas',
+      note: 'Basta con superar una de las dos combinaciones.',
       options: [{ metrics: [
         {
-          label: 'Blocajes',
+          label: 'Blocajes + despejes de puños',
           unit: 'count',
-          value: (s) => n(s, 'claims_ok'),
-          target: perMin('claims_per_min', 0.02),
-          cmp: 'gte',
-          describe: (lim) => `${lim?.claims_per_min ?? 0.02} blocajes por minuto jugado`,
+          value: (s) => n(s, 'claims_ok') + n(s, 'punches_ok') + n(s, 'punches_fail'),
+          target: perMin('block_punch_per_min', 0.03),
+          cmp: 'gt',
+          describe: (lim) => `(blocajes + despejes de puños) por minuto jugado superior a ${lim?.block_punch_per_min ?? 0.03}`,
         },
         {
-          label: 'Despejes de puños',
+          label: 'Salidas fuera del área + cubrir balón y blocar',
           unit: 'count',
-          value: (s) => n(s, 'punches_ok') + n(s, 'punches_fail'),
-          target: perMin('punches_per_min', 0.03),
-          cmp: 'gte',
-          describe: (lim) => `${lim?.punches_per_min ?? 0.03} despejes de puños por minuto jugado`,
+          value: (s) => n(s, 'sweepers_ok') + n(s, 'cubrir_balon_blocar'),
+          target: perMin('sweeper_cover_per_min', 0.03),
+          cmp: 'gt',
+          describe: (lim) => `(salidas fuera del área + cubrir balón y blocar) por minuto jugado superior a ${lim?.sweeper_cover_per_min ?? 0.03}`,
         },
       ] }],
     },
@@ -338,9 +350,9 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
         label: 'Acciones de último hombre',
         unit: 'count',
         value: (s) => n(s, 'def_actions_last_man'),
-        target: perMin('last_man_per_min', 0.02),
+        target: perMin('last_man_per_min', 0.01),
         cmp: 'gte',
-        describe: (lim) => `${lim?.last_man_per_min ?? 0.02} acciones de último hombre por minuto jugado`,
+        describe: (lim) => `${lim?.last_man_per_min ?? 0.01} acciones de último hombre por minuto jugado`,
       }] }],
     },
     {
@@ -453,12 +465,7 @@ export function evaluateRelevoBlocks(
 
     for (const option of block.options) {
       const results = option.metrics.map((m) => {
-        // El bloque 2 del portero compara contra sus propias paradas, no contra
-        // un umbral fijo: calidad > multiplicador × paradas (y al menos 1 parada).
-        const target =
-          pos === 'POR' && block.id === 2
-            ? (lim?.calidad_parada_multiplier ?? 0.5) * (Number(score?.saves) || 0)
-            : m.target(lim, mins)
+        const target = m.target(lim, mins, score)
         const value = m.value(score)
         const passes = m.cmp === 'gte' ? value >= target : value > target
         return {
@@ -536,7 +543,7 @@ export const DEFAULT_RATES: ScoringRates = {
   assist_goal: 3,
   assist_no_goal: 1,
   clean_sheet: { POR: 4, DEF: 3, MED: 2, DEL: 1 },
-  goal_conceded: { POR: -2, DEF: -2, MED: -1, DEL: -1 },
+  goal_conceded: { POR: -1, DEF: -1, MED: -0.5, DEL: -0.5 },
   penalty_save: { POR: 3, DEF: 3, MED: 3, DEL: 3 },
   penalty_missed: -2,
   penalty_won: { POR: 2, DEF: 2, MED: 2, DEL: 2 },

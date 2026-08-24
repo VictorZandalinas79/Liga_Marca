@@ -1,0 +1,138 @@
+============================================================
+📊 RECALCULANDO PUNTOS DE TODOS LOS PARTIDOS
+============================================================
+Encontrados 40 partidos descargados en data/Partidos_Individuales.
+
+[1/40] Procesando 8fkdhce1peguwgnsunwoln3f8...
+   ⚠️ No se encontró fixture_id para 8fkdhce1peguwgnsunwoln3f8. Saltando.
+
+[2/40] Procesando 8gsasg1a8udin1qccgt1rk55g...
+   ⚠️ No se encontró fixture_id para 8gsasg1a8udin1qccgt1rk55g. Saltando.
+
+[3/40] Procesando 8e0buzpazvekslf9rgudkmgpg...
+   ⚠️ No se encontró fixture_id para 8e0buzpazvekslf9rgudkmgpg. Saltando.
+
+[4/40] Procesando 3xq4alyjtlltd6j11gckoxvkk...
+   ⚠️ No se encontró fixture_id para 3xq4alyjtlltd6j11gckoxvkk. Saltando.
+
+[5/40] Procesando 8hxuhuhppv8ru74er798kjbpw...
+   ⚠️ No se encontró fixture_id para 8hxuhuhppv8ru74er798kjbpw. Saltando.
+
+[6/40] Procesando 8es4680yd87gtmomg2jk3isyc...
+   ⚠️ No se encontró fixture_id para 8es4680yd87gtmomg2jk3isyc. Saltando.
+
+[7/40] Procesando 3y3gz2ufpcbu5vkgph7jyg74k...
+   ⚠️ No se encontró fixture_id para 3y3gz2ufpcbu5vkgph7jyg74k. Saltando.
+
+[8/40] Procesando 6ypvv07mjqz0hg3voh3u7gges...
+   ✅ Fixture ID: 6ypvv07mjqz0hg3voh3u7gges
+   Ejecutando: python3 trigger_descarga_eventos.py 6ypvv07mjqz0hg3voh3u7gges 6ypvv07mjqz0hg3voh3u7gges
+   ✅ Sincronización completada.
+
+[9/40] Procesando 8gcbai6m7v7o8piqfram4qe50...
+   ⚠️ No se encontró fixture_id para 8gcbai6m7v7o8piqfram4qe50. Saltando.
+
+[10/40] Procesando 6z77qknhbwckkkciwzs085yj8...
+   ✅ Fixture ID: 6z77qknhbwckkkciwzs085yj8
+   Ejecutando: python3 trigger_descarga_eventos.py 6z77qknhbwckkkciwzs085yj8 6z77qknhbwckkkciwzs085yj8
+   ✅ Sincronización completada.
+
+[11/40] Procesando 3v3zljn1yog1g4knq4uoaledw...
+   ⚠️ No se encontró fixture_id para 3v3zljn1yog1g4knq4uoaledw. Saltando.
+
+[12/40] Procesando 8hjyqksgwrgio75wqut9c5tsk...
+   ⚠️ No se encontró fixture_id para 8hjyqksgwrgio75wqut9c5tsk. Saltando.
+
+[13/40] Procesando 8ee7ipt4u6kyk6baueedsdafo...
+   ⚠️ No se encontró fixture_id para 8ee7ipt4u6kyk6baueedsdafo. Saltando.
+
+[14/40] Procesando 3w881304b6s154go90fihrjtg...
+   ⚠️ No se encontró fixture_id para 3w881304b6s154go90fihrjtg. Saltando.
+
+[15/40] Procesando 8jv8a1g0w3q9kvec2ksh1kdg4...
+   ⚠️ No se encontró fixture_id para 8jv8a1g0w3q9kvec2ksh1kdg4. Saltando.
+
+[16/40] Procesando 8jhducvwyfm3jz3fgkh49aiok...
+   ⚠️ No se encontró fixture_id para 8jhducvwyfm3jz3fgkh49aiok. Saltando.
+
+[17/40] Procesando 71zqp0xwkbtm50t332jrwt0yc...
+   ✅ Fixture ID: 71zqp0xwkbtm50t332jrwt0yc
+   Ejecutando: python3 trigger_descarga_eventos.py 71zqp0xwkbtm50t332jrwt0yc 71zqp0xwkbtm50t332jrwt0yc
+   ✅ Sincronización completada.
+
+[18/40] Procesando 1iz38m02tzgh8x5a9yg2ztgyc...
+   ⚠️ No se encontró fixture_id para 1iz38m02tzgh8x5a9yg2ztgyc. Saltando.
+
+[19/40] Procesando 716vp99sj88laxm7ujwt3ua6s...
+   ✅ Fixture ID: 716vp99sj88laxm7ujwt3ua6s
+   Ejecutando: python3 trigger_descarga_eventos.py 716vp99sj88laxm7ujwt3ua6s 716vp99sj88laxm7ujwt3ua6s
+   ✅ Sincronización completada.
+
+[20/40] Procesando 8ibp4zw9an61s04zlhid9k8pg...
+   ⚠️ No se encontró fixture_id para 8ibp4zw9an61s04zlhid9k8pg. Saltando.
+
+[21/40] Procesando 8j3l6y3sjyoc4p8witck4pwr8...
+   ⚠️ No se encontró fixture_id para 8j3l6y3sjyoc4p8witck4pwr8. Saltando.
+
+[22/40] Procesando 8l0tfgfiokq3eu0cyhy2xek2c...
+   ⚠️ No se encontró fixture_id para 8l0tfgfiokq3eu0cyhy2xek2c. Saltando.
+
+[23/40] Procesando 8d8fm7wli7tfx8hm9w5l8nuhg...
+   ⚠️ No se encontró fixture_id para 8d8fm7wli7tfx8hm9w5l8nuhg. Saltando.
+
+[24/40] Procesando 8dmcz3k1u4ze53nvrsoz7eoes...
+   ⚠️ No se encontró fixture_id para 8dmcz3k1u4ze53nvrsoz7eoes. Saltando.
+
+[25/40] Procesando 8lektpju5p8dtppcyblv48wes...
+   ⚠️ No se encontró fixture_id para 8lektpju5p8dtppcyblv48wes. Saltando.
+
+[26/40] Procesando 3xcjz4isjg101zf0d40lxkglw...
+   ⚠️ No se encontró fixture_id para 3xcjz4isjg101zf0d40lxkglw. Saltando.
+
+[27/40] Procesando 3wljbdagmhpi6h7viwogz9ul0...
+   ⚠️ No se encontró fixture_id para 3wljbdagmhpi6h7viwogz9ul0. Saltando.
+
+[28/40] Procesando 7000rk9jiemwpjw2i9tnpim8k...
+   ✅ Fixture ID: 7000rk9jiemwpjw2i9tnpim8k
+   Ejecutando: python3 trigger_descarga_eventos.py 7000rk9jiemwpjw2i9tnpim8k 7000rk9jiemwpjw2i9tnpim8k
+   ✅ Sincronización completada.
+
+[29/40] Procesando 3wz71k4469ny273fw5c1yavx0...
+   ⚠️ No se encontró fixture_id para 3wz71k4469ny273fw5c1yavx0. Saltando.
+
+[30/40] Procesando 8fydg367drpc25r1bobxqj3f8...
+   ⚠️ No se encontró fixture_id para 8fydg367drpc25r1bobxqj3f8. Saltando.
+
+[31/40] Procesando 8h6429zr5ijqcxc8gjxygjtw4...
+   ⚠️ No se encontró fixture_id para 8h6429zr5ijqcxc8gjxygjtw4. Saltando.
+
+[32/40] Procesando 70ecxis8a4v87q3igbbhvxn2s...
+   ✅ Fixture ID: 70ecxis8a4v87q3igbbhvxn2s
+   Ejecutando: python3 trigger_descarga_eventos.py 70ecxis8a4v87q3igbbhvxn2s 70ecxis8a4v87q3igbbhvxn2s
+   ✅ Sincronización completada.
+
+[33/40] Procesando 759wkks5e6lybl2205pedxgd0...
+   ✅ Fixture ID: 759wkks5e6lybl2205pedxgd0
+   Ejecutando: python3 trigger_descarga_eventos.py 759wkks5e6lybl2205pedxgd0 759wkks5e6lybl2205pedxgd0
+   ✅ Sincronización completada.
+
+[34/40] Procesando 8f6gex4eh119d2hh9y2zb5clw...
+   ⚠️ No se encontró fixture_id para 8f6gex4eh119d2hh9y2zb5clw. Saltando.
+
+[35/40] Procesando 5x22do769ggspxs4t2pjr26tw...
+   ⚠️ No se encontró fixture_id para 5x22do769ggspxs4t2pjr26tw. Saltando.
+
+[36/40] Procesando 8k94qvmdvsycrxzlbprx5c0es...
+   ⚠️ No se encontró fixture_id para 8k94qvmdvsycrxzlbprx5c0es. Saltando.
+
+[37/40] Procesando 8ipngy9mmx0rx8i4bqwc3807o...
+   ⚠️ No se encontró fixture_id para 8ipngy9mmx0rx8i4bqwc3807o. Saltando.
+
+[38/40] Procesando ar8b186wqraa80u0vpi2e4nis...
+   ⚠️ No se encontró fixture_id para ar8b186wqraa80u0vpi2e4nis. Saltando.
+
+[39/40] Procesando 8kmvxdfvwq3sx8hx5cb7qr1g4...
+   ⚠️ No se encontró fixture_id para 8kmvxdfvwq3sx8hx5cb7qr1g4. Saltando.
+
+[40/40] Procesando 8jl294wug2pecy5pb2qbzyjh0...
+   ⚠️ No se encontró fixture_id para 8jl294wug2pecy5pb2qbzyjh0. Saltando.

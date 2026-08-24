@@ -233,7 +233,7 @@ def generar_pdf(fixture_id, match_id):
             calidad = downloader.player_calidad_parada.get(pid, 0.0)
             calidad_min = (calidad / mins) if mins > 0 else 0
             saves_min = (saves / mins) if mins > 0 else 0
-            lim2 = rate_val('calidad_parada_multiplier', 0.5) * saves_min
+            lim2 = rate_val('calidad_parada_multiplier', 0.006)
             blocks_info.append(("Bloque 2", f"Calidad P.: {calidad_min:.3f}/m (> {lim2:.3f}/m)", g('block_2_pts') == 1.0))
             
             # B3

@@ -334,29 +334,27 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
                     <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto)</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      <LabeledInput label="Paradas / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'saves_per_min') || 0.06} onChange={(v) => setRelevoLimit('POR', 'saves_per_min', v)} step="0.01" />
+                      <LabeledInput label="Paradas / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'saves_per_min') || 0.07} onChange={(v) => setRelevoLimit('POR', 'saves_per_min', v)} step="0.01" />
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
                     <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 2 (1 punto) - Calidad de Parada</h4>
                     <p className="text-xs text-slate-500 mb-3">
-                      Se busca un tiro rival en los 5 segundos previos a cada parada. Ese tiro recibe un <strong>Valor de Importancia</strong> según su zona (ver mapa). 
-                      Se suman todos los valores y se dividen por los minutos jugados. Si este ratio supera una fracción (multiplicador) de las paradas por minuto, gana 1 punto.
+                      Se busca un tiro rival en los 5 segundos previos a cada parada. Ese tiro recibe un <strong>Valor de Importancia</strong> según su zona (ver mapa).
+                      Se suma ese valor en cada parada; el acumulado debe superar una fracción del número de paradas realizadas para ganar 1 punto (solo si ha hecho al menos 1 parada).
                     </p>
                     <div className="flex flex-col lg:flex-row gap-5 items-start">
                       <div className="flex-1 w-full max-w-sm border border-slate-200 rounded-lg overflow-hidden bg-slate-100">
                         <img src="/calidad_parada.png" alt="Mapa de puntos por Calidad de Parada" className="w-full h-auto object-cover" />
                       </div>
                       <div className="flex-1 w-full grid grid-cols-1 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                        <LabeledInput label="Multiplicador (ej. 0.5 es 'la mitad')" value={num((rules.relevo_limits as any)?.POR || {}, 'calidad_parada_multiplier') || 0.5} onChange={(v) => setRelevoLimit('POR', 'calidad_parada_multiplier', v)} step="0.1" />
+                        <LabeledInput label="Divisor de paradas (ej. 3 = un tercio)" value={num((rules.relevo_limits as any)?.POR || {}, 'calidad_parada_divisor') || 3} onChange={(v) => setRelevoLimit('POR', 'calidad_parada_divisor', v)} step="1" />
                         <div className="text-xs text-slate-600 mt-2 p-2 bg-white border border-slate-200 rounded">
                           <strong>Ejemplo de la regla:</strong>
                           <br />
-                          El portero promedia <strong>0,06 paradas</strong> por minuto jugado.
+                          El portero realiza <strong>6 paradas</strong>. Con divisor 3, el umbral es 6 / 3 = <strong>2</strong>.
                           <br />
-                          En sus paradas ha acumulado un "valor de calidad" que equivale a <strong>0,04 por minuto jugado</strong>.
-                          <br />
-                          Como la calidad (0,04) es mayor que la <strong>mitad de sus paradas</strong> (0,06 x 0.5 = 0,03), entonces <strong>supera la métrica y suma 1 punto</strong>.
+                          En sus paradas ha acumulado un "valor de calidad" de <strong>2,4</strong>, que es mayor que 2, así que <strong>supera la métrica y suma 1 punto</strong>.
                         </div>
                       </div>
                     </div>
@@ -367,7 +365,7 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
                         <p className="text-xs font-semibold text-slate-700 mb-2">Opción A: Pases Largos</p>
-                        <LabeledInput label="Pases largos / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'long_passes_per_min') || 0.05} onChange={(v) => setRelevoLimit('POR', 'long_passes_per_min', v)} step="0.01" />
+                        <LabeledInput label="Pases largos / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'long_passes_per_min') || 0.12} onChange={(v) => setRelevoLimit('POR', 'long_passes_per_min', v)} step="0.01" />
                       </div>
                       <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
                         <p className="text-xs font-semibold text-slate-700 mb-2">Opción B: Pases Totales (deben cumplirse ambas)</p>
@@ -380,9 +378,10 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                   </div>
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
                     <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 4 (1 punto) - Condición OR</h4>
+                    <p className="text-xs text-slate-500 mb-3">Suma el punto si (blocajes + despejes de puños) / min jugados supera el umbral, o si (salidas fuera del área + cubrir balón y blocar) / min jugados supera el umbral.</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      <LabeledInput label="Blocajes aéreos / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'claims_per_min') || 0.02} onChange={(v) => setRelevoLimit('POR', 'claims_per_min', v)} step="0.01" />
-                      <LabeledInput label="Despejes de puños / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'punches_per_min') || 0.03} onChange={(v) => setRelevoLimit('POR', 'punches_per_min', v)} step="0.01" />
+                      <LabeledInput label="(Blocajes + puños) / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'block_punch_per_min') || 0.03} onChange={(v) => setRelevoLimit('POR', 'block_punch_per_min', v)} step="0.01" />
+                      <LabeledInput label="(Salidas + cubrir balón) / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'sweeper_cover_per_min') || 0.03} onChange={(v) => setRelevoLimit('POR', 'sweeper_cover_per_min', v)} step="0.01" />
                     </div>
                   </div>
                 </div>
@@ -392,7 +391,7 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
                     <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto)</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      <LabeledInput label="Acción último hombre / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'last_man_per_min') || 0.02} onChange={(v) => setRelevoLimit('DEF', 'last_man_per_min', v)} step="0.01" />
+                      <LabeledInput label="Acción último hombre / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'last_man_per_min') || 0.01} onChange={(v) => setRelevoLimit('DEF', 'last_man_per_min', v)} step="0.01" />
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
