@@ -52,7 +52,7 @@ BEGIN
         VALUES (team_id_val, pid, TRUE, FALSE, idx, target_matchday);
         idx := idx + 1;
     END LOOP;
-    FOR pid IN SELECT id FROM public.players WHERE position ILIKE '%forward%' OR position ILIKE '%attacker%' ORDER BY RANDOM() LIMIT 3 LOOP
+    FOR pid IN SELECT id FROM public.players WHERE position ILIKE '%forward%' OR position ILIKE '%attacker%' ORDER BY RANDOM() LIMIT 2 LOOP
         INSERT INTO public.team_players (team_id, player_id, is_starter, is_captain, "order", matchday)
         VALUES (team_id_val, pid, TRUE, FALSE, idx, target_matchday);
         idx := idx + 1;
