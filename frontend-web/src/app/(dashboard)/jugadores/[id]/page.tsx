@@ -132,6 +132,7 @@ interface PlayerScore {
   takeons_won: number
   takeons_lost: number
   takeons_overrun: number
+  final_third_events: number
   good_skills: number
   dispossessed: number
   bad_touches: number
@@ -318,7 +319,7 @@ export default function JugadorDetallePage() {
             clearances: 0, clearances_last_line: 0, blocked_crosses: 0, interceptions: 0, interceptions_high: 0, interceptions_med: 0, interceptions_low: 0, tackles_won: 0, tackles_lost: 0, blocked_shots: 0, blocked_passes: 0, ball_recoveries: 0, recoveries_high: 0, recoveries_med: 0, recoveries_low: 0, offsides_provoked: 0, challenges_lost: 0,
             errors_leading_to_shot: 0, errors_leading_to_goal: 0,
             passes_completed: 0, passes_attempted: 0, progressive_passes: 0, passes_into_final_third: 0, passes_into_box: 0, through_balls: 0, crosses_completed: 0, crosses_attempted: 0, switch_plays: 0, pull_backs: 0, long_balls_completed: 0, lay_offs: 0, forward_passes: 0, set_pieces_taken: 0, successful_crosses: 0, box_entries: 0,
-            takeons_won: 0, takeons_lost: 0, takeons_overrun: 0, good_skills: 0, dispossessed: 0, bad_touches: 0,
+            takeons_won: 0, takeons_lost: 0, takeons_overrun: 0, final_third_events: 0, good_skills: 0, dispossessed: 0, bad_touches: 0,
             aerials_won: 0, aerials_lost: 0,
             fouls_committed: 0, fouls_won: 0,
             yellow_cards: 0, second_yellow_cards: 0, red_cards: 0,
@@ -745,6 +746,7 @@ export default function JugadorDetallePage() {
       takeons_won: acc.takeons_won + n(s.takeons_won),
       takeons_lost: acc.takeons_lost + n(s.takeons_lost),
       takeons_overrun: acc.takeons_overrun + n(s.takeons_overrun),
+      final_third_events: acc.final_third_events + n(s.final_third_events),
       good_skills: acc.good_skills + n(s.good_skills),
       dispossessed: acc.dispossessed + n(s.dispossessed),
       bad_touches: acc.bad_touches + n(s.bad_touches),
@@ -838,6 +840,7 @@ export default function JugadorDetallePage() {
     takeons_won: 0,
     takeons_lost: 0,
     takeons_overrun: 0,
+    final_third_events: 0,
     good_skills: 0,
     dispossessed: 0,
     bad_touches: 0,

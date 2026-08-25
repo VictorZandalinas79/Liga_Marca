@@ -420,10 +420,16 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
               {activeTab === 'MED' && (
                 <div className="space-y-6">
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
-                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto)</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto) - Opción A o B (dentro de cada opción, ambas condiciones)</h4>
+                    <p className="text-xs text-slate-500 mb-2">Opción A: campo rival</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
                       <LabeledInput label="% Pases en campo rival" value={num((rules.relevo_limits as any)?.MED || {}, 'pass_opp_pct') || 50} onChange={(v) => setRelevoLimit('MED', 'pass_opp_pct', v)} step="1" />
                       <LabeledInput label="Pases en campo rival / min" value={num((rules.relevo_limits as any)?.MED || {}, 'pass_opp_per_min') || 0.5} onChange={(v) => setRelevoLimit('MED', 'pass_opp_per_min', v)} step="0.1" />
+                    </div>
+                    <p className="text-xs text-slate-500 mb-2">Opción B: pases totales</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="% Pases buenos (total)" value={num((rules.relevo_limits as any)?.MED || {}, 'pass_pct') || 65} onChange={(v) => setRelevoLimit('MED', 'pass_pct', v)} step="1" />
+                      <LabeledInput label="Pases intentados / min" value={num((rules.relevo_limits as any)?.MED || {}, 'passes_per_min') || 0.4} onChange={(v) => setRelevoLimit('MED', 'passes_per_min', v)} step="0.1" />
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
@@ -452,10 +458,15 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
               {activeTab === 'DEL' && (
                 <div className="space-y-6">
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
-                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto)</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 1 (1 punto) - Opción A o B (dentro de cada opción, ambas condiciones si aplica)</h4>
+                    <p className="text-xs text-slate-500 mb-2">Opción A: campo rival</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
                       <LabeledInput label="% Pases en campo rival" value={num((rules.relevo_limits as any)?.DEL || {}, 'pass_opp_pct') || 50} onChange={(v) => setRelevoLimit('DEL', 'pass_opp_pct', v)} step="1" />
                       <LabeledInput label="Pases en campo rival / min" value={num((rules.relevo_limits as any)?.DEL || {}, 'pass_opp_per_min') || 0.5} onChange={(v) => setRelevoLimit('DEL', 'pass_opp_per_min', v)} step="0.1" />
+                    </div>
+                    <p className="text-xs text-slate-500 mb-2">Opción B: participación en 3/4 de campo (x &gt; 66,6)</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <LabeledInput label="Participaciones en 3/4 campo / min" value={num((rules.relevo_limits as any)?.DEL || {}, 'final_third_events_per_min') || 0.1} onChange={(v) => setRelevoLimit('DEL', 'final_third_events_per_min', v)} step="0.01" />
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">

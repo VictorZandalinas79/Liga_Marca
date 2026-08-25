@@ -555,7 +555,15 @@ class MatchEventDownloader:
             p_opp = stats.get('pass_opp_half_completed', 0)
             p_opp_att = stats.get('pass_opp_half_attempted', 0)
             p_opp_pct = (p_opp / p_opp_att * 100) if p_opp_att > 0 else 0
-            if p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(rules.get('pass_opp_per_min', 0.5) * 90):
+            cond_opp = p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(rules.get('pass_opp_per_min', 0.5) * 90)
+
+            passes_completed = stats.get('passes_completed', 0)
+            passes_attempted = stats.get('passes_attempted', 0)
+            pass_pct = (passes_completed / passes_attempted * 100) if passes_attempted > 0 else 0
+            passes_per_min = (passes_attempted / mins_played) if mins_played > 0 else 0
+            cond_total = pass_pct > rules.get('pass_pct', 65) and passes_per_min > rules.get('passes_per_min', 0.4)
+
+            if cond_opp or cond_total:
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
                 
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
@@ -583,7 +591,13 @@ class MatchEventDownloader:
             p_opp = stats.get('pass_opp_half_completed', 0)
             p_opp_att = stats.get('pass_opp_half_attempted', 0)
             p_opp_pct = (p_opp / p_opp_att * 100) if p_opp_att > 0 else 0
-            if p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(rules.get('pass_opp_per_min', 0.5) * 90):
+            cond_opp = p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(rules.get('pass_opp_per_min', 0.5) * 90)
+
+            final_third_events = stats.get('relevo_del_final_third_events', 0)
+            final_third_per_min = (final_third_events / mins_played) if mins_played > 0 else 0
+            cond_final_third = final_third_per_min > rules.get('final_third_events_per_min', 0.1)
+
+            if cond_opp or cond_final_third:
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
                 
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
@@ -606,7 +620,10 @@ class MatchEventDownloader:
             if (assists >= req(rules.get('assists_per_min', 0.03) * 90)) or (t_pct > rules.get('takeons_pct', 35)):
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
-        total_pts = -1 if completed_blocks == 0 else completed_blocks
+        if completed_blocks == 0:
+            total_pts = -1 if mins_played >= 10 else 0
+        else:
+            total_pts = completed_blocks
         breakdown['total'] = float(total_pts)
         return breakdown
 
@@ -636,7 +653,7 @@ class MatchEventDownloader:
             player_team = self.players_team.get(player_id)
             opp_team = next((t for t in set(self.players_team.values()) if t and t != player_team), None)
 
-            if player_team and opp_team:
+            if player_team and opp_team and mins_played >= threshold:
                 team_goals = self.team_goals_scored.get(player_team, 0)
                 opp_goals = self.team_goals_scored.get(opp_team, 0)
 
@@ -653,6 +670,9 @@ class MatchEventDownloader:
                 else:
                     self.stats[player_id]['win_bonus'] = 0
                     self.stats[player_id]['draw_bonus'] = 0
+            else:
+                self.stats[player_id]['win_bonus'] = 0
+                self.stats[player_id]['draw_bonus'] = 0
 
         # --- GOLES ---
         goals = stats.get('goals', 0)
@@ -805,6 +825,11 @@ class MatchEventDownloader:
         # --- RELEVO Generic Tracking ---
         if self.has_qualifier(event, 14):
             self.apply_points(player_id, 'relevo_def_action_last_man', 1, current_min)
+
+        # Participación en 3/4 de campo (x > 66.6): Pass, Offside Pass, Take On, Miss,
+        # Post, Attempt Saved, Goal, Good Skill, Dispossessed, Ball Touch (bloque 1 DEL)
+        if type_id in [1, 2, 3, 13, 14, 15, 16, 42, 50, 61] and event.get('x', 0) > 66.6:
+            self.apply_points(player_id, 'relevo_del_final_third_events', 1, current_min)
 
         if type_id in [3, 4, 7, 54]: # Duelos por el suelo
             self.apply_points(player_id, 'relevo_ground_duels_total', 1, current_min)
@@ -1472,6 +1497,7 @@ class MatchEventDownloader:
                 'header_shots': stats.get('relevo_remates_cabeza', 0),
                 'recoveries_opp_half': stats.get('relevo_recup_campo_rival', 0),
                 'shots_total': stats.get('shots_total', 0),
+                'final_third_events': stats.get('relevo_del_final_third_events', 0),
             }
 
             payload = player_score_data.copy()

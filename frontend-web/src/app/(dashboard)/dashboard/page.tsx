@@ -419,6 +419,8 @@ export default function DashboardPage() {
 
       const history = [];
       for (let md = fantasyStart; md <= targetMaxMd; md++) {
+        if (openMatchdays.includes(md)) continue;
+
         const myMap = computedLineupsByTeam.get(userTeamId);
         let myPoints = 0;
         let myHasPenalty = false;
@@ -454,7 +456,7 @@ export default function DashboardPage() {
     if (allPenalties.length >= 0) {
       fetchHistory();
     }
-  }, [userTeamId, activeMatchday, allPenalties, user?.id, supabase, config.fantasy_starting_matchday]);
+  }, [userTeamId, activeMatchday, allPenalties, user?.id, supabase, config.fantasy_starting_matchday, openMatchdays]);
 
   useEffect(() => {
     const fetchAllPlayerStats = async () => {
@@ -2591,14 +2593,14 @@ export default function DashboardPage() {
                 <h3 className="text-base font-bold text-slate-900">Historial Completo de Sanciones (Liga)</h3>
               </div>
 
-              {allPenalties.filter(p => p.user_id === user?.id && !(p.matchday === activeMatchday && isUnlockWindowOpen)).length === 0 &&
-               liveInfractions.filter(inf => inf.user_id === user?.id && !(inf.matchday === activeMatchday && isUnlockWindowOpen) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday)).length === 0 ? (
+              {allPenalties.filter(p => p.user_id === user?.id && p.matchday >= (config?.fantasy_starting_matchday ?? 1) && p.matchday < activeMatchday && !openMatchdays.includes(p.matchday)).length === 0 &&
+               liveInfractions.filter(inf => inf.user_id === user?.id && inf.matchday >= (config?.fantasy_starting_matchday ?? 1) && inf.matchday < activeMatchday && !openMatchdays.includes(inf.matchday) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday)).length === 0 ? (
                 <p className="text-sm text-slate-500 italic text-center py-6">No tienes sanciones registradas en tu historial.</p>
               ) : (
                 <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
                   {/* Sanciones dinámicas activas del usuario */}
                   {liveInfractions
-                    .filter(inf => inf.user_id === user?.id && !(inf.matchday === activeMatchday && isUnlockWindowOpen) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday))
+                    .filter(inf => inf.user_id === user?.id && inf.matchday >= (config?.fantasy_starting_matchday ?? 1) && inf.matchday < activeMatchday && !openMatchdays.includes(inf.matchday) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday))
                     .map((inf) => (
                     <div key={inf.id} className="flex justify-between items-center text-sm bg-slate-50 rounded-xl p-3 border border-amber-100 shadow-sm">
                       <div className="flex items-center gap-2">
@@ -2611,7 +2613,7 @@ export default function DashboardPage() {
 
                   {/* Sanciones consolidadas históricas del usuario */}
                   {allPenalties
-                    .filter(p => p.user_id === user?.id && !(p.matchday === activeMatchday && isUnlockWindowOpen))
+                    .filter(p => p.user_id === user?.id && p.matchday >= (config?.fantasy_starting_matchday ?? 1) && p.matchday < activeMatchday && !openMatchdays.includes(p.matchday))
                     .map((p) => {
                       const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
                       const userName = profileObj?.full_name || 'Tú'
@@ -3130,7 +3132,7 @@ export default function DashboardPage() {
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 text-xs sm:text-sm text-slate-600 leading-none mt-0.5">
                     <span className="flex items-center gap-1">
                       <strong className={`font-extrabold text-sm sm:text-base ${
-                        (statsModalPlayer.total_points || 0) < 0 ? 'text-red-600' : (statsModalPlayer.total_points || 0) >= 0 && (statsModalPlayer.total_points || 0) <= 1 ? 'text-orange-600' : 'text-emerald-600'
+                        (statsModalPlayer.total_points || 0) < 0 ? 'text-red-600' : (statsModalPlayer.total_points || 0) >= 0 && (statsModalPlayer.total_points || 0) < 6 ? 'text-orange-600' : 'text-emerald-600'
                       }`}>{statsModalPlayer.total_points || 0}</strong> pts
                     </span>
                     <span className="text-slate-300">•</span>

@@ -5,7 +5,7 @@
   "participation": {
     "starter_bonus": 2,
     "substitute_bonus": 1,
-    "minutes_threshold": 60
+    "minutes_threshold": 59
   },
   "positions": {
     "POR": "Portero",
@@ -63,7 +63,7 @@
       "DEF": 3,
       "MED": 2,
       "DEL": 1,
-      "min_minutes": 60,
+      "min_minutes": 59,
       "requires_zero": "goal_conceded",
       "description": "Otorgar si juega >= 60 min y suma 0 en goal_conceded"
     },
@@ -145,6 +145,8 @@
     },
     "MED": {
       "pass_opp_pct": 50,
+      "pass_pct": 65,
+      "passes_per_min": 0.4,
       "aerials_pct": 60,
       "ground_duels_pct": 60,
       "shots_on_pct": 50,
@@ -154,6 +156,7 @@
     },
     "DEL": {
       "pass_opp_pct": 50,
+      "final_third_events_per_min": 0.1,
       "aerials_pct": 40,
       "recup_opp_per_min": 0.02,
       "shots_on_pct": 60,

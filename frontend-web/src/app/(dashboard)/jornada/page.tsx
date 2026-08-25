@@ -1394,7 +1394,7 @@ export default function JornadaPage() {
                                   ) : (
                                     <div className="flex items-baseline justify-end leading-tight">
                                       <span className={`text-sm font-bold ${
-                                        (player.puntos || 0) < 0 ? 'text-red-600' : (player.puntos || 0) >= 0 && (player.puntos || 0) <= 1 ? 'text-orange-600' : 'text-emerald-600'
+                                        (player.puntos || 0) < 0 ? 'text-red-600' : (player.puntos || 0) >= 0 && (player.puntos || 0) < 6 ? 'text-orange-600' : 'text-emerald-600'
                                       } ${player.hasPlayed ? 'opacity-70' : ''}`}>
                                         {Math.round((player.puntos ?? 0) * 10) / 10}
                                       </span>

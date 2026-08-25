@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { applyMarketFilter } from '@/lib/market'
 import { Card, CardContent } from '@/components/ui/card'
-import { Search, TrendingUp, Goal, Ticket, Download, Swords, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { Search, TrendingUp, Goal, Ticket, Download, Swords, ChevronDown, ChevronUp, X, BarChart2 } from 'lucide-react'
 
 interface Player {
   id: string
@@ -211,7 +211,7 @@ export default function JugadoresPage() {
   const [minPrice, setMinPrice] = useState<string>('')
   const [maxPrice, setMaxPrice] = useState<string>('')
   const [teams, setTeams] = useState<Array<{ id: string; name: string; logo_url?: string }>>([])
-  const [sortBy, setSortBy] = useState<'price' | 'points' | 'goals' | 'name'>('price')
+  const [sortBy, setSortBy] = useState<'price' | 'points' | 'avg_points' | 'goals' | 'name'>('price')
   const [loading, setLoading] = useState(true)
   const [isComparatorOpen, setIsComparatorOpen] = useState(false)
   const [playerAId, setPlayerAId] = useState<string>('')
@@ -435,6 +435,7 @@ export default function JugadoresPage() {
       
       if (sortBy === 'price') return (b.precio || 0) - (a.precio || 0)
       if (sortBy === 'points') return (b.stats?.total_points || 0) - (a.stats?.total_points || 0)
+      if (sortBy === 'avg_points') return (b.stats?.avg_points || 0) - (a.stats?.avg_points || 0)
       if (sortBy === 'goals') return (b.stats?.goals || 0) - (a.stats?.goals || 0)
       return (a.short_name || '').localeCompare(b.short_name || '')
     })
@@ -487,11 +488,12 @@ export default function JugadoresPage() {
             </select>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'price' | 'points' | 'goals' | 'name')}
+              onChange={(e) => setSortBy(e.target.value as 'price' | 'points' | 'avg_points' | 'goals' | 'name')}
               className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
             >
               <option value="price">Ordenar por Precio</option>
               <option value="points">Ordenar por Puntos</option>
+              <option value="avg_points">Ordenar por Promedio</option>
               <option value="goals">Ordenar por Goles</option>
               <option value="name">Ordenar por Nombre</option>
             </select>
@@ -844,14 +846,23 @@ export default function JugadoresPage() {
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-0.5 !text-emerald-600 leading-none">
+                  <div className="text-center min-w-[32px] sm:min-w-[44px]">
+                    <div className="flex items-center justify-center gap-0.5 text-emerald-600 leading-none">
                       <TrendingUp className="h-3 w-3" />
                       <span className="text-xs sm:text-sm font-bold">
                         {player.stats ? Math.round(player.stats.total_points * 10) / 10 : 0}
                       </span>
                     </div>
                     <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Puntos</p>
+                  </div>
+                  <div className="text-center min-w-[32px] sm:min-w-[44px]">
+                    <div className="flex items-center justify-center gap-0.5 text-blue-600 leading-none">
+                      <BarChart2 className="h-3 w-3" />
+                      <span className="text-xs sm:text-sm font-bold">
+                        {player.stats ? Math.round(player.stats.avg_points * 10) / 10 : 0}
+                      </span>
+                    </div>
+                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Promedio</p>
                   </div>
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-0.5 !text-slate-700 leading-none">
@@ -879,7 +890,7 @@ export default function JugadoresPage() {
                       {player.stats?.matches_played || 0}
                     </span>
                     <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">
-                      {player.stats?.avg_points || 0} pts/pj
+                      Partidos
                     </p>
                   </div>
                 </div>

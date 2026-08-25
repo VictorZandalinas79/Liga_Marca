@@ -265,7 +265,7 @@ export default async function PuntuacionPage() {
         </p>
         <ul className="space-y-2 text-sm text-slate-600 mb-6 list-disc pl-5">
           <li>Por cada bloque superado, el jugador suma <strong>1 punto</strong>.</li>
-          <li>Si no supera <strong>ningún bloque</strong>, su puntuación de Relevo será <strong>-1 punto</strong>.</li>
+          <li>Si no supera <strong>ningún bloque</strong>, su puntuación de Relevo será <strong>-1 punto</strong>, salvo que haya jugado <strong>menos de 10 minutos</strong>, en cuyo caso se queda en <strong>0 puntos</strong> (no se penaliza por muestra insuficiente).</li>
           <li>La puntuación final oscila entre <strong>-1 y 4 puntos</strong>.</li>
         </ul>
 
@@ -332,7 +332,7 @@ export default async function PuntuacionPage() {
         <div className="mb-6">
           <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Medio (MED)</h3>
           <ul className="text-sm text-slate-600 space-y-2 pl-2">
-            <li><span className="font-semibold">Bloque 1:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'pass_opp_pct') || 50}% pases en campo rival y &ge; {num((rules?.relevo_limits as any)?.MED, 'pass_opp_per_min') || 0.5} pases/min.</li>
+            <li><span className="font-semibold">Bloque 1:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'pass_opp_pct') || 50}% pases en campo rival y &ge; {num((rules?.relevo_limits as any)?.MED, 'pass_opp_per_min') || 0.5} pases/min, O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'pass_pct') || 65}% de acierto en el pase total y &gt; {num((rules?.relevo_limits as any)?.MED, 'passes_per_min') || 0.4} pases intentados/min.</li>
             <li><span className="font-semibold">Bloque 2:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'aerials_pct') || 60}% duelos aéreos ganados (mín. 3), O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'ground_duels_pct') || 60}% duelos suelo ganados (mín. 3).</li>
             <li><span className="font-semibold">Bloque 3:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'shots_on_pct') || 50}% remates a puerta, O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'takeons_pct') || 35}% regates completados (mín. 2).</li>
             <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.MED, 'assists_per_min') || 0.03} asistencias/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.MED, 'crosses_per_min') || 0.02} centros buenos/min.</li>
@@ -343,7 +343,7 @@ export default async function PuntuacionPage() {
         <div>
           <h3 className="font-bold text-slate-800 text-sm mb-2 bg-slate-100 p-2 rounded">Delantero (DEL)</h3>
           <ul className="text-sm text-slate-600 space-y-2 pl-2">
-            <li><span className="font-semibold">Bloque 1:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'pass_opp_pct') || 50}% pases en campo rival y &ge; {num((rules?.relevo_limits as any)?.DEL, 'pass_opp_per_min') || 0.5} pases/min.</li>
+            <li><span className="font-semibold">Bloque 1:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'pass_opp_pct') || 50}% pases en campo rival y &ge; {num((rules?.relevo_limits as any)?.DEL, 'pass_opp_per_min') || 0.5} pases/min, O BIEN &gt; {num((rules?.relevo_limits as any)?.DEL, 'final_third_events_per_min') || 0.1} participaciones (pase, regate, remate, gol, acción de habilidad, pérdida o control de balón) en 3/4 de campo (x &gt; 66,6) por minuto jugado.</li>
             <li><span className="font-semibold">Bloque 2:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'aerials_pct') || 40}% duelos aéreos ganados (mín. 3), O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'recup_opp_per_min') || 0.3} recuperaciones campo rival/min.</li>
             <li><span className="font-semibold">Bloque 3:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'shots_on_pct') || 60}% remates a puerta, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'head_shots_per_min') || 0.02} remates de cabeza/min.</li>
             <li><span className="font-semibold">Bloque 4:</span> ≥ {num((rules?.relevo_limits as any)?.DEL, 'assists_per_min') || 0.03} asistencias/min, O BIEN &gt; {num((rules?.relevo_limits as any)?.DEL, 'takeons_pct') || 35}% regates completados (mín. 2).</li>

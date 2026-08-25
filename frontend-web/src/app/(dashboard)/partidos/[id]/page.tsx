@@ -466,6 +466,7 @@ export default function PartidoDetallePage() {
           recoveries_opp_half: score?.recoveries_opp_half || 0,
           shots_total: score?.shots_total || 0,
           takeons_overrun: score?.takeons_overrun || 0,
+          final_third_events: score?.final_third_events || 0,
         }
       })
 
@@ -770,7 +771,7 @@ export default function PartidoDetallePage() {
               {/* Col 3: Puntos y Eventos/Iconos (Alineados a la derecha) */}
               <div className="flex flex-col items-end justify-center justify-self-end gap-0.5 relative z-10">
                 <span className={`text-2xl sm:text-3xl font-extrabold leading-none text-right drop-shadow-sm ${
-                  (player.total_points || 0) < 0 ? 'text-red-500' : (player.total_points || 0) >= 0 && (player.total_points || 0) <= 1 ? 'text-orange-500' : 'text-emerald-400'
+                  (player.total_points || 0) < 0 ? 'text-red-500' : (player.total_points || 0) >= 0 && (player.total_points || 0) < 6 ? 'text-orange-500' : 'text-emerald-400'
                 }`}>
                   {player.total_points || 0}
                 </span>
@@ -1146,7 +1147,7 @@ export default function PartidoDetallePage() {
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 text-xs sm:text-sm text-slate-600 leading-none mt-0.5">
                     <span className="flex items-center gap-1">
                       <strong className={`font-extrabold text-sm sm:text-base ${
-                        (selectedPlayer.total_points || 0) < 0 ? 'text-red-600' : (selectedPlayer.total_points || 0) >= 0 && (selectedPlayer.total_points || 0) <= 1 ? 'text-orange-600' : 'text-emerald-600'
+                        (selectedPlayer.total_points || 0) < 0 ? 'text-red-600' : (selectedPlayer.total_points || 0) >= 0 && (selectedPlayer.total_points || 0) < 6 ? 'text-orange-600' : 'text-emerald-600'
                       }`}>{selectedPlayer.total_points || 0}</strong> pts
                     </span>
                     <span className="text-slate-300">•</span>

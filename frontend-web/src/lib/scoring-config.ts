@@ -100,6 +100,8 @@ export const DEFAULT_RELEVO_LIMITS: RelevoLimits = {
   MED: {
     pass_opp_pct: 50,
     pass_opp_per_min: 0.5,
+    pass_pct: 65,
+    passes_per_min: 0.4,
     aerials_pct: 60,
     ground_duels_pct: 60,
     shots_on_pct: 50,
@@ -110,6 +112,7 @@ export const DEFAULT_RELEVO_LIMITS: RelevoLimits = {
   DEL: {
     pass_opp_pct: 50,
     pass_opp_per_min: 0.5,
+    final_third_events_per_min: 0.1,
     aerials_pct: 40,
     recup_opp_per_min: 0.3,
     shots_on_pct: 60,
@@ -230,6 +233,34 @@ const passOppPerMin = (fallback: number): RelevoMetricSpec => ({
   target: perMin('pass_opp_per_min', fallback),
   cmp: 'gte',
   describe: (lim) => `${lim?.pass_opp_per_min ?? fallback} pases en campo rival por minuto jugado`,
+})
+
+const overallPassPct = (fallback: number): RelevoMetricSpec => ({
+  label: 'Acierto en el pase (total)',
+  unit: 'pct',
+  value: (s) => pct(n(s, 'passes_completed'), n(s, 'passes_attempted')),
+  target: flat('pass_pct', fallback),
+  cmp: 'gt',
+  detail: (s) => `${n(s, 'passes_completed')}/${n(s, 'passes_attempted')}`,
+  describe: (lim) => `más del ${lim?.pass_pct ?? fallback}% de acierto en el pase total`,
+})
+
+const passesPerMin = (fallback: number): RelevoMetricSpec => ({
+  label: 'Pases intentados por minuto',
+  unit: 'count',
+  value: (s) => n(s, 'passes_attempted'),
+  target: perMin('passes_per_min', fallback),
+  cmp: 'gt',
+  describe: (lim) => `más de ${lim?.passes_per_min ?? fallback} pases intentados por minuto jugado`,
+})
+
+const finalThirdEventsPerMin = (fallback: number): RelevoMetricSpec => ({
+  label: 'Participaciones en 3/4 de campo por minuto',
+  unit: 'count',
+  value: (s) => n(s, 'final_third_events'),
+  target: perMin('final_third_events_per_min', fallback),
+  cmp: 'gt',
+  describe: (lim) => `más de ${lim?.final_third_events_per_min ?? fallback} participaciones (pase, regate, remate, gol, acción de habilidad, pérdida o control de balón) en 3/4 de campo (x > 66,6) por minuto jugado`,
 })
 
 const longPasses = (fallback: number): RelevoMetricSpec => ({
@@ -388,13 +419,29 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
   ],
   MED: [
-    { id: 1, title: 'Distribución en campo rival', options: [{ requireAll: true, metrics: [passOppPct(50), passOppPerMin(0.5)] }] },
+    {
+      id: 1,
+      title: 'Distribución',
+      note: 'Basta con cumplir las dos métricas de la opción A (campo rival), o las dos de la opción B (pases totales).',
+      options: [
+        { requireAll: true, metrics: [passOppPct(50), passOppPerMin(0.5)] },
+        { requireAll: true, metrics: [overallPassPct(65), passesPerMin(0.4)] },
+      ],
+    },
     { id: 2, title: 'Duelos', options: [{ metrics: [aerialsPct(60), groundDuelsPct(60)] }] },
     { id: 3, title: 'Desequilibrio', options: [{ metrics: [shotsOnPct(50), takeonsPct(35)] }] },
     { id: 4, title: 'Generación de juego', options: [{ metrics: [assists(0.03), crosses(0.02)] }] },
   ],
   DEL: [
-    { id: 1, title: 'Distribución en campo rival', options: [{ requireAll: true, metrics: [passOppPct(50), passOppPerMin(0.5)] }] },
+    {
+      id: 1,
+      title: 'Distribución / Participación en 3/4 de campo',
+      note: 'Basta con cumplir las dos métricas de la opción A (campo rival), o la métrica de la opción B (participación en 3/4 de campo).',
+      options: [
+        { requireAll: true, metrics: [passOppPct(50), passOppPerMin(0.5)] },
+        { metrics: [finalThirdEventsPerMin(0.1)] },
+      ],
+    },
     {
       id: 2,
       title: 'Presión y juego aéreo',
