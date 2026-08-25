@@ -282,7 +282,7 @@ export default function DashboardPage() {
       setSelectedMatchday(activeMatchday)
     }
   }, [activeMatchday, recommendedMatchday, openMatchdaysLoaded])
-  const { isLocked, isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, upcomingLocks } = useMatchdayLock(selectedMatchday)
+  const { isLocked, isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, upcomingLocks, isCloseToStart } = useMatchdayLock(selectedMatchday)
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
   // Estos jugadores no se pueden cambiar aunque el mercado general esté abierto.
   const lockedTeams = useLockedTeams()
@@ -1875,13 +1875,22 @@ export default function DashboardPage() {
             </span>
           ) : (
             timeUntilUnlock && (
-              <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-650 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-xs animate-pulse">
-                <Unlock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span className="text-emerald-700 font-bold">Cambios Abiertos</span>
-                <span className="text-slate-400 font-normal">
-                  (cierre en <span className="font-bold text-slate-600 font-mono">{timeUntilUnlock}</span>)
+              isCloseToStart ? (
+                <span className="inline-flex items-center gap-2 bg-red-50 border-2 border-red-500 text-red-700 px-4 py-2 rounded-xl text-sm sm:text-base font-extrabold shadow-md animate-pulse">
+                  <Unlock className="w-5 h-5 text-red-600 shrink-0 animate-bounce" />
+                  <span>
+                    ¡Cierre de cambios en: <span className="font-black text-red-600 font-mono text-base sm:text-lg">{timeUntilUnlock}</span>!
+                  </span>
                 </span>
-              </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-650 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-xs animate-pulse">
+                  <Unlock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="text-emerald-700 font-bold">Cambios Abiertos</span>
+                  <span className="text-slate-400 font-normal">
+                    (cierre en <span className="font-bold text-slate-600 font-mono">{timeUntilUnlock}</span>)
+                  </span>
+                </span>
+              )
             )
           )}
         </div>

@@ -21,6 +21,7 @@ interface MatchdayLockState {
   currentMatchday: number
   currentMomento: string | null
   upcomingLocks: OutOfOrderLock[]
+  isCloseToStart?: boolean
 }
 
 export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
@@ -34,6 +35,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
     currentMatchday: 0,
     currentMomento: null,
     upcomingLocks: [],
+    isCloseToStart: false,
   })
 
   useEffect(() => {
@@ -354,12 +356,18 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
 
       let timeUntilUnlock = ''
       let timeUntilLock = ''
-
+      let isCloseToStart = false
       if (now.getTime() < unlockTimeDate.getTime()) {
         const diffMs = unlockTimeDate.getTime() - now.getTime()
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
         const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-        timeUntilUnlock = `${diffHours}h ${diffMins}min`
+        if (diffMs < 3 * 60 * 60 * 1000) {
+          const diffSecs = Math.floor((diffMs % (1000 * 60)) / 1000)
+          timeUntilUnlock = `${diffHours}h ${diffMins}m ${diffSecs}s`
+          isCloseToStart = true
+        } else {
+          timeUntilUnlock = `${diffHours}h ${diffMins}min`
+        }
       } else if (now.getTime() > mergedBlocks[mergedBlocks.length - 1].end) {
         timeUntilLock = 'Finalizada'
       } else if (isUnlockWindowOpen) {
@@ -381,6 +389,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         currentMatchday: targetMatchday,
         currentMomento: shouldShowMomento ? targetMomento : null,
         upcomingLocks: outOfOrderLocks.filter(l => l.until.getTime() > now.getTime()),
+        isCloseToStart,
       })
     }
 
