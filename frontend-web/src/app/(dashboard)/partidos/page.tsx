@@ -328,13 +328,68 @@ export default function PartidosPage() {
   })
   const shouldAutoRefresh = hasLiveFixtures || hasFixturesInPlayWindow || now < pollUntil
 
+  // ── Auto-procesado ─────────────────────────────────────────────────────
+  // Antes, esta página solo releía Supabase (refreshCurrent): si nadie abría
+  // el partido concreto para disparar su auto-sync, los puntos no se
+  // procesaban nunca aunque el partido llevara horas en juego. Ahora, con la
+  // lista abierta, se relanza el procesado (sync-all-matches) cada
+  // AUTO_SYNC_LIST_COOLDOWN_MS mientras haya partidos en ventana de juego.
+  const AUTO_SYNC_LIST_KEY = 'partidos-lista-autosync'
+  const AUTO_SYNC_LIST_COOLDOWN_MS = 5 * 60 * 1000
+
+  const canAutoSyncList = () => {
+    try {
+      const last = Number(sessionStorage.getItem(AUTO_SYNC_LIST_KEY) || 0)
+      return Date.now() - last > AUTO_SYNC_LIST_COOLDOWN_MS
+    } catch {
+      return true
+    }
+  }
+  const markAutoSyncList = () => {
+    try {
+      sessionStorage.setItem(AUTO_SYNC_LIST_KEY, String(Date.now()))
+    } catch {
+      /* sin persistencia, no pasa nada: peor caso, se sincroniza de más */
+    }
+  }
+
+  const autoSyncPending = useCallback(async () => {
+    const pending = fixtures.filter(f => {
+      if (!f.start_time) return false
+      if (TERMINAL_STATUSES.has((f.status || '').toLowerCase())) return false
+      const elapsedMs = Date.now() - new Date(f.start_time).getTime()
+      return elapsedMs > -PREMATCH_WINDOW_MS && elapsedMs < POSTMATCH_WINDOW_MS
+    })
+    if (pending.length === 0) return
+
+    try {
+      await fetch('/api/sync-all-matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matchday: typeof currentMatchday === 'number' ? currentMatchday : currentMomento,
+          fixtures: pending.map(f => ({ id: f.id, match_id: f.match_id || f.id }))
+        })
+      })
+    } catch (error) {
+      console.error('Auto-sync (lista de partidos) falló:', error)
+    }
+  }, [fixtures, currentMatchday, currentMomento])
+
   useEffect(() => {
     if (!shouldAutoRefresh) return
 
-    const intervalId = setInterval(() => {
-      // Sin refrescos en pestañas de fondo; al volver se refresca al instante.
-      if (!document.hidden) refreshCurrent()
-    }, LIVE_REFRESH_MS)
+    const tick = () => {
+      if (document.hidden) return // sin refrescos en pestañas de fondo
+      refreshCurrent()
+      if (hasFixturesInPlayWindow && canAutoSyncList()) {
+        markAutoSyncList()
+        autoSyncPending()
+      }
+    }
+
+    tick() // al entrar a la página, no esperar LIVE_REFRESH_MS para procesar
+    const intervalId = setInterval(tick, LIVE_REFRESH_MS)
 
     const onVisible = () => {
       if (!document.hidden) refreshCurrent()
@@ -345,7 +400,7 @@ export default function PartidosPage() {
       clearInterval(intervalId)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [shouldAutoRefresh, refreshCurrent])
+  }, [shouldAutoRefresh, refreshCurrent, hasFixturesInPlayWindow, autoSyncPending])
 
   // Cambiar de jornada no dispara ninguna consulta de fixtures: ya están todos
   // en memoria. Solo se recargan las puntuaciones de la nueva jornada.

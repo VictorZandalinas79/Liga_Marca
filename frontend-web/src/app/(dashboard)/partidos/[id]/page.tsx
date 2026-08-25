@@ -205,7 +205,7 @@ const formatPlayerName = (player: { short_name?: string; first_name?: string; la
 // Cada sync dispara un workflow de GitHub Actions (cola con concurrencia
 // `sync-live`), así que no se lanza a lo loco: solo para partidos dentro de su
 // ventana de juego y con un margen entre disparos, compartido entre pestañas.
-const AUTO_SYNC_COOLDOWN_MS = 3 * 60 * 1000
+const AUTO_SYNC_COOLDOWN_MS = 5 * 60 * 1000
 // El motor tarda ~1-2 min en subir los datos: refrescamos varias veces después.
 const POST_SYNC_REFRESH_DELAYS_MS = [30_000, 60_000, 120_000]
 const PLAY_WINDOW_BEFORE_MS = 30 * 60 * 1000
@@ -238,8 +238,7 @@ export default function PartidoDetallePage() {
   const router = useRouter()
   const params = useParams()
 
-  // Partido ya auto-sincronizado en este montaje + refrescos pendientes
-  const autoSyncedFixtureRef = useRef<string | null>(null)
+  // Refrescos pendientes tras lanzar un sync
   const postSyncTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   // El margen entre disparos vive en sessionStorage para que entrar y salir del
@@ -549,7 +548,6 @@ export default function PartidoDetallePage() {
 
   const handleSyncMatch = () => {
     if (!fixture) return
-    autoSyncedFixtureRef.current = fixture.id
     markAutoSync(fixture.id)
     return runSync(fixture)
   }
@@ -559,19 +557,6 @@ export default function PartidoDetallePage() {
     fetchPartido()
   }, [params.id])
 
-  // Al abrir un partido dentro de su ventana de juego, lanzamos el sync solo y
-  // vamos recargando los datos según llegan (ver schedulePostSyncRefreshes).
-  useEffect(() => {
-    if (!fixture) return
-    if (autoSyncedFixtureRef.current === fixture.id) return
-    if (!isInPlayWindow(fixture)) return
-    if (!canAutoSync(fixture.id)) return
-
-    autoSyncedFixtureRef.current = fixture.id
-    markAutoSync(fixture.id)
-    runSync(fixture, { auto: true })
-  }, [fixture?.id, fixture?.status, fixture?.start_time])
-
   // Limpiar los refrescos programados al salir del partido
   useEffect(() => {
     return () => {
@@ -580,21 +565,31 @@ export default function PartidoDetallePage() {
     }
   }, [])
 
-  // Efecto para polling cuando el partido está en vivo o cerca de empezar.
-  // El intervalo se arma siempre que quede algo por ver y decide en cada tick
-  // si toca releer: así una pestaña abierta una hora antes empieza a refrescar
-  // sola al entrar en la ventana, sin depender de que cambie el fixture.
+  // Auto-sincronización mientras el partido está en su ventana de juego:
+  // se dispara al abrir el partido y se repite cada AUTO_SYNC_COOLDOWN_MS
+  // (5 min) mientras siga en ventana, en vez de una sola vez por montaje.
+  // Antes, un ref bloqueaba cualquier sync tras el primero y el intervalo
+  // solo releía Supabase sin volver a procesar: los puntos se quedaban
+  // congelados salvo que el usuario saliera y reentrara al partido.
   useEffect(() => {
     if (!fixture) return
     if (!fixture.start_time) return
     if (fixture.status === 'finished') return
 
-    const interval = setInterval(() => {
-      if (isInPlayWindow(fixture)) fetchPartido()
-    }, 30000) // 30 segundos
+    const tick = () => {
+      if (!isInPlayWindow(fixture)) return
+      if (canAutoSync(fixture.id)) {
+        markAutoSync(fixture.id)
+        runSync(fixture, { auto: true })
+      } else {
+        fetchPartido()
+      }
+    }
 
+    tick()
+    const interval = setInterval(tick, 30000) // 30 segundos
     return () => clearInterval(interval)
-  }, [fixture?.status, fixture?.start_time])
+  }, [fixture?.id, fixture?.status, fixture?.start_time])
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString)
