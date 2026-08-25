@@ -82,13 +82,14 @@ export interface LockedTeam {
  */
 export function computeOutOfOrderLocks(
   fixtures: FixtureLite[],
-  offsets: LockOffsets = DEFAULT_LOCK_OFFSETS
+  offsets: LockOffsets = DEFAULT_LOCK_OFFSETS,
+  fantasyStart: number = 1
 ): OutOfOrderLock[] {
   const startOffsetMs = offsets.startHoursBefore * ONE_HOUR
   const endOffsetMs = offsets.endHoursAfter * ONE_HOUR
 
   const numeric = fixtures.filter(
-    f => f.matchday && f.matchday > 0 && f.start_time && f.home_team_id && f.away_team_id
+    f => f.matchday && f.matchday >= fantasyStart && f.start_time && f.home_team_id && f.away_team_id
   )
   if (numeric.length === 0) return []
 
@@ -220,10 +221,11 @@ export function isLockActive(lock: OutOfOrderLock, now: Date = new Date()): bool
 export function computeLockedTeams(
   fixtures: FixtureLite[],
   now: Date = new Date(),
-  offsets: LockOffsets = DEFAULT_LOCK_OFFSETS
+  offsets: LockOffsets = DEFAULT_LOCK_OFFSETS,
+  fantasyStart: number = 1
 ): LockedTeam[] {
   const locked: LockedTeam[] = []
-  for (const lock of computeOutOfOrderLocks(fixtures, offsets)) {
+  for (const lock of computeOutOfOrderLocks(fixtures, offsets, fantasyStart)) {
     if (!isLockActive(lock, now)) continue
     for (const teamId of lock.teamIds) {
       locked.push({

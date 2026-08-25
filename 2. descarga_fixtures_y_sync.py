@@ -198,7 +198,7 @@ def _parse_ts(s):
         return None
 
 
-def detect_out_of_order(fixtures_payload):
+def detect_out_of_order(fixtures_payload, fantasy_start=1):
     """Detecta partidos cuyo matchday NO coincide con su hueco cronológico real.
 
     Mismo algoritmo que el frontend (locked-teams.ts): el tiempo representativo
@@ -213,7 +213,7 @@ def detect_out_of_order(fixtures_payload):
     for f in fixtures_payload:
         md = f.get("matchday")
         st = _parse_ts(f.get("start_time", ""))
-        if md and md > 0 and st:
+        if md and md >= fantasy_start and st:
             rows.append((f["id"], md, st))
     if not rows:
         return {}
@@ -556,6 +556,14 @@ def upload_fixtures_to_supabase(matches):
     # --- FIN NUEVA LÓGICA ---
 
     # Detectar cambios de horario antes del upsert
+    fantasy_start = 1
+    try:
+        cfg_res = supabase.table("league_config").select("fantasy_starting_matchday").eq("id", 1).maybeSingle().execute()
+        if cfg_res.data:
+            fantasy_start = cfg_res.data.get("fantasy_starting_matchday", 1)
+    except Exception as e:
+        print(f"⚠️ Error obteniendo fantasy_starting_matchday: {e}")
+
     try:
         existing_resp = supabase.table("fixtures").select("id,start_time,status").execute()
         existing_map = {r['id']: r['start_time'] for r in (existing_resp.data or [])}
@@ -575,7 +583,7 @@ def upload_fixtures_to_supabase(matches):
             f['status'] = prev
 
     # Partidos que quedan fuera del orden de su jornada (aplazados/adelantados).
-    out_of_order = detect_out_of_order(fixtures_payload)
+    out_of_order = detect_out_of_order(fixtures_payload, fantasy_start)
 
     schedule_notifications = []
     for f in fixtures_payload:

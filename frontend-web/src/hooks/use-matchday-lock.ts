@@ -104,7 +104,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       const outOfOrderLocks = computeOutOfOrderLocks(allFixtures as FixtureLite[], {
         startHoursBefore: unlockOffsetMs / (60 * 60 * 1000),
         endHoursAfter: lockOffsetMs / (60 * 60 * 1000)
-      })
+      }, fantasyStart)
       const outOfOrderIds = new Set(outOfOrderLocks.map(l => l.fixtureId))
       const VOID_STATUSES = new Set(['cancelled', 'postponed'])
 

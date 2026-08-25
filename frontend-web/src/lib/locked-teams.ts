@@ -39,13 +39,15 @@ export function useLockedTeams(): LockedTeam[] {
   useEffect(() => {
     const run = async () => {
       const supabase = createClient()
-      const [offsets, { data }] = await Promise.all([
+      const [offsets, { data: leagueData }, { data }] = await Promise.all([
         fetchLockOffsets(supabase),
+        supabase.from('league_config').select('fantasy_starting_matchday').eq('id', 1).maybeSingle(),
         supabase
           .from('fixtures')
           .select('id,matchday,start_time,status,home_team_id,away_team_id'),
       ])
-      setLocked(computeLockedTeams((data || []) as FixtureLite[], new Date(), offsets))
+      const fantasyStart = leagueData?.fantasy_starting_matchday ?? 1
+      setLocked(computeLockedTeams((data || []) as FixtureLite[], new Date(), offsets, fantasyStart))
     }
     run()
     const interval = setInterval(run, 60 * 1000)
@@ -85,7 +87,7 @@ export function useOpenMatchdays(): OpenMatchdaysState {
       ])
       const fantasyStart = leagueData?.fantasy_starting_matchday ?? 1
       const fixtures = (data || []) as FixtureLite[]
-      const outOfOrderIds = new Set(computeOutOfOrderLocks(fixtures, offsets).map(l => l.fixtureId))
+      const outOfOrderIds = new Set(computeOutOfOrderLocks(fixtures, offsets, fantasyStart).map(l => l.fixtureId))
       const now = Date.now()
 
       const byMatchday = new Map<number, FixtureLite[]>()
