@@ -89,7 +89,7 @@ export function MetricBreakdown({
     let wb = n(player.win_bonus)
     let db = n(player.draw_bonus)
 
-    if (wb === 0 && db === 0 && hasResult) {
+    if (wb === 0 && db === 0 && hasResult && hasThreshold) {
       if (isWin) {
         wb = R.participation.win_bonus_60
       } else if (isDraw) {

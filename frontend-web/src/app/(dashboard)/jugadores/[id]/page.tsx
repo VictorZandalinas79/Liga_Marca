@@ -1261,7 +1261,7 @@ export default function JugadorDetallePage() {
     const stored = nv(s, 'win_bonus') + nv(s, 'draw_bonus')
     if (stored > 0) return stored
     const f = s.fixture
-    if (!f || nv(s, 'minutes_played') <= 0) return 0
+    if (!f || nv(s, 'minutes_played') < SR.participation.minutes_threshold) return 0
     const isHome = player.team_id === f.home_team_id
     const isAway = player.team_id === f.away_team_id
     if (!isHome && !isAway) return 0
