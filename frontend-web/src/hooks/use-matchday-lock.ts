@@ -282,16 +282,14 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         }
       }
       
-      // Añadir partidos out-of-order de la jornada actual que estamos viendo
-      // (solo si esta jornada ya forma parte de la liga activa)
-      if (targetMatchday >= fantasyStart) {
-        const oooFixtures = fixtures.filter(f => outOfOrderIds.has(f.id))
-        for (const f of oooFixtures) {
-          blocks.push({
-            start: new Date(f.start_time).getTime() - unlockOffsetMs,
-            end: new Date(f.start_time).getTime() + lockOffsetMs
-          })
-        }
+      // Añadir TODOS los partidos out-of-order (aplazados/adelantados) de cualquier jornada >= fantasyStart
+      // para que el mercado se bloquee a nivel de aplicación durante la disputa de dichos partidos.
+      const oooFixtures = allFixtures.filter(f => outOfOrderIds.has(f.id) && f.matchday && f.matchday >= fantasyStart)
+      for (const f of oooFixtures) {
+        blocks.push({
+          start: new Date(f.start_time).getTime() - unlockOffsetMs,
+          end: new Date(f.start_time).getTime() + lockOffsetMs
+        })
       }
       
       blocks.sort((a, b) => a.start - b.start)

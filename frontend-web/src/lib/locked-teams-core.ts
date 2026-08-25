@@ -109,42 +109,26 @@ export function computeOutOfOrderLocks(
     repTime.set(md, times[Math.floor(times.length / 2)])
   }
 
-  // Para cada jornada, calcular min y max absolutos, descartando outliers muy lejanos (ej. >14 días de la mediana)
-  const bounds = new Map<number, {min: number, max: number}>()
-  for (const [md, fixtures] of byMatchday.entries()) {
-    const times = fixtures.map(f => new Date(f.start_time).getTime())
-    times.sort((a, b) => a - b)
-    const median = times[Math.floor(times.length / 2)]
-    const MAX_DISTANCE = 14 * 24 * 60 * 60 * 1000 // 14 días
-    const validTimes = times.filter(t => Math.abs(t - median) <= MAX_DISTANCE)
-    if (validTimes.length > 0) {
-      bounds.set(md, { min: Math.min(...validTimes), max: Math.max(...validTimes) })
-    } else {
-      bounds.set(md, { min: median, max: median })
-    }
-  }
-
-  // Orden cronológico de las jornadas según su tiempo representativo.
-  const chronoOrder = [...byMatchday.keys()].sort((a, b) => repTime.get(a)! - repTime.get(b)!)
+  const OUT_OF_ORDER_THRESHOLD = 5 * 24 * 60 * 60 * 1000 // 5 días
 
   // Dado un instante t y su jornada original, ¿en el hueco de qué jornada cae?
   const slotFor = (t: number, ownMatchday: number): number => {
-    // Busca si t cae DENTRO de los límites de una jornada ANTERIOR (K < ownMatchday)
-    for (const k of chronoOrder) {
-      if (k >= ownMatchday) break;
-      const b = bounds.get(k);
-      if (b && t >= b.min && t <= b.max) return k;
+    const ownRep = repTime.get(ownMatchday)
+    if (ownRep && Math.abs(t - ownRep) <= OUT_OF_ORDER_THRESHOLD) {
+      return ownMatchday
     }
 
-    // Busca si t cae DENTRO de los límites de una jornada POSTERIOR (K > ownMatchday)
-    for (let i = chronoOrder.length - 1; i >= 0; i--) {
-      const k = chronoOrder[i]
-      if (k <= ownMatchday) break;
-      const b = bounds.get(k);
-      if (b && t >= b.min && t <= b.max) return k;
+    let closestMd = ownMatchday
+    let minDiff = Infinity
+    for (const [md, rep] of repTime.entries()) {
+      if (md === ownMatchday) continue
+      const diff = Math.abs(t - rep)
+      if (diff < minDiff) {
+        minDiff = diff
+        closestMd = md
+      }
     }
-
-    return ownMatchday;
+    return closestMd
   }
 
   const locks: OutOfOrderLock[] = []

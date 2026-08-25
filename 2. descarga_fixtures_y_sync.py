@@ -227,21 +227,28 @@ def detect_out_of_order(fixtures_payload):
         times.sort()
         rep[md] = times[len(times) // 2]
 
-    chrono = sorted(rep.keys(), key=lambda m: rep[m])
+    # Umbral de 5 días en segundos (5 * 24 * 60 * 60 = 432000 segundos)
+    OUT_OF_ORDER_THRESHOLD_SECS = 5 * 24 * 60 * 60
 
-    def slot_for(t):
-        for i, cur in enumerate(chrono):
-            nxt = chrono[i + 1] if i + 1 < len(chrono) else None
-            if nxt is None:
-                return cur
-            boundary = rep[cur] + (rep[nxt] - rep[cur]) / 2
-            if t <= boundary:
-                return cur
-        return chrono[-1]
+    def slot_for(t, ownMatchday):
+        own_rep = rep.get(ownMatchday)
+        if own_rep and abs((t - own_rep).total_seconds()) <= OUT_OF_ORDER_THRESHOLD_SECS:
+            return ownMatchday
+        
+        closest_md = ownMatchday
+        min_diff = float('inf')
+        for md, r_val in rep.items():
+            if md == ownMatchday:
+                continue
+            diff = abs((t - r_val).total_seconds())
+            if diff < min_diff:
+                min_diff = diff
+                closest_md = md
+        return closest_md
 
     result = {}
     for fid, md, st in rows:
-        slot = slot_for(st)
+        slot = slot_for(st, md)
         if slot != md:
             result[fid] = ("delayed" if md < slot else "advanced", md)
     return result

@@ -46,8 +46,8 @@ export function NotificationBell() {
   const [activeTab, setActiveTab] = useState<Tab>('partidos')
   const [mounted, setMounted] = useState(false)
 
-  const isPartido = (n: Notification) => n.type === 'fixture_changed' || String(n.id).startsWith('locked-fx-')
   const isSancion = (n: Notification) => String(n.id).startsWith('penalty-') || String(n.id).startsWith('live-inf-')
+  const isPartido = (n: Notification) => !isSancion(n) && (n.type === 'fixture_changed' || n.type === 'players_locked' || String(n.id).startsWith('locked-fx-'))
   const isJugador = (n: Notification) => !isPartido(n) && !isSancion(n)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [copiedAll, setCopiedAll] = useState(false)
