@@ -28,13 +28,40 @@ const VOID_STATUSES = new Set(['cancelled', 'postponed'])
 
 /** Offsets configurables desde Admin → Reglas del Juego (league_config). */
 export interface LockOffsets {
-  /** Horas antes del primer partido en las que se cierra el mercado. */
-  startHoursBefore: number
+  /**
+   * Horas antes del primer partido en las que se cierra el mercado, cuando
+   * ese primer partido cae en martes, miércoles o jueves.
+   */
+  startHoursBeforeMidweek: number
+  /**
+   * Horas antes del primer partido en las que se cierra el mercado, para el
+   * resto de días (viernes a lunes).
+   */
+  startHoursBeforeWeekend: number
   /** Horas después del último partido en las que se considera cerrada la jornada. */
   endHoursAfter: number
 }
 
-export const DEFAULT_LOCK_OFFSETS: LockOffsets = { startHoursBefore: 1, endHoursAfter: 2 }
+export const DEFAULT_LOCK_OFFSETS: LockOffsets = {
+  startHoursBeforeMidweek: 1,
+  startHoursBeforeWeekend: 1,
+  endHoursAfter: 2,
+}
+
+/** Martes, miércoles o jueves (Date.getDay(): 0=domingo … 6=sábado). */
+function isMidweekDay(d: Date): boolean {
+  const day = d.getDay()
+  return day === 2 || day === 3 || day === 4
+}
+
+/**
+ * Horas de antelación aplicables según el día en que cae el partido que marca
+ * el inicio del bloqueo (el primer partido de la jornada, o el primer partido
+ * adelantado, según el caso).
+ */
+export function resolveStartHoursBefore(matchTime: Date, offsets: LockOffsets): number {
+  return isMidweekDay(matchTime) ? offsets.startHoursBeforeMidweek : offsets.startHoursBeforeWeekend
+}
 
 export interface FixtureLite {
   id: string
@@ -85,7 +112,6 @@ export function computeOutOfOrderLocks(
   offsets: LockOffsets = DEFAULT_LOCK_OFFSETS,
   fantasyStart: number = 1
 ): OutOfOrderLock[] {
-  const startOffsetMs = offsets.startHoursBefore * ONE_HOUR
   const endOffsetMs = offsets.endHoursAfter * ONE_HOUR
 
   const numeric = fixtures.filter(
@@ -189,7 +215,8 @@ export function computeOutOfOrderLocks(
       const earliestAdvancedBase = advancedSiblings.length > 0
         ? Math.min(...advancedSiblings.map(x => new Date(x.start_time).getTime()))
         : t;
-      const lockStart = earliestAdvancedBase - startOffsetMs;
+      const startHoursBefore = resolveStartHoursBefore(new Date(earliestAdvancedBase), offsets)
+      const lockStart = earliestAdvancedBase - startHoursBefore * ONE_HOUR;
 
       locks.push({
         fixtureId: f.id,

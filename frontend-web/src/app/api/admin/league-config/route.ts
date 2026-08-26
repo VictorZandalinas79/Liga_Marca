@@ -10,7 +10,8 @@ const NUMERIC_FIELDS = [
   'pay_winner',
   'pay_loser',
   'pay_rest',
-  'matchday_start_hours_before',
+  'matchday_start_hours_before_midweek',
+  'matchday_start_hours_before_weekend',
   'matchday_end_hours_after',
   'fantasy_starting_matchday',
   'max_changes_per_matchday',
@@ -67,6 +68,13 @@ export async function PATCH(request: NextRequest) {
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 })
   }
+
+  // matchday_start_hours_before (columna heredada) se mantiene en sync con la
+  // variante de fin de semana para los cálculos que aún no distinguen por día.
+  if (patch.matchday_start_hours_before_weekend !== undefined) {
+    patch.matchday_start_hours_before = patch.matchday_start_hours_before_weekend
+  }
+
   patch.updated_at = new Date().toISOString()
 
   const admin = createAdminSupabase()

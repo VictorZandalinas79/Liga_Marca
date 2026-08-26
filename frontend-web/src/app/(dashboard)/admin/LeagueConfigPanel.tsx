@@ -142,8 +142,11 @@ export function LeagueConfigPanel({ onStateChange }: { onStateChange?: (state: a
     if (config.infraction_penalty_cost !== savedConfig.infraction_penalty_cost) {
       diffs.push(`Penalización por infracción: ${savedConfig.infraction_penalty_cost}€ ➔ ${config.infraction_penalty_cost}€`)
     }
-    if (config.matchday_start_hours_before !== savedConfig.matchday_start_hours_before) {
-      diffs.push(`Inicio jornada: ${savedConfig.matchday_start_hours_before}h antes ➔ ${config.matchday_start_hours_before}h antes`)
+    if (config.matchday_start_hours_before_midweek !== savedConfig.matchday_start_hours_before_midweek) {
+      diffs.push(`Inicio jornada (mar/mié/jue): ${savedConfig.matchday_start_hours_before_midweek}h antes ➔ ${config.matchday_start_hours_before_midweek}h antes`)
+    }
+    if (config.matchday_start_hours_before_weekend !== savedConfig.matchday_start_hours_before_weekend) {
+      diffs.push(`Inicio jornada (resto de días): ${savedConfig.matchday_start_hours_before_weekend}h antes ➔ ${config.matchday_start_hours_before_weekend}h antes`)
     }
     if (config.matchday_end_hours_after !== savedConfig.matchday_end_hours_after) {
       diffs.push(`Cierre jornada: ${savedConfig.matchday_end_hours_after}h después ➔ ${config.matchday_end_hours_after}h después`)
@@ -277,11 +280,22 @@ export function LeagueConfigPanel({ onStateChange }: { onStateChange?: (state: a
           {/* Horario de jornada */}
           <div>
             <p className="text-sm font-semibold text-slate-700 mb-2">Horario de la jornada (horas)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <p className="text-xs text-slate-500 mb-3">
+              El &quot;empieza&quot; depende del día en que cae el primer partido de la
+              jornada: una antelación para jornadas entre semana (martes, miércoles
+              o jueves) y otra para el resto de días (viernes a lunes).
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <NumberField
-                label="Empieza (horas antes del 1er partido)"
-                value={config.matchday_start_hours_before}
-                onChange={(v) => setNum('matchday_start_hours_before', v)}
+                label="Empieza si 1er partido es mar/mié/jue (horas antes)"
+                value={config.matchday_start_hours_before_midweek}
+                onChange={(v) => setNum('matchday_start_hours_before_midweek', v)}
+                step="0.5"
+              />
+              <NumberField
+                label="Empieza el resto de días (horas antes)"
+                value={config.matchday_start_hours_before_weekend}
+                onChange={(v) => setNum('matchday_start_hours_before_weekend', v)}
                 step="0.5"
               />
               <NumberField

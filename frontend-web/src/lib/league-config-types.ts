@@ -6,6 +6,8 @@ export interface LeagueConfig {
   pay_loser: number
   pay_rest: number
   matchday_start_hours_before: number
+  matchday_start_hours_before_midweek: number
+  matchday_start_hours_before_weekend: number
   matchday_end_hours_after: number
   fantasy_starting_matchday: number
   max_changes_per_matchday: number
@@ -41,6 +43,8 @@ export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
   pay_loser: 2,
   pay_rest: 1,
   matchday_start_hours_before: 1,
+  matchday_start_hours_before_midweek: 1,
+  matchday_start_hours_before_weekend: 1,
   matchday_end_hours_after: 2,
   fantasy_starting_matchday: 1,
   max_changes_per_matchday: 3,

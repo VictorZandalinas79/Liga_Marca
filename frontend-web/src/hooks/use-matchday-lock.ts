@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { computeOutOfOrderLocks, type FixtureLite, type OutOfOrderLock } from '@/lib/locked-teams-core'
+import { computeOutOfOrderLocks, resolveStartHoursBefore, type FixtureLite, type LockOffsets, type OutOfOrderLock } from '@/lib/locked-teams-core'
 
 let lastLogKey = ''
 
@@ -49,26 +49,32 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
     // sitio que monta el hook, lo que ahogaba la carga inicial de la página.
     let cache: {
       fixtures: FixtureWithMomento[]
-      unlockOffsetMs: number
+      lockOffsets: LockOffsets
       lockOffsetMs: number
       fantasyStart: number
     } | null = null
+
+    // Horas de antelación aplicables según el día del partido que abre el bloqueo.
+    const startOffsetMsFor = (date: Date, offsets: LockOffsets) =>
+      resolveStartHoursBefore(date, offsets) * 60 * 60 * 1000
 
     const fetchMatchdayData = async () => {
       const supabase = createClient()
 
       // Offsets configurables (Admin → Reglas del Juego): cuándo empieza la
-      // jornada (cierra el mercado) y cuándo se considera cerrada.
-      let unlockOffsetMs = 60 * 60 * 1000      // 1h antes del primer partido
+      // jornada (cierra el mercado) y cuándo se considera cerrada. El inicio
+      // depende del día del primer partido (mar/mié/jue vs resto de días).
+      let lockOffsets: LockOffsets = { startHoursBeforeMidweek: 1, startHoursBeforeWeekend: 1, endHoursAfter: 2 }
       let lockOffsetMs = 2 * 60 * 60 * 1000    // 2h después del último partido
       let fantasyStart = 1                     // jornada en la que arranca el juego
       const { data: cfg } = await supabase
         .from('league_config')
-        .select('matchday_start_hours_before, matchday_end_hours_after, fantasy_starting_matchday')
+        .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday')
         .eq('id', 1)
         .maybeSingle()
       if (cfg) {
-        if (cfg.matchday_start_hours_before != null) unlockOffsetMs = Number(cfg.matchday_start_hours_before) * 60 * 60 * 1000
+        if (cfg.matchday_start_hours_before_midweek != null) lockOffsets.startHoursBeforeMidweek = Number(cfg.matchday_start_hours_before_midweek)
+        if (cfg.matchday_start_hours_before_weekend != null) lockOffsets.startHoursBeforeWeekend = Number(cfg.matchday_start_hours_before_weekend)
         if (cfg.matchday_end_hours_after != null) lockOffsetMs = Number(cfg.matchday_end_hours_after) * 60 * 60 * 1000
         if (cfg.fantasy_starting_matchday != null) fantasyStart = Number(cfg.fantasy_starting_matchday)
       }
@@ -89,7 +95,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
 
       cache = {
         fixtures: allFixtures as unknown as FixtureWithMomento[],
-        unlockOffsetMs,
+        lockOffsets,
         lockOffsetMs,
         fantasyStart,
       }
@@ -99,12 +105,9 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
     // Recalcula el estado a partir de la caché. No toca la red.
     const recomputeState = () => {
       if (cancelled || !cache) return
-      const { fixtures: allFixtures, unlockOffsetMs, lockOffsetMs, fantasyStart } = cache
+      const { fixtures: allFixtures, lockOffsets, lockOffsetMs, fantasyStart } = cache
 
-      const outOfOrderLocks = computeOutOfOrderLocks(allFixtures as FixtureLite[], {
-        startHoursBefore: unlockOffsetMs / (60 * 60 * 1000),
-        endHoursAfter: lockOffsetMs / (60 * 60 * 1000)
-      }, fantasyStart)
+      const outOfOrderLocks = computeOutOfOrderLocks(allFixtures as FixtureLite[], lockOffsets, fantasyStart)
       const outOfOrderIds = new Set(outOfOrderLocks.map(l => l.fixtureId))
       const VOID_STATUSES = new Set(['cancelled', 'postponed'])
 
@@ -197,7 +200,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
 
           const firstMatchTime = new Date(fixtures[0].start_time)
           const lastMatchTime = new Date(fixtures[fixtures.length - 1].start_time)
-          const unlockTime = firstMatchTime.getTime() - unlockOffsetMs
+          const unlockTime = firstMatchTime.getTime() - startOffsetMsFor(firstMatchTime, lockOffsets)
           const lockTime = lastMatchTime.getTime() + lockOffsetMs
 
           if (now.getTime() >= unlockTime && now.getTime() <= lockTime) {
@@ -219,7 +222,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
             )
 
             const firstMatchTime = new Date(fixtures[0].start_time)
-            const unlockTime = firstMatchTime.getTime() - unlockOffsetMs
+            const unlockTime = firstMatchTime.getTime() - startOffsetMsFor(firstMatchTime, lockOffsets)
 
             if (unlockTime > now.getTime()) {
               nextJornada = jornada
@@ -275,20 +278,22 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         const regularFixtures = jornada.fixtures.filter(f => !outOfOrderIds.has(f.id))
         if (regularFixtures.length > 0) {
           const sorted = regularFixtures.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+          const firstTime = new Date(sorted[0].start_time)
           blocks.push({
-            start: new Date(sorted[0].start_time).getTime() - unlockOffsetMs,
+            start: firstTime.getTime() - startOffsetMsFor(firstTime, lockOffsets),
             end: new Date(sorted[sorted.length - 1].start_time).getTime() + lockOffsetMs
           })
         }
       }
-      
+
       // Añadir TODOS los partidos out-of-order (aplazados/adelantados) de cualquier jornada >= fantasyStart
       // para que el mercado se bloquee a nivel de aplicación durante la disputa de dichos partidos.
       const oooFixtures = allFixtures.filter(f => outOfOrderIds.has(f.id) && f.matchday && f.matchday >= fantasyStart)
       for (const f of oooFixtures) {
+        const fTime = new Date(f.start_time)
         blocks.push({
-          start: new Date(f.start_time).getTime() - unlockOffsetMs,
-          end: new Date(f.start_time).getTime() + lockOffsetMs
+          start: fTime.getTime() - startOffsetMsFor(fTime, lockOffsets),
+          end: fTime.getTime() + lockOffsetMs
         })
       }
       

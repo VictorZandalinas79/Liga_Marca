@@ -4,6 +4,7 @@ import {
   computeLockedTeams,
   computeOutOfOrderLocks,
   DEFAULT_LOCK_OFFSETS,
+  resolveStartHoursBefore,
   type FixtureLite,
   type LockedTeam,
   type LockOffsets,
@@ -19,13 +20,16 @@ export async function fetchLockOffsets(
 ): Promise<LockOffsets> {
   const { data: cfg } = await supabase
     .from('league_config')
-    .select('matchday_start_hours_before, matchday_end_hours_after')
+    .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after')
     .eq('id', 1)
     .maybeSingle()
   return {
-    startHoursBefore: cfg?.matchday_start_hours_before != null
-      ? Number(cfg.matchday_start_hours_before)
-      : DEFAULT_LOCK_OFFSETS.startHoursBefore,
+    startHoursBeforeMidweek: cfg?.matchday_start_hours_before_midweek != null
+      ? Number(cfg.matchday_start_hours_before_midweek)
+      : DEFAULT_LOCK_OFFSETS.startHoursBeforeMidweek,
+    startHoursBeforeWeekend: cfg?.matchday_start_hours_before_weekend != null
+      ? Number(cfg.matchday_start_hours_before_weekend)
+      : DEFAULT_LOCK_OFFSETS.startHoursBeforeWeekend,
     endHoursAfter: cfg?.matchday_end_hours_after != null
       ? Number(cfg.matchday_end_hours_after)
       : DEFAULT_LOCK_OFFSETS.endHoursAfter,
@@ -103,13 +107,13 @@ export function useOpenMatchdays(): OpenMatchdaysState {
       let recommendedMatchday: number | null = null
       let bestDistance = Infinity
 
-      const startOffsetMs = offsets.startHoursBefore * 60 * 60 * 1000
       const endOffsetMs = offsets.endHoursAfter * 60 * 60 * 1000
 
       for (const [md, fs] of byMatchday) {
         const times = fs.map(f => new Date(f.start_time).getTime())
         const minStart = Math.min(...times)
         const maxStart = Math.max(...times)
+        const startOffsetMs = resolveStartHoursBefore(new Date(minStart), offsets) * 60 * 60 * 1000
         const unlockTime = minStart - startOffsetMs
         const lockTime = maxStart + endOffsetMs
 
