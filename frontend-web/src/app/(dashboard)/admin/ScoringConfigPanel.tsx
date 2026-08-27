@@ -401,7 +401,7 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                     <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 4 (1 punto) - Condición OR</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       <LabeledInput label="Acciones ofensivas en 3/4 / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'off_actions_3_4_per_min') || 0.20} onChange={(v) => setRelevoLimit('DEF', 'off_actions_3_4_per_min', v)} step="0.01" />
-                      <LabeledInput label="% Duelos totales ganados (mín. 5)" value={num((rules.relevo_limits as any)?.DEF || {}, 'total_duels_pct') || 90} onChange={(v) => setRelevoLimit('DEF', 'total_duels_pct', v)} step="1" />
+                      <LabeledInput label="% Duelos totales ganados (mín. 10)" value={num((rules.relevo_limits as any)?.DEF || {}, 'total_duels_pct') || 90} onChange={(v) => setRelevoLimit('DEF', 'total_duels_pct', v)} step="1" />
                     </div>
                   </div>
                 </div>

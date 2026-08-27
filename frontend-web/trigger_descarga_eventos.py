@@ -576,11 +576,11 @@ class MatchEventDownloader:
             if (recov_per_min >= rules.get('recoveries_per_min', 0.10)) or (abp_per_min >= rules.get('abp_remates_per_min', 0.01)) or (successful_crosses >= 2 and crosses_per_min >= rules.get('crosses_per_min', 0.02)):
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
 
-            # B4: Acciones ofensivas buenas en 3/4/min >= 0.30 O % duelos totales > 90% (mín 5)
+            # B4: Acciones ofensivas buenas en 3/4/min >= 0.30 O % duelos totales > 90% (mín 10)
             off34_per_min = (stats.get('relevo_off_actions_3_4_outcome_1', 0) / mins_played) if mins_played > 0 else 0
             total_duels_tot = g_tot + a_tot
-            total_duels_pct = ((g_won + a_won) / total_duels_tot * 100) if total_duels_tot >= 5 else 0
-            if (off34_per_min >= rules.get('off_actions_3_4_per_min', 0.20)) or (total_duels_tot >= 5 and total_duels_pct > rules.get('total_duels_pct', 90)):
+            total_duels_pct = ((g_won + a_won) / total_duels_tot * 100) if total_duels_tot >= 10 else 0
+            if (off34_per_min >= rules.get('off_actions_3_4_per_min', 0.20)) or (total_duels_tot >= 10 and total_duels_pct > rules.get('total_duels_pct', 90)):
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
         elif pos == 'MED':

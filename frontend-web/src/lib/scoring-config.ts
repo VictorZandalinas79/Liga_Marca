@@ -144,6 +144,8 @@ export interface RelevoMetricSpec {
   detail?: (s: ScoreRow) => string
   /** Descripción del umbral para la página de Puntuación. */
   describe: (lim: Record<string, number>) => string
+  /** Función opcional para forzar el fallo si no se cumple un mínimo absoluto. */
+  forceFail?: (s: ScoreRow) => boolean
 }
 
 export interface RelevoOptionSpec {
@@ -211,14 +213,12 @@ const perMinMetric = (label: string, valueKey: string, limKey: string, fallback:
 const perMinMetricMinCount = (label: string, valueKey: string, limKey: string, fallback: number, minCount: number, cmp: 'gte' | 'gt' = 'gte'): RelevoMetricSpec => ({
   label: `${label} (mín. ${minCount})`,
   unit: 'count',
-  value: (s) => {
-    const val = n(s, valueKey)
-    return val >= minCount ? val : -1 // -1 ensures it fails the target
-  },
+  value: (s) => n(s, valueKey),
   target: perMin(limKey, fallback),
   cmp,
   detail: (s) => `${n(s, valueKey)} (mín. ${minCount})`,
   describe: (lim) => `${lim?.[limKey] ?? fallback} ${label.toLowerCase()} por minuto jugado (mín. ${minCount})`,
+  forceFail: (s) => n(s, valueKey) < minCount,
 })
 
 const goalsAtLeast1: RelevoMetricSpec = {
@@ -367,12 +367,12 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
           unit: 'pct',
           value: (s) => {
             const total = aerialsTotal(s) + groundDuelsTotal(s)
-            return total >= 5 ? pct(n(s, 'aerials_won') + n(s, 'ground_duels_won'), total) : 0
+            return total >= 10 ? pct(n(s, 'aerials_won') + n(s, 'ground_duels_won'), total) : 0
           },
           target: flat('total_duels_pct', 90),
           cmp: 'gt',
-          detail: (s) => `${n(s, 'aerials_won') + n(s, 'ground_duels_won')}/${aerialsTotal(s) + groundDuelsTotal(s)} (mín. 5)`,
-          describe: (lim) => `más del ${lim?.total_duels_pct ?? 90}% de duelos totales (aéreo + suelo) ganados (mín. 5 duelos)`,
+          detail: (s) => `${n(s, 'aerials_won') + n(s, 'ground_duels_won')}/${aerialsTotal(s) + groundDuelsTotal(s)} (mín. 10)`,
+          describe: (lim) => `más del ${lim?.total_duels_pct ?? 90}% de duelos totales (aéreo + suelo) ganados (mín. 10 duelos)`,
         },
       ] }],
     },
@@ -504,7 +504,8 @@ export function evaluateRelevoBlocks(
       const results = option.metrics.map((m) => {
         const target = m.target(lim, mins, score)
         const value = m.value(score)
-        const passes = m.cmp === 'gte' ? value >= target : value > target
+        const forced = m.forceFail?.(score) ?? false
+        const passes = !forced && (m.cmp === 'gte' ? value >= target : value > target)
         return {
           label: m.label,
           unit: m.unit,
