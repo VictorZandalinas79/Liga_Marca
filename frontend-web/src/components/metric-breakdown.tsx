@@ -495,33 +495,46 @@ export function MetricBreakdown({
     return (
       <div 
         key={m.label} 
-        className="flex flex-wrap items-center justify-between gap-1.5 py-1.5 px-2.5 rounded-lg bg-white border border-slate-200/70 shadow-2xs"
+        className={`flex flex-wrap items-center justify-between gap-1.5 py-1.5 px-2.5 rounded-lg border transition-all ${
+          m.met
+            ? 'bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-white border-emerald-300/90 shadow-2xs ring-1 ring-emerald-500/20'
+            : 'bg-white border-slate-200/70 shadow-2xs'
+        }`}
       >
-        <span className="text-[11px] font-semibold text-slate-700 min-w-[110px]">
-          {m.label}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-[110px]">
+          {m.met && (
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse shrink-0" />
+          )}
+          <span className={`text-[11px] ${m.met ? 'font-extrabold text-emerald-950' : 'font-semibold text-slate-700'}`}>
+            {m.label}
+          </span>
+        </div>
 
         <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
           {/* Métrica del Jugador */}
           <div 
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[11px] border transition-all ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] border transition-all ${
               m.met
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-slate-100 text-slate-600 border-slate-200'
+                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-extrabold shadow-sm shadow-emerald-500/30 border-emerald-400/90 ring-2 ring-emerald-400/25'
+                : 'bg-slate-100 text-slate-600 border-slate-200 font-semibold'
             }`}
             title="Métrica del Jugador"
           >
-            <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Jugador:</span>
-            <span>{playerValStr}</span>
+            <span className={`text-[9px] font-black uppercase tracking-wider ${m.met ? 'text-emerald-100' : 'text-slate-400'}`}>
+              Jugador:
+            </span>
+            <span className={m.met ? 'font-black tracking-wide text-white drop-shadow-xs' : ''}>
+              {playerValStr}
+            </span>
             {m.met ? (
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-white fill-emerald-700/50 shrink-0" />
             ) : (
               <XCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             )}
           </div>
 
           {/* Separador */}
-          <span className="text-[10px] font-bold text-slate-300">vs</span>
+          <span className={`text-[10px] font-bold ${m.met ? 'text-emerald-600/80' : 'text-slate-300'}`}>vs</span>
 
           {/* Meta a Sobrepasar */}
           <div 
@@ -569,7 +582,7 @@ export function MetricBreakdown({
                     key={block.id}
                     className={`rounded-xl border p-2.5 transition-all shadow-2xs ${
                       isPositive 
-                        ? 'bg-gradient-to-r from-emerald-50/30 to-white border-emerald-200/80' 
+                        ? 'bg-gradient-to-r from-emerald-50/60 via-emerald-50/20 to-white border-emerald-300/90 shadow-xs ring-1 ring-emerald-500/15' 
                         : isNegative 
                         ? 'bg-gradient-to-r from-rose-50/30 to-white border-rose-200/80'
                         : 'bg-slate-50/40 border-slate-200/70'
@@ -585,9 +598,9 @@ export function MetricBreakdown({
                           {block.title}
                         </h4>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-black tabular-nums shadow-2xs ${
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-black tabular-nums shadow-xs ${
                         isPositive
-                          ? 'bg-emerald-500 text-white'
+                          ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-emerald-500/30 ring-1 ring-emerald-400/30'
                           : isNegative
                           ? 'bg-rose-500 text-white'
                           : 'bg-slate-200 text-slate-600'

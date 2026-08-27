@@ -466,6 +466,13 @@ export default function PartidoDetallePage() {
           shots_total: score?.shots_total || 0,
           takeons_overrun: score?.takeons_overrun || 0,
           final_third_events: score?.final_third_events || 0,
+          def_actions_12_8_49_42_7: score?.def_actions_12_8_49_42_7 || 0,
+          def_actions_opp_half_12_8_49_42_7: score?.def_actions_opp_half_12_8_49_42_7 || 0,
+          off_actions_3_4_outcome_1: score?.off_actions_3_4_outcome_1 || 0,
+          off_actions_opp_half_outcome_1: score?.off_actions_opp_half_outcome_1 || 0,
+          intercept_recup_3_4: score?.intercept_recup_3_4 || 0,
+          recoveries_49: score?.recoveries_49 || 0,
+          saves_gte_07: score?.saves_gte_07 || 0,
         }
       })
 

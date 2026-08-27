@@ -27,13 +27,19 @@
       "all": 3,
       "typeId": 1,
       "qualifierId": 210,
-      "qualifierValues": [16]
+      "qualifierValues": [
+        16
+      ]
     },
     "assist_no_goal": {
       "all": 1,
       "typeId": 1,
       "qualifierId": 210,
-      "qualifierValues": [13, 14, 15]
+      "qualifierValues": [
+        13,
+        14,
+        15
+      ]
     },
     "penalty_won": {
       "all": 2,
@@ -126,43 +132,50 @@
   "relevo_limits": {
     "_description": "Umbrales de los 4 bloques de Puntos RELEVO por posición. Cada bloque superado suma 1 punto; si no se supera ninguno, -1. Las claves '*_per_min' se multiplican por los minutos jugados para obtener el mínimo exigido; las claves '*_pct' son porcentajes absolutos.",
     "POR": {
-      "saves_per_min": 0.07,
-      "calidad_parada_divisor": 3,
-      "long_passes_per_min": 0.12,
-      "pass_pct": 65,
-      "pass_att_per_min": 0.3,
-      "block_punch_per_min": 0.03,
-      "sweeper_cover_per_min": 0.03
+      "pass_completed_per_min": 0.18,
+      "saves_per_min": 0.01,
+      "calidad_parada_divisor": 3.0,
+      "long_passes_per_min_b2": 0.04,
+      "long_passes_flat": 6,
+      "block_punch_per_min": 0.02,
+      "sweeper_cover_per_min": 0.02,
+      "saves_gte_07_count": 2,
+      "saves_per_min_b4": 0.03
     },
     "DEF": {
-      "last_man_per_min": 0.02,
-      "long_passes_per_min": 0.05,
-      "forward_passes_per_min": 0.05,
-      "aerials_pct": 60,
-      "ground_duels_pct": 60,
+      "def_actions_per_min": 0.07,
+      "pass_pct": 70,
+      "long_passes_per_min": 0.03,
+      "forward_passes_per_min": 0.03,
+      "ground_duels_pct": 55,
+      "aerials_pct": 75,
+      "recoveries_per_min": 0.1,
       "abp_remates_per_min": 0.01,
-      "crosses_per_min": 0.02
+      "crosses_per_min": 0.02,
+      "off_actions_3_4_per_min": 0.2,
+      "total_duels_pct": 90
     },
     "MED": {
-      "pass_opp_pct": 50,
-      "pass_pct": 65,
-      "passes_per_min": 0.4,
-      "aerials_pct": 60,
-      "ground_duels_pct": 60,
-      "shots_on_pct": 50,
-      "takeons_pct": 35,
-      "assists_per_min": 0.03,
-      "crosses_per_min": 0.02
+      "def_actions_opp_per_min": 0.01,
+      "pass_pct": 66,
+      "aerials_pct": 45,
+      "recoveries_opp_per_min": 0.03,
+      "fwd_long_pct": 10,
+      "shots_on_pct": 66,
+      "off_actions_opp_per_min": 0.85,
+      "intercept_recup_3_4_per_min": 0.02,
+      "assists_total": 3,
+      "takeons_pct": 75
     },
     "DEL": {
-      "pass_opp_pct": 50,
-      "final_third_events_per_min": 0.1,
+      "final_third_events_per_min": 0.09,
+      "recoveries_opp_per_min": 0.009,
       "aerials_pct": 40,
-      "recup_opp_per_min": 0.02,
-      "shots_on_pct": 60,
-      "head_shots_per_min": 0.02,
-      "assists_per_min": 0.03,
-      "takeons_pct": 35
+      "shots_on_target_count": 1,
+      "shots_on_pct": 70,
+      "takeons_pct": 75,
+      "assists_total": 3,
+      "off_actions_opp_per_min": 0.4
     }
   },
   "typeId_mapping": {

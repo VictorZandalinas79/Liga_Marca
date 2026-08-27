@@ -769,6 +769,13 @@ export default function JugadorDetallePage() {
       set_piece_shots: acc.set_piece_shots + n((s as any).set_piece_shots),
       recoveries_opp_half: acc.recoveries_opp_half + n((s as any).recoveries_opp_half),
       header_shots: acc.header_shots + n((s as any).header_shots),
+      def_actions_12_8_49_42_7: acc.def_actions_12_8_49_42_7 + n((s as any).def_actions_12_8_49_42_7),
+      def_actions_opp_half_12_8_49_42_7: acc.def_actions_opp_half_12_8_49_42_7 + n((s as any).def_actions_opp_half_12_8_49_42_7),
+      off_actions_3_4_outcome_1: acc.off_actions_3_4_outcome_1 + n((s as any).off_actions_3_4_outcome_1),
+      off_actions_opp_half_outcome_1: acc.off_actions_opp_half_outcome_1 + n((s as any).off_actions_opp_half_outcome_1),
+      intercept_recup_3_4: acc.intercept_recup_3_4 + n((s as any).intercept_recup_3_4),
+      recoveries_49: acc.recoveries_49 + n((s as any).recoveries_49),
+      saves_gte_07: acc.saves_gte_07 + n((s as any).saves_gte_07),
     }
   }, {
     total_points: 0,
@@ -863,6 +870,13 @@ export default function JugadorDetallePage() {
     set_piece_shots: 0,
     recoveries_opp_half: 0,
     header_shots: 0,
+    def_actions_12_8_49_42_7: 0,
+    def_actions_opp_half_12_8_49_42_7: 0,
+    off_actions_3_4_outcome_1: 0,
+    off_actions_opp_half_outcome_1: 0,
+    intercept_recup_3_4: 0,
+    recoveries_49: 0,
+    saves_gte_07: 0,
   } as any)
 
   const matchesPlayed = scores.filter(s => (s.minutes_played || 0) > 0).length

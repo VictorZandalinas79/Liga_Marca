@@ -468,7 +468,15 @@ class MatchEventDownloader:
                 'pass_opp_half_attempted': 0,
                 'pass_opp_half_completed': 0,
                 'shots_total': 0,
-                'relevo_points': 0
+                'relevo_points': 0,
+                # Métricas RELEVO v4 (réplica exacta de analizar_metricas_relevo.py)
+                'relevo_saves_gte_07': 0,
+                'relevo_def_actions_12_8_49_42_7': 0,
+                'relevo_def_actions_opp_half_12_8_49_42_7': 0,
+                'relevo_off_actions_3_4_outcome_1': 0,
+                'relevo_off_actions_opp_half_outcome_1': 0,
+                'relevo_intercept_recup_3_4': 0,
+                'relevo_recoveries_49': 0,
             }
             if player_id not in self.points:
                 self.points[player_id] = BASE_SCORE
@@ -501,123 +509,144 @@ class MatchEventDownloader:
         rules = self.scoring_rules.get('relevo_limits', {}).get(pos, {})
 
         if pos == 'POR':
-            if stats.get('saves', 0) >= req(rules.get('saves_per_min', 0.07) * 90):
-                completed_blocks += 1; breakdown['block_1_pts'] = 1.0
-            
-            calidad = self.player_calidad_parada.get(player_id, 0.0)
+            passes_completed = stats.get('passes_completed', 0)
             saves = stats.get('saves', 0)
 
-            if saves > 0 and calidad > (saves / rules.get('calidad_parada_divisor', 3)):
+            # B1 (Muy fácil): Pases comp./min >= 0.18 O Paradas/min >= 0.01
+            passes_per_min = (passes_completed / mins_played) if mins_played > 0 else 0
+            saves_per_min = (saves / mins_played) if mins_played > 0 else 0
+            if (passes_per_min >= rules.get('pass_completed_per_min', 0.18)) or (saves_per_min >= rules.get('saves_per_min', 0.01)):
+                completed_blocks += 1; breakdown['block_1_pts'] = 1.0
+
+            # B2 (Fácil): Calidad de parada acumulada > (saves / 3.0) O Pases largos/min >= 0.04
+            calidad = self.player_calidad_parada.get(player_id, 0.0)
+            long_per_min = (stats.get('long_balls_completed', 0) / mins_played) if mins_played > 0 else 0
+            if (calidad > (saves / rules.get('calidad_parada_divisor', 3.0))) or (long_per_min >= rules.get('long_passes_per_min_b2', 0.04)):
                 completed_blocks += 1; breakdown['block_2_pts'] = 1.0
 
+            # B3 (Difícil): Pases largos completados >= 6 O (claims+punches)/min >= 0.02 O (sweepers+cubrir)/min >= 0.02
             long_passes = stats.get('long_balls_completed', 0)
-            passes_completed = stats.get('passes_completed', 0)
-            passes_attempted = stats.get('passes_attempted', 0)
-            p_pct = (passes_completed / passes_attempted * 100) if passes_attempted > 0 else 0
-            if (long_passes >= req(rules.get('long_passes_per_min', 0.12) * 90)) or (p_pct > rules.get('pass_pct', 65) and passes_attempted >= req(rules.get('pass_att_per_min', 0.3) * 90)):
-                completed_blocks += 1; breakdown['block_3_pts'] = 1.0
-
-            # Bloque 4: (blocajes typeId 11 + puños typeId 41) / min > 0.03,
-            # o (salidas fuera área typeId 59 + cubrir balón y blocar typeId 54) / min > 0.03
             blocajes = stats.get('claims', 0)
             punches = stats.get('punches_ok', 0) + stats.get('punches_fail', 0)
             salidas = stats.get('sweepers', 0)
             cubrir = stats.get('relevo_cubrir_blocar', 0)
-            cond_a = mins_played > 0 and ((blocajes + punches) / mins_played) > rules.get('block_punch_per_min', 0.03)
-            cond_b = mins_played > 0 and ((salidas + cubrir) / mins_played) > rules.get('sweeper_cover_per_min', 0.03)
-            if cond_a or cond_b:
+            cond_a = long_passes >= rules.get('long_passes_flat', 6)
+            cond_b = mins_played > 0 and ((blocajes + punches) / mins_played) >= rules.get('block_punch_per_min', 0.02)
+            cond_c = mins_played > 0 and ((salidas + cubrir) / mins_played) >= rules.get('sweeper_cover_per_min', 0.02)
+            if cond_a or cond_b or cond_c:
+                completed_blocks += 1; breakdown['block_3_pts'] = 1.0
+
+            # B4 (Muy difícil): Paradas calidad>=0.7 >= 2 O (saves/min > 0.03 Y conceded==0 Y saves>=2)
+            saves_07 = stats.get('relevo_saves_gte_07', 0)
+            conceded = stats.get('goals_conceded', 0)
+            cond_d = saves_07 >= rules.get('saves_gte_07_count', 2)
+            cond_e = (saves_per_min > rules.get('saves_per_min_b4', 0.03)) and (conceded == 0) and (saves >= 2)
+            if cond_d or cond_e:
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
         elif pos == 'DEF':
-            last_man = stats.get('relevo_def_action_last_man', 0)
-            if last_man >= req(rules.get('last_man_per_min', 0.01) * 90):
-                completed_blocks += 1; breakdown['block_1_pts'] = 1.0
-                
-            long_passes = stats.get('long_balls_completed', 0)
-            forward_passes = stats.get('forward_passes', 0)
-            if (long_passes >= req(rules.get('long_passes_per_min', 0.05) * 90)) or (forward_passes >= req(rules.get('forward_passes_per_min', 0.05) * 90)):
-                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
-                
-            a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
-            a_tot = a_won + a_lost
-            a_pct = (a_won / a_tot * 100) if a_tot >= 3 else 0
-            g_won = stats.get('relevo_ground_duels_won', 0); g_tot = stats.get('relevo_ground_duels_total', 0)
-            g_pct = (g_won / g_tot * 100) if g_tot >= 3 else 0
-            if (a_pct > rules.get('aerials_pct', 60)) or (g_pct > rules.get('ground_duels_pct', 60)):
-                completed_blocks += 1; breakdown['block_3_pts'] = 1.0
-                
-            abp_remates = stats.get('relevo_abp_remates', 0)
-            crosses = stats.get('successful_crosses', 0)
-            if (abp_remates >= req(rules.get('abp_remates_per_min', 0.01) * 90)) or (crosses >= req(rules.get('crosses_per_min', 0.02) * 90)):
-                completed_blocks += 1; breakdown['block_4_pts'] = 1.0
-
-        elif pos == 'MED':
-            p_opp = stats.get('pass_opp_half_completed', 0)
-            p_opp_att = stats.get('pass_opp_half_attempted', 0)
-            p_opp_pct = (p_opp / p_opp_att * 100) if p_opp_att > 0 else 0
-            cond_opp = p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(rules.get('pass_opp_per_min', 0.5) * 90)
-
+            def_actions = stats.get('relevo_def_actions_12_8_49_42_7', 0)
+            def_actions_per_min = (def_actions / mins_played) if mins_played > 0 else 0
             passes_completed = stats.get('passes_completed', 0)
             passes_attempted = stats.get('passes_attempted', 0)
             pass_pct = (passes_completed / passes_attempted * 100) if passes_attempted > 0 else 0
-            passes_per_min = (passes_attempted / mins_played) if mins_played > 0 else 0
-            cond_total = pass_pct > rules.get('pass_pct', 65) and passes_per_min > rules.get('passes_per_min', 0.4)
 
-            if cond_opp or cond_total:
+            # B1: Acciones defensivas/min >= 0.07 O % pases buenos > 70%
+            if (def_actions_per_min >= rules.get('def_actions_per_min', 0.07)) or (pass_pct > rules.get('pass_pct', 70)):
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
-                
+
+            # B2: Pases largos/min >= 0.03 O Pases adelante/min >= 0.03 O % duelos suelo > 55% (mín 3)
+            long_per_min = (stats.get('long_balls_completed', 0) / mins_played) if mins_played > 0 else 0
+            fwd_per_min = (stats.get('forward_passes', 0) / mins_played) if mins_played > 0 else 0
+            g_won = stats.get('relevo_ground_duels_won', 0); g_tot = stats.get('relevo_ground_duels_total', 0)
+            g_pct = (g_won / g_tot * 100) if g_tot >= 3 else 0
+            if (long_per_min >= rules.get('long_passes_per_min', 0.03)) or (fwd_per_min >= rules.get('forward_passes_per_min', 0.03)) or (g_tot >= 3 and g_pct > rules.get('ground_duels_pct', 55)):
+                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
+
+            # B3: % duelos aéreos >= 75% (mín 3) O Recuperaciones/min >= 0.10 O Remates ABP/min >= 0.01 O Centros buenos/min >= 0.02
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
             a_tot = a_won + a_lost
             a_pct = (a_won / a_tot * 100) if a_tot >= 3 else 0
-            g_won = stats.get('relevo_ground_duels_won', 0); g_tot = stats.get('relevo_ground_duels_total', 0)
-            g_pct = (g_won / g_tot * 100) if g_tot >= 3 else 0
-            if (a_pct > rules.get('aerials_pct', 60)) or (g_pct > rules.get('ground_duels_pct', 60)):
-                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
-                
-            shots_on = stats.get('shots_on_target', 0); shots_tot = stats.get('shots_total', 0)
-            s_pct = (shots_on / shots_tot * 100) if shots_tot > 0 else 0
-            t_won = stats.get('takeons_won', 0); t_lost = stats.get('takeons_lost', 0); t_over = stats.get('takeons_overrun', 0)
-            t_tot = t_won + t_lost + t_over
-            t_pct = (t_won / t_tot * 100) if t_tot >= 2 else 0
-            if (s_pct > rules.get('shots_on_pct', 50)) or (t_pct > rules.get('takeons_pct', 35)):
+            recov_per_min = (stats.get('relevo_recoveries_49', 0) / mins_played) if mins_played > 0 else 0
+            abp_per_min = (stats.get('relevo_abp_remates', 0) / mins_played) if mins_played > 0 else 0
+            crosses_per_min = (stats.get('successful_crosses', 0) / mins_played) if mins_played > 0 else 0
+            if (a_tot >= 3 and a_pct >= rules.get('aerials_pct', 75)) or (recov_per_min >= rules.get('recoveries_per_min', 0.10)) or (abp_per_min >= rules.get('abp_remates_per_min', 0.01)) or (crosses_per_min >= rules.get('crosses_per_min', 0.02)):
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
-                
-            assists = stats.get('assists', 0) + stats.get('fantasy_assist', 0)
-            crosses = stats.get('successful_crosses', 0)
-            if (assists >= req(rules.get('assists_per_min', 0.03) * 90)) or (crosses >= req(rules.get('crosses_per_min', 0.02) * 90)):
+
+            # B4: Acciones ofensivas buenas en 3/4/min >= 0.30 O % duelos totales > 90% (mín 5)
+            off34_per_min = (stats.get('relevo_off_actions_3_4_outcome_1', 0) / mins_played) if mins_played > 0 else 0
+            total_duels_tot = g_tot + a_tot
+            total_duels_pct = ((g_won + a_won) / total_duels_tot * 100) if total_duels_tot >= 5 else 0
+            if (off34_per_min >= rules.get('off_actions_3_4_per_min', 0.20)) or (total_duels_tot >= 5 and total_duels_pct > rules.get('total_duels_pct', 90)):
+                completed_blocks += 1; breakdown['block_4_pts'] = 1.0
+
+        elif pos == 'MED':
+            def_opp = stats.get('relevo_def_actions_opp_half_12_8_49_42_7', 0)
+            def_opp_per_min = (def_opp / mins_played) if mins_played > 0 else 0
+            passes_completed = stats.get('passes_completed', 0)
+            passes_attempted = stats.get('passes_attempted', 0)
+            pass_pct = (passes_completed / passes_attempted * 100) if passes_attempted > 0 else 0
+
+            # B1: Acciones def. campo rival/min >= 0.01 O % pases buenos >= 66%
+            if (def_opp_per_min >= rules.get('def_actions_opp_per_min', 0.01)) or (pass_pct >= rules.get('pass_pct', 66)):
+                completed_blocks += 1; breakdown['block_1_pts'] = 1.0
+
+            # B2: % duelos aéreos >= 45% (mín 3) O Recuperaciones campo rival/min >= 0.03 O % pases adelante+largos > 10%
+            a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
+            a_tot = a_won + a_lost
+            a_pct = (a_won / a_tot * 100) if a_tot >= 3 else 0
+            recup_opp_per_min = (stats.get('relevo_recup_campo_rival', 0) / mins_played) if mins_played > 0 else 0
+            fwd_long_pct = ((stats.get('forward_passes', 0) + stats.get('long_balls_completed', 0)) / passes_attempted * 100) if passes_attempted > 0 else 0
+            if (a_tot >= 3 and a_pct >= rules.get('aerials_pct', 45)) or (recup_opp_per_min >= rules.get('recoveries_opp_per_min', 0.03)) or (fwd_long_pct > rules.get('fwd_long_pct', 10)):
+                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
+
+            # B3: % remates a puerta > 66% (mín 2) O Acciones of. campo rival completadas/min >= 0.85 O (intercept+recup 3/4)/min >= 0.02
+            shots_on = stats.get('shots_on_target', 0); shots_tot = stats.get('shots_total', 0)
+            s_pct = (shots_on / shots_tot * 100) if shots_tot >= 2 else 0
+            off_opp_per_min = (stats.get('relevo_off_actions_opp_half_outcome_1', 0) / mins_played) if mins_played > 0 else 0
+            intercept_recup_per_min = (stats.get('relevo_intercept_recup_3_4', 0) / mins_played) if mins_played > 0 else 0
+            if (shots_tot >= 2 and s_pct > rules.get('shots_on_pct', 66)) or (off_opp_per_min >= rules.get('off_actions_opp_per_min', 0.85)) or (intercept_recup_per_min >= rules.get('intercept_recup_3_4_per_min', 0.02)):
+                completed_blocks += 1; breakdown['block_3_pts'] = 1.0
+
+            # B4: Goles >= 1 O Asistencias totales >= 3 O % regates completados > 75% (mín 2)
+            goals = stats.get('goals', 0)
+            assists_tot = stats.get('assists', 0) + stats.get('fantasy_assist', 0)
+            t_won = stats.get('takeons_won', 0); t_lost = stats.get('takeons_lost', 0)
+            t_tot = t_won + t_lost
+            t_pct = (t_won / t_tot * 100) if t_tot >= 2 else 0
+            if (goals >= 1) or (assists_tot >= rules.get('assists_total', 3)) or (t_tot >= 2 and t_pct > rules.get('takeons_pct', 75)):
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
         elif pos == 'DEL':
-            p_opp = stats.get('pass_opp_half_completed', 0)
-            p_opp_att = stats.get('pass_opp_half_attempted', 0)
-            p_opp_pct = (p_opp / p_opp_att * 100) if p_opp_att > 0 else 0
-            cond_opp = p_opp_pct > rules.get('pass_opp_pct', 50) and p_opp >= req(rules.get('pass_opp_per_min', 0.5) * 90)
-
             final_third_events = stats.get('relevo_del_final_third_events', 0)
             final_third_per_min = (final_third_events / mins_played) if mins_played > 0 else 0
-            cond_final_third = final_third_per_min > rules.get('final_third_events_per_min', 0.1)
+            recup_opp_per_min = (stats.get('relevo_recup_campo_rival', 0) / mins_played) if mins_played > 0 else 0
 
-            if cond_opp or cond_final_third:
+            # B1: Participaciones 3/4/min >= 0.09 O Recuperaciones campo rival/min >= 0.009
+            if (final_third_per_min >= rules.get('final_third_events_per_min', 0.09)) or (recup_opp_per_min >= rules.get('recoveries_opp_per_min', 0.009)):
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
-                
+
+            # B2: % duelos aéreos > 40% (mín 3) O Tiros a puerta >= 1
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
             a_tot = a_won + a_lost
             a_pct = (a_won / a_tot * 100) if a_tot >= 3 else 0
-            rec_opp = stats.get('relevo_recup_campo_rival', 0)
-            if (a_pct > rules.get('aerials_pct', 40)) or (rec_opp >= req(rules.get('recup_opp_per_min', 0.3) * 90)):
-                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
-                
             shots_on = stats.get('shots_on_target', 0); shots_tot = stats.get('shots_total', 0)
-            s_pct = (shots_on / shots_tot * 100) if shots_tot > 0 else 0
-            head_shots = stats.get('relevo_remates_cabeza', 0)
-            if (s_pct > rules.get('shots_on_pct', 60)) or (head_shots >= req(rules.get('head_shots_per_min', 0.02) * 90)):
-                completed_blocks += 1; breakdown['block_3_pts'] = 1.0
-                
-            assists = stats.get('assists', 0) + stats.get('fantasy_assist', 0)
-            t_won = stats.get('takeons_won', 0); t_lost = stats.get('takeons_lost', 0); t_over = stats.get('takeons_overrun', 0)
-            t_tot = t_won + t_lost + t_over
+            if (a_tot >= 3 and a_pct > rules.get('aerials_pct', 40)) or (shots_on >= rules.get('shots_on_target_count', 1)):
+                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
+
+            # B3: % remates a puerta > 70% (mín 3) O % regates completados > 75% (mín 2)
+            s_pct = (shots_on / shots_tot * 100) if shots_tot >= 3 else 0
+            t_won = stats.get('takeons_won', 0); t_lost = stats.get('takeons_lost', 0)
+            t_tot = t_won + t_lost
             t_pct = (t_won / t_tot * 100) if t_tot >= 2 else 0
-            if (assists >= req(rules.get('assists_per_min', 0.03) * 90)) or (t_pct > rules.get('takeons_pct', 35)):
+            if (shots_tot >= 3 and s_pct > rules.get('shots_on_pct', 70)) or (t_tot >= 2 and t_pct > rules.get('takeons_pct', 75)):
+                completed_blocks += 1; breakdown['block_3_pts'] = 1.0
+
+            # B4: Goles >= 1 O Asistencias totales >= 3 O Acciones of. campo rival completadas/min >= 0.40
+            goals = stats.get('goals', 0)
+            assists_tot = stats.get('assists', 0) + stats.get('fantasy_assist', 0)
+            off_opp_per_min = (stats.get('relevo_off_actions_opp_half_outcome_1', 0) / mins_played) if mins_played > 0 else 0
+            if (goals >= 1) or (assists_tot >= rules.get('assists_total', 3)) or (off_opp_per_min >= rules.get('off_actions_opp_per_min', 0.40)):
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
         if completed_blocks == 0:
@@ -863,6 +892,27 @@ class MatchEventDownloader:
             
         if type_id in (49, 8) and event.get('x', 0) > 50: # Recuperación campo rival
             self.apply_points(player_id, 'relevo_recup_campo_rival', 1, current_min)
+
+        # Acciones defensivas agrupadas (12,8,49,42,7) - RELEVO v4
+        if type_id in [12, 8, 49, 42, 7]:
+            self.apply_points(player_id, 'relevo_def_actions_12_8_49_42_7', 1, current_min)
+            if event.get('x', 0) >= 50:
+                self.apply_points(player_id, 'relevo_def_actions_opp_half_12_8_49_42_7', 1, current_min)
+
+        # Acciones ofensivas agrupadas: pase/regate completados (1,3 outcome=1) o
+        # cualquier remate (13,14,15,16), en 3/4 de campo (x>66.6) y en campo rival (x>=50)
+        if type_id in [1, 3, 13, 14, 15, 16]:
+            is_good = (type_id in [1, 3] and event.get('outcome', 1) == 1) or (type_id in [13, 14, 15, 16])
+            if is_good:
+                x_off = event.get('x', 0)
+                if x_off > 66.6:
+                    self.apply_points(player_id, 'relevo_off_actions_3_4_outcome_1', 1, current_min)
+                if x_off >= 50:
+                    self.apply_points(player_id, 'relevo_off_actions_opp_half_outcome_1', 1, current_min)
+
+        # Interceptaciones + recuperaciones en 3/4 (x > 66.6)
+        if type_id in [8, 49] and event.get('x', 0) > 66.6:
+            self.apply_points(player_id, 'relevo_intercept_recup_3_4', 1, current_min)
         # -------------------------------
 
         handlers = {
@@ -1036,6 +1086,7 @@ class MatchEventDownloader:
     def _handle_recovery(self, event, current_min):
         pid = event.get('playerId')
         self.apply_points(pid, 'ball_recoveries', 1, current_min)
+        self.apply_points(pid, 'relevo_recoveries_49', 1, current_min)
 
 
     def _handle_clearance(self, event, current_min):
@@ -1075,6 +1126,8 @@ class MatchEventDownloader:
                 self.player_calidad_parada[player_id] = self.player_calidad_parada.get(player_id, 0.0) + val
                 # Espejo en stats para poder subirlo a player_scores.
                 self.stats[player_id]['calidad_parada'] = self.player_calidad_parada[player_id]
+                if val >= 0.7:
+                    self.stats[player_id]['relevo_saves_gte_07'] = self.stats[player_id].get('relevo_saves_gte_07', 0) + 1
                 self.recalculate_player_points(player_id, current_min)
 
 
@@ -1498,6 +1551,15 @@ class MatchEventDownloader:
                 'recoveries_opp_half': stats.get('relevo_recup_campo_rival', 0),
                 'shots_total': stats.get('shots_total', 0),
                 'final_third_events': stats.get('relevo_del_final_third_events', 0),
+
+                # RELEVO v4: nuevas métricas crudas de apoyo a los bloques
+                'saves_gte_07': stats.get('relevo_saves_gte_07', 0),
+                'def_actions_12_8_49_42_7': stats.get('relevo_def_actions_12_8_49_42_7', 0),
+                'def_actions_opp_half_12_8_49_42_7': stats.get('relevo_def_actions_opp_half_12_8_49_42_7', 0),
+                'off_actions_3_4_outcome_1': stats.get('relevo_off_actions_3_4_outcome_1', 0),
+                'off_actions_opp_half_outcome_1': stats.get('relevo_off_actions_opp_half_outcome_1', 0),
+                'intercept_recup_3_4': stats.get('relevo_intercept_recup_3_4', 0),
+                'recoveries_49': stats.get('relevo_recoveries_49', 0),
             }
 
             payload = player_score_data.copy()
