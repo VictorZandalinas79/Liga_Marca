@@ -350,7 +350,6 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                       </div>
                       <div className="flex-1 w-full grid grid-cols-1 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
                         <LabeledInput label="Divisor de paradas (ej. 3 = un tercio)" value={num((rules.relevo_limits as any)?.POR || {}, 'calidad_parada_divisor') || 3.0} onChange={(v) => setRelevoLimit('POR', 'calidad_parada_divisor', v)} step="1" />
-                        <LabeledInput label="Pases largos / min jugados" value={num((rules.relevo_limits as any)?.POR || {}, 'long_passes_per_min_b2') || 0.04} onChange={(v) => setRelevoLimit('POR', 'long_passes_per_min_b2', v)} step="0.01" />
                       </div>
                     </div>
                   </div>

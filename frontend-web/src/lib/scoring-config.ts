@@ -132,8 +132,8 @@ type ScoreRow = Record<string, unknown>
 
 export interface RelevoMetricSpec {
   label: string
-  /** 'count' → unidades acumuladas ; 'pct' → porcentaje */
-  unit: 'count' | 'pct'
+  /** 'count' → unidades por minuto ; 'pct' → porcentaje ; 'flat' → cantidad fija absoluta */
+  unit: 'count' | 'pct' | 'flat'
   /** Valor logrado por el jugador. */
   value: (s: ScoreRow) => number
   /** Mínimo exigido, dados los umbrales de su posición, los minutos jugados y la fila del jugador. */
@@ -262,9 +262,8 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
           target: (lim, _mins, s) => n(s, 'saves') / (lim?.calidad_parada_divisor ?? 3.0),
           cmp: 'gt',
           detail: (s) => `${n(s, 'calidad_parada')} / (${n(s, 'saves')} paradas ÷ ${DEFAULT_RELEVO_LIMITS.POR.calidad_parada_divisor ?? 3.0})`,
-          describe: (lim) => `valor de calidad acumulado superior a las paradas ÷ ${lim?.calidad_parada_divisor ?? 3.0}`,
+          describe: (lim) => `El valor acumulado de calidad de las paradas debe ser estrictamente mayor a (Total de Paradas ÷ ${lim?.calidad_parada_divisor ?? 3.0})`,
         },
-        perMinMetric('Pases largos completados', 'long_balls_completed', 'long_passes_per_min_b2', 0.04),
       ] }],
     },
     {
@@ -273,7 +272,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
       options: [{ metrics: [
         {
           label: 'Pases largos completados (por partido)',
-          unit: 'count',
+          unit: 'flat',
           value: (s) => n(s, 'long_balls_completed'),
           target: flat('long_passes_flat', 6),
           cmp: 'gte',
@@ -441,7 +440,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
         aerialsPct(40, 3, 'gt'),
         {
           label: 'Tiros a puerta',
-          unit: 'count',
+          unit: 'flat',
           value: (s) => n(s, 'shots_on_target'),
           target: flat('shots_on_target_count', 1),
           cmp: 'gte',
@@ -468,7 +467,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
 
 export interface RelevoMetricResult {
   label: string
-  unit: 'count' | 'pct'
+  unit: 'count' | 'pct' | 'flat'
   value: number
   target: number
   met: boolean

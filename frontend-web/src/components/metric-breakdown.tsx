@@ -482,14 +482,19 @@ export function MetricBreakdown({
 
   const renderRelevoMetric = (m: any) => {
     const isPct = m.unit === 'pct'
+    const isFlat = m.unit === 'flat'
     const cmpSymbol = m.cmp === 'gte' ? '≥' : '>'
 
     const playerValStr = isPct
       ? `${m.value.toFixed(0)}%${m.detail ? ` (${m.detail})` : ''}`
+      : isFlat
+      ? `${m.value}`
       : `${m.value} (${m.valPerMin}/m)`
 
     const targetValStr = isPct
       ? `${cmpSymbol} ${m.target.toFixed(0)}%`
+      : isFlat
+      ? `${cmpSymbol} ${m.target}`
       : `${cmpSymbol} ${m.tgtPerMin}/m`
 
     return (

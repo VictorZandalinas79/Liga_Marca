@@ -518,10 +518,9 @@ class MatchEventDownloader:
             if (passes_per_min >= rules.get('pass_completed_per_min', 0.18)) or (saves_per_min >= rules.get('saves_per_min', 0.01)):
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
 
-            # B2 (Fácil): Calidad de parada acumulada > (saves / 3.0) O Pases largos/min >= 0.04
+            # B2 (Fácil): Calidad de parada acumulada > (saves / 3.0)
             calidad = self.player_calidad_parada.get(player_id, 0.0)
-            long_per_min = (stats.get('long_balls_completed', 0) / mins_played) if mins_played > 0 else 0
-            if (calidad > (saves / rules.get('calidad_parada_divisor', 3.0))) or (long_per_min >= rules.get('long_passes_per_min_b2', 0.04)):
+            if calidad > (saves / rules.get('calidad_parada_divisor', 3.0)):
                 completed_blocks += 1; breakdown['block_2_pts'] = 1.0
 
             # B3 (Difícil): Pases largos completados >= 6 O (claims+punches)/min >= 0.02 O (sweepers+cubrir)/min >= 0.02

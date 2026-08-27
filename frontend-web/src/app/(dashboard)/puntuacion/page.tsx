@@ -276,7 +276,7 @@ export default async function PuntuacionPage() {
             <li><span className="font-semibold">Bloque 1 - Volumen de juego:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'pass_completed_per_min') || 0.18} pases completados/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.POR, 'saves_per_min') || 0.01} paradas/min.</li>
             <li className="space-y-3">
               <div>
-                <span className="font-semibold text-slate-900">Bloque 2 - Calidad de parada:</span> Valor acumulado de Calidad de Parada supera la {calidadDivisor === 3 ? 'tercera parte' : `1/${calidadDivisor} parte`} del número de paradas realizadas, O BIEN ≥ {num((rules?.relevo_limits as any)?.POR, 'long_passes_per_min_b2') || 0.04} pases largos completados/min.
+                <span className="font-semibold text-slate-900">Bloque 2 - Calidad de parada:</span> Valor acumulado de Calidad de Parada supera la {calidadDivisor === 3 ? 'tercera parte' : `1/${calidadDivisor} parte`} del número de paradas realizadas.
                 <p className="mt-1 text-slate-500 text-xs leading-relaxed">
                   Se busca un tiro rival en los 5 segundos previos a cada parada. Ese tiro recibe un <strong>Valor de Importancia</strong> según su zona (ver mapa). Se suma ese valor en cada parada. Si el acumulado supera (nº de paradas / {calidadDivisor}), gana 1 punto.
                 </p>
