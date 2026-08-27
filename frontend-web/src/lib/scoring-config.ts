@@ -303,7 +303,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
         {
           label: 'Paradas de calidad ≥ 0.7',
           unit: 'flat',
-          value: (s) => n(s, 'relevo_saves_gte_07'),
+          value: (s) => n(s, 'saves_gte_07'),
           target: flat('saves_gte_07_count', 2),
           cmp: 'gte',
           describe: (lim) => `${lim?.saves_gte_07_count ?? 2} o más paradas de calidad ≥ 0.7`,
