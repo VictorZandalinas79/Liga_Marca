@@ -302,8 +302,8 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
       options: [{ metrics: [
         {
           label: 'Paradas de calidad ≥ 0.7',
-          unit: 'count',
-          value: (s) => n(s, 'saves_gte_07'),
+          unit: 'flat',
+          value: (s) => n(s, 'relevo_saves_gte_07'),
           target: flat('saves_gte_07_count', 2),
           cmp: 'gte',
           describe: (lim) => `${lim?.saves_gte_07_count ?? 2} o más paradas de calidad ≥ 0.7`,
@@ -311,11 +311,12 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
         {
           label: 'Paradas/min + portería a cero (mín. 2 paradas)',
           unit: 'count',
-          value: (s) => (n(s, 'goals_conceded') === 0 && n(s, 'saves') >= 2 ? n(s, 'saves') / 90 : 0),
-          target: flat('saves_per_min_b4', 0.03),
+          value: (s) => n(s, 'saves'),
+          target: perMin('saves_per_min_b4', 0.03),
           cmp: 'gt',
           detail: (s) => `${n(s, 'saves')} paradas, ${n(s, 'goals_conceded')} encajados`,
           describe: (lim) => `paradas/min > ${lim?.saves_per_min_b4 ?? 0.03}, portería a cero y mín. 2 paradas`,
+          forceFail: (s) => n(s, 'goals_conceded') > 0 || n(s, 'saves') < 2,
         },
       ] }],
     },
