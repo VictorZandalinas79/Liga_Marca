@@ -383,18 +383,18 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
                     <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 2 (1 punto) - Condición OR</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      <LabeledInput label="Pases largos / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'long_passes_per_min') || 0.03} onChange={(v) => setRelevoLimit('DEF', 'long_passes_per_min', v)} step="0.01" />
-                      <LabeledInput label="Pases hacia adelante / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'forward_passes_per_min') || 0.03} onChange={(v) => setRelevoLimit('DEF', 'forward_passes_per_min', v)} step="0.01" />
+                      <LabeledInput label="Pases largos / min jugados (mín. 3)" value={num((rules.relevo_limits as any)?.DEF || {}, 'long_passes_per_min') || 0.03} onChange={(v) => setRelevoLimit('DEF', 'long_passes_per_min', v)} step="0.01" />
+                      <LabeledInput label="Pases hacia adelante / min jugados (mín. 3)" value={num((rules.relevo_limits as any)?.DEF || {}, 'forward_passes_per_min') || 0.03} onChange={(v) => setRelevoLimit('DEF', 'forward_passes_per_min', v)} step="0.01" />
                       <LabeledInput label="% Duelos suelo ganados (mín. 3)" value={num((rules.relevo_limits as any)?.DEF || {}, 'ground_duels_pct') || 55} onChange={(v) => setRelevoLimit('DEF', 'ground_duels_pct', v)} step="1" />
+                      <LabeledInput label="% Duelos aéreos ganados (mín. 3)" value={num((rules.relevo_limits as any)?.DEF || {}, 'aerials_pct') || 75} onChange={(v) => setRelevoLimit('DEF', 'aerials_pct', v)} step="1" />
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">
                     <h4 className="font-semibold text-slate-800 text-sm mb-3">Bloque 3 (1 punto) - Condición OR</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      <LabeledInput label="% Duelos aéreos ganados (mín. 3)" value={num((rules.relevo_limits as any)?.DEF || {}, 'aerials_pct') || 75} onChange={(v) => setRelevoLimit('DEF', 'aerials_pct', v)} step="1" />
                       <LabeledInput label="Recuperaciones / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'recoveries_per_min') || 0.10} onChange={(v) => setRelevoLimit('DEF', 'recoveries_per_min', v)} step="0.01" />
                       <LabeledInput label="Remate ABP / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'abp_remates_per_min') || 0.01} onChange={(v) => setRelevoLimit('DEF', 'abp_remates_per_min', v)} step="0.01" />
-                      <LabeledInput label="Centros buenos / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'crosses_per_min') || 0.02} onChange={(v) => setRelevoLimit('DEF', 'crosses_per_min', v)} step="0.01" />
+                      <LabeledInput label="Centros buenos / min jugados (mín. 2)" value={num((rules.relevo_limits as any)?.DEF || {}, 'crosses_per_min') || 0.02} onChange={(v) => setRelevoLimit('DEF', 'crosses_per_min', v)} step="0.01" />
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-lg p-4 bg-white">

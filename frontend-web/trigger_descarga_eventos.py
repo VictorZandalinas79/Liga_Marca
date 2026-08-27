@@ -555,22 +555,25 @@ class MatchEventDownloader:
             if (def_actions_per_min >= rules.get('def_actions_per_min', 0.07)) or (pass_pct > rules.get('pass_pct', 70)):
                 completed_blocks += 1; breakdown['block_1_pts'] = 1.0
 
-            # B2: Pases largos/min >= 0.03 O Pases adelante/min >= 0.03 O % duelos suelo > 55% (mín 3)
-            long_per_min = (stats.get('long_balls_completed', 0) / mins_played) if mins_played > 0 else 0
-            fwd_per_min = (stats.get('forward_passes', 0) / mins_played) if mins_played > 0 else 0
+            # B2: Pases largos/min >= 0.03 (mín 3) O Pases adelante/min >= 0.03 (mín 3) O % duelos suelo > 55% (mín 3) O % duelos aéreos >= 75% (mín 3)
+            long_balls = stats.get('long_balls_completed', 0)
+            fwd_passes = stats.get('forward_passes', 0)
+            long_per_min = (long_balls / mins_played) if mins_played > 0 else 0
+            fwd_per_min = (fwd_passes / mins_played) if mins_played > 0 else 0
             g_won = stats.get('relevo_ground_duels_won', 0); g_tot = stats.get('relevo_ground_duels_total', 0)
             g_pct = (g_won / g_tot * 100) if g_tot >= 3 else 0
-            if (long_per_min >= rules.get('long_passes_per_min', 0.03)) or (fwd_per_min >= rules.get('forward_passes_per_min', 0.03)) or (g_tot >= 3 and g_pct > rules.get('ground_duels_pct', 55)):
-                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
-
-            # B3: % duelos aéreos >= 75% (mín 3) O Recuperaciones/min >= 0.10 O Remates ABP/min >= 0.01 O Centros buenos/min >= 0.02
             a_won = stats.get('aerials_won', 0); a_lost = stats.get('aerials_lost', 0)
             a_tot = a_won + a_lost
             a_pct = (a_won / a_tot * 100) if a_tot >= 3 else 0
+            if (long_balls >= 3 and long_per_min >= rules.get('long_passes_per_min', 0.03)) or (fwd_passes >= 3 and fwd_per_min >= rules.get('forward_passes_per_min', 0.03)) or (g_tot >= 3 and g_pct > rules.get('ground_duels_pct', 55)) or (a_tot >= 3 and a_pct >= rules.get('aerials_pct', 75)):
+                completed_blocks += 1; breakdown['block_2_pts'] = 1.0
+
+            # B3: Recuperaciones/min >= 0.10 O Remates ABP/min >= 0.01 O Centros buenos/min >= 0.02 (mín 2)
             recov_per_min = (stats.get('relevo_recoveries_49', 0) / mins_played) if mins_played > 0 else 0
             abp_per_min = (stats.get('relevo_abp_remates', 0) / mins_played) if mins_played > 0 else 0
-            crosses_per_min = (stats.get('successful_crosses', 0) / mins_played) if mins_played > 0 else 0
-            if (a_tot >= 3 and a_pct >= rules.get('aerials_pct', 75)) or (recov_per_min >= rules.get('recoveries_per_min', 0.10)) or (abp_per_min >= rules.get('abp_remates_per_min', 0.01)) or (crosses_per_min >= rules.get('crosses_per_min', 0.02)):
+            successful_crosses = stats.get('successful_crosses', 0)
+            crosses_per_min = (successful_crosses / mins_played) if mins_played > 0 else 0
+            if (recov_per_min >= rules.get('recoveries_per_min', 0.10)) or (abp_per_min >= rules.get('abp_remates_per_min', 0.01)) or (successful_crosses >= 2 and crosses_per_min >= rules.get('crosses_per_min', 0.02)):
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
 
             # B4: Acciones ofensivas buenas en 3/4/min >= 0.30 O % duelos totales > 90% (mín 5)

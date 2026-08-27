@@ -208,6 +208,19 @@ const perMinMetric = (label: string, valueKey: string, limKey: string, fallback:
   describe: (lim) => `${lim?.[limKey] ?? fallback} ${label.toLowerCase()} por minuto jugado`,
 })
 
+const perMinMetricMinCount = (label: string, valueKey: string, limKey: string, fallback: number, minCount: number, cmp: 'gte' | 'gt' = 'gte'): RelevoMetricSpec => ({
+  label: `${label} (mín. ${minCount})`,
+  unit: 'count',
+  value: (s) => {
+    const val = n(s, valueKey)
+    return val >= minCount ? val : -1 // -1 ensures it fails the target
+  },
+  target: perMin(limKey, fallback),
+  cmp,
+  detail: (s) => `${n(s, valueKey)} (mín. ${minCount})`,
+  describe: (lim) => `${lim?.[limKey] ?? fallback} ${label.toLowerCase()} por minuto jugado (mín. ${minCount})`,
+})
+
 const goalsAtLeast1: RelevoMetricSpec = {
   label: 'Goles',
   unit: 'count',
@@ -329,19 +342,19 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
       id: 2,
       title: 'Salida de balón',
       options: [{ metrics: [
-        perMinMetric('Pases largos completados', 'long_balls_completed', 'long_passes_per_min', 0.03),
-        perMinMetric('Pases hacia adelante', 'forward_passes', 'forward_passes_per_min', 0.03),
+        perMinMetricMinCount('Pases largos completados', 'long_balls_completed', 'long_passes_per_min', 0.03, 3),
+        perMinMetricMinCount('Pases hacia adelante', 'forward_passes', 'forward_passes_per_min', 0.03, 3),
         groundDuelsPct(55, 3, 'gt'),
+        aerialsPct(75, 3, 'gte'),
       ] }],
     },
     {
       id: 3,
       title: 'Duelos y recuperaciones',
       options: [{ metrics: [
-        aerialsPct(75, 3, 'gte'),
         perMinMetric('Recuperaciones', 'recoveries_49', 'recoveries_per_min', 0.10),
         perMinMetric('Remates a balón parado', 'set_piece_shots', 'abp_remates_per_min', 0.01),
-        perMinMetric('Centros buenos', 'successful_crosses', 'crosses_per_min', 0.02),
+        perMinMetricMinCount('Centros buenos', 'successful_crosses', 'crosses_per_min', 0.02, 2),
       ] }],
     },
     {
