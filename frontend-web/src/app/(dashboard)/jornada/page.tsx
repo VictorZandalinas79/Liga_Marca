@@ -874,7 +874,7 @@ export default function JornadaPage() {
 
     // Hacemos el elemento visible temporalmente para renderizarlo fuera de pantalla
     const originalClasses = element.className
-    element.className = "absolute left-[-9999px] top-0 bg-white w-[297mm] h-[210mm] overflow-hidden"
+    element.className = "absolute left-[-9999px] top-0 flex flex-col bg-slate-50 w-[297mm] h-[210mm] overflow-hidden"
 
     try {
       // Importamos dinámicamente para que Next.js no falle en SSR
@@ -888,7 +888,7 @@ export default function JornadaPage() {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#f8fafc'
       })
 
       const dataUrl = canvas.toDataURL('image/jpeg', 0.98)
@@ -1253,8 +1253,8 @@ export default function JornadaPage() {
                 </div>
 
                 {/* Jugadores */}
-                <div className="p-4">
-                  <div className="space-y-3">
+                <div className="px-1.5 pb-2 pt-1">
+                  <div className="space-y-1">
                     {(['Titulares', 'Suplentes'] as const).map((grupo) => {
                       const jugadoresGrupo = team.jugadores.filter(p =>
                         grupo === 'Titulares' ? p.is_starter : !p.is_starter
@@ -1301,10 +1301,10 @@ export default function JornadaPage() {
 
                               return (
                               <div
-                                key={player.id}
+                                key={matchKey}
                                 ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
                                 onClick={() => openPlayerStats(player.id, finalSanctionReason)}
-                                className={`flex items-center justify-between px-1 py-0.5 min-h-[38px] rounded-lg transition-all gap-1 cursor-pointer ${
+                                className={`flex items-center justify-between px-1 rounded-lg transition-all gap-1 cursor-pointer ${
                                   isActive
                                     ? 'ring-2 ring-orange-500 ring-offset-1 shadow-md relative z-10 scale-[1.02]'
                                     : isMatch
@@ -1322,8 +1322,15 @@ export default function JornadaPage() {
                                     : 'bg-slate-50 hover:bg-slate-100'
                                 }`}
                               >
-                                {/* Photo Leftmost */}
-                                <div className="shrink-0 mr-1.5 flex items-center justify-center">
+                                {/* Position Leftmost */}
+                                <div className="shrink-0 flex items-center justify-center mr-0.5">
+                                  <Badge className={`text-[9px] px-1 py-0 shrink-0 leading-none ${getPositionColor(player.position)}`}>
+                                    {getPositionLabel(player.position)}
+                                  </Badge>
+                                </div>
+
+                                {/* Photo */}
+                                <div className="shrink-0 mr-1 flex items-center justify-center">
                                   {player.photo ? (
                                     <img
                                       src={player.photo}
@@ -1345,7 +1352,7 @@ export default function JornadaPage() {
                                 <div className="flex flex-col min-w-0 flex-1 justify-center gap-0.5">
                                   {/* Row 1: Name and badges */}
                                   <div className="flex items-center gap-1.5 min-w-0 w-full">
-                                    <span className={`font-semibold whitespace-normal break-words ${
+                                    <span className={`font-semibold whitespace-nowrap overflow-hidden text-ellipsis ${
                                       (player.short_name || player.first_name || '').length > 15
                                         ? 'text-[10px]'
                                         : 'text-xs'
@@ -1355,9 +1362,6 @@ export default function JornadaPage() {
                                     {isPenalized && (
                                       <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0" />
                                     )}
-                                    <Badge className={`text-[9px] px-1 py-0 shrink-0 leading-none ${getPositionColor(player.position)}`}>
-                                      {getPositionLabel(player.position)}
-                                    </Badge>
                                     {player.is_captain && (
                                       <Badge className="text-[9px] px-1 py-0 bg-yellow-500 text-white shrink-0 leading-none">C</Badge>
                                     )}

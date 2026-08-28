@@ -665,15 +665,18 @@ export default function DashboardPage() {
     if (autoSave && tid) {
       console.log('[AUTO-GUARDAR] Guardando equipo inicial en matchday', matchdayToSave)
       const teamPlayers = selected.map((playerId, index) => ({
-        team_id: tid,
         player_id: playerId,
         is_starter: true,
         is_captain: index === 0,
         order: index,
-        matchday: matchdayToSave,
+        replaced_player_id: null,
       }))
 
-      const { error } = await supabase.from('team_players').insert(teamPlayers)
+      const { error } = await supabase.rpc('save_team_lineup', {
+        p_team_id: tid,
+        p_matchday: matchdayToSave,
+        p_players: teamPlayers,
+      })
       if (error) {
         console.error('[AUTO-GUARDAR] Error:', error)
       } else {
@@ -828,14 +831,17 @@ export default function DashboardPage() {
       //    heredar esos mismos 11 y persistirlos en la jornada activa.
       if (baseIds.length > 0) {
         const rows = baseIds.map((pid, index) => ({
-          team_id: teamData.id,
           player_id: pid,
           is_starter: true,
           is_captain: index === 0,
           order: index,
-          matchday,
+          replaced_player_id: null,
         }))
-        const { error } = await supabase.from('team_players').insert(rows)
+        const { error } = await supabase.rpc('save_team_lineup', {
+          p_team_id: teamData.id,
+          p_matchday: matchday,
+          p_players: rows,
+        })
         if (error) console.error('[CARGAR] Error heredando alineación:', error)
         if (isMounted) {
           setSelectedPlayers(baseIds)
@@ -1169,6 +1175,14 @@ export default function DashboardPage() {
       return
     }
 
+    // Garantía dura: nunca se guarda un equipo que no tenga exactamente 11
+    // jugadores. Esto es lo que permitió en el pasado que un usuario acabara
+    // con 22 jugadores duplicados en una jornada.
+    if (selectedPlayers.length !== 11) {
+      alert(`Tu equipo tiene ${selectedPlayers.length} jugadores. Debe tener exactamente 11 para poder guardarlo.`)
+      return
+    }
+
     // Un jugador que ya no está en Biwenger se conserva en el equipo de quien lo
     // tenía, pero no se puede fichar de nuevo. Se comprueba aquí y no solo al
     // pintar el mercado porque la selección puede venir de una alineación
@@ -1235,42 +1249,50 @@ export default function DashboardPage() {
 
     const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
 
-    // Eliminar equipo anterior de la jornada actual para poder sobreescribirlo
-    console.log(`[GUARDAR] Eliminando equipo anterior en matchday ${matchdayToSave}`)
-    const { error: deleteError } = await supabase
-      .from('team_players')
-      .delete()
-      .eq('team_id', teamIdToUse)
-      .eq('matchday', matchdayToSave)
-    if (deleteError) {
-      console.error('[GUARDAR] Error eliminando:', deleteError)
-    }
+    // Guardar mediante la función RPC atómica (DELETE+INSERT en una sola
+    // transacción). Un delete+insert hecho como dos llamadas separadas desde
+    // el cliente deja una ventana de carrera: si esta función se dispara dos
+    // veces casi a la vez (doble clic, dos pestañas, reintento de red), ambas
+    // pueden borrar y luego insertar, duplicando toda la alineación. Esto es
+    // justo lo que le pasó a un usuario, que acabó con 22 jugadores en una
+    // jornada. También preservamos aquí replaced_player_id, que antes se
+    // perdía al guardar por este camino.
+    const teamPlayers = selectedPlayers.map((playerId, index) => {
+      let replacedId: string | null = null
+      if (activeMatchday && config && matchdayToSave > config.fantasy_starting_matchday) {
+        if (dbReplacedPlayers[index]) replacedId = dbReplacedPlayers[index]
+        else {
+          const ch = changeHistory.find(c => c.index === index)
+          if (ch) replacedId = ch.outId
+        }
+      }
+      if (replacedId === playerId) replacedId = null
 
-    if (selectedPlayers.length > 0) {
-      // Guardar el equipo en la jornada activa correspondiente
-      const teamPlayers = selectedPlayers.map((playerId, index) => ({
-        team_id: teamIdToUse,
+      return {
         player_id: playerId,
         is_starter: true,
         is_captain: index === 0,
         order: index,
-        matchday: matchdayToSave, 
-      }))
-
-      console.log(`[GUARDAR] Insertando jugadores en matchday ${matchdayToSave}`)
-      console.log('[GUARDAR] Payload:', JSON.stringify(teamPlayers, null, 2))
-
-      const { data, error } = await supabase.from('team_players').insert(teamPlayers).select()
-
-      if (error) {
-        console.error('[GUARDAR] Error al insertar:', JSON.stringify(error, null, 2))
-        console.error('[GUARDAR] Error details:', error)
-        alert('Error al guardar: ' + (error.message || JSON.stringify(error)))
-      } else {
-        console.log('[GUARDAR] Equipo guardado correctamente:', data?.length, 'jugadores')
-        setSavedPlayers(selectedPlayers)
-        setChangeHistory([])
+        replaced_player_id: replacedId,
       }
+    })
+
+    console.log(`[GUARDAR] Guardando alineación (RPC atómica) en matchday ${matchdayToSave}`)
+    console.log('[GUARDAR] Payload:', JSON.stringify(teamPlayers, null, 2))
+
+    const { error } = await supabase.rpc('save_team_lineup', {
+      p_team_id: teamIdToUse,
+      p_matchday: matchdayToSave,
+      p_players: teamPlayers,
+    })
+
+    if (error) {
+      console.error('[GUARDAR] Error al guardar:', JSON.stringify(error, null, 2))
+      alert('Error al guardar: ' + (error.message || JSON.stringify(error)))
+    } else {
+      console.log('[GUARDAR] Equipo guardado correctamente:', teamPlayers.length, 'jugadores')
+      setSavedPlayers(selectedPlayers)
+      setChangeHistory([])
     }
   }
 

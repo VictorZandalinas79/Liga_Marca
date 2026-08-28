@@ -5,6 +5,7 @@ import {
   loadDivisionMembership,
   userDisplayName,
 } from '@/lib/divisions'
+import { resolveStartHoursBefore } from '@/lib/locked-teams-core'
 
 export interface Infraction {
   id: string
@@ -23,16 +24,16 @@ export async function getCurrentMatchday(supabase: SupabaseClient): Promise<numb
   // 2. Si no, calcular dinámicamente usando las fechas de fixtures y league_config (como useMatchdayLock)
   const { data: cfg } = await supabase
     .from('league_config')
-    .select('matchday_start_hours_before, matchday_end_hours_after')
+    .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after')
     .eq('id', 1)
     .maybeSingle()
 
-  let unlockOffsetMs = 60 * 60 * 1000
-  let lockOffsetMs = 2 * 60 * 60 * 1000
-  if (cfg) {
-    if (cfg.matchday_start_hours_before != null) unlockOffsetMs = Number(cfg.matchday_start_hours_before) * 60 * 60 * 1000
-    if (cfg.matchday_end_hours_after != null) lockOffsetMs = Number(cfg.matchday_end_hours_after) * 60 * 60 * 1000
+  const lockOffsets = {
+    startHoursBeforeMidweek: cfg?.matchday_start_hours_before_midweek != null ? Number(cfg.matchday_start_hours_before_midweek) : 1,
+    startHoursBeforeWeekend: cfg?.matchday_start_hours_before_weekend != null ? Number(cfg.matchday_start_hours_before_weekend) : 1,
+    endHoursAfter: cfg?.matchday_end_hours_after != null ? Number(cfg.matchday_end_hours_after) : 2,
   }
+  const lockOffsetMs = lockOffsets.endHoursAfter * 60 * 60 * 1000
 
   const { data: fixtures } = await supabase
     .from('fixtures')
@@ -63,10 +64,18 @@ export async function getCurrentMatchday(supabase: SupabaseClient): Promise<numb
   })).sort((a, b) => a.matchday - b.matchday)
 
   const now = Date.now()
-  // Buscar jornada activa
+  // Buscar jornada activa. Puede haber más de una "activa" a la vez: un
+  // partido aplazado de una jornada anterior alarga su ventana (fin + margen)
+  // y puede solapar con el inicio de la siguiente, que ya desbloqueó sus
+  // propios cambios. En ese caso hay que quedarse con la MÁS AVANZADA (mismo
+  // criterio que usa la página de Jornada para elegir su jornada por
+  // defecto), si no, la campana se queda pegada en la jornada vieja y dejan
+  // de calcularse sanciones de la jornada real en curso.
   for (const j of sortedJornadas) {
-    const first = new Date(j.start_time).getTime()
+    const firstDate = new Date(j.start_time)
+    const first = firstDate.getTime()
     const last = new Date(j.end_time).getTime()
+    const unlockOffsetMs = resolveStartHoursBefore(firstDate, lockOffsets) * 60 * 60 * 1000
     const unlock = first - unlockOffsetMs
     const lock = last + lockOffsetMs
     if (now >= unlock && now <= lock) {
@@ -76,7 +85,9 @@ export async function getCurrentMatchday(supabase: SupabaseClient): Promise<numb
 
   // Buscar próxima jornada
   for (const j of sortedJornadas) {
-    const first = new Date(j.start_time).getTime()
+    const firstDate = new Date(j.start_time)
+    const first = firstDate.getTime()
+    const unlockOffsetMs = resolveStartHoursBefore(firstDate, lockOffsets) * 60 * 60 * 1000
     const unlock = first - unlockOffsetMs
     if (unlock > now) {
       return j.matchday
@@ -90,13 +101,14 @@ export async function getCurrentMatchday(supabase: SupabaseClient): Promise<numb
 export async function isMatchdayLockStarted(supabase: SupabaseClient, matchday: number): Promise<boolean> {
   const { data: cfg } = await supabase
     .from('league_config')
-    .select('matchday_start_hours_before')
+    .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend')
     .eq('id', 1)
     .maybeSingle()
 
-  let unlockOffsetMs = 60 * 60 * 1000
-  if (cfg && cfg.matchday_start_hours_before != null) {
-    unlockOffsetMs = Number(cfg.matchday_start_hours_before) * 60 * 60 * 1000
+  const lockOffsets = {
+    startHoursBeforeMidweek: cfg?.matchday_start_hours_before_midweek != null ? Number(cfg.matchday_start_hours_before_midweek) : 1,
+    startHoursBeforeWeekend: cfg?.matchday_start_hours_before_weekend != null ? Number(cfg.matchday_start_hours_before_weekend) : 1,
+    endHoursAfter: 2, // not needed here but required by type
   }
 
   const { data: fixtures } = await supabase
@@ -109,8 +121,9 @@ export async function isMatchdayLockStarted(supabase: SupabaseClient, matchday: 
 
   if (!fixtures || !fixtures.start_time) return false
 
-  const firstMatchTime = new Date(fixtures.start_time).getTime()
-  const unlockTime = firstMatchTime - unlockOffsetMs
+  const firstMatchDate = new Date(fixtures.start_time)
+  const unlockOffsetMs = resolveStartHoursBefore(firstMatchDate, lockOffsets) * 60 * 60 * 1000
+  const unlockTime = firstMatchDate.getTime() - unlockOffsetMs
   
   return Date.now() >= unlockTime
 }

@@ -148,6 +148,12 @@ export function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications()
+    // Antes solo se cargaba una vez al montar: si la pestaña llevaba abierta
+    // desde antes de que se cerrara el periodo de cambios de una jornada, la
+    // sanción nunca aparecía sin recargar la página a mano. Refrescamos cada
+    // 2 minutos para que las sanciones en vivo aparezcan solas al cerrarse.
+    const interval = setInterval(fetchNotifications, 120000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
@@ -166,7 +172,38 @@ export function NotificationBell() {
       const res = await fetch('/api/notifications', { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
-        const rawNotifs = data.notifications || []
+        // Excluir las sanciones que venían del API de notificaciones (penalties/live-inf)
+        // porque ahora las obtenemos directamente de /api/penalties/live
+        const rawNotifs = (data.notifications || []).filter(
+          (n: any) => !String(n.id).startsWith('penalty-') && !String(n.id).startsWith('live-inf-')
+        )
+
+        // Obtener sanciones directamente de /api/penalties/live para TODAS las
+        // divisiones, el mismo endpoint que usa la página de Jornada.
+        let sanctionNotifs: Notification[] = []
+        try {
+          const divResults = await Promise.all(
+            [1, 2, 3].map(async (div) => {
+              const r = await fetch(`/api/penalties/live?division=${div}`, { cache: 'no-store' })
+              if (!r.ok) return []
+              const d = await r.json()
+              return (d.infractions || []).map((inf: any) => ({
+                id: `live-inf-${inf.id || `${div}-${inf.user_id}-${inf.description}`}`,
+                type: 'players_locked' as NotificationType,
+                title: `Sanción en Juego J${inf.matchday}: ${inf.full_name}`,
+                body: `${inf.description} (Puntuarán 0 pts esta jornada)`,
+                created_at: new Date().toISOString(),
+                read_at: null,
+                division: div,
+              }))
+            })
+          )
+          sanctionNotifs = divResults.flat()
+        } catch (e) {
+          console.error('Error fetching live sanctions:', e)
+        }
+
+        const allNotifs = [...sanctionNotifs, ...rawNotifs]
 
         // Cargar IDs leídos localmente
         let readIds: string[] = []
@@ -176,7 +213,7 @@ export function NotificationBell() {
         } catch {}
 
         // Mapear combinando read_at de la base de datos y de localStorage
-        const processed = rawNotifs.map((n: Notification) => {
+        const processed = allNotifs.map((n: Notification) => {
           if (readIds.includes(n.id)) {
             return { ...n, read_at: n.read_at || new Date().toISOString() }
           }

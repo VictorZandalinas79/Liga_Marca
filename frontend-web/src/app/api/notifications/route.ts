@@ -77,18 +77,18 @@ export async function GET() {
 
   let penaltyNotifications: any[] = []
   if (currentMatchday) {
-    // A. Sanciones consolidadas en base de datos. Solo las de MI división: las
-    //    multas de otra tabla no me afectan ni compiten conmigo. Un usuario sin
-    //    división no recibe ninguna, porque no participa en ninguna tabla.
+    // A. Sanciones consolidadas en base de datos (tabla penalties).
+    //    Se buscan sin filtro de división para mostrar TODAS.
     const { data: actualPenalties } = await supabase
       .from('penalties')
-      .select('id, matchday, description, points, user_id, division, created_at, profiles(full_name)')
+      .select('id, matchday, description, points, user_id, created_at, profiles(full_name, division)')
       .eq('matchday', currentMatchday)
 
-    if (actualPenalties) {
+    if (actualPenalties && actualPenalties.length > 0) {
       penaltyNotifications = actualPenalties.map(p => {
         const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
         const name = profileObj?.full_name || 'Usuario'
+        const div = profileObj?.division ?? null
         return {
           id: `penalty-${p.id}`,
           type: 'players_locked',
@@ -96,23 +96,24 @@ export async function GET() {
           body: `${p.description} (Se restaron ${p.points} pts)`,
           created_at: p.created_at || new Date().toISOString(),
           read_at: null,
-          division: p.division
+          division: div
         }
       })
     }
 
-    // B. Sanciones/Infracciones en vivo (dinámicas y pendientes de la jornada activa)
-    // Si ya hay sanciones oficiales en la BD para esta jornada (mercado cerrado),
-    // no mostramos las advertencias dinámicas duplicadas.
-    // Sin división asignada no se compite en ninguna tabla, así que no hay
-    // sanciones que avisar.
-    let liveNotifications: any[] = []
-    if (actualPenalties == null || actualPenalties.length === 0) {
-      // SOLO mostrar sanciones en vivo si ya estamos a <= 1 hora del primer partido
-      const isLocked = await isMatchdayLockStarted(supabase, currentMatchday)
-      if (isLocked) {
-        const liveInfractions = await getLiveInfractions(supabase, currentMatchday, null)
-        liveNotifications = liveInfractions.map(inf => ({
+    // B. Sanciones en vivo: calculadas dinámicamente para TODAS las divisiones,
+    //    igual que hace la página de Jornada vía /api/penalties/live.
+    //    Solo se muestran si no hay sanciones consolidadas (para no duplicar).
+    const consolidatedUserIds = new Set((actualPenalties || []).map(p => p.user_id))
+    
+    const isLocked = await isMatchdayLockStarted(supabase, currentMatchday)
+    if (isLocked) {
+      // division=null → calcula TODAS las divisiones
+      const liveInfractions = await getLiveInfractions(supabase, currentMatchday, null)
+      
+      const liveNotifications = liveInfractions
+        .filter(inf => !consolidatedUserIds.has(inf.user_id))
+        .map(inf => ({
           id: `live-inf-${inf.id}`,
           type: 'players_locked',
           title: `Sanción en Juego J${inf.matchday}: ${inf.full_name}`,
@@ -121,11 +122,12 @@ export async function GET() {
           read_at: null,
           division: inf.division
         }))
-      }
+      
+      penaltyNotifications.push(...liveNotifications)
     }
-
-    penaltyNotifications.push(...liveNotifications)
   }
+
+  console.log(`[API NOTIFICATIONS] currentMatchday=${currentMatchday}, penalties=${penaltyNotifications.length}`)
 
   // Combinar todas las listas
   const combined = [...penaltyNotifications, ...outOfOrderNotifications, ...visibleStandard]
