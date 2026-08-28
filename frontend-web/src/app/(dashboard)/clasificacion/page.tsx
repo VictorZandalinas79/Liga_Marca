@@ -19,6 +19,18 @@ import { getStandings } from '@/lib/standings'
 import { DIVISION_COMBINED, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
 
+function formatPlayerName(name: string | undefined | null) {
+  if (!name) return ''
+  const trimmed = name.trim()
+  if (trimmed.length > 12 && trimmed.includes(' ')) {
+    const parts = trimmed.split(' ')
+    if (parts.length >= 2) {
+      return `${parts[0].charAt(0).toUpperCase()}. ${parts.slice(1).join(' ')}`
+    }
+  }
+  return trimmed
+}
+
 interface UserStanding {
   user_id: string
   user_name: string
@@ -907,8 +919,8 @@ export default function ClasificacionPage() {
                                     {/* col 2: nombre + posición + equipo */}
                                     <div className="min-w-0">
                                       <div className="flex items-center gap-1 flex-wrap">
-                                        <span className={`text-xs font-semibold truncate ${player.sanctionReason ? 'text-red-200' : 'text-white'}`}>
-                                          {player.short_name}
+                                        <span className={`text-xs font-semibold whitespace-nowrap ${player.sanctionReason ? 'text-red-200' : 'text-white'}`}>
+                                          {formatPlayerName(player.short_name)}
                                         </span>
                                         <Badge className={`text-[9px] px-1 py-0 leading-tight shrink-0 ${getPositionColor(player.position)}`}>
                                           {getPositionLabel(player.position)}
@@ -939,8 +951,8 @@ export default function ClasificacionPage() {
                                           {player.replacedPlayer.photo && (
                                             <img src={player.replacedPlayer.photo} className="w-3.5 h-3.5 rounded-full object-cover border border-slate-500 shrink-0" alt="" />
                                           )}
-                                          <span className="text-[9px] text-red-400 font-semibold truncate max-w-[90px]">
-                                            {player.replacedPlayer.short_name}
+                                          <span className="text-[9px] text-red-400 font-semibold whitespace-nowrap">
+                                            {formatPlayerName(player.replacedPlayer.short_name)}
                                           </span>
                                         </div>
                                       )}
@@ -988,7 +1000,7 @@ export default function ClasificacionPage() {
                                           )}
                                         </div>
                                         <div className="min-w-0 flex items-center gap-1 flex-wrap">
-                                          <span className="text-[11px] font-medium text-slate-400 truncate">{player.short_name}</span>
+                                          <span className="text-[11px] font-medium text-slate-400 whitespace-nowrap">{formatPlayerName(player.short_name)}</span>
                                           <Badge className={`text-[9px] px-1 py-0 leading-tight shrink-0 opacity-70 ${getPositionColor(player.position)}`}>
                                             {getPositionLabel(player.position)}
                                           </Badge>

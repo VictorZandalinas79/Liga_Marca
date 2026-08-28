@@ -11,6 +11,18 @@ import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
 import { PrintView } from './PrintView'
 
+function formatPlayerName(name: string | undefined | null) {
+  if (!name) return ''
+  const trimmed = name.trim()
+  if (trimmed.length > 12 && trimmed.includes(' ')) {
+    const parts = trimmed.split(' ')
+    if (parts.length >= 2) {
+      return `${parts[0].charAt(0).toUpperCase()}. ${parts.slice(1).join(' ')}`
+    }
+  }
+  return trimmed
+}
+
 interface Player {
   id: string
   first_name: string
@@ -1528,12 +1540,12 @@ export default function JornadaPage() {
                                 <div className="flex flex-col min-w-0 flex-1 justify-center gap-0.5">
                                   {/* Row 1: Name and badges */}
                                   <div className="flex items-center gap-1.5 min-w-0 w-full">
-                                    <span className={`font-semibold whitespace-nowrap overflow-hidden text-ellipsis ${
+                                    <span className={`font-semibold whitespace-nowrap ${
                                       (player.short_name || '').length > 15
                                         ? 'text-[10px]'
                                         : 'text-xs'
                                     } ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
-                                      {player.short_name}
+                                      {formatPlayerName(player.short_name)}
                                     </span>
                                     {isPenalized && (
                                       <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0" />
@@ -1589,8 +1601,8 @@ export default function JornadaPage() {
                                       {player.replacedPlayer.photo && (
                                         <img src={player.replacedPlayer.photo} className="w-3.5 h-3.5 rounded-full object-cover border border-slate-300 shrink-0" alt="" />
                                       )}
-                                      <span className="text-[9px] text-red-500 font-medium truncate max-w-[70px]">
-                                        {player.replacedPlayer.short_name || ''}
+                                      <span className="text-[9px] text-red-500 font-medium whitespace-nowrap">
+                                        {formatPlayerName(player.replacedPlayer.short_name)}
                                       </span>
                                     </div>
                                   )}
