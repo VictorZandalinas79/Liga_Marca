@@ -313,7 +313,7 @@ export default async function PuntuacionPage() {
             <li>
               <span className="font-semibold">Bloque 3 - Distribución y salidas:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'long_passes_flat') || 6} pases largos completados en el partido, O BIEN (blocajes + puños)/min ≥ {num((rules?.relevo_limits as any)?.POR, 'block_punch_per_min') || 0.02}, O BIEN (salidas fuera del área + cubrir balón y blocar)/min ≥ {num((rules?.relevo_limits as any)?.POR, 'sweeper_cover_per_min') || 0.02}.
             </li>
-            <li><span className="font-semibold">Bloque 4 - Paradas decisivas:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'saves_gte_07_count') || 2} paradas de calidad ≥ 0.7, O BIEN paradas/min &gt; {num((rules?.relevo_limits as any)?.POR, 'saves_per_min_b4') || 0.03}, portería a cero y mín. 2 paradas.</li>
+            <li><span className="font-semibold">Bloque 4 - Paradas decisivas:</span> ≥ {num((rules?.relevo_limits as any)?.POR, 'saves_gte_07_count') || 2} paradas de calidad ≥ 0.7, O BIEN paradas/min &gt; {num((rules?.relevo_limits as any)?.POR, 'saves_per_min_b4') || 0.03}, portería a cero y mín. 2 paradas, O BIEN al menos {num((rules?.relevo_limits as any)?.POR, 'goals_count') || 1} gol.</li>
           </ul>
         </div>
 
@@ -324,7 +324,7 @@ export default async function PuntuacionPage() {
             <li><span className="font-semibold">Bloque 1 - Presencia defensiva:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'def_actions_per_min') || 0.07} acciones defensivas/min, O BIEN &gt; {num((rules?.relevo_limits as any)?.DEF, 'pass_pct') || 70}% acierto en el pase.</li>
             <li><span className="font-semibold">Bloque 2 - Salida de balón:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'long_passes_per_min') || 0.03} pases largos/min (mín. 3), O BIEN ≥ {num((rules?.relevo_limits as any)?.DEF, 'forward_passes_per_min') || 0.03} pases hacia adelante/min (mín. 3), O BIEN &gt; {num((rules?.relevo_limits as any)?.DEF, 'ground_duels_pct') || 55}% duelos suelo ganados (mín. 3), O BIEN ≥ {num((rules?.relevo_limits as any)?.DEF, 'aerials_pct') || 75}% duelos aéreos ganados (mín. 3).</li>
             <li><span className="font-semibold">Bloque 3 - Duelos y recuperaciones:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'recoveries_per_min') || 0.10} recuperaciones/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEF, 'abp_remates_per_min') || 0.01} remates a balón parado/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEF, 'crosses_per_min') || 0.02} centros buenos/min (mín. 2).</li>
-            <li><span className="font-semibold">Bloque 4 - Aportación ofensiva:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'off_actions_3_4_per_min') || 0.20} acciones ofensivas en 3/4/min, O BIEN &gt; {num((rules?.relevo_limits as any)?.DEF, 'total_duels_pct') || 90}% duelos totales (aéreo + suelo) ganados (mín. 10).</li>
+            <li><span className="font-semibold">Bloque 4 - Aportación ofensiva:</span> ≥ {num((rules?.relevo_limits as any)?.DEF, 'off_actions_3_4_per_min') || 0.20} acciones ofensivas en 3/4/min, O BIEN &gt; {num((rules?.relevo_limits as any)?.DEF, 'total_duels_pct') || 90}% duelos totales (aéreo + suelo) ganados (mín. 10), O BIEN al menos {num((rules?.relevo_limits as any)?.DEF, 'goals_count') || 1} gol.</li>
           </ul>
         </div>
 
@@ -335,7 +335,7 @@ export default async function PuntuacionPage() {
             <li><span className="font-semibold">Bloque 1 - Presencia defensiva y pase:</span> ≥ {num((rules?.relevo_limits as any)?.MED, 'def_actions_opp_per_min') || 0.01} acciones defensivas en campo rival/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.MED, 'pass_pct') || 66}% de acierto en el pase.</li>
             <li><span className="font-semibold">Bloque 2 - Duelos y recuperaciones:</span> ≥ {num((rules?.relevo_limits as any)?.MED, 'aerials_pct') || 45}% duelos aéreos ganados (mín. 3), O BIEN ≥ {num((rules?.relevo_limits as any)?.MED, 'recoveries_opp_per_min') || 0.03} recuperaciones campo rival/min, O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'fwd_long_pct') || 10}% de pases adelante + largos sobre los intentados.</li>
             <li><span className="font-semibold">Bloque 3 - Desequilibrio:</span> &gt; {num((rules?.relevo_limits as any)?.MED, 'shots_on_pct') || 66}% remates a puerta (mín. 2), O BIEN ≥ {num((rules?.relevo_limits as any)?.MED, 'off_actions_opp_per_min') || 0.85} acciones ofensivas en campo rival/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.MED, 'intercept_recup_3_4_per_min') || 0.02} interceptaciones + recuperaciones en 3/4/min.</li>
-            <li><span className="font-semibold">Bloque 4 - Generación de juego:</span> Al menos 1 gol, O BIEN ≥ {num((rules?.relevo_limits as any)?.MED, 'assists_total') || 3} asistencias totales, O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'takeons_pct') || 75}% regates completados (mín. 2).</li>
+            <li><span className="font-semibold">Bloque 4 - Generación de juego:</span> Al menos {num((rules?.relevo_limits as any)?.MED, 'goals_count') || 1} gol, O BIEN ≥ {num((rules?.relevo_limits as any)?.MED, 'assists_total') || 3} asistencias totales, O BIEN &gt; {num((rules?.relevo_limits as any)?.MED, 'takeons_pct') || 75}% regates completados (mín. 2).</li>
           </ul>
         </div>
 
@@ -346,7 +346,7 @@ export default async function PuntuacionPage() {
             <li><span className="font-semibold">Bloque 1 - Participación en 3/4 de campo:</span> ≥ {num((rules?.relevo_limits as any)?.DEL, 'final_third_events_per_min') || 0.09} participaciones en 3/4 de campo/min, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'recoveries_opp_per_min') || 0.009} recuperaciones campo rival/min.</li>
             <li><span className="font-semibold">Bloque 2 - Presión y juego aéreo:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'aerials_pct') || 40}% duelos aéreos ganados (mín. 3), O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'shots_on_target_count') || 1} tiros a puerta.</li>
             <li><span className="font-semibold">Bloque 3 - Definición:</span> &gt; {num((rules?.relevo_limits as any)?.DEL, 'shots_on_pct') || 70}% remates a puerta (mín. 3), O BIEN &gt; {num((rules?.relevo_limits as any)?.DEL, 'takeons_pct') || 75}% regates completados (mín. 2).</li>
-            <li><span className="font-semibold">Bloque 4 - Aportación al ataque:</span> Al menos 1 gol, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'assists_total') || 3} asistencias totales, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'off_actions_opp_per_min') || 0.40} acciones ofensivas en campo rival/min.</li>
+            <li><span className="font-semibold">Bloque 4 - Aportación al ataque:</span> Al menos {num((rules?.relevo_limits as any)?.DEL, 'goals_count') || 1} gol, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'assists_total') || 3} asistencias totales, O BIEN ≥ {num((rules?.relevo_limits as any)?.DEL, 'off_actions_opp_per_min') || 0.40} acciones ofensivas en campo rival/min.</li>
           </ul>
         </div>
 

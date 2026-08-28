@@ -536,11 +536,12 @@ class MatchEventDownloader:
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
 
             # B4 (Muy difícil): Paradas calidad>=0.7 >= 2 O (saves/min > 0.03 Y conceded==0 Y saves>=2)
+            goals = stats.get('goals', 0)
             saves_07 = stats.get('relevo_saves_gte_07', 0)
             conceded = stats.get('goals_conceded', 0)
             cond_d = saves_07 >= rules.get('saves_gte_07_count', 2)
             cond_e = (saves_per_min > rules.get('saves_per_min_b4', 0.03)) and (conceded == 0) and (saves >= 2)
-            if cond_d or cond_e:
+            if cond_d or cond_e or (goals >= rules.get('goals_count', 1)):
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
         elif pos == 'DEF':
@@ -576,10 +577,11 @@ class MatchEventDownloader:
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
 
             # B4: Acciones ofensivas buenas en 3/4/min >= 0.30 O % duelos totales > 90% (mín 10)
+            goals = stats.get('goals', 0)
             off34_per_min = (stats.get('relevo_off_actions_3_4_outcome_1', 0) / mins_played) if mins_played > 0 else 0
             total_duels_tot = g_tot + a_tot
             total_duels_pct = ((g_won + a_won) / total_duels_tot * 100) if total_duels_tot >= 10 else 0
-            if (off34_per_min >= rules.get('off_actions_3_4_per_min', 0.20)) or (total_duels_tot >= 10 and total_duels_pct > rules.get('total_duels_pct', 90)):
+            if (off34_per_min >= rules.get('off_actions_3_4_per_min', 0.20)) or (total_duels_tot >= 10 and total_duels_pct > rules.get('total_duels_pct', 90)) or (goals >= rules.get('goals_count', 1)):
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
         elif pos == 'MED':
@@ -616,7 +618,7 @@ class MatchEventDownloader:
             t_won = stats.get('takeons_won', 0); t_lost = stats.get('takeons_lost', 0)
             t_tot = t_won + t_lost
             t_pct = (t_won / t_tot * 100) if t_tot >= 2 else 0
-            if (goals >= 1) or (assists_tot >= rules.get('assists_total', 3)) or (t_tot >= 2 and t_pct > rules.get('takeons_pct', 75)):
+            if (goals >= rules.get('goals_count', 1)) or (assists_tot >= rules.get('assists_total', 3)) or (t_tot >= 2 and t_pct > rules.get('takeons_pct', 75)):
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
         elif pos == 'DEL':
@@ -648,7 +650,7 @@ class MatchEventDownloader:
             goals = stats.get('goals', 0)
             assists_tot = stats.get('assists', 0) + stats.get('fantasy_assist', 0)
             off_opp_per_min = (stats.get('relevo_off_actions_opp_half_outcome_1', 0) / mins_played) if mins_played > 0 else 0
-            if (goals >= 1) or (assists_tot >= rules.get('assists_total', 3)) or (off_opp_per_min >= rules.get('off_actions_opp_per_min', 0.40)):
+            if (goals >= rules.get('goals_count', 1)) or (assists_tot >= rules.get('assists_total', 3)) or (off_opp_per_min >= rules.get('off_actions_opp_per_min', 0.40)):
                 completed_blocks += 1; breakdown['block_4_pts'] = 1.0
 
         if completed_blocks == 0:

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -88,7 +88,11 @@ export default function JornadaPage() {
   const [showSanciones, setShowSanciones] = useState(false)
   const [modalPlayer, setModalPlayer] = useState<Record<string, any> | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
+  const [searchInputValue, setSearchInputValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedRealTeamId, setSelectedRealTeamId] = useState<string>('')
+  const [minPrice, setMinPrice] = useState<string>('')
+  const [maxPrice, setMaxPrice] = useState<string>('')
   const [searchActiveIndex, setSearchActiveIndex] = useState(0)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [matchdayInfractions, setMatchdayInfractions] = useState<any[]>([])
@@ -804,22 +808,70 @@ export default function JornadaPage() {
   const normalizeText = (text: string) =>
     text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
-  const isPlayerMatch = useCallback((p: Player, q: string): boolean => {
-    if (!q) return false
-    const nameMatch =
-      normalizeText(p.short_name || '').includes(q) ||
-      normalizeText(p.first_name || '').includes(q) ||
-      normalizeText(p.last_name || '').includes(q)
-    const teamMatch = p.team ? normalizeText(p.team.name).includes(q) : false
-    const priceMatch = p.valor ? String(p.valor).includes(q) : false
-    return nameMatch || teamMatch || priceMatch
+  const parsePriceInput = useCallback((val: string): number => {
+    const cleanVal = val.trim().toLowerCase()
+    if (cleanVal.endsWith('m')) {
+      return parseFloat(cleanVal.slice(0, -1)) * 1000000
+    }
+    if (cleanVal.endsWith('k')) {
+      return parseFloat(cleanVal.slice(0, -1)) * 1000
+    }
+    return parseFloat(cleanVal.replace(/[^0-9.]/g, ''))
   }, [])
 
+  const isPlayerMatch = useCallback((p: Player, team: UserTeam, q: string, realTeamId: string, minP: string, maxP: string): boolean => {
+    if (!q && !realTeamId && !minP && !maxP) return false
+
+    // 1. Filtro de búsqueda por texto (si está activo)
+    if (q) {
+      const displayName = p.short_name || ''
+      const nameMatch = normalizeText(displayName).includes(q)
+      const teamMatch = p.team ? normalizeText(p.team.name).includes(q) : false
+      const userTeamMatch = normalizeText(team.team_name || '').includes(q)
+      const userNameMatch = normalizeText(team.user_name || '').includes(q)
+      const priceMatch = p.valor ? String(p.valor).includes(q) : false
+      const textMatches = nameMatch || teamMatch || userTeamMatch || userNameMatch || priceMatch
+      if (!textMatches) return false
+    }
+
+    // 2. Filtro de equipo real (si está activo)
+    if (realTeamId) {
+      if (p.team_id !== realTeamId) return false
+    }
+
+    // 3. Filtro de precio mínimo (si está activo)
+    if (minP) {
+      const minVal = parsePriceInput(minP)
+      if (!isNaN(minVal) && (p.valor || 0) < minVal) return false
+    }
+
+    // 4. Filtro de precio máximo (si está activo)
+    if (maxP) {
+      const maxVal = parsePriceInput(maxP)
+      if (!isNaN(maxVal) && (p.valor || 0) > maxVal) return false
+    }
+
+    return true
+  }, [parsePriceInput])
+
+  // Obtener los equipos reales disponibles en los planteles cargados para el selector
+  const availableRealTeams = useMemo(() => {
+    const teamsMap = new Map<string, { id: string; name: string }>()
+    userTeams.forEach(ut => {
+      ut.jugadores.forEach(p => {
+        if (p.team_id && p.team?.name) {
+          teamsMap.set(p.team_id, { id: p.team_id, name: p.team.name })
+        }
+      })
+    })
+    return Array.from(teamsMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [userTeams])
+
   // Lista plana de coincidencias: { teamId, playerId } para navegar
-  const searchMatches = searchQuery.trim()
+  const searchMatches = (searchQuery.trim() || selectedRealTeamId || minPrice || maxPrice)
     ? sortedTeams.flatMap(team =>
         team.jugadores
-          .filter(p => isPlayerMatch(p, normalizeText(searchQuery.trim())))
+          .filter(p => isPlayerMatch(p, team, normalizeText(searchQuery.trim()), selectedRealTeamId, minPrice, maxPrice))
           .map(p => ({ teamId: team.team_id, playerId: p.id, key: `${team.team_id}-${p.id}` }))
       )
     : []
@@ -841,9 +893,8 @@ export default function JornadaPage() {
     }
   }, [searchMatches])
 
-  // Resetear índice activo al cambiar la query
+  // Hacer scroll al primer resultado al cambiar la query o filtros
   useEffect(() => {
-    setSearchActiveIndex(0)
     if (searchMatches.length > 0) {
       setTimeout(() => {
         const firstMatch = searchMatches[0]
@@ -852,13 +903,13 @@ export default function JornadaPage() {
         }
       }, 100)
     }
-  }, [searchQuery])
+  }, [searchQuery, selectedRealTeamId, minPrice, maxPrice])
 
   const exportToExcel = () => {
     let csv = '\uFEFFUsuario,Jugador,Posicion,Puntos,Sancion\n'
     userTeams.forEach(t => {
       t.jugadores.forEach(p => {
-        csv += `"${t.user_name}","${p.short_name || p.first_name}","${getPositionLabel(p.position)}",${p.puntos || 0},"${p.sanctionReason || ''}"\n`
+        csv += `"${t.user_name}","${p.short_name || ''}","${getPositionLabel(p.position)}",${p.puntos || 0},"${p.sanctionReason || ''}"\n`
       })
     })
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -866,6 +917,41 @@ export default function JornadaPage() {
     link.href = URL.createObjectURL(blob)
     link.download = `Alineaciones_Jornada_${selectedMatchday}.csv`
     link.click()
+  }
+  // Convierte una <img> a data: URL (base64) para que html2canvas la pueda
+  // pintar siempre, sin depender de que el servidor de origen (Biwenger,
+  // Opta, Supabase Storage) mande cabeceras CORS. Si la descarga falla o
+  // tarda demasiado, deja la imagen como estaba en vez de bloquear el PDF entero.
+  const inlineImagesAsDataUrls = async (root: HTMLElement) => {
+    const imgs = Array.from(root.querySelectorAll('img'))
+    await Promise.all(imgs.map(async (img) => {
+      const src = img.getAttribute('src')
+      if (!src || src.startsWith('data:')) return
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 6000)
+        
+        let fetchUrl = src
+        if (src.startsWith('http') && !src.startsWith(window.location.origin)) {
+          fetchUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`
+        }
+
+        const res = await fetch(fetchUrl, { signal: controller.signal, cache: 'force-cache' })
+        clearTimeout(timeout)
+        if (!res.ok) return
+        const blob = await res.blob()
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+        img.setAttribute('data-original-src', src)
+        img.setAttribute('src', dataUrl)
+      } catch {
+        // Ignorar errores de carga
+      }
+    }))
   }
 
   const exportToPdf = async () => {
@@ -884,6 +970,10 @@ export default function JornadaPage() {
       // Pequeña espera para asegurar que el navegador pinta el elemento oculto
       await new Promise(r => setTimeout(r, 150))
 
+      // Incrusta todas las imágenes (fotos, escudos, icono de liga) como
+      // base64 antes de capturar, para que salgan sí o sí en el PDF.
+      await inlineImagesAsDataUrls(element)
+
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -900,12 +990,18 @@ export default function JornadaPage() {
       })
       
       pdf.addImage(dataUrl, 'JPEG', 0, 0, 297, 210)
-      pdf.save(`Alineaciones_Jornada_${selectedMatchday}.pdf`)
+      const divName = selectedDivision ? `${selectedDivision}adivision` : 'conjunta'
+      pdf.save(`Jornada${selectedMatchday}_${divName}.pdf`)
     } catch (e: any) {
       console.error('Error generando PDF', e)
       alert('Hubo un problema descargando el PDF de forma directa. Contacta con el administrador.')
     } finally {
       element.className = originalClasses
+      // Restauramos las imágenes a su URL original
+      element.querySelectorAll('img[src^="data:"]').forEach((img) => {
+        const original = img.getAttribute('data-original-src')
+        if (original) img.setAttribute('src', original)
+      })
     }
   }
 
@@ -1057,52 +1153,134 @@ export default function JornadaPage() {
 
       {/* Buscador tipo Ctrl+F */}
       {showEquipos && userTeams.length > 0 && (
-        <div className="sticky top-16 z-30 bg-white/95 backdrop-blur-sm rounded-lg border border-slate-300 shadow-md px-3 py-2 flex items-center gap-2">
-          <Search className="w-4 h-4 text-slate-400 shrink-0" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Buscar por jugador, equipo o precio…"
-            className="flex-1 min-w-0 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                goToMatch(e.shiftKey ? safeActiveIndex - 1 : safeActiveIndex + 1)
-              }
-            }}
-          />
-          {searchQuery && (
-            <>
-              <span className="text-xs text-slate-500 whitespace-nowrap font-medium">
-                {matchCount > 0 ? `${safeActiveIndex + 1} / ${matchCount}` : '0 resultados'}
-              </span>
-              <div className="flex items-center gap-0.5">
+        <div className="sticky top-16 z-30 bg-white/95 backdrop-blur-sm rounded-xl border border-slate-200 shadow-lg px-4 py-3 flex flex-col gap-3">
+          {/* Fila 1: Texto Buscador + Botones Navegación/Limpieza */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setSearchActiveIndex(0)
+                setSearchQuery(searchInputValue.trim())
+              }}
+              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 transition-colors shrink-0 flex items-center justify-center border border-slate-200"
+              title="Buscar"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+            <input
+              type="text"
+              value={searchInputValue}
+              onChange={e => {
+                const val = e.target.value
+                setSearchInputValue(val)
+                if (!val.trim()) {
+                  setSearchActiveIndex(0)
+                  setSearchQuery('')
+                }
+              }}
+              placeholder="Buscar por jugador, equipo o precio…"
+              className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:bg-white"
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  const trimmedInput = searchInputValue.trim()
+                  if (searchQuery !== trimmedInput) {
+                    setSearchActiveIndex(0)
+                    setSearchQuery(trimmedInput)
+                  } else {
+                    goToMatch(e.shiftKey ? safeActiveIndex - 1 : safeActiveIndex + 1)
+                  }
+                }
+              }}
+            />
+            
+            {/* Resultados y Navegación de coincidencias (si hay algún filtro activo) */}
+            {(searchQuery || selectedRealTeamId || minPrice || maxPrice) && (
+              <>
+                <span className="text-xs text-slate-500 whitespace-nowrap font-medium px-1">
+                  {matchCount > 0 ? `${safeActiveIndex + 1} / ${matchCount}` : '0 resultados'}
+                </span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={() => goToMatch(safeActiveIndex - 1)}
+                    disabled={matchCount === 0}
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="Anterior"
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => goToMatch(safeActiveIndex + 1)}
+                    disabled={matchCount === 0}
+                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="Siguiente"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
                 <button
-                  onClick={() => goToMatch(safeActiveIndex - 1)}
-                  disabled={matchCount === 0}
-                  className="p-1 rounded text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  title="Anterior"
+                  onClick={() => {
+                    setSearchInputValue('')
+                    setSearchQuery('')
+                    setSelectedRealTeamId('')
+                    setMinPrice('')
+                    setMaxPrice('')
+                    setSearchActiveIndex(0)
+                  }}
+                  className="p-1.5 rounded-lg border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition-colors shrink-0"
+                  title="Limpiar todos los filtros"
                 >
-                  <ChevronUp className="w-4 h-4" />
+                  <X className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={() => goToMatch(safeActiveIndex + 1)}
-                  disabled={matchCount === 0}
-                  className="p-1 rounded text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  title="Siguiente"
-                >
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-              </div>
-              <button
-                onClick={() => setSearchQuery('')}
-                className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              </>
+            )}
+          </div>
+
+          {/* Fila 2: Selectores de Equipo Real y Rango de Precios */}
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+            {/* Selector de Equipo Real */}
+            <div className="flex-1 min-w-0">
+              <select
+                value={selectedRealTeamId}
+                onChange={e => {
+                  setSelectedRealTeamId(e.target.value)
+                  setSearchActiveIndex(0)
+                }}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
               >
-                <X className="w-4 h-4" />
-              </button>
-            </>
-          )}
+                <option value="">Todos los equipos reales</option>
+                {availableRealTeams.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Inputs de margen de precio */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <input
+                type="text"
+                placeholder="Precio Mín (ej. 10M)"
+                value={minPrice}
+                onChange={e => {
+                  setMinPrice(e.target.value)
+                  setSearchActiveIndex(0)
+                }}
+                className="w-full sm:w-36 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+              <span className="text-slate-400 text-xs sm:text-sm">—</span>
+              <input
+                type="text"
+                placeholder="Precio Máx (ej. 50M)"
+                value={maxPrice}
+                onChange={e => {
+                  setMaxPrice(e.target.value)
+                  setSearchActiveIndex(0)
+                }}
+                className="w-full sm:w-36 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+          </div>
         </div>
       )}
 
@@ -1116,22 +1294,22 @@ export default function JornadaPage() {
                   <tr className="border-b border-slate-700">
                     <th className="text-left py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold text-slate-300 w-5 sm:w-8">Pos</th>
                     <th className="text-left py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold text-slate-300">Equipo</th>
-                    <th className="text-center py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold text-slate-300">Jug.</th>
-                    <th
-                      onClick={() => setSortBy('valor')}
-                      className={`text-right py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'valor' ? 'text-emerald-400' : 'text-slate-300'}`}
-                    >
-                      Valor
-                    </th>
                     <th
                       onClick={() => setSortBy('puntos')}
                       className={`text-right py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'puntos' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Pts
                     </th>
+                    <th className="text-center py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold text-slate-300">Jug.</th>
+                    <th
+                      onClick={() => setSortBy('valor')}
+                      className={`hidden sm:table-cell text-right py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'valor' ? 'text-emerald-400' : 'text-slate-300'}`}
+                    >
+                      Valor
+                    </th>
                     <th
                       onClick={() => setSortBy('promedio')}
-                      className={`text-right py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}
+                      className={`text-right py-1 pl-0.5 sm:pl-1 pr-2 sm:pr-4 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Prom
                     </th>
@@ -1162,26 +1340,26 @@ export default function JornadaPage() {
                       <td className="py-0.5 px-0.5 sm:px-1">
                         {getPositionMedal(pos, isLast)}
                       </td>
-                      <td className="py-0.5 px-0.5 sm:px-1 whitespace-normal break-words">
+                      <td className="py-0.5 px-0.5 sm:px-1 whitespace-nowrap">
                         <span className="font-bold text-white text-[9px] min-[360px]:text-[10px] sm:text-[15px] uppercase leading-tight">{team.user_name}</span>
+                      </td>
+                      <td className="py-0.5 px-0.5 sm:px-1 text-right whitespace-nowrap">
+                        <span className="text-base sm:text-xl font-bold text-emerald-400">
+                          {(Math.round(team.puntos_totales * 10) / 10).toFixed(1)}
+                        </span>
+                        <span className="hidden sm:inline text-[8px] sm:text-[10px] text-slate-400 ml-0.5">pts</span>
                       </td>
                       <td className="py-0.5 px-0.5 sm:px-1 text-center whitespace-nowrap">
                         <span className="text-[9px] sm:text-xs text-slate-400 font-medium">
                           {jugaron}/{total}
                         </span>
                       </td>
-                      <td className="py-0.5 px-0.5 sm:px-1 text-right whitespace-nowrap">
+                      <td className="hidden sm:table-cell py-0.5 px-0.5 sm:px-1 text-right whitespace-nowrap">
                         <span className="text-[9px] sm:text-xs font-semibold text-slate-200">{fmtValor(team.valor_total)}</span>
                       </td>
-                      <td className="py-0.5 px-0.5 sm:px-1 text-right whitespace-nowrap">
-                        <span className="text-xs sm:text-sm font-bold text-emerald-400">
-                          {Math.round(team.puntos_totales * 10) / 10}
-                        </span>
-                        <span className="hidden sm:inline text-[8px] sm:text-[10px] text-slate-400 ml-0.5">pts</span>
-                      </td>
-                      <td className="py-0.5 px-0.5 sm:px-1 text-right whitespace-nowrap">
+                      <td className="py-0.5 pl-0.5 sm:pl-1 pr-2 sm:pr-4 text-right whitespace-nowrap">
                         <span className="text-[9px] sm:text-xs font-semibold text-slate-200">
-                          {jugaron > 0 ? Math.round(promedio * 10) / 10 : '—'}
+                          {jugaron > 0 ? (Math.round(promedio * 10) / 10).toFixed(1) : '—'}
                         </span>
                         <span className="hidden sm:inline text-[8px] sm:text-[10px] text-slate-400 ml-0.5">pts/j</span>
                       </td>
@@ -1231,11 +1409,7 @@ export default function JornadaPage() {
                   {/* Info: Nombre arriba, stats abajo */}
                   <div className="flex flex-col flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">
-                      <h3 className="font-bold text-white text-[11px] sm:text-xs uppercase leading-tight tracking-tighter truncate">{team.user_name}</h3>
-                      <div className="flex items-baseline gap-1 shrink-0 ml-auto">
-                        <p className="text-[10px] text-slate-400 leading-none">Valor</p>
-                        <p className={`text-[11px] font-bold leading-none ${team.hasBudgetWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{fmtValor(team.valor_total)}</p>
-                      </div>
+                      <h3 className="font-bold text-white text-[11px] sm:text-xs uppercase leading-tight tracking-tighter whitespace-nowrap">{team.user_name}</h3>
                     </div>
                     
                     <div className="flex items-center gap-2 mt-1">
@@ -1244,9 +1418,11 @@ export default function JornadaPage() {
                         <p className={`text-[11px] font-mono font-bold leading-none ${team.hasTacticsWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{getFormacion(team.jugadores)}</p>
                       </div>
                       <div className="w-px h-3 bg-slate-500" />
+                      <p className={`text-[11px] font-bold leading-none ${team.hasBudgetWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{fmtValor(team.valor_total)}</p>
+                      <div className="w-px h-3 bg-slate-500" />
                       <div className="flex items-center gap-1">
                         <p className="text-[10px] text-slate-400 leading-none">Pts</p>
-                        <p className="text-[12px] font-bold text-emerald-400 leading-none">{Math.round(team.puntos_totales * 10) / 10}</p>
+                        <p className="text-[12px] font-bold text-emerald-400 leading-none">{(Math.round(team.puntos_totales * 10) / 10).toFixed(1)}</p>
                       </div>
                     </div>
                   </div>
@@ -1353,11 +1529,11 @@ export default function JornadaPage() {
                                   {/* Row 1: Name and badges */}
                                   <div className="flex items-center gap-1.5 min-w-0 w-full">
                                     <span className={`font-semibold whitespace-nowrap overflow-hidden text-ellipsis ${
-                                      (player.short_name || player.first_name || '').length > 15
+                                      (player.short_name || '').length > 15
                                         ? 'text-[10px]'
                                         : 'text-xs'
                                     } ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
-                                      {player.short_name || player.first_name}
+                                      {player.short_name}
                                     </span>
                                     {isPenalized && (
                                       <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0" />
@@ -1389,7 +1565,7 @@ export default function JornadaPage() {
                                   {player.sanctionReason ? (
                                     <div className="flex flex-col items-end justify-center leading-none">
                                       <span className="text-[9px] font-bold text-red-500 line-through mb-0.5 whitespace-nowrap">
-                                        {Math.round((player.originalPuntos ?? 0) * 10) / 10} pts
+                                        {(Math.round((player.originalPuntos ?? 0) * 10) / 10).toFixed(1)} pts
                                       </span>
                                       <span className="text-sm font-extrabold text-red-600 whitespace-nowrap">
                                         0 pts
@@ -1400,7 +1576,7 @@ export default function JornadaPage() {
                                       <span className={`text-sm font-bold ${
                                         (player.puntos || 0) < 0 ? 'text-red-600' : (player.puntos || 0) >= 0 && (player.puntos || 0) < 6 ? 'text-orange-600' : 'text-emerald-600'
                                       } ${player.hasPlayed ? 'opacity-70' : ''}`}>
-                                        {Math.round((player.puntos ?? 0) * 10) / 10}
+                                        {(Math.round((player.puntos ?? 0) * 10) / 10).toFixed(1)}
                                       </span>
                                       <span className="text-[10px] text-slate-500 ml-0.5">pts</span>
                                     </div>
@@ -1414,7 +1590,7 @@ export default function JornadaPage() {
                                         <img src={player.replacedPlayer.photo} className="w-3.5 h-3.5 rounded-full object-cover border border-slate-300 shrink-0" alt="" />
                                       )}
                                       <span className="text-[9px] text-red-500 font-medium truncate max-w-[70px]">
-                                        {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
+                                        {player.replacedPlayer.short_name || ''}
                                       </span>
                                     </div>
                                   )}

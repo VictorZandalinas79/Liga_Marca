@@ -98,24 +98,32 @@ export function PrintView({ teams, matchday, division }: { teams: UserTeam[], ma
         {teams.map((t) => (
           <div key={t.team_id} className="bg-white rounded-md shadow-sm border border-slate-200 overflow-hidden break-inside-avoid flex flex-col">
             {/* User Header */}
-            <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white px-1 py-[1.5px] flex justify-between items-center gap-1 shrink-0">
-              <span className="text-[6px] font-black text-slate-400 shrink-0 w-4 text-center leading-none">
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white px-1 py-[2px] flex justify-between items-center gap-1 shrink-0">
+              <span className="text-[6px] font-black text-slate-400 shrink-0 w-3 text-center leading-none">
                 {rankBadge(t.posicion)}
               </span>
-              <h3 className="font-bold text-[7px] truncate uppercase tracking-wide flex-1 min-w-0 leading-none">{t.user_name}</h3>
-              <div className="shrink-0 flex items-baseline gap-0.5">
-                <span className="text-[9px] font-black text-emerald-400 leading-none">{Math.round((t.puntos_totales ?? 0) * 10) / 10}</span>
-                <span className="text-[4.5px] text-slate-400 font-bold leading-none">PTS</span>
+              <div className="flex-1 min-w-0 flex flex-col justify-center">
+                <h3 className="font-bold text-[7px] truncate uppercase tracking-wide leading-none">{t.user_name}</h3>
+              </div>
+              <div className="shrink-0 flex items-center gap-1.5">
+                <span className="text-[5px] font-bold text-slate-400 leading-none tracking-tight">{t.jugadores.slice(0, 11).filter(p => getPositionLabel(p.position) === 'DEF').length}-{t.jugadores.slice(0, 11).filter(p => getPositionLabel(p.position) === 'MED').length}-{t.jugadores.slice(0, 11).filter(p => getPositionLabel(p.position) === 'DEL').length}</span>
+                <span className="text-[5px] font-bold text-emerald-400/90 leading-none tracking-tight">{(t.valor_total / 1000000).toFixed(1)}M€</span>
+                {(t.puntos_totales ?? 0) > 0 && (
+                  <div className="flex items-baseline gap-[1px] ml-1">
+                    <span className="text-[7.5px] font-black text-white leading-none">{Math.round(t.puntos_totales * 10) / 10}</span>
+                    <span className="text-[4px] text-slate-400 font-bold leading-none">PTS</span>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Players List */}
-            <div className="flex-1 flex flex-col justify-between">
+            <div className="flex-1 flex flex-col justify-start">
               {t.jugadores.slice(0, 11).map((player, idx) => {
                 const isPenalized = !!player.sanctionReason
 
                 return (
-                  <div key={`${t.team_id}-${player.id}-${idx}`} className="flex items-center gap-[2px] px-[2px] bg-white border-b border-slate-100/60 last:border-0 overflow-hidden">
+                  <div key={`${t.team_id}-${player.id}-${idx}`} className={`flex-1 max-h-[13px] flex items-center gap-[2px] px-[2px] bg-white border-b border-slate-100/60 last:border-0 overflow-hidden min-h-0 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''}`}>
                     {/* Escudo del equipo real del jugador */}
                     <div className="shrink-0 w-2.5 flex justify-center">
                       {player.team?.logo_url ? (
@@ -141,7 +149,7 @@ export function PrintView({ teams, matchday, division }: { teams: UserTeam[], ma
                     {/* Info */}
                     <div className="flex-1 min-w-0 leading-none">
                       <div className="flex items-center gap-0.5">
-                        <span className={`text-[5.5px] font-bold truncate ${isPenalized ? 'text-red-700 line-through' : 'text-slate-800'}`}>
+                        <span className={`text-[5.5px] font-bold whitespace-nowrap ${isPenalized ? 'text-red-700 line-through' : 'text-slate-800'}`}>
                           {player.short_name || player.first_name}
                         </span>
                         {player.is_captain && (
@@ -158,7 +166,7 @@ export function PrintView({ teams, matchday, division }: { teams: UserTeam[], ma
                       {!dense && player.replacedPlayer && (
                         <div className="flex items-center mt-[0.5px]">
                           <span className="text-[4.5px] text-slate-400 font-medium scale-90 origin-left">⇆ </span>
-                          <span className="text-[4.5px] font-bold text-emerald-600 truncate scale-90 origin-left">
+                          <span className="text-[4.5px] font-bold text-emerald-600 whitespace-nowrap scale-90 origin-left">
                             {player.replacedPlayer.short_name || player.replacedPlayer.first_name}
                           </span>
                         </div>
@@ -168,10 +176,10 @@ export function PrintView({ teams, matchday, division }: { teams: UserTeam[], ma
                     {/* Puntos */}
                     <div className="shrink-0 text-right pr-0.5">
                       {isPenalized ? (
-                        <span className="text-[5.5px] font-black text-red-600">0</span>
+                        <span className="text-[5.5px] font-black text-red-600">-</span>
                       ) : (
-                        <span className="text-[6px] font-black text-emerald-600">
-                          {Math.round((player.puntos ?? 0) * 10) / 10}
+                        <span className={`text-[6px] font-black ${Math.round((player.puntos ?? 0) * 10) / 10 !== 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                          {Math.round((player.puntos ?? 0) * 10) / 10 !== 0 ? Math.round((player.puntos ?? 0) * 10) / 10 : '-'}
                         </span>
                       )}
                     </div>

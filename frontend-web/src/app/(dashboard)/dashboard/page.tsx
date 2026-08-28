@@ -36,7 +36,7 @@ function formatPlayerName(name: string): string {
   return trimmed
 }
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar } from 'lucide-react'
+import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 import { getStandings } from '@/lib/standings'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
@@ -139,8 +139,8 @@ function PitchPlayerCard({
       </div>
 
       {/* Nombre del jugador */}
-      <div className="flex flex-col items-center w-[100px] sm:w-[110px] md:w-[115px] lg:w-[120px] -mt-1 md:-mt-1.5 z-30">
-        <p className="font-extrabold text-white text-[10.5px] sm:text-[11px] md:text-[11.5px] lg:text-[12px] leading-tight drop-shadow-md relative w-full text-center transition-all duration-300 whitespace-normal break-words"
+      <div className="flex flex-col items-center w-[100px] sm:w-[110px] md:w-[125px] lg:w-[130px] -mt-1 md:-mt-1.5 z-30">
+        <p className="font-extrabold text-white text-[10.5px] sm:text-[11.5px] md:text-[13px] lg:text-[14px] leading-tight drop-shadow-md relative w-full text-center transition-all duration-300 whitespace-normal break-words"
            style={{ textShadow: '1px 1px 3px rgba(0,0,0,1)' }}>
           {formatPlayerName(player.short_name || player.first_name)}
         </p>
@@ -1546,7 +1546,7 @@ export default function DashboardPage() {
       const idx = player._originalIndex
       
       // Only show changed players if we are past the starting matchday
-      if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
+      if (selectedMatchday && config && selectedMatchday > config.fantasy_starting_matchday) {
         // 1. ¿Hay un cambio persistido en la base de datos para este índice?
         const dbReplacedId = dbReplacedPlayers[idx]
         if (dbReplacedId) {
@@ -1573,7 +1573,23 @@ export default function DashboardPage() {
     }
 
     return { replacedPlayerByUniqueKey: result, unchangedKeys: unchanged }
-  }, [selectedPlayersData, changeHistory, dbReplacedPlayers, players, activeMatchday, config])
+  }, [selectedPlayersData, changeHistory, dbReplacedPlayers, players, selectedMatchday, config])
+
+  // Obtener la lista de sustituciones realizadas para la jornada seleccionada (para pintar abajo del todo)
+  const substitutionsList = useMemo(() => {
+    if (!selectedMatchday || !config || selectedMatchday <= config.fantasy_starting_matchday) {
+      return []
+    }
+    return selectedPlayersData
+      .map(player => {
+        const outPlayer = replacedPlayerByUniqueKey.get(player._uniqueKey)
+        if (outPlayer) {
+          return { inPlayer: player, outPlayer }
+        }
+        return null
+      })
+      .filter((sub): sub is { inPlayer: Player & { _uniqueKey: string; _originalIndex: number }; outPlayer: Player } => sub !== null)
+  }, [selectedPlayersData, replacedPlayerByUniqueKey, selectedMatchday, config])
 
   // Calcular sanciones dinámicas para la visualización del campo
   const startersForSanctions = selectedPlayersData.map(p => ({
@@ -2946,6 +2962,142 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Lista de Jugadores Sustituidos y que han entrado */}
+      {selectedMatchday > (config?.fantasy_starting_matchday ?? 1) && (
+        <Card className="w-full mt-6 border border-slate-100 rounded-2xl shadow-sm overflow-hidden bg-white animate-in fade-in duration-300">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-slate-100">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <ArrowLeftRight className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-800" style={{ fontFamily: 'var(--font-outfit)' }}>
+                  Sustituciones de la Jornada {selectedMatchday}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Jugadores del once inicial que fueron sustituidos respecto a la jornada anterior
+                </p>
+              </div>
+            </div>
+
+            {substitutionsList.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                No se realizaron sustituciones en esta jornada.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {substitutionsList.map(({ inPlayer, outPlayer }, idx) => {
+                  const inPts = playerPoints.get(inPlayer.id)
+                  const outPts = playerPoints.get(outPlayer.id)
+
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between gap-2 p-3 bg-slate-50/70 border border-slate-100 rounded-xl hover:shadow-sm transition-all"
+                    >
+                      {/* JUGADOR QUE SALE (Sustituido) */}
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <span className="text-[9px] font-black text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded shrink-0">
+                          SALE
+                        </span>
+                        <div className="relative shrink-0">
+                          {outPlayer.photo ? (
+                            <img
+                              src={outPlayer.photo}
+                              alt={outPlayer.short_name}
+                              className="w-10 h-10 rounded-full object-cover border border-slate-200 bg-white grayscale-[40%]"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-450 border border-slate-200">
+                              {outPlayer.shirt_number || '?'}
+                            </div>
+                          )}
+                          {outPlayer.team?.logo_url && (
+                            <img
+                              src={outPlayer.team.logo_url}
+                              alt=""
+                              className="absolute -bottom-1 -right-1 w-4 h-4 object-contain bg-white rounded-full p-0.5 shadow-xs border border-slate-100"
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-650 truncate">
+                            {formatPlayerName(outPlayer.short_name || outPlayer.first_name)}
+                          </p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className={`text-[8px] font-bold text-white px-1 py-0.2 rounded-sm leading-none shrink-0 ${getPositionColor(outPlayer.position)}`}>
+                              {getPositionLabel(outPlayer.position)}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-medium">
+                              {outPlayer.precio ? `${outPlayer.precio}M` : '-'}
+                            </span>
+                          </div>
+                        </div>
+                        {outPts !== undefined && (
+                          <div className="ml-auto text-slate-400 font-bold text-xs shrink-0 pr-1">
+                            {outPts} pts
+                          </div>
+                        )}
+                      </div>
+
+                      {/* FLECHA DE CAMBIO */}
+                      <div className="flex items-center justify-center text-slate-400 px-1">
+                        <ArrowRight className="w-4 h-4" />
+                      </div>
+
+                      {/* JUGADOR QUE ENTRA (Nuevo Starter) */}
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded shrink-0">
+                          ENTRA
+                        </span>
+                        <div className="relative shrink-0">
+                          {inPlayer.photo ? (
+                            <img
+                              src={inPlayer.photo}
+                              alt={inPlayer.short_name}
+                              className="w-10 h-10 rounded-full object-cover border border-slate-200 bg-white"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 border border-slate-200">
+                              {inPlayer.shirt_number || '?'}
+                            </div>
+                          )}
+                          {inPlayer.team?.logo_url && (
+                            <img
+                              src={inPlayer.team.logo_url}
+                              alt=""
+                              className="absolute -bottom-1 -right-1 w-4 h-4 object-contain bg-white rounded-full p-0.5 shadow-xs border border-slate-100"
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">
+                            {formatPlayerName(inPlayer.short_name || inPlayer.first_name)}
+                          </p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className={`text-[8px] font-bold text-white px-1 py-0.2 rounded-sm leading-none shrink-0 ${getPositionColor(inPlayer.position)}`}>
+                              {getPositionLabel(inPlayer.position)}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-medium">
+                              {inPlayer.precio ? `${inPlayer.precio}M` : '-'}
+                            </span>
+                          </div>
+                        </div>
+                        {inPts !== undefined && (
+                          <div className="ml-auto text-emerald-600 font-black text-xs shrink-0 pr-1">
+                            {inPts} pts
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
 

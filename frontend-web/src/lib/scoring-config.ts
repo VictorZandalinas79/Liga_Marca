@@ -89,6 +89,7 @@ export const DEFAULT_RELEVO_LIMITS: RelevoLimits = {
     sweeper_cover_per_min: 0.02,
     saves_gte_07_count: 2,
     saves_per_min_b4: 0.03,
+    goals_count: 1,
   },
   DEF: {
     def_actions_per_min: 0.07,
@@ -102,6 +103,7 @@ export const DEFAULT_RELEVO_LIMITS: RelevoLimits = {
     crosses_per_min: 0.02,
     off_actions_3_4_per_min: 0.20,
     total_duels_pct: 90,
+    goals_count: 1,
   },
   MED: {
     def_actions_opp_per_min: 0.01,
@@ -114,6 +116,7 @@ export const DEFAULT_RELEVO_LIMITS: RelevoLimits = {
     intercept_recup_3_4_per_min: 0.02,
     assists_total: 3,
     takeons_pct: 75,
+    goals_count: 1,
   },
   DEL: {
     final_third_events_per_min: 0.09,
@@ -124,6 +127,7 @@ export const DEFAULT_RELEVO_LIMITS: RelevoLimits = {
     takeons_pct: 75,
     assists_total: 3,
     off_actions_opp_per_min: 0.40,
+    goals_count: 1,
   },
 }
 
@@ -221,14 +225,14 @@ const perMinMetricMinCount = (label: string, valueKey: string, limKey: string, f
   forceFail: (s) => n(s, valueKey) < minCount,
 })
 
-const goalsAtLeast1: RelevoMetricSpec = {
+const goalsCount = (fallback: number = 1): RelevoMetricSpec => ({
   label: 'Goles',
   unit: 'count',
   value: (s) => n(s, 'goals'),
-  target: () => 1,
+  target: flat('goals_count', fallback),
   cmp: 'gte',
-  describe: () => 'al menos 1 gol',
-}
+  describe: (lim) => `al menos ${lim?.goals_count ?? fallback} gol${(lim?.goals_count ?? fallback) !== 1 ? 'es' : ''}`,
+})
 
 const assistsTotal = (fallback: number): RelevoMetricSpec => ({
   label: 'Asistencias totales',
@@ -318,6 +322,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
           describe: (lim) => `paradas/min > ${lim?.saves_per_min_b4 ?? 0.03}, portería a cero y mín. 2 paradas`,
           forceFail: (s) => n(s, 'goals_conceded') > 0 || n(s, 'saves') < 2,
         },
+        goalsCount(1),
       ] }],
     },
   ],
@@ -374,6 +379,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
           detail: (s) => `${n(s, 'aerials_won') + n(s, 'ground_duels_won')}/${aerialsTotal(s) + groundDuelsTotal(s)} (mín. 10)`,
           describe: (lim) => `más del ${lim?.total_duels_pct ?? 90}% de duelos totales (aéreo + suelo) ganados (mín. 10 duelos)`,
         },
+        goalsCount(1),
       ] }],
     },
   ],
@@ -422,7 +428,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     {
       id: 4,
       title: 'Generación de juego',
-      options: [{ metrics: [goalsAtLeast1, assistsTotal(3), takeonsPct(75, 2, 'gt')] }],
+      options: [{ metrics: [goalsCount(1), assistsTotal(3), takeonsPct(75, 2, 'gt')] }],
     },
   ],
   DEL: [
@@ -458,7 +464,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
       id: 4,
       title: 'Aportación al ataque',
       options: [{ metrics: [
-        goalsAtLeast1,
+        goalsCount(1),
         assistsTotal(3),
         perMinMetric('Acciones ofensivas en campo rival', 'off_actions_opp_half_outcome_1', 'off_actions_opp_per_min', 0.40),
       ] }],

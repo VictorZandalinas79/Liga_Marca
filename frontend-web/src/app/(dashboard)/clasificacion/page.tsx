@@ -774,20 +774,20 @@ export default function ClasificacionPage() {
                       </div>
                     </td>
                     <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
-                      <span className="text-[10px] sm:text-sm font-bold text-emerald-400">
-                        {Math.round(standing.total_points * 10) / 10}
+                      <span className="text-base sm:text-xl font-bold text-emerald-400">
+                        {(Math.round(standing.total_points * 10) / 10).toFixed(1)}
                       </span>
                       <span className="hidden sm:inline text-[10px] text-slate-400 ml-0.5">pts</span>
                     </td>
                     <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
                       <span className="text-[9px] sm:text-xs font-semibold text-slate-200">
-                        {standing.average_points}
+                        {Number(standing.average_points).toFixed(1)}
                       </span>
                       <span className="hidden sm:inline text-[10px] text-slate-400 ml-0.5">pts/j</span>
                     </td>
                     <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
                       <span className="text-[9px] sm:text-xs font-semibold text-blue-400">
-                        {Math.round(standing.last_3_jornadas_avg * 10) / 10}
+                        {(Math.round(standing.last_3_jornadas_avg * 10) / 10).toFixed(1)}
                       </span>
                     </td>
                     <td className="px-0.5 sm:px-1 py-1">
@@ -828,7 +828,7 @@ export default function ClasificacionPage() {
                   {isExpanded && userTeamData[standing.user_id] && (
                     <tr>
                       <td colSpan={11} className="p-0">
-                        <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 px-3 py-2.5 sticky left-0 w-[calc(100vw-2rem)] sm:w-[400px] max-w-full shadow-lg border-r border-slate-600/50">
+                        <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 px-3 py-2.5 sticky left-0 w-[calc(100vw-3.5rem)] sm:w-[400px] max-w-full shadow-lg border-r border-slate-600/50">
                           {/* Cabecera equipo */}
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
                             <Users className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -838,7 +838,7 @@ export default function ClasificacionPage() {
                             {!userTeamData[standing.user_id]?.isHidden && (
                               <div className="flex items-center gap-1.5 ml-auto">
                                 <Badge className="bg-emerald-600 text-white text-xs shrink-0 flex items-center gap-1 px-1.5 py-0.5">
-                                  <span>{Math.round((userTeamData[standing.user_id]?.totalPoints || 0) * 10) / 10} pts</span>
+                                  <span>{(Math.round((userTeamData[standing.user_id]?.totalPoints || 0) * 10) / 10).toFixed(1)} pts</span>
                                   <span className="text-emerald-200">·</span>
                                   <div className="flex items-center">
                                     <button

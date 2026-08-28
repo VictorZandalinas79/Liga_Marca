@@ -140,7 +140,8 @@
       "block_punch_per_min": 0.02,
       "sweeper_cover_per_min": 0.02,
       "saves_gte_07_count": 2,
-      "saves_per_min_b4": 0.03
+      "saves_per_min_b4": 0.03,
+      "goals_count": 1
     },
     "DEF": {
       "def_actions_per_min": 0.07,
@@ -153,7 +154,8 @@
       "abp_remates_per_min": 0.01,
       "crosses_per_min": 0.02,
       "off_actions_3_4_per_min": 0.2,
-      "total_duels_pct": 90
+      "total_duels_pct": 90,
+      "goals_count": 1
     },
     "MED": {
       "def_actions_opp_per_min": 0.01,
@@ -165,7 +167,8 @@
       "off_actions_opp_per_min": 0.85,
       "intercept_recup_3_4_per_min": 0.02,
       "assists_total": 3,
-      "takeons_pct": 75
+      "takeons_pct": 75,
+      "goals_count": 1
     },
     "DEL": {
       "final_third_events_per_min": 0.09,
@@ -175,7 +178,8 @@
       "shots_on_pct": 70,
       "takeons_pct": 75,
       "assists_total": 3,
-      "off_actions_opp_per_min": 0.4
+      "off_actions_opp_per_min": 0.4,
+      "goals_count": 1
     }
   },
   "typeId_mapping": {

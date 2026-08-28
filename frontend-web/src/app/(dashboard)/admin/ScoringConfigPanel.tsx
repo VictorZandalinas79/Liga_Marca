@@ -366,6 +366,7 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       <LabeledInput label="Paradas de calidad ≥ 0.7 (mín. nº)" value={num((rules.relevo_limits as any)?.POR || {}, 'saves_gte_07_count') || 2} onChange={(v) => setRelevoLimit('POR', 'saves_gte_07_count', v)} step="1" />
                       <LabeledInput label="Paradas / min jugados (con portería a cero y mín. 2 paradas)" value={num((rules.relevo_limits as any)?.POR || {}, 'saves_per_min_b4') || 0.03} onChange={(v) => setRelevoLimit('POR', 'saves_per_min_b4', v)} step="0.01" />
+                      <LabeledInput label="Goles (mín.)" value={num((rules.relevo_limits as any)?.POR || {}, 'goals_count') || 1} onChange={(v) => setRelevoLimit('POR', 'goals_count', v)} step="1" />
                     </div>
                   </div>
                 </div>
@@ -401,6 +402,7 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       <LabeledInput label="Acciones ofensivas en 3/4 / min jugados" value={num((rules.relevo_limits as any)?.DEF || {}, 'off_actions_3_4_per_min') || 0.20} onChange={(v) => setRelevoLimit('DEF', 'off_actions_3_4_per_min', v)} step="0.01" />
                       <LabeledInput label="% Duelos totales ganados (mín. 10)" value={num((rules.relevo_limits as any)?.DEF || {}, 'total_duels_pct') || 90} onChange={(v) => setRelevoLimit('DEF', 'total_duels_pct', v)} step="1" />
+                      <LabeledInput label="Goles (mín.)" value={num((rules.relevo_limits as any)?.DEF || {}, 'goals_count') || 1} onChange={(v) => setRelevoLimit('DEF', 'goals_count', v)} step="1" />
                     </div>
                   </div>
                 </div>
@@ -435,8 +437,8 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       <LabeledInput label="Asistencias totales (mín.)" value={num((rules.relevo_limits as any)?.MED || {}, 'assists_total') || 3} onChange={(v) => setRelevoLimit('MED', 'assists_total', v)} step="1" />
                       <LabeledInput label="% Regates completados (mín. 2)" value={num((rules.relevo_limits as any)?.MED || {}, 'takeons_pct') || 75} onChange={(v) => setRelevoLimit('MED', 'takeons_pct', v)} step="1" />
+                      <LabeledInput label="Goles (mín.)" value={num((rules.relevo_limits as any)?.MED || {}, 'goals_count') || 1} onChange={(v) => setRelevoLimit('MED', 'goals_count', v)} step="1" />
                     </div>
-                    <p className="text-xs text-slate-500 mt-2">Se suma el punto también si marca 1 gol o más (no editable).</p>
                   </div>
                 </div>
               )}
@@ -468,8 +470,8 @@ export function ScoringConfigPanel({ onStateChange }: { onStateChange?: (state: 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       <LabeledInput label="Asistencias totales (mín.)" value={num((rules.relevo_limits as any)?.DEL || {}, 'assists_total') || 3} onChange={(v) => setRelevoLimit('DEL', 'assists_total', v)} step="1" />
                       <LabeledInput label="Acciones ofensivas campo rival / min" value={num((rules.relevo_limits as any)?.DEL || {}, 'off_actions_opp_per_min') || 0.40} onChange={(v) => setRelevoLimit('DEL', 'off_actions_opp_per_min', v)} step="0.01" />
+                      <LabeledInput label="Goles (mín.)" value={num((rules.relevo_limits as any)?.DEL || {}, 'goals_count') || 1} onChange={(v) => setRelevoLimit('DEL', 'goals_count', v)} step="1" />
                     </div>
-                    <p className="text-xs text-slate-500 mt-2">Se suma el punto también si marca 1 gol o más (no editable).</p>
                   </div>
                 </div>
               )}
