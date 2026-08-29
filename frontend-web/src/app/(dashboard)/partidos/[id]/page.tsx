@@ -775,7 +775,7 @@ export default function PartidoDetallePage() {
                 <span className={`text-2xl sm:text-3xl font-extrabold leading-none text-right drop-shadow-sm ${
                   (player.total_points || 0) < 0 ? 'text-red-500' : (player.total_points || 0) >= 0 && (player.total_points || 0) < 6 ? 'text-orange-500' : 'text-emerald-400'
                 }`}>
-                  {player.total_points || 0}
+                  {Number(player.total_points || 0).toFixed(1)}
                 </span>
                 
                 {/* Eventos debajo de la puntuación */}
@@ -1150,7 +1150,7 @@ export default function PartidoDetallePage() {
                     <span className="flex items-center gap-1">
                       <strong className={`font-extrabold text-sm sm:text-base ${
                         (selectedPlayer.total_points || 0) < 0 ? 'text-red-600' : (selectedPlayer.total_points || 0) >= 0 && (selectedPlayer.total_points || 0) < 6 ? 'text-orange-600' : 'text-emerald-600'
-                      }`}>{selectedPlayer.total_points || 0}</strong> pts
+                      }`}>{Number(selectedPlayer.total_points || 0).toFixed(1)}</strong> pts
                     </span>
                     <span className="text-slate-300">•</span>
                     <span><strong className="text-slate-800">{selectedPlayer.minutes_played || 0}</strong> min</span>
