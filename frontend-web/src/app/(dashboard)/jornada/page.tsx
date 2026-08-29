@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle, Printer, FileSpreadsheet } from 'lucide-react'
+import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle, Printer, FileSpreadsheet, ArrowLeft, ArrowRight } from 'lucide-react'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
@@ -566,6 +566,7 @@ export default function JornadaPage() {
         }
       })
       
+
       // Calcular warning de exceso de cambios visual
       const prevIds = prevStartersByTeam.get(ut.id) || []
       const currentStarterIds = starters.map(j => j.id)
@@ -802,7 +803,7 @@ export default function JornadaPage() {
     const mid = starters.filter(p => getPositionLabel(p.position) === 'MED').length
     const fwd = starters.filter(p => getPositionLabel(p.position) === 'DEL').length
     if (gk + def + mid + fwd === 0) return '-'
-    return `${gk}-${def}-${mid}-${fwd}`
+    return `${gk}.${def}.${mid}.${fwd}`
   }
 
   const sortedTeams = [...userTeams].sort((a, b) => {
@@ -1510,11 +1511,12 @@ export default function JornadaPage() {
                                     : 'bg-slate-50 hover:bg-slate-100'
                                 }`}
                               >
-                                {/* Position Leftmost */}
-                                <div className="shrink-0 flex items-center justify-center mr-0.5">
+                                {/* Position & Order Leftmost */}
+                                <div className="shrink-0 flex flex-col items-center justify-center mr-0.5 min-w-[28px]">
                                   <Badge className={`text-[9px] px-1 py-0 shrink-0 leading-none ${getPositionColor(player.position)}`}>
                                     {getPositionLabel(player.position)}
                                   </Badge>
+                                  <span className="text-[10px] font-bold text-slate-400 mt-1 leading-none">{idx + 1}</span>
                                 </div>
 
                                 {/* Photo */}
@@ -1538,42 +1540,72 @@ export default function JornadaPage() {
 
                                 {/* Left Side: Stacked Name + Info */}
                                 <div className="flex flex-col min-w-0 flex-1 justify-center gap-0.5">
-                                  {/* Row 1: Name and badges */}
-                                  <div className="flex items-center gap-1.5 min-w-0 w-full">
-                                    <span className={`font-semibold whitespace-nowrap ${
-                                      (player.short_name || '').length > 15
-                                        ? 'text-[10px]'
-                                        : 'text-xs'
-                                    } ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
-                                      {formatPlayerName(player.short_name)}
-                                    </span>
-                                    {isPenalized && (
-                                      <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0" />
-                                    )}
-                                    {player.is_captain && (
-                                      <Badge className="text-[9px] px-1 py-0 bg-yellow-500 text-white shrink-0 leading-none">C</Badge>
-                                    )}
-                                  </div>
-                                  
-                                  {/* Row 2: Metadata (Order, Shirt, Photo, Team, Value) */}
-                                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 min-w-0 w-full">
-                                    <span className="font-bold text-slate-400 shrink-0">{idx + 1}</span>
-                                    
-                                    {player.shirt_number && (
-                                      <span className="font-black text-slate-600 shrink-0">{player.shirt_number}</span>
-                                    )}
-                                    
-
-                                    {player.team?.logo_url && (
-                                      <img src={player.team.logo_url} alt="" className="w-3 h-3 object-contain shrink-0" title={player.team?.name} />
-                                    )}
-                                    
-                                    <span className="shrink-0 text-[10px] text-slate-400 font-medium">{fmtValor(player.valor || 0)}</span>
-                                  </div>
+                                  {player.replacedPlayer ? (
+                                    <>
+                                      {/* One Line Setup */}
+                                      <div className="flex items-center w-full min-w-0">
+                                        <span className={`font-bold whitespace-nowrap truncate text-[14px] tracking-tight ${isPenalized ? 'text-red-800' : player.hasPlayed ? 'text-slate-700' : 'text-slate-900'}`}>
+                                          {formatPlayerName(player.short_name)}
+                                        </span>
+                                        {isPenalized && <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0 ml-1" />}
+                                        {player.is_captain && <Badge className="text-[9px] px-1 py-0 bg-yellow-500 text-white shrink-0 leading-none ml-1">C</Badge>}
+                                      </div>
+                                      {/* Substituted Player */}
+                                      <div className="flex items-center gap-1 w-full min-w-0 -mt-[1px]">
+                                        <div className="flex flex-col items-center justify-center shrink-0 w-[15px] h-[15px] rounded-full bg-[#EFE9DD] -space-y-[4px]">
+                                          <ArrowLeft className="w-2 h-2 text-[#CD4C4C] stroke-[4]" />
+                                          <ArrowRight className="w-2 h-2 text-[#5D9C44] stroke-[4]" />
+                                        </div>
+                                        <span className="font-bold truncate text-[10px] text-[#CD4C4C] leading-none">{formatPlayerName(player.replacedPlayer.short_name)}</span>
+                                        {player.replacedPlayer.team?.logo_url && (
+                                          <img src={player.replacedPlayer.team.logo_url} alt="" className="w-2.5 h-2.5 object-contain shrink-0" />
+                                        )}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      {/* Row 1: Name and badges */}
+                                      <div className="flex items-center gap-1.5 min-w-0 w-full">
+                                        <span className={`font-semibold whitespace-nowrap ${
+                                          (player.short_name || '').length > 15
+                                            ? 'text-[10px]'
+                                            : 'text-xs'
+                                        } ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
+                                          {formatPlayerName(player.short_name)}
+                                        </span>
+                                        {isPenalized && (
+                                          <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0" />
+                                        )}
+                                        {player.is_captain && (
+                                          <Badge className="text-[9px] px-1 py-0 bg-yellow-500 text-white shrink-0 leading-none">C</Badge>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Row 2: Metadata (Shirt, Photo, Team, Value) */}
+                                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 min-w-0 w-full">
+                                        {player.shirt_number && (
+                                          <span className="font-black text-slate-600 shrink-0">{player.shirt_number}</span>
+                                        )}
+                                        
+                                        {player.team?.logo_url && (
+                                          <img src={player.team.logo_url} alt="" className="w-3 h-3 object-contain shrink-0" title={player.team?.name} />
+                                        )}
+                                        
+                                        <span className="shrink-0 text-[10px] text-slate-400 font-medium">{fmtValor(player.valor || 0)}</span>
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
 
                                 {/* Right Side: Points + Replacement */}
-                                <div className="flex flex-col items-end justify-center shrink min-w-0 pl-1">
+                                <div className="flex flex-col items-end justify-center shrink-0 min-w-0 pl-1">
+                                  {player.replacedPlayer && (
+                                    <div className="flex items-center gap-1 mb-[2px] justify-end">
+                                      {player.shirt_number && <span className="font-black text-slate-700 text-[10px]">{player.shirt_number}</span>}
+                                      {player.team?.logo_url && <img src={player.team.logo_url} alt="" className="w-3 h-3 object-contain" />}
+                                      <span className="text-[10px] text-slate-500 font-bold">{fmtValor(player.valor || 0)}</span>
+                                    </div>
+                                  )}
                                   {player.sanctionReason ? (
                                     <div className="flex flex-col items-end justify-center leading-none">
                                       <span className="text-[9px] font-bold text-red-500 line-through mb-0.5 whitespace-nowrap">
@@ -1584,8 +1616,8 @@ export default function JornadaPage() {
                                       </span>
                                     </div>
                                   ) : (
-                                    <div className="flex items-baseline justify-end leading-tight">
-                                      <span className={`text-sm font-bold ${
+                                    <div className="flex items-baseline justify-end leading-none">
+                                      <span className={`text-base font-extrabold tracking-tight ${
                                         (player.puntos || 0) < 0 ? 'text-red-600' : (player.puntos || 0) >= 0 && (player.puntos || 0) < 6 ? 'text-orange-600' : 'text-emerald-600'
                                       } ${player.hasPlayed ? 'opacity-70' : ''}`}>
                                         {(Math.round((player.puntos ?? 0) * 10) / 10).toFixed(1)}
@@ -1594,18 +1626,7 @@ export default function JornadaPage() {
                                     </div>
                                   )}
                                   
-                                  {/* Replacement Row on the right */}
-                                  {player.replacedPlayer && (
-                                    <div className="flex items-center gap-1 mt-0.5 justify-end w-full">
-                                      <span className="text-[9px] text-slate-400">por</span>
-                                      {player.replacedPlayer.photo && (
-                                        <img src={player.replacedPlayer.photo} className="w-3.5 h-3.5 rounded-full object-cover border border-slate-300 shrink-0" alt="" />
-                                      )}
-                                      <span className="text-[9px] text-red-500 font-medium whitespace-nowrap">
-                                        {formatPlayerName(player.replacedPlayer.short_name)}
-                                      </span>
-                                    </div>
-                                  )}
+
                                 </div>
                               </div>
                             )})}

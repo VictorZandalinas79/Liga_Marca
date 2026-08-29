@@ -36,7 +36,7 @@ function formatPlayerName(name: string): string {
   return trimmed
 }
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight } from 'lucide-react'
+import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight, ArrowLeft } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 import { getStandings } from '@/lib/standings'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
@@ -127,16 +127,19 @@ function PitchPlayerCard({
         {/* Reemplazado (arriba izquierda) */}
         {replacedPlayer && (
           <div 
-            className="absolute -top-1 -left-1.5 sm:-top-1.5 sm:-left-2 md:-top-2 md:-left-2.5 w-5.5 h-5.5 sm:w-6 sm:h-6 md:w-7 md:h-7 rounded-full border border-red-500 bg-slate-900 shadow-md flex items-center justify-center z-30 cursor-help"
+            className="absolute -top-3 -left-3 sm:-top-4 sm:-left-4 flex flex-row items-center gap-1 z-30 cursor-help bg-white/95 px-1.5 py-0.5 rounded-full shadow-sm border border-slate-200"
             title={`Reemplaza a: ${replacedPlayer.short_name || replacedPlayer.first_name}`}
           >
-            {replacedPlayer.photo ? (
-              <img src={replacedPlayer.photo} className="w-full h-full rounded-full object-cover grayscale-[30%]" />
-            ) : (
-              <span className="text-[6px] sm:text-[8px] md:text-[9px] font-bold text-red-200">
-                {replacedPlayer.shirt_number || '?'}
-              </span>
+            <div className="w-[12px] h-[12px] sm:w-[14px] sm:h-[14px] rounded-full bg-[#EFE9DD] flex flex-col items-center justify-center -space-y-[3px] shrink-0">
+              <ArrowLeft className="w-2 h-2 text-[#CD4C4C] stroke-[4]" />
+              <ArrowRight className="w-2 h-2 text-[#5D9C44] stroke-[4]" />
+            </div>
+            {replacedPlayer.team?.logo_url && (
+              <img src={replacedPlayer.team.logo_url} className="w-[12px] h-[12px] sm:w-[14px] sm:h-[14px] object-contain shrink-0" alt="" />
             )}
+            <span className="text-[8px] sm:text-[9px] font-bold text-[#CD4C4C] whitespace-nowrap leading-none truncate max-w-[50px] sm:max-w-[60px]">
+              {formatPlayerName(replacedPlayer.short_name || replacedPlayer.first_name)}
+            </span>
           </div>
         )}
       </div>
@@ -1583,6 +1586,7 @@ export default function DashboardPage() {
       // 3. Si no hay ni cambio en memoria ni en BD, o es la J1, es un titular base
       unchanged.add(player._uniqueKey)
     }
+
 
     return { replacedPlayerByUniqueKey: result, unchangedKeys: unchanged }
   }, [selectedPlayersData, changeHistory, dbReplacedPlayers, players, selectedMatchday, config])
