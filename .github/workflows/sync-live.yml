@@ -2,12 +2,21 @@ name: Sync Live Matches
 
 on:
   schedule:
-    # Cada 5 min. El runner (ci/run_live_sync.py) sale enseguida si no hay
-    # ningún partido en ventana, así que las ejecuciones vacías son baratas.
-    # Ojo: los crons de GitHub se retrasan y a veces se saltan huecos; si se
-    # quiere precisión, un cron externo (cron-job.org) llamando al
-    # workflow_dispatch de abajo es más fiable y este schedule queda de respaldo.
-    - cron: '*/5 * * * *'
+    # RESPALDO, no el disparador principal.
+    #
+    # Esto estaba en '*/5 * * * *' y no funcionaba: contando las ejecuciones
+    # reales, GitHub descartaba casi todos los huecos. De las 288 pasadas
+    # diarias que pedía el cron se ejecutaban 56 unos días, 2 otros, y los
+    # días 19, 20 y 21 de agosto de 2026 ninguna. Los crons de alta frecuencia
+    # en el pool gratuito de GitHub no son fiables y no hay nada que tocar aquí
+    # para arreglarlo: pedir 288 huecos al día es parte del motivo por el que
+    # te descartan.
+    #
+    # El disparador de verdad es ahora pg_cron dentro de Supabase
+    # (supabase/migrations/027_pg_cron_live_sync.sql), que llama cada 5 min al
+    # workflow_dispatch de abajo. Este schedule se queda a 1/hora como red por
+    # si esa vía se cayera.
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       fixture_ids:
