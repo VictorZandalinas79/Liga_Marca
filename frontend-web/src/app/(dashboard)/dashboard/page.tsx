@@ -94,15 +94,18 @@ function PitchPlayerCard({
   return (
     <div className="flex flex-col items-center w-[58px] sm:w-[68px] md:w-[74px] lg:w-[80px] text-center relative shrink-0 group transition-all duration-300">
       <div className="relative mb-1 md:mb-1.5 lg:mb-2">
+        {/* Sombra 3D en el césped */}
+        <div className="absolute -bottom-1 sm:-bottom-1.5 left-1/2 -translate-x-1/2 w-7 h-2 sm:w-9 sm:h-2.5 md:w-10 md:h-3 lg:w-11 lg:h-3.5 bg-black/60 rounded-[100%] blur-[2px] z-0"></div>
+
         {/* Foto del jugador actual */}
         {player.photo ? (
           <img
             src={player.photo}
             alt={player.short_name || ''}
-            className={`w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-full object-cover shadow-lg bg-transparent transition-all duration-300 ${isPenalized ? 'border-2 border-red-500 ring-2 ring-red-500 animate-pulse' : ''}`}
+            className={`relative z-10 w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-full object-cover shadow-lg bg-transparent transition-all duration-300 ${isPenalized ? 'border-2 border-red-500 ring-2 ring-red-500 animate-pulse' : ''}`}
           />
         ) : (
-          <div className={`w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] sm:text-xs md:text-sm lg:text-base font-bold shadow-lg transition-all duration-300 ${isPenalized ? 'border-2 border-red-500 ring-2 ring-red-500 animate-pulse' : ''}`}>
+          <div className={`relative z-10 w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] sm:text-xs md:text-sm lg:text-base font-bold shadow-lg transition-all duration-300 ${isPenalized ? 'border-2 border-red-500 ring-2 ring-red-500 animate-pulse' : ''}`}>
             {player.shirt_number || '?'}
           </div>
         )}
@@ -179,7 +182,7 @@ function splitRowPlayers<T>(arr: T[]): T[][] {
   return [arr.slice(0, 4), arr.slice(4)]
 }
 
-function getRowGapClass(len: number, isFwd: boolean = false, isDiv1: boolean = false): string {
+function getRowGapClass(len: number, isFwd: boolean = false, isDiv1: boolean = false, isDef: boolean = false): string {
   if (isFwd && isDiv1) {
     // Delanteros de primera división: mantener espaciado original
     if (len === 4) return 'gap-1 sm:gap-3'
@@ -196,7 +199,16 @@ function getRowGapClass(len: number, isFwd: boolean = false, isDiv1: boolean = f
     return 'gap-3 sm:gap-3'
   }
 
-  // Defensores y mediocampistas
+  // Defensores en primera división (separar un poquito más)
+  if (isDef && isDiv1) {
+    if (len === 5) return 'gap-3 sm:gap-6'
+    if (len === 4) return 'gap-5 sm:gap-10'
+    if (len === 3) return 'gap-8 sm:gap-12'
+    if (len === 2) return 'gap-12 sm:gap-16'
+    return 'gap-4 sm:gap-6'
+  }
+
+  // Defensores y mediocampistas (común)
   if (len === 4) return 'gap-4 sm:gap-8' // un poco más que gap-2
   if (len === 3) return 'gap-6 sm:gap-10' // un poco más que gap-4
   if (len === 2) return 'gap-10 sm:gap-14' // un poco más que gap-8
@@ -2030,7 +2042,7 @@ export default function DashboardPage() {
 
                   {/* Player rows (top-down: Delanteros -> Mediocampistas -> Defensas -> Porteros) */}
                   <div 
-                    className={`relative z-10 flex flex-col justify-between h-full -translate-x-2 sm:-translate-x-3 md:-translate-x-4 lg:-translate-x-5 ${
+                    className={`relative z-10 flex flex-col justify-between h-full -translate-x-2 sm:-translate-x-1 md:-translate-x-1 lg:-translate-x-1 ${
                       userDivision === 1 
                         ? 'pt-[23%] pb-[23%] px-0 scale-[0.85] origin-bottom sm:pt-[25%] sm:pb-[20%] sm:scale-[0.83] sm:origin-center' 
                         : 'px-6 pt-24 pb-12 sm:px-2 sm:pt-20 sm:pb-4 md:px-0 md:pt-24 md:pb-6 lg:pt-28 lg:pb-8'
@@ -2044,7 +2056,7 @@ export default function DashboardPage() {
                         return (
                           <div 
                             key={rowIdx} 
-                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, true, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[15%]' : ''}`}
+                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, true, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[15%]' : ''} ${userDivision === 1 ? 'translate-x-2' : ''}`}
                           >
                             {subRow.map((player, idx) => (
                               <div 
@@ -2070,7 +2082,7 @@ export default function DashboardPage() {
                         return (
                           <div 
                             key={rowIdx} 
-                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[4%] -translate-y-4 sm:-translate-y-6' : ''} ${isSplit && rowIdx === 0 ? 'translate-y-2 sm:translate-y-4' : ''}`}
+                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-[4%] -translate-y-1 sm:-translate-y-2' : ''} ${isSplit && rowIdx === 0 ? 'translate-y-2 sm:translate-y-4' : ''} ${userDivision === 1 ? 'translate-x-2' : ''}`}
                           >
                             {subRow.map((player, idx) => (
                               <div 
@@ -2096,7 +2108,7 @@ export default function DashboardPage() {
                         return (
                           <div 
                             key={rowIdx} 
-                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1)} ${userDivision === 1 && !isSplit ? 'px-0 -translate-y-1 sm:-translate-y-2' : ''}`}
+                            className={`flex justify-center flex-nowrap items-center ${getRowGapClass(subRow.length, false, userDivision === 1, true)} ${userDivision === 1 && !isSplit ? 'px-0 -translate-y-1 sm:-translate-y-2' : ''} ${userDivision === 1 ? 'translate-x-2' : ''}`}
                           >
                             {subRow.map((player, idx) => (
                               <div 
@@ -2116,7 +2128,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Portero */}
-                    <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? '-translate-y-4 sm:-translate-y-6' : ''}`}>
+                    <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? '-translate-y-4 sm:-translate-y-6 translate-x-2' : ''}`}>
                       {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
                         <div 
                           key={player._uniqueKey} 
