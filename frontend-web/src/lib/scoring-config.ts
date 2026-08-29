@@ -248,7 +248,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
   POR: [
     {
       id: 1,
-      title: 'Volumen de juego',
+      title: 'Muy accesible',
       options: [{ metrics: [
         perMinMetric('Pases completados', 'passes_completed', 'pass_completed_per_min', 0.18),
         perMinMetric('Paradas', 'saves', 'saves_per_min', 0.01),
@@ -256,7 +256,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 2,
-      title: 'Calidad de parada',
+      title: 'Accesible',
       note: 'Cada parada suma un valor según la zona desde la que se remató; el valor acumulado debe superar un tercio del número de paradas realizadas.',
       options: [{ metrics: [
         {
@@ -272,7 +272,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 3,
-      title: 'Distribución y salidas',
+      title: 'Exigente',
       options: [{ metrics: [
         {
           label: 'Pases largos completados (por partido)',
@@ -302,7 +302,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 4,
-      title: 'Paradas decisivas',
+      title: 'Top',
       options: [{ metrics: [
         {
           label: 'Paradas de calidad ≥ 0.7',
@@ -329,7 +329,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
   DEF: [
     {
       id: 1,
-      title: 'Presencia defensiva',
+      title: 'Muy accesible',
       options: [{ metrics: [
         perMinMetric('Acciones defensivas', 'def_actions_12_8_49_42_7', 'def_actions_per_min', 0.07),
         {
@@ -345,7 +345,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 2,
-      title: 'Salida de balón',
+      title: 'Accesible',
       options: [{ metrics: [
         perMinMetricMinCount('Pases largos completados', 'long_balls_completed', 'long_passes_per_min', 0.03, 3),
         perMinMetricMinCount('Pases hacia adelante', 'forward_passes', 'forward_passes_per_min', 0.03, 3),
@@ -355,7 +355,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 3,
-      title: 'Duelos y recuperaciones',
+      title: 'Exigente',
       options: [{ metrics: [
         perMinMetric('Recuperaciones', 'recoveries_49', 'recoveries_per_min', 0.10),
         perMinMetric('Remates a balón parado', 'set_piece_shots', 'abp_remates_per_min', 0.01),
@@ -364,7 +364,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 4,
-      title: 'Aportación ofensiva',
+      title: 'Top',
       options: [{ metrics: [
         perMinMetric('Acciones ofensivas en 3/4', 'off_actions_3_4_outcome_1', 'off_actions_3_4_per_min', 0.20),
         {
@@ -386,7 +386,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
   MED: [
     {
       id: 1,
-      title: 'Presencia defensiva y pase',
+      title: 'Muy accesible',
       options: [{ metrics: [
         perMinMetric('Acciones defensivas en campo rival', 'def_actions_opp_half_12_8_49_42_7', 'def_actions_opp_per_min', 0.01),
         {
@@ -402,7 +402,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 2,
-      title: 'Duelos y recuperaciones',
+      title: 'Accesible',
       options: [{ metrics: [
         aerialsPct(45, 3, 'gte'),
         perMinMetric('Recuperaciones en campo rival', 'recoveries_opp_half', 'recoveries_opp_per_min', 0.03),
@@ -418,23 +418,23 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 3,
-      title: 'Desequilibrio',
+      title: 'Exigente',
       options: [{ metrics: [
         shotsOnPct(66, 2, 'gt'),
-        perMinMetric('Acciones ofensivas en campo rival', 'off_actions_opp_half_outcome_1', 'off_actions_opp_per_min', 0.85),
-        perMinMetric('Interceptaciones + recuperaciones en 3/4', 'intercept_recup_3_4', 'intercept_recup_3_4_per_min', 0.02),
+        perMinMetricMinCount('Acciones ofensivas en campo rival', 'off_actions_opp_half_outcome_1', 'off_actions_opp_per_min', 0.85, 5),
+        perMinMetricMinCount('Interceptaciones + recuperaciones en 3/4', 'intercept_recup_3_4', 'intercept_recup_3_4_per_min', 0.02, 3),
       ] }],
     },
     {
       id: 4,
-      title: 'Generación de juego',
+      title: 'Top',
       options: [{ metrics: [goalsCount(1), assistsTotal(3), takeonsPct(75, 2, 'gt')] }],
     },
   ],
   DEL: [
     {
       id: 1,
-      title: 'Participación en 3/4 de campo',
+      title: 'Muy accesible',
       options: [{ metrics: [
         perMinMetric('Participaciones en 3/4 de campo', 'final_third_events', 'final_third_events_per_min', 0.09),
         perMinMetric('Recuperaciones en campo rival', 'recoveries_opp_half', 'recoveries_opp_per_min', 0.009),
@@ -442,7 +442,7 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 2,
-      title: 'Presión y juego aéreo',
+      title: 'Accesible',
       options: [{ metrics: [
         aerialsPct(40, 3, 'gt'),
         {
@@ -457,12 +457,12 @@ export const RELEVO_BLOCKS: Record<Position, RelevoBlockSpec[]> = {
     },
     {
       id: 3,
-      title: 'Definición',
+      title: 'Exigente',
       options: [{ metrics: [shotsOnPct(70, 3, 'gt'), takeonsPct(75, 2, 'gt')] }],
     },
     {
       id: 4,
-      title: 'Aportación al ataque',
+      title: 'Top',
       options: [{ metrics: [
         goalsCount(1),
         assistsTotal(3),

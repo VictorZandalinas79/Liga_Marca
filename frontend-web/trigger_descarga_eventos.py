@@ -607,9 +607,11 @@ class MatchEventDownloader:
             # B3: % remates a puerta > 66% (mín 2) O Acciones of. campo rival completadas/min >= 0.85 O (intercept+recup 3/4)/min >= 0.02
             shots_on = stats.get('shots_on_target', 0); shots_tot = stats.get('shots_total', 0)
             s_pct = (shots_on / shots_tot * 100) if shots_tot >= 2 else 0
-            off_opp_per_min = (stats.get('relevo_off_actions_opp_half_outcome_1', 0) / mins_played) if mins_played > 0 else 0
-            intercept_recup_per_min = (stats.get('relevo_intercept_recup_3_4', 0) / mins_played) if mins_played > 0 else 0
-            if (shots_tot >= 2 and s_pct > rules.get('shots_on_pct', 66)) or (off_opp_per_min >= rules.get('off_actions_opp_per_min', 0.85)) or (intercept_recup_per_min >= rules.get('intercept_recup_3_4_per_min', 0.02)):
+            off_opp_total = stats.get('relevo_off_actions_opp_half_outcome_1', 0)
+            off_opp_per_min = (off_opp_total / mins_played) if mins_played > 0 else 0
+            intercept_recup_total = stats.get('relevo_intercept_recup_3_4', 0)
+            intercept_recup_per_min = (intercept_recup_total / mins_played) if mins_played > 0 else 0
+            if (shots_tot >= 2 and s_pct > rules.get('shots_on_pct', 66)) or (off_opp_total >= 5 and off_opp_per_min >= rules.get('off_actions_opp_per_min', 0.85)) or (intercept_recup_total >= 3 and intercept_recup_per_min >= rules.get('intercept_recup_3_4_per_min', 0.02)):
                 completed_blocks += 1; breakdown['block_3_pts'] = 1.0
 
             # B4: Goles >= 1 O Asistencias totales >= 3 O % regates completados > 75% (mín 2)
