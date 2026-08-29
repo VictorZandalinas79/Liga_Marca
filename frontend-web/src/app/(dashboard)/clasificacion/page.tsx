@@ -925,9 +925,6 @@ export default function ClasificacionPage() {
                                         <Badge className={`text-[9px] px-1 py-0 leading-tight shrink-0 ${getPositionColor(player.position)}`}>
                                           {getPositionLabel(player.position)}
                                         </Badge>
-                                        {player.is_captain && (
-                                          <Badge className="text-[9px] px-1 py-0 leading-tight shrink-0 bg-yellow-500 text-white">C</Badge>
-                                        )}
                                         {player.sanctionReason && (
                                           <span title={player.sanctionReason} className="inline-flex shrink-0">
                                             <AlertTriangle 

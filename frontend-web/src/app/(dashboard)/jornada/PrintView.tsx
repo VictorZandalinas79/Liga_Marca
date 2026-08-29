@@ -152,9 +152,6 @@ export function PrintView({ teams, matchday, division }: { teams: UserTeam[], ma
                         <span className={`text-[5.5px] font-bold whitespace-nowrap ${isPenalized ? 'text-red-700 line-through' : 'text-slate-800'}`}>
                           {player.short_name || player.first_name}
                         </span>
-                        {player.is_captain && (
-                          <span className="bg-yellow-500 text-white text-[4px] font-bold px-[2px] rounded-sm leading-none shrink-0">C</span>
-                        )}
                         {!dense && (
                           <span className={`text-[3.5px] font-bold text-white px-[2px] rounded-sm leading-none shrink-0 ${getPositionColor(player.position)}`}>
                             {getPositionLabel(player.position)}

@@ -1548,7 +1548,6 @@ export default function JornadaPage() {
                                           {formatPlayerName(player.short_name)}
                                         </span>
                                         {isPenalized && <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0 ml-1" />}
-                                        {player.is_captain && <Badge className="text-[9px] px-1 py-0 bg-yellow-500 text-white shrink-0 leading-none ml-1">C</Badge>}
                                       </div>
                                       {/* Substituted Player */}
                                       <div className="flex items-center gap-1 w-full min-w-0 -mt-[1px]">
@@ -1575,9 +1574,6 @@ export default function JornadaPage() {
                                         </span>
                                         {isPenalized && (
                                           <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0" />
-                                        )}
-                                        {player.is_captain && (
-                                          <Badge className="text-[9px] px-1 py-0 bg-yellow-500 text-white shrink-0 leading-none">C</Badge>
                                         )}
                                       </div>
                                       

@@ -15,7 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Users
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
@@ -40,7 +41,9 @@ interface Fixture {
   home_team?: { name: string; logo_url?: string } | null
   away_team?: { name: string; logo_url?: string } | null
   match_id?: string
-  is_complete?: boolean
+  /** Derivado en cliente: ya hay alineaciones (evento Opta typeId 34 procesado) */
+  has_lineups?: boolean
+  /** Minuto del último evento descargado (lo escribe trigger_descarga_eventos.py) */
   current_minute?: number
   // Lo rellena el trigger de la migración 024. Antes de aplicarla llega undefined
   // y la "última actualización" se calcula solo con player_scores.
@@ -63,8 +66,24 @@ const TERMINAL_STATUSES = new Set(['finished', 'cancelled', 'postponed'])
 // Sin esto la página no se enteraba de que un partido había empezado hasta que
 // algo la re-renderizaba, y el auto-refresco no llegaba a arrancar nunca.
 const CLOCK_TICK_MS = 30_000
-// Un partido se considera completo con más de 18 jugadores puntuados (≈2 onces)
-const COMPLETE_PLAYER_THRESHOLD = 18
+// El evento de alineación (Opta typeId 34) crea una fila en player_scores por
+// cada titular: 11 + 11 = 22. Con más de 10 ya hay al menos un once cargado, y
+// el margen absorbe a los titulares que el motor descarta por no estar en la
+// BD. (El umbral anterior, 18, se quedaba a solo 4 filas de fallar.)
+const LINEUP_PLAYER_THRESHOLD = 10
+// Estados con los que la API dice que el partido ha terminado
+const FINISHED_STATUSES = new Set(['finished', 'ft', 'completed'])
+
+/**
+ * ¿Está rodando el balón? Criterio único para el badge y para el aro rojo de
+ * la tarjeta, que antes lo calculaban por separado y podían discrepar.
+ * Está en juego si la API lo marca 'live' o si ya hay minuto del último evento.
+ */
+function isFixtureInPlay(status?: string, currentMinute?: number) {
+  const s = (status || '').toLowerCase()
+  if (FINISHED_STATUSES.has(s) || TERMINAL_STATUSES.has(s)) return false
+  return ['live', '1h', '2h', 'ht', 'in play', 'playing'].includes(s) || (currentMinute ?? 0) > 0
+}
 
 interface SyncStatus {
   syncing: boolean
@@ -237,12 +256,12 @@ export default function PartidosPage() {
   const scoresLoaded = scoresState.key === fixtureIdsKey
   const scoreCounts = scoresLoaded ? scoresState.counts : EMPTY_COUNTS
 
-  // Fixtures con el marcador de "completo" ya resuelto
+  // Fixtures con el marcador de "hay alineaciones" ya resuelto
   const fixtures = useMemo<Fixture[]>(
     () =>
       visibleFixtures.map(f => ({
         ...f,
-        is_complete: scoresLoaded && (scoreCounts[f.id] || 0) > COMPLETE_PLAYER_THRESHOLD
+        has_lineups: scoresLoaded && (scoreCounts[f.id] || 0) > LINEUP_PLAYER_THRESHOLD
       })),
     [visibleFixtures, scoreCounts, scoresLoaded]
   )
@@ -317,9 +336,9 @@ export default function PartidosPage() {
   const hasLiveFixtures = fixtures.some(f => f.status === 'live')
   const hasFixturesInPlayWindow = fixtures.some(f => {
     if (!f.start_time) return false
-    // Se mira el estado real del partido, NO `is_complete`: ese flag solo dice
-    // que hay más de 18 jugadores puntuados, y eso ya se cumple en cuanto
-    // llegan las alineaciones (antes incluso de empezar). Usarlo aquí apagaba
+    // Se mira el estado real del partido, NO `has_lineups`: ese flag solo dice
+    // que ya hay jugadores puntuados, y eso se cumple en cuanto llegan las
+    // alineaciones (antes incluso de empezar). Usarlo aquí apagaba
     // el auto-refresco justo cuando empezaban a entrar los datos del directo.
     if (TERMINAL_STATUSES.has((f.status || '').toLowerCase())) return false
     const elapsedMs = now - new Date(f.start_time).getTime()
@@ -457,24 +476,24 @@ export default function PartidosPage() {
   }
 
   const getStatusBadge = (
-    isComplete?: boolean,
+    hasLineups?: boolean,
     status?: string,
     currentMinute?: number,
     startTime?: string
   ) => {
     const s = (status || '').toLowerCase()
-    const isLiveStr = ['live', '1h', '2h', 'ht', 'in play', 'playing'].includes(s)
-    const hasLiveMinute = currentMinute !== undefined && currentMinute !== null && currentMinute > 0
-    const isFinished = s === 'finished' || s === 'ft' || s === 'completed'
-    
-    if ((isLiveStr || hasLiveMinute) && !isFinished) {
+
+    // 1) En juego: badge rojo + minuto del último evento descargado
+    if (isFixtureInPlay(status, currentMinute)) {
+      // El minuto se muestra aunque sea 0 (pitido inicial recién dado)
+      const showMinute = currentMinute !== undefined && currentMinute !== null && currentMinute >= 0
       return (
         <div className="flex items-center gap-2">
           <Badge className="bg-red-600 text-white text-xs flex items-center gap-1.5 animate-pulse">
             <span className="w-2 h-2 rounded-full bg-white inline-block" />
             En Juego
           </Badge>
-          {hasLiveMinute && (
+          {showMinute && (
             <span className="text-yellow-400 font-black text-xs sm:text-sm tracking-wide bg-yellow-950/40 border border-yellow-500/20 px-2 py-0.5 rounded shadow-sm">
               Min {currentMinute}&apos;
             </span>
@@ -482,9 +501,44 @@ export default function PartidosPage() {
         </div>
       )
     }
-    // Antes del pitido inicial no tiene sentido hablar de completo/incompleto:
-    // las alineaciones ya crean 22 puntuaciones a 0, así que `isComplete` es
-    // true media hora antes de empezar y el partido salía marcado "Completo".
+
+    // 2) Terminado: no depende de las puntuaciones, solo del estado de la API
+    if (FINISHED_STATUSES.has(s)) {
+      return (
+        <Badge className="bg-emerald-600 text-white text-xs flex items-center gap-1">
+          <CheckCircle className="w-3 h-3" />
+          Completo
+        </Badge>
+      )
+    }
+
+    // 3) Suspendido / cancelado: antes caían en el "Incompleto" rojo
+    if (s === 'postponed' || s === 'cancelled') {
+      return (
+        <Badge className="bg-amber-600 text-white text-xs flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" />
+          {s === 'postponed' ? 'Aplazado' : 'Cancelado'}
+        </Badge>
+      )
+    }
+
+    // A partir de aquí hace falta saber si hay alineaciones, y eso sale de
+    // player_scores: sin ellas cargadas, esqueleto en vez de un badge falso.
+    if (!scoresLoaded) {
+      return <span className="h-5 w-20 rounded bg-slate-700/60 animate-pulse inline-block" />
+    }
+
+    // 4) Alineaciones publicadas (evento typeId 34 ya procesado) pero sin rodar
+    //    el balón: pre-partido, o post-inicio con la API retrasada.
+    if (hasLineups) {
+      return (
+        <Badge className="bg-blue-600 text-white text-xs flex items-center gap-1">
+          <Users className="w-3 h-3" />
+          Alineaciones disponibles
+        </Badge>
+      )
+    }
+
     if (startTime && new Date(startTime).getTime() > now) {
       return (
         <Badge className="bg-slate-600 text-white text-xs flex items-center gap-1">
@@ -493,19 +547,7 @@ export default function PartidosPage() {
         </Badge>
       )
     }
-    // Hasta que no lleguen las puntuaciones no sabemos si está completo:
-    // mejor un hueco que marcar "Incompleto" en falso durante un instante.
-    if (!scoresLoaded) {
-      return <span className="h-5 w-20 rounded bg-slate-700/60 animate-pulse inline-block" />
-    }
-    if (isComplete) {
-      return (
-        <Badge className="bg-emerald-600 text-white text-xs flex items-center gap-1">
-          <CheckCircle className="w-3 h-3" />
-          Completo
-        </Badge>
-      )
-    }
+
     return (
       <Badge className="bg-red-500 text-white text-xs flex items-center gap-1">
         <AlertCircle className="w-3 h-3" />
@@ -521,12 +563,12 @@ export default function PartidosPage() {
   const handleSyncAll = async () => {
     if (fixtures.length === 0) return
 
-    // Pendiente = todavía puede dar datos nuevos. Un partido en juego tiene ya
-    // más de 18 jugadores puntuados (`is_complete`), así que con el filtro
-    // anterior el botón contestaba "todos sincronizados" en pleno directo,
-    // justo cuando más falta hace pulsarlo.
+    // Pendiente = todavía puede dar datos nuevos. Un partido en juego ya tiene
+    // jugadores puntuados (`has_lineups`), así que con el filtro anterior el
+    // botón contestaba "todos sincronizados" en pleno directo, justo cuando
+    // más falta hace pulsarlo.
     const pendingFixtures = fixtures.filter(
-      f => !TERMINAL_STATUSES.has((f.status || '').toLowerCase()) || !f.is_complete
+      f => !TERMINAL_STATUSES.has((f.status || '').toLowerCase()) || !f.has_lineups
     )
 
     if (pendingFixtures.length === 0) {
@@ -608,7 +650,12 @@ export default function PartidosPage() {
     return acc
   }, {} as Record<string, Fixture[]>)
 
-  const completeCount = fixtures.filter(f => f.is_complete).length
+  // "Completos" = partidos terminados, no partidos con alineaciones cargadas:
+  // con el flag anterior la cabecera cantaba "3/10 completos" media hora antes
+  // del pitido inicial, solo porque ya habían llegado los onces.
+  const completeCount = fixtures.filter(f =>
+    FINISHED_STATUSES.has((f.status || '').toLowerCase())
+  ).length
 
   // Jornada actual como número (NaN si estamos en modo "momento", p. ej. "Fase Final")
   const currentMatchdayNum = Number(currentMatchday)
@@ -798,15 +845,20 @@ export default function PartidosPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {dateFixtures.map((fixture) => {
               const timeUntil = fixture.start_time ? getTimeUntilMatch(fixture.start_time) : null
-              const startsSoon = timeUntil !== null && timeUntil.includes('min') && parseInt(timeUntil) <= 2
+              const startsSoon = timeUntil !== null && !timeUntil.includes('h') && timeUntil.includes('min') && parseInt(timeUntil) <= 30
+              const isLive = isFixtureInPlay(fixture.status, fixture.current_minute)
 
               return (
                 <Card
                   key={fixture.id}
                   className={`!bg-slate-800 border-slate-700 hover:shadow-lg transition-all cursor-pointer ${
-                    fixture.status === 'live' ? 'ring-2 ring-red-500 animate-pulse' :
-                    startsSoon ? 'ring-2 ring-green-500 animate-pulse' : ''
-                  } ${fixture.is_complete ? 'border-emerald-600 ring-1 ring-emerald-600' : ''}`}
+                    isLive ? 'ring-2 ring-red-500 animate-pulse' :
+                    startsSoon ? 'ring-2 ring-blue-500 animate-pulse' : ''
+                  } ${
+                    FINISHED_STATUSES.has((fixture.status || '').toLowerCase())
+                      ? 'border-emerald-600 ring-1 ring-emerald-600'
+                      : ''
+                  }`}
                 >
                   <CardContent className="p-4 relative overflow-hidden">
                     {/* Fondo semitransparente del icono de la liga */}
@@ -820,7 +872,7 @@ export default function PartidosPage() {
                     <div className="w-full h-full relative z-10" onClick={() => handleMatchClick(fixture)}>
                       {/* Estado y hora */}
                       <div className="flex items-center justify-between mb-4">
-                        {getStatusBadge(fixture.is_complete, fixture.status, fixture.current_minute, fixture.start_time)}
+                        {getStatusBadge(fixture.has_lineups, fixture.status, fixture.current_minute, fixture.start_time)}
                         <div className="flex items-center gap-1 text-sm text-slate-300">
                           <Clock className="w-4 h-4" />
                           {formatTime(fixture.start_time)}
