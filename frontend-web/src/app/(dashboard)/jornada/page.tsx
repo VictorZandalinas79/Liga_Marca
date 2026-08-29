@@ -38,6 +38,7 @@ interface Player {
   team_id?: string
   team?: { name: string; logo_url?: string }
   hasPlayed?: boolean
+  isPlaying?: boolean
   hasSubstitutionWarning?: boolean
   hasMaxTeamWarning?: boolean
   replacedPlayer?: { id: string; short_name?: string; first_name?: string; photo?: string } | null
@@ -341,21 +342,34 @@ export default function JornadaPage() {
       }
     })
 
-    // Equipos reales que ya han jugado en esta jornada
+    // Equipos reales que ya han jugado o están jugando en esta jornada
     const playedTeamIds = new Set<string>()
+    const liveTeamIds = new Set<string>()
     if (info && info.fixtureIds.length > 0) {
       const now = Date.now()
       const { data: fixtureDetails } = await supabase
         .from('fixtures')
-        .select('home_team_id, away_team_id, status, start_time')
+        .select('home_team_id, away_team_id, status, start_time, current_minute')
         .in('id', info.fixtureIds)
       fixtureDetails?.forEach(f => {
-        const matchEnded =
-          f.status === 'finished' ||
-          (f.start_time && new Date(f.start_time).getTime() + MATCH_DURATION_MS < now)
+        const startTime = f.start_time ? new Date(f.start_time).getTime() : 0
+        const isFinished = f.status === 'finished' || f.status === 'ft' || f.status === 'completed'
+        
+        const matchEnded = isFinished || (startTime > 0 && startTime + MATCH_DURATION_MS < now)
+        
         if (matchEnded) {
           if (f.home_team_id) playedTeamIds.add(f.home_team_id)
           if (f.away_team_id) playedTeamIds.add(f.away_team_id)
+        } else {
+          // Si no ha terminado, pero ya empezó o la API dice live
+          const isLive = startTime > 0 && now >= startTime
+          const statusLive = f.status === 'live' || ['1h', '2h', 'ht', 'in play', 'playing'].includes((f.status || '').toLowerCase())
+          const hasMin = f.current_minute !== undefined && f.current_minute !== null && f.current_minute > 0
+          
+          if (isLive || statusLive || hasMin) {
+            if (f.home_team_id) liveTeamIds.add(f.home_team_id)
+            if (f.away_team_id) liveTeamIds.add(f.away_team_id)
+          }
         }
       })
     }
@@ -474,6 +488,7 @@ export default function JornadaPage() {
           is_starter: tp.is_starter || false,
           is_captain: tp.is_captain || false,
           hasPlayed: p?.team_id ? playedTeamIds.has(p.team_id) : false,
+          isPlaying: p?.team_id ? liveTeamIds.has(p.team_id) : false,
         }
       })
 
@@ -1506,6 +1521,8 @@ export default function JornadaPage() {
                                     ? 'bg-orange-200 hover:bg-orange-300'
                                     : isMatch
                                     ? 'bg-yellow-100 hover:bg-yellow-200'
+                                    : player.isPlaying
+                                    ? 'bg-red-50 border border-red-200 animate-pulse hover:bg-red-100 text-red-900 shadow-sm'
                                     : player.hasPlayed
                                     ? 'bg-slate-200 hover:bg-slate-300'
                                     : 'bg-slate-50 hover:bg-slate-100'
