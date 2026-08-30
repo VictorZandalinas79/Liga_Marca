@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Trophy, MapPin, Clock, Calendar, Users, TrendingUp, RefreshCw, X, Timer, ArrowLeftRight } from 'lucide-react'
+import { ArrowLeft, Trophy, MapPin, Clock, Calendar, Users, TrendingUp, RefreshCw, X, Timer } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 import { evaluateRelevoBlocks, resolveRates, type Position } from '@/lib/scoring-config'
@@ -719,9 +719,10 @@ export default function PartidoDetallePage() {
     const playerTeam = player.team_id === homeTeam?.id ? homeTeam : awayTeam
     const isHome = player.team_id === homeTeam?.id
     const teamPlayers = isHome ? homePlayers : awayPlayers
+    const isFinished = fixture?.status === 'finished'
     const wasSubstituted = !!(player.is_starter && (
       teamPlayers.some(p => p.replaced_player_id === player.id) ||
-      (player.minutes_played && player.minutes_played < 90 && !(player.red_cards && player.red_cards > 0) && !(player.second_yellow_cards && player.second_yellow_cards > 0))
+      (isFinished && player.minutes_played && player.minutes_played < 90 && !(player.red_cards && player.red_cards > 0) && !(player.second_yellow_cards && player.second_yellow_cards > 0))
     ))
 
     return (
@@ -745,14 +746,24 @@ export default function PartidoDetallePage() {
           )}
           {wasSubstituted && (
             <div
-              className={`absolute top-0 z-10 w-5 h-5 sm:w-6 sm:h-6 bg-slate-950/95 border-slate-700/60 flex items-center justify-center ${
+              className={`absolute top-0 z-10 w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 border-blue-500/50 flex items-center justify-center ${
                 isHome 
                   ? 'right-0 rounded-bl-md border-l border-b' 
                   : 'left-0 rounded-br-md border-r border-b'
               }`}
               title="Sustituido"
             >
-              <ArrowLeftRight className="w-2.5 h-2.5 text-white" />
+              <svg 
+                viewBox="0 0 24 24" 
+                className="w-3 h-3 sm:w-3.5 sm:h-3.5" 
+                fill="none" 
+                strokeWidth="3.5" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                <path d="M7 18V6M7 6L3 10M7 6l4 4" className="stroke-emerald-400" />
+                <path d="M17 6v12M17 18l-4-4M17 18l4-4" className="stroke-rose-500" />
+              </svg>
             </div>
           )}
           {playerTeam?.logo_url && (
