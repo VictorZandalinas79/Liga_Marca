@@ -56,6 +56,9 @@ interface UserStanding {
   kamikaze_score?: number
   app_opens?: number
   saldo?: number
+  active_matchday_points?: number | null
+  active_matchday_played?: number
+  active_matchday_total?: number
 }
 
 interface MatchdayStatus {
@@ -105,9 +108,12 @@ export default function ClasificacionPage() {
       .eq('matchday', md)
       .maybeSingle()
 
+    let isOpen = false
     if (statusData) {
       setIsLeagueOpen(statusData.is_open)
+      isOpen = statusData.is_open
     }
+    return { currentMatchday: md, isLeagueOpen: isOpen }
   }
 
   useEffect(() => {
@@ -125,14 +131,16 @@ export default function ClasificacionPage() {
 
     const fetchStandings = async () => {
       if (!isBackgroundRefresh) setLoading(true)
-      await fetchMatchdays()
+      const { currentMatchday: md, isLeagueOpen: isOpen } = await fetchMatchdays()
+      
+      const activeMatchdayToFetch = !isOpen ? md : null
 
       // La clasificación la calcula `getStandings`, que recorre cada división
       // por separado. En la pestaña Conjunta no se recalcula nada mezclando
       // divisiones: se juntan los resultados que ya salieron de cada tabla, así
       // que los puntos de un usuario son siempre los mismos que ve en la suya.
       const { standings: standingsData, lastPlayedMatchday: maxPlayed, incomplete } =
-        await getStandings(supabase, selectedDivision)
+        await getStandings(supabase, selectedDivision, activeMatchdayToFetch)
 
       if (isStale()) return
 
@@ -666,6 +674,17 @@ export default function ClasificacionPage() {
                       <SortIcon field="average_points" />
                     </div>
                   </th>
+                  {!isLeagueOpen && (
+                    <th
+                      className="text-right text-[9px] sm:text-xs font-semibold text-amber-400 px-0.5 sm:px-1 py-1 whitespace-nowrap"
+                      title={`Jugadores alineados que ya han jugado en la J${currentMatchday}`}
+                    >
+                      <div className="flex items-center justify-end gap-0.5">
+                        <span className="hidden sm:inline">Jugados (J{currentMatchday})</span>
+                        <span className="sm:hidden">Jug. J{currentMatchday}</span>
+                      </div>
+                    </th>
+                  )}
                   <th
                     className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
                     onClick={() => handleSort('last_3_jornadas_avg')}
@@ -791,12 +810,23 @@ export default function ClasificacionPage() {
                       </span>
                       <span className="hidden sm:inline text-[10px] text-slate-400 ml-0.5">pts</span>
                     </td>
-                    <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
+                     <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
                       <span className="text-[9px] sm:text-xs font-semibold text-slate-200">
                         {Number(standing.average_points).toFixed(1)}
                       </span>
                       <span className="hidden sm:inline text-[10px] text-slate-400 ml-0.5">pts/j</span>
                     </td>
+                    {!isLeagueOpen && (
+                      <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
+                        {standing.active_matchday_points !== null ? (
+                          <span className="text-[10px] sm:text-xs font-bold text-amber-400">
+                            {standing.active_matchday_played}/{standing.active_matchday_total || 11}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] sm:text-xs text-slate-500">-</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
                       <span className="text-[9px] sm:text-xs font-semibold text-blue-400">
                         {(Math.round(standing.last_3_jornadas_avg * 10) / 10).toFixed(1)}
@@ -839,7 +869,7 @@ export default function ClasificacionPage() {
                   {/* Equipo desplegable */}
                   {isExpanded && userTeamData[standing.user_id] && (
                     <tr>
-                      <td colSpan={11} className="p-0">
+                      <td colSpan={!isLeagueOpen ? 12 : 11} className="p-0">
                         <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 px-3 py-2.5 sticky left-0 w-[calc(100vw-3.5rem)] sm:w-[400px] max-w-full shadow-lg border-r border-slate-600/50">
                           {/* Cabecera equipo */}
                           <div className="flex items-center gap-2 mb-2 flex-wrap">

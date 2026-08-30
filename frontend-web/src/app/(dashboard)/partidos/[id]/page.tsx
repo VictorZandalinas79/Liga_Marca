@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Trophy, MapPin, Clock, Calendar, Users, TrendingUp, RefreshCw, X } from 'lucide-react'
+import { ArrowLeft, Trophy, MapPin, Clock, Calendar, Users, TrendingUp, RefreshCw, X, Timer, ArrowLeftRight } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 import { evaluateRelevoBlocks, resolveRates, type Position } from '@/lib/scoring-config'
@@ -14,12 +14,15 @@ interface Player {
   id: string
   first_name: string
   last_name: string
+  nickname: string | null
   short_name: string
   position: string
+  calc_position?: string
   photo?: string
-  shirt_number?: number
+  shirt_number: number | null
   team_id: string
   is_starter?: boolean
+  replaced_player_id?: string | null
   minutes_played?: number
   total_points?: number
   goals?: number
@@ -126,10 +129,12 @@ interface PlayerScore {
   total_points: number
   minutes_played: number
   goals: number
+  own_goals: number
   assists: number
   yellow_cards: number
   red_cards: number
   is_starter: boolean
+  replaced_player_id?: string | null
 }
 
 
@@ -199,6 +204,24 @@ const formatPlayerName = (player: { short_name?: string; first_name?: string; la
   }
   
   return first || last || 'Desconocido';
+}
+
+const getMobilePlayerName = (player: { short_name?: string; first_name?: string; last_name?: string }) => {
+  const fullName = player.short_name || `${player.first_name || ''} ${player.last_name || ''}`.trim();
+  if (!fullName) return 'Desconocido';
+  
+  const parts = fullName.split(/\s+/);
+  if (parts.length > 1) {
+    const last = parts[parts.length - 1];
+    const firstPart = parts[0];
+    if (firstPart.endsWith('.') || firstPart.length === 1) {
+      return fullName;
+    }
+    const initial = firstPart.charAt(0).toUpperCase();
+    return `${initial}. ${last}`;
+  }
+  
+  return fullName;
 }
 
 // ── Auto-sincronización al abrir el partido ────────────────────────────────
@@ -360,6 +383,7 @@ export default function PartidoDetallePage() {
         const score = scoresMap.get(player.id)
         return {
           ...player,
+          replaced_player_id: score?.replaced_player_id || null,
           is_starter: score?.is_starter || false,
           minutes_played: score?.minutes_played || 0,
           total_points: score?.total_points || 0,
@@ -664,19 +688,19 @@ export default function PartidoDetallePage() {
 
   const getPositionOrder = (position: string): number => {
     const posLower = position.toLowerCase()
-    if (posLower.includes('goalkeeper') || posLower === 'gk') return 0 // Porteros primero
+    if (posLower.includes('goalkeeper') || posLower === 'gk' || posLower === 'por') return 0 // Porteros primero
     if (posLower.includes('defender') || posLower === 'def') return 1 // Defensas segundo
-    if (posLower.includes('midfielder') || posLower === 'mid') return 2 // Medios tercero
-    if (posLower.includes('forward') || posLower === 'fwd') return 3 // Delanteros cuarto
+    if (posLower.includes('midfielder') || posLower === 'mid' || posLower === 'med') return 2 // Medios tercero
+    if (posLower.includes('forward') || posLower === 'fwd' || posLower === 'del') return 3 // Delanteros cuarto
     return 2 // Por defecto, medios
   }
 
   const getPositionLabel = (position: string) => {
     const posLower = position.toLowerCase()
-    if (posLower.includes('goalkeeper') || posLower === 'gk') return 'POR'
+    if (posLower.includes('goalkeeper') || posLower === 'gk' || posLower === 'por') return 'POR'
     if (posLower.includes('defender') || posLower === 'def') return 'DEF'
-    if (posLower.includes('midfielder') || posLower === 'mid') return 'MED'
-    if (posLower.includes('forward') || posLower === 'fwd') return 'DEL'
+    if (posLower.includes('midfielder') || posLower === 'mid' || posLower === 'med') return 'MED'
+    if (posLower.includes('forward') || posLower === 'fwd' || posLower === 'del') return 'DEL'
     return 'MED'
   }
 
@@ -694,6 +718,11 @@ export default function PartidoDetallePage() {
   const renderPlayerCard = (player: Player) => {
     const playerTeam = player.team_id === homeTeam?.id ? homeTeam : awayTeam
     const isHome = player.team_id === homeTeam?.id
+    const teamPlayers = isHome ? homePlayers : awayPlayers
+    const wasSubstituted = !!(player.is_starter && (
+      teamPlayers.some(p => p.replaced_player_id === player.id) ||
+      (player.minutes_played && player.minutes_played < 90 && !(player.red_cards && player.red_cards > 0) && !(player.second_yellow_cards && player.second_yellow_cards > 0))
+    ))
 
     return (
       <div
@@ -714,6 +743,18 @@ export default function PartidoDetallePage() {
               }`}
             />
           )}
+          {wasSubstituted && (
+            <div
+              className={`absolute top-0 z-10 w-5 h-5 sm:w-6 sm:h-6 bg-slate-950/95 border-slate-700/60 flex items-center justify-center ${
+                isHome 
+                  ? 'right-0 rounded-bl-md border-l border-b' 
+                  : 'left-0 rounded-br-md border-r border-b'
+              }`}
+              title="Sustituido"
+            >
+              <ArrowLeftRight className="w-2.5 h-2.5 text-white" />
+            </div>
+          )}
           {playerTeam?.logo_url && (
             <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.12] pointer-events-none overflow-hidden">
               <img src={playerTeam.logo_url} alt={playerTeam.name} className="w-32 h-32 sm:w-40 sm:h-40 object-contain -rotate-12 scale-125 grayscale" />
@@ -722,30 +763,37 @@ export default function PartidoDetallePage() {
           <CardContent className="px-1 pt-2.5 pb-1 sm:p-2.5 flex flex-col gap-3 sm:gap-4">
             {/* Fila 1: Nombre completo del jugador (toda la línea para él) */}
             <p className="text-[10.5px] sm:text-xs font-black uppercase tracking-wider text-white leading-tight relative z-20 drop-shadow-md text-center px-6 sm:px-7 w-full -mt-1 sm:mt-0">
-              {formatPlayerName(player)}
+              <span className="block sm:hidden">
+                {getMobilePlayerName(player)}
+              </span>
+              <span className="hidden sm:block">
+                {formatPlayerName(player)}
+              </span>
             </p>
-
+ 
             {/* Fila 2: stats, Foto, y puntos/eventos */}
             <div className="grid grid-cols-[1fr_auto_1fr] sm:grid-cols-3 items-center gap-1 sm:gap-2 w-full px-0.5 sm:px-0">
               
               {/* Col 1: Escudo, Demarcación, Minutos */}
-              <div className="min-w-0 flex flex-col items-start sm:flex-row sm:items-center justify-self-start gap-1 sm:gap-1.5 flex-wrap text-slate-400 relative z-10 -ml-1 sm:-ml-2 -mt-1 sm:-mt-1.5">
-                <span className={`inline-flex items-center px-1 rounded text-[7.5px] font-bold leading-none py-0.5 shrink-0 ${getPositionColor(player.position)}`}>
+              <div className="min-w-[65px] sm:min-w-[75px] flex flex-col items-start justify-center justify-self-start gap-1 relative z-20">
+                <span className={`inline-flex items-center px-1.5 py-[3px] rounded text-[10px] sm:text-[11px] font-black leading-none uppercase tracking-wider shrink-0 shadow-sm ${getPositionColor(player.position)}`}>
                   {getPositionLabel(player.position)}
                 </span>
                 
-                <span className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-1 shrink-0">
-                  <span className={`rounded px-1 py-0.5 leading-none font-bold text-[7.5px] uppercase tracking-wide border ${
-                    player.is_starter
-                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                      : 'bg-red-500/15 text-red-400 border-red-500/30'
+                <span className={`rounded px-1.5 py-[3px] leading-none font-extrabold text-[10px] sm:text-[11px] uppercase tracking-wide border shrink-0 shadow-sm ${
+                  player.is_starter
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                    : 'bg-slate-700/80 text-slate-300 border-slate-600/50'
+                }`}>
+                  {player.is_starter ? 'TIT' : 'SUP'}
+                </span>
+ 
+                <span className="inline-flex items-center gap-1 bg-slate-900 border border-slate-700 rounded px-1.5 py-[3px] leading-none shadow-md shrink-0">
+                  <Timer className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span className={`text-[11px] sm:text-xs font-mono font-black tracking-wider ${
+                    (player.minutes_played || 0) >= 59 ? 'text-emerald-400' : 'text-orange-400'
                   }`}>
-                    {player.is_starter ? 'Tit' : 'Sup'}
-                  </span>
-                  <span className={`text-[10px] sm:text-[11px] font-bold leading-none ${
-                    (player.minutes_played || 0) >= 59 ? 'text-emerald-400' : 'text-red-400'
-                  }`}>
-                    {player.minutes_played || 0}'
+                    {player.minutes_played || 0}′
                   </span>
                 </span>
               </div>
@@ -986,48 +1034,48 @@ export default function PartidoDetallePage() {
 
           <div className="space-y-2 sm:space-y-4">
             {/* Porteros */}
-            {homePlayers.filter(p => getPositionLabel(p.position) === 'POR').length > 0 && (
+            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'POR').length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-amber-600 uppercase mb-2">Porteros</h4>
                 <div className="space-y-2">
                   {homePlayers
-                    .filter(p => getPositionLabel(p.position) === 'POR')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'POR')
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Defensas */}
-            {homePlayers.filter(p => getPositionLabel(p.position) === 'DEF').length > 0 && (
+            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF').length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-blue-600 uppercase mb-2">Defensas</h4>
                 <div className="space-y-2">
                   {homePlayers
-                    .filter(p => getPositionLabel(p.position) === 'DEF')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF')
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Medios */}
-            {homePlayers.filter(p => getPositionLabel(p.position) === 'MED').length > 0 && (
+            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'MED').length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-emerald-600 uppercase mb-2">Mediocampistas</h4>
                 <div className="space-y-2">
                   {homePlayers
-                    .filter(p => getPositionLabel(p.position) === 'MED')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'MED')
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Delanteros */}
-            {homePlayers.filter(p => getPositionLabel(p.position) === 'DEL').length > 0 && (
+            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL').length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-red-600 uppercase mb-2">Delanteros</h4>
                 <div className="space-y-2">
                   {homePlayers
-                    .filter(p => getPositionLabel(p.position) === 'DEL')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL')
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
@@ -1051,48 +1099,48 @@ export default function PartidoDetallePage() {
 
           <div className="space-y-2 sm:space-y-4">
             {/* Porteros */}
-            {awayPlayers.filter(p => getPositionLabel(p.position) === 'POR').length > 0 && (
+            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'POR').length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-amber-600 uppercase mb-2">Porteros</h4>
                 <div className="space-y-2">
                   {awayPlayers
-                    .filter(p => getPositionLabel(p.position) === 'POR')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'POR')
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Defensas */}
-            {awayPlayers.filter(p => getPositionLabel(p.position) === 'DEF').length > 0 && (
+            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF').length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-blue-600 uppercase mb-2">Defensas</h4>
                 <div className="space-y-2">
                   {awayPlayers
-                    .filter(p => getPositionLabel(p.position) === 'DEF')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF')
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Medios */}
-            {awayPlayers.filter(p => getPositionLabel(p.position) === 'MED').length > 0 && (
+            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'MED').length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-emerald-600 uppercase mb-2">Mediocampistas</h4>
                 <div className="space-y-2">
                   {awayPlayers
-                    .filter(p => getPositionLabel(p.position) === 'MED')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'MED')
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Delanteros */}
-            {awayPlayers.filter(p => getPositionLabel(p.position) === 'DEL').length > 0 && (
+            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL').length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-red-600 uppercase mb-2">Delanteros</h4>
                 <div className="space-y-2">
                   {awayPlayers
-                    .filter(p => getPositionLabel(p.position) === 'DEL')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL')
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>

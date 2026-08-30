@@ -31,6 +31,7 @@ Uso:
 
 import os
 import sys
+from datetime import datetime, timedelta
 from supabase import create_client
 from dotenv import load_dotenv
 
@@ -129,6 +130,92 @@ def detect_matchday(sb):
             by_md.setdefault(md, []).append((f.get("status") or "").lower())
     finished = [md for md, st in by_md.items() if all(s == "finished" for s in st)]
     return max(finished) if finished else None
+
+
+def chronological_predecessors(fixtures, cfg, fantasy_start):
+    """Jornada de la que viene cada jornada, en orden de CALENDARIO.
+
+    Normalmente es m - 1, pero un partido fuera de orden rompe esa
+    correspondencia: si la J6 juega un partido adelantado antes de que se juegue
+    la J4, el once de la J4 se hereda del que disputó ese partido, y es contra
+    ese contra el que hay que contar los cambios y la exclusividad.
+
+    Espejo de `chronologicalPredecessors` en src/lib/locked-teams-core.ts: si se
+    toca uno hay que tocar el otro.
+    """
+    hour = timedelta(hours=1)
+    mid = float(cfg.get("matchday_start_hours_before_midweek") or 1)
+    week = float(cfg.get("matchday_start_hours_before_weekend") or 1)
+    void_status = {"cancelled", "postponed"}
+
+    def parse(ts):
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+    def start_offset(t):
+        # Martes, miércoles o jueves cuentan como entre semana.
+        return (mid if t.weekday() in (1, 2, 3) else week) * hour
+
+    by_md = {}
+    for f in fixtures:
+        md = f.get("matchday")
+        if not md or md < fantasy_start or not f.get("start_time"):
+            continue
+        if (f.get("status") or "").lower() in void_status:
+            continue
+        by_md.setdefault(md, []).append(f)
+    if not by_md:
+        return {}
+
+    # Mediana de cada jornada: robusta frente a un único partido descolocado.
+    rep = {md: sorted(parse(f["start_time"]) for f in fs)[len(fs) // 2] for md, fs in by_md.items()}
+    threshold = timedelta(days=5)
+
+    def slot_for(t, own):
+        if abs(t - rep[own]) <= threshold:
+            return own
+        others = [md for md in rep if md != own]
+        return min(others, key=lambda md: abs(t - rep[md])) if others else own
+
+    out_of_order = set()
+    for md, fs in by_md.items():
+        for f in fs:
+            t = parse(f["start_time"])
+            played_slot = slot_for(t, md)
+            if played_slot == md:
+                continue
+            # Un aplazado que ya se jugó deja de descolocar nada, igual que en
+            # computeOutOfOrderLocks.
+            if md < played_slot and (f.get("status") or "").lower() == "finished":
+                continue
+            out_of_order.add(f["id"])
+
+    # Un tramo por jornada (con sus partidos en orden) y otro por cada partido
+    # fuera de orden.
+    tramos = []
+    for md, fs in by_md.items():
+        regular = [f for f in fs if f["id"] not in out_of_order]
+        if regular:
+            first = min(parse(f["start_time"]) for f in regular)
+            tramos.append((first - start_offset(first), md))
+        for f in fs:
+            if f["id"] in out_of_order:
+                t = parse(f["start_time"])
+                tramos.append((t - start_offset(t), md))
+    tramos.sort(key=lambda x: x[0])
+
+    # El tramo de referencia de una jornada es el ÚLTIMO suyo: cuando se puntúa,
+    # su alineación es la que quedó comprometida en ese tramo.
+    last_idx = {}
+    for i, (_, md) in enumerate(tramos):
+        last_idx[md] = i
+
+    prev = {}
+    for md, idx in last_idx.items():
+        for i in range(idx - 1, -1, -1):
+            if tramos[i][1] != md:
+                prev[md] = tramos[i][1]
+                break
+    return prev
 
 
 def best_player(candidates, zeroed, points):
@@ -403,11 +490,23 @@ def run_matchday(sb, matchday):
         for p in players
     }
 
-    # Puntos por jugador en todas las jornadas hasta la jornada actual
-    scores_all = fetch_all(sb, "player_scores", "player_id,total_points,matchday")
+    # Puntos por jugador en todas las jornadas hasta la jornada actual.
+    # La jornada de una puntuación es la del PARTIDO en el que se logró: cada
+    # partido puntúa en la suya, también los adelantados o aplazados que se
+    # juegan fuera de su hueco del calendario. `player_scores.matchday` está sin
+    # rellenar (siempre NULL), así que fiarse de esa columna dejaba `scores_by_md`
+    # vacío y todos los equipos a 0 puntos.
+    all_fixtures = fetch_all(sb, "fixtures", "id,matchday,start_time,status")
+    fixture_md = {
+        f["id"]: f["matchday"]
+        for f in all_fixtures
+        if f.get("id") and f.get("matchday")
+    }
+
+    scores_all = fetch_all(sb, "player_scores", "player_id,total_points,matchday,fixture_id")
     scores_by_md = {}
     for s in scores_all:
-        md = s["matchday"]
+        md = s.get("matchday") or fixture_md.get(s.get("fixture_id"))
         if md is not None and md <= matchday:
             pid = s["player_id"]
             scores_by_md.setdefault(md, {})[pid] = scores_by_md.setdefault(md, {}).get(pid, 0) + (s.get("total_points") or 0)
@@ -438,6 +537,12 @@ def run_matchday(sb, matchday):
     # La jornada en la que arranca el juego no tiene "anterior" a efectos de
     # sanciones: se sale de cero aunque la liga real lleve jornadas jugadas.
     start_md = max(1, fantasy_starting_matchday)
+    # De qué jornada viene cada jornada en el calendario (ver el helper).
+    prev_of = chronological_predecessors(all_fixtures, cfg, start_md)
+    for md in sorted(prev_of):
+        if prev_of[md] != md - 1 and md <= matchday:
+            log(f"📅 La J{md} viene de la J{prev_of[md]} (partido fuera de orden), no de la J{md - 1}")
+
 
     lineup_history = {}
     zeroed_history = {}
@@ -463,7 +568,24 @@ def run_matchday(sb, matchday):
             for tid in division_team_ids:
                 lineup_history[m][tid] = get_lineup_for_matchday(all_tp, tid, m)
 
-            # Dueños en m-1, solo entre equipos de ESTA división.
+            # Jornada de la que viene m a efectos de PLANTILLA (cambios y
+            # exclusividad). Las multas arrastradas y los jugadores anulados
+            # siguen mirando a m - 1: salen de la última jornada PUNTUADA, y la
+            # jornada de un partido adelantado no se puntúa hasta el final.
+            prev_lineup_m = prev_of.get(m, m - 1)
+            if prev_lineup_m not in lineup_history:
+                lineup_history[prev_lineup_m] = {}
+            for tid in division_team_ids:
+                if tid in lineup_history[prev_lineup_m]:
+                    continue
+                # El predecesor va por delante en número (partido adelantado):
+                # su once es el que se guardó para ESA jornada; si el usuario no
+                # llegó a tocarla, se cae a la regla de siempre.
+                exact = [r["player_id"] for r in all_tp
+                         if r["team_id"] == tid and r["matchday"] == prev_lineup_m]
+                lineup_history[prev_lineup_m][tid] = exact or get_lineup_for_matchday(all_tp, tid, m - 1)
+
+            # Dueños en la jornada de la que viene m, solo entre equipos de ESTA división.
             held_by_others_prev_m = {}
             for tid in division_team_ids:
                 held_by_others_prev_m[tid] = {}
@@ -471,7 +593,7 @@ def run_matchday(sb, matchday):
                     if owner_tid == tid:
                         continue
                     owner_name = team_to_username.get(owner_tid, "otro usuario")
-                    for pid in lineup_history[m - 1][owner_tid]:
+                    for pid in lineup_history[prev_lineup_m][owner_tid]:
                         held_by_others_prev_m[tid].setdefault(pid, []).append(owner_name)
 
             points_m = scores_by_md.get(m, {})
@@ -485,10 +607,10 @@ def run_matchday(sb, matchday):
                 is_first = m == start_md
                 # En la primera jornada del juego no hay plantilla previa que
                 # respetar: cambios libres y libertad para alinear a cualquiera.
-                prev_mine = set() if is_first else set(lineup_history[m - 1][tid])
+                prev_mine = set() if is_first else set(lineup_history[prev_lineup_m][tid])
                 held_by_others_prev = {} if is_first else held_by_others_prev_m[tid]
                 prev_penalties = None if is_first else penalties_history[m - 1][tid]
-                lineup_prev = None if is_first else lineup_history[m - 1][tid]
+                lineup_prev = None if is_first else lineup_history[prev_lineup_m][tid]
                 zeroed_prev = None if is_first else zeroed_history[m - 1][tid]
 
                 sanctions, zeroed = compute_team_sanctions(

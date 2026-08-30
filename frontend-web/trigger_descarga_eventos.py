@@ -184,6 +184,7 @@ class MatchEventDownloader:
         self.team_goals_conceded = {}
         self.team_goals_scored = {}
         self.player_positions_map = {}
+        self.sub_events = {} # NUEVO: eventId -> playerId (para cruzar suplentes y titulares)
         self.home_team_id = None
         self.away_team_id = None
         self.matchday = None
@@ -965,13 +966,33 @@ class MatchEventDownloader:
 
     def _handle_sub_off(self, event, current_min):
         pid = event.get('playerId')
-        if pid: self.remove_player(pid, event.get('timeMin', current_min))
+        event_id = str(event.get('eventId'))
+        if pid: 
+            self.remove_player(pid, event.get('timeMin', current_min))
+            self.sub_events[event_id] = pid
+            
+            # Cruzar con el suplente si ya se procesó
+            q55 = self.get_qualifier(event, 55)
+            if q55 and str(q55) in self.sub_events:
+                sub_on_pid = self.sub_events[str(q55)]
+                self.init_player_stats_if_none(sub_on_pid)
+                self.stats[sub_on_pid]['replaced_player_id'] = pid
         return True
 
     def _handle_sub_on(self, event, current_min):
         pid = event.get('playerId')
         team_id = event.get('contestantId')
-        if pid: self.init_player(pid, team_id, event.get('timeMin', current_min))
+        event_id = str(event.get('eventId'))
+        if pid: 
+            self.init_player(pid, team_id, event.get('timeMin', current_min))
+            self.sub_events[event_id] = pid
+            
+            # Cruzar con el titular que sale si ya se procesó
+            q55 = self.get_qualifier(event, 55)
+            if q55 and str(q55) in self.sub_events:
+                sub_off_pid = self.sub_events[str(q55)]
+                self.init_player_stats_if_none(pid)
+                self.stats[pid]['replaced_player_id'] = sub_off_pid
         return True
 
     def _handle_recovery(self, event, current_min):
@@ -1566,6 +1587,7 @@ class MatchEventDownloader:
                 'off_actions_opp_half_outcome_1': stats.get('relevo_off_actions_opp_half_outcome_1', 0),
                 'intercept_recup_3_4': stats.get('relevo_intercept_recup_3_4', 0),
                 'recoveries_49': stats.get('relevo_recoveries_49', 0),
+                'replaced_player_id': stats.get('replaced_player_id', None),
             }
 
             payload = player_score_data.copy()

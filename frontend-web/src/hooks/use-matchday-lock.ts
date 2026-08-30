@@ -20,6 +20,13 @@ interface MatchdayLockState {
   timeUntilLock: string
   currentMatchday: number
   currentMomento: string | null
+  /**
+   * Jornada del tramo de juego INMEDIATAMENTE ANTERIOR al de `currentMatchday`,
+   * en orden cronológico (no numérico). Es de la que hay que heredar el once:
+   * si la J6 tiene un partido adelantado que se juega antes de la J4, la J4
+   * arranca del equipo que jugó ese partido, no del de la J3.
+   */
+  previousMatchday: number | null
   upcomingLocks: OutOfOrderLock[]
   isCloseToStart?: boolean
 }
@@ -34,6 +41,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
     timeUntilLock: '',
     currentMatchday: 0,
     currentMomento: null,
+    previousMatchday: null,
     upcomingLocks: [],
     isCloseToStart: false,
   })
@@ -184,129 +192,110 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       }
 
       const now = new Date()
-      let targetMatchday: number = 1
-      let targetMomento: string | null = null
 
-      if (currentMatchday) {
-        targetMatchday = typeof currentMatchday === 'string' ? parseInt(currentMatchday) : currentMatchday
-      } else {
-        // Buscar jornada activa (dins de la finestra de temps)
-        let activeJornada: typeof allJornadas[0] | null = null
-
-        for (const jornada of allJornadas) {
-          const fixtures = jornada.fixtures.sort((a, b) =>
-            new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-          )
-
-          const firstMatchTime = new Date(fixtures[0].start_time)
-          const lastMatchTime = new Date(fixtures[fixtures.length - 1].start_time)
-          const unlockTime = firstMatchTime.getTime() - startOffsetMsFor(firstMatchTime, lockOffsets)
-          const lockTime = lastMatchTime.getTime() + lockOffsetMs
-
-          if (now.getTime() >= unlockTime && now.getTime() <= lockTime) {
-            activeJornada = jornada
-            break
-          }
-        }
-
-        if (activeJornada) {
-          targetMatchday = activeJornada.matchday
-          targetMomento = activeJornada.momento || null
-        } else {
-          // Buscar la PRÒXIMA jornada (la primera amb unlockTime > now)
-          let nextJornada: typeof allJornadas[0] | null = null
-
-          for (const jornada of allJornadas) {
-            const fixtures = jornada.fixtures.sort((a, b) =>
-              new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-            )
-
-            const firstMatchTime = new Date(fixtures[0].start_time)
-            const unlockTime = firstMatchTime.getTime() - startOffsetMsFor(firstMatchTime, lockOffsets)
-
-            if (unlockTime > now.getTime()) {
-              nextJornada = jornada
-              break
-            }
-          }
-
-          if (nextJornada) {
-            targetMatchday = nextJornada.matchday
-            targetMomento = nextJornada.momento || null
-          } else {
-            // Usar l'última jornada disponible
-            const lastJornada = allJornadas[allJornadas.length - 1]
-            targetMatchday = lastJornada.matchday
-            targetMomento = lastJornada.momento || null
-          }
-        }
-      }
-
-      // El juego puede arrancar más tarde que LaLiga (Admin → Reglas del Juego).
-      // Mientras no se llegue a esa jornada, el reloj y la cabecera apuntan a
-      // ella: el mercado sigue abierto y la cuenta atrás marca cuándo empieza
-      // de verdad, no la próxima jornada de LaLiga que se juegue.
-      if (!currentMatchday && targetMatchday < fantasyStart) {
-        const startJornada = allJornadas.find(j => j.matchday === fantasyStart)
-        if (startJornada) {
-          targetMatchday = startJornada.matchday
-          targetMomento = startJornada.momento || null
-        }
-      }
-
-      // Trobar la jornada objectiu per obtindre els fixtures
-      const targetJornada = allJornadas.find(j => j.matchday === targetMatchday)
-
-      if (!targetJornada || targetJornada.fixtures.length === 0) {
-        setState(s => ({ ...s, isLocked: true, isUnlockWindowOpen: false }))
-        return
-      }
-
-      const fixtures = targetJornada.fixtures.sort((a, b) =>
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-      )
-
-      interface LockBlock { start: number; end: number }
+      // Tramos de juego: cada intervalo en el que el mercado está cerrado porque
+      // se está disputando algo. Cada bloque recuerda a QUÉ JORNADA pertenece,
+      // porque de eso depende para qué jornada se están haciendo los cambios.
+      interface LockBlock { start: number; end: number; matchday: number; momento: string | null; outOfOrder: boolean }
       const blocks: LockBlock[] = []
-      
-      // Añadir los bloques regulares de TODAS las jornadas que pertenecen al juego.
+
+      // Bloques regulares de TODAS las jornadas que pertenecen al juego.
       // Si la liga reinició (fantasyStart > 1), ignoramos los partidos de jornadas anteriores
       // porque para el juego estamos en 'pretemporada' y el mercado debe estar abierto.
       for (const jornada of allJornadas) {
         if (jornada.matchday < fantasyStart) continue
-        
+
         const regularFixtures = jornada.fixtures.filter(f => !outOfOrderIds.has(f.id))
         if (regularFixtures.length > 0) {
           const sorted = regularFixtures.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
           const firstTime = new Date(sorted[0].start_time)
           blocks.push({
             start: firstTime.getTime() - startOffsetMsFor(firstTime, lockOffsets),
-            end: new Date(sorted[sorted.length - 1].start_time).getTime() + lockOffsetMs
+            end: new Date(sorted[sorted.length - 1].start_time).getTime() + lockOffsetMs,
+            matchday: jornada.matchday,
+            momento: jornada.momento || null,
+            outOfOrder: false,
           })
         }
       }
 
       // Añadir TODOS los partidos out-of-order (aplazados/adelantados) de cualquier jornada >= fantasyStart
       // para que el mercado se bloquee a nivel de aplicación durante la disputa de dichos partidos.
+      // El bloque lleva la jornada LÓGICA del partido: los cambios hechos antes de
+      // un partido adelantado de la J6 cuentan para la J6, no para la jornada en
+      // cuyo hueco del calendario cae.
       const oooFixtures = allFixtures.filter(f => outOfOrderIds.has(f.id) && f.matchday && f.matchday >= fantasyStart)
       for (const f of oooFixtures) {
         const fTime = new Date(f.start_time)
         blocks.push({
           start: fTime.getTime() - startOffsetMsFor(fTime, lockOffsets),
-          end: fTime.getTime() + lockOffsetMs
+          end: fTime.getTime() + lockOffsetMs,
+          matchday: f.matchday as number,
+          momento: f.momento || null,
+          outOfOrder: true,
         })
       }
-      
+
       blocks.sort((a, b) => a.start - b.start)
+
+      if (blocks.length === 0) {
+        setState(s => ({ ...s, isLocked: true, isUnlockWindowOpen: false }))
+        return
+      }
+
+      let targetMatchday: number = 1
+      let targetMomento: string | null = null
+
+      if (currentMatchday) {
+        targetMatchday = typeof currentMatchday === 'string' ? parseInt(currentMatchday) : currentMatchday
+      } else {
+        // La jornada a la que apuntan los cambios es la del tramo que se está
+        // jugando ahora; si estamos en un hueco de mercado, la del próximo tramo
+        // que se vaya a jugar. Derivarlo de los tramos (y no de la ventana
+        // completa de cada jornada, de su primer a su último partido) es lo que
+        // impide que un partido fuera de orden se trague los huecos intermedios:
+        // entre el partido adelantado de la J6 y el fin de semana de la J4, el
+        // próximo tramo es el de la J4, así que los cambios son para la J4.
+        let target: LockBlock | null = null
+        for (const b of blocks) {
+          if (now.getTime() < b.start || now.getTime() > b.end) continue
+          // Con tramos solapados manda la jornada regular (el hueco del
+          // calendario en el que estamos de verdad); entre iguales, la última
+          // en empezar.
+          if (!target || !b.outOfOrder || target.outOfOrder) target = b
+        }
+        if (!target) {
+          target = blocks.find(b => b.start > now.getTime()) || blocks[blocks.length - 1]
+        }
+        targetMatchday = target.matchday
+        targetMomento = target.momento
+      }
+
+      // Tramo de referencia de la jornada objetivo: el que se está jugando o el
+      // próximo suyo; si ya pasaron todos, el último. Una jornada con un partido
+      // adelantado tiene dos tramos (el adelantado y el resto), y cada uno hereda
+      // de algo distinto.
+      const targetBlocks = blocks.filter(b => b.matchday === targetMatchday)
+      const refBlock = targetBlocks.find(b => now.getTime() <= b.end) || targetBlocks[targetBlocks.length - 1]
+      let previousMatchday: number | null = null
+      if (refBlock) {
+        for (const b of blocks) {
+          if (b.start >= refBlock.start) break
+          if (b.matchday !== targetMatchday) previousMatchday = b.matchday
+        }
+      }
+
       const mergedBlocks: LockBlock[] = []
       if (blocks.length > 0) {
-         let current = blocks[0]
+         // Copia: la fusión mueve el `end`, y los bloques originales siguen
+         // haciendo falta tal cual para resolver la jornada de arriba.
+         let current = { ...blocks[0] }
          for (let i = 1; i < blocks.length; i++) {
             if (blocks[i].start <= current.end) {
                current.end = Math.max(current.end, blocks[i].end)
             } else {
                mergedBlocks.push(current)
-               current = blocks[i]
+               current = { ...blocks[i] }
             }
          }
          mergedBlocks.push(current)
@@ -391,6 +380,7 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
         timeUntilLock,
         currentMatchday: targetMatchday,
         currentMomento: shouldShowMomento ? targetMomento : null,
+        previousMatchday,
         upcomingLocks: outOfOrderLocks.filter(l => l.until.getTime() > now.getTime()),
         isCloseToStart,
       })

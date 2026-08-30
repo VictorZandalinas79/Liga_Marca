@@ -267,3 +267,67 @@ export function computeLockedTeams(
   }
   return locked
 }
+
+/**
+ * Jornada de la que viene cada jornada, en orden de CALENDARIO.
+ *
+ * Normalmente es `m - 1`, pero un partido fuera de orden rompe esa
+ * correspondencia: si la J6 juega un partido adelantado antes de que se juegue
+ * la J4, el once de la J4 se hereda del que disputó ese partido, y es contra
+ * ese contra el que hay que contar los cambios y la exclusividad.
+ *
+ * El tramo de referencia de una jornada es el ÚLTIMO suyo: cuando se puntúa, su
+ * alineación es la que quedó comprometida en ese tramo. Por eso la J6 del
+ * ejemplo viene de la J5 (su tramo regular), aunque su partido adelantado
+ * viniera de la J3.
+ *
+ * Las jornadas sin predecesor (la primera del juego) no aparecen en el mapa.
+ */
+export function chronologicalPredecessors(
+  fixtures: FixtureLite[],
+  offsets: LockOffsets = DEFAULT_LOCK_OFFSETS,
+  fantasyStart: number = 1
+): Map<number, number> {
+  const outOfOrderIds = new Set(
+    computeOutOfOrderLocks(fixtures, offsets, fantasyStart).map(l => l.fixtureId)
+  )
+
+  const byMatchday = new Map<number, FixtureLite[]>()
+  for (const f of fixtures) {
+    if (!f.matchday || f.matchday < fantasyStart || !f.start_time) continue
+    if (VOID_STATUSES.has((f.status || '').toLowerCase())) continue
+    if (!byMatchday.has(f.matchday)) byMatchday.set(f.matchday, [])
+    byMatchday.get(f.matchday)!.push(f)
+  }
+
+  // Un tramo por jornada (con sus partidos en orden) y otro por cada partido
+  // fuera de orden, igual que los bloques de mercado de useMatchdayLock.
+  const tramos: { start: number; matchday: number }[] = []
+  for (const [md, fs] of byMatchday) {
+    const regular = fs.filter(f => !outOfOrderIds.has(f.id))
+    if (regular.length > 0) {
+      const first = Math.min(...regular.map(f => new Date(f.start_time).getTime()))
+      tramos.push({ start: first - resolveStartHoursBefore(new Date(first), offsets) * ONE_HOUR, matchday: md })
+    }
+    for (const f of fs) {
+      if (!outOfOrderIds.has(f.id)) continue
+      const t = new Date(f.start_time).getTime()
+      tramos.push({ start: t - resolveStartHoursBefore(new Date(t), offsets) * ONE_HOUR, matchday: md })
+    }
+  }
+  tramos.sort((a, b) => a.start - b.start)
+
+  const lastTramoIdx = new Map<number, number>()
+  tramos.forEach((t, i) => lastTramoIdx.set(t.matchday, i))
+
+  const prev = new Map<number, number>()
+  for (const [md, idx] of lastTramoIdx) {
+    for (let i = idx - 1; i >= 0; i--) {
+      if (tramos[i].matchday !== md) {
+        prev.set(md, tramos[i].matchday)
+        break
+      }
+    }
+  }
+  return prev
+}

@@ -297,7 +297,7 @@ export default function DashboardPage() {
       setSelectedMatchday(activeMatchday)
     }
   }, [activeMatchday, recommendedMatchday, openMatchdaysLoaded])
-  const { isLocked, isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, upcomingLocks, isCloseToStart } = useMatchdayLock(selectedMatchday)
+  const { isLocked, isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, currentMatchday: resolvedMatchday, previousMatchday, upcomingLocks, isCloseToStart } = useMatchdayLock(selectedMatchday)
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
   // Estos jugadores no se pueden cambiar aunque el mercado general esté abierto.
   const lockedTeams = useLockedTeams()
@@ -777,25 +777,38 @@ export default function DashboardPage() {
         setPlayers(playersWithTeam)
       }
 
-      // 2. Alineación de la JORNADA ANTERIOR (base para resaltar cambios)
-      // Solo aplica si estamos en una jornada posterior al inicio de la liga
+      // 2. Alineación de la JORNADA ANTERIOR (base para heredar y para resaltar
+      // cambios). "Anterior" es la del tramo de juego previo en el CALENDARIO,
+      // no la del número de jornada anterior: si un partido adelantado de la J6
+      // se juega antes que la J4, la J4 arranca del equipo que jugó ese partido.
+      // Cuando el hook aún no ha resuelto el tramo previo se cae a la regla
+      // antigua (la última jornada guardada por debajo de esta).
       let baseIds: string[] = []
+      let baseSavedAt: string | null = null
       if (matchday > config.fantasy_starting_matchday) {
-        const { data: prevPlayers } = await supabase
+        const baseQuery = () => supabase
           .from('team_players')
-          .select('player_id, matchday, order')
+          .select('player_id, matchday, order, created_at')
           .eq('team_id', teamData.id)
           .eq('is_starter', true)
-          .lt('matchday', matchday)
-          .order('matchday', { ascending: false })
+
+        // Si no hay once en el tramo previo (no abrió la app en esa ventana de
+        // mercado), la base es la última jornada que sí guardó: quien no haga
+        // cambios entre el martes y el jueves sigue con su equipo de la J3.
+        let prevPlayers = previousMatchday != null
+          ? (await baseQuery().eq('matchday', previousMatchday)).data
+          : null
+        if (!prevPlayers || prevPlayers.length === 0) {
+          prevPlayers = (await baseQuery().lt('matchday', matchday).order('matchday', { ascending: false })).data
+        }
 
         if (prevPlayers && prevPlayers.length > 0) {
           const prevMd = prevPlayers[0].matchday
-          baseIds = prevPlayers
+          const prevRows = prevPlayers
             .filter(tp => tp.matchday === prevMd)
             .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-            .map(tp => tp.player_id)
-          baseIds = [...new Set(baseIds)]
+          baseIds = [...new Set(prevRows.map(tp => tp.player_id))]
+          baseSavedAt = prevRows[0]?.created_at ?? null
         }
       }
       if (isMounted) {
@@ -805,12 +818,24 @@ export default function DashboardPage() {
       // 3. Alineación de la JORNADA ACTIVA
       const { data: currentPlayers } = await supabase
         .from('team_players')
-        .select('player_id, order, replaced_player_id')
+        .select('player_id, order, replaced_player_id, created_at')
         .eq('team_id', teamData.id)
         .eq('is_starter', true)
         .eq('matchday', matchday)
 
-      if (currentPlayers && currentPlayers.length > 0) {
+      // Una jornada con un partido adelantado se comprometió antes de tiempo (el
+      // once que jugó ese partido) y vuelve a abrirse semanas después. Si su
+      // alineación es ANTERIOR a la del tramo previo, se quedó congelada dos
+      // jornadas atrás: hay que retomarla desde el equipo actual. Los jugadores
+      // de los equipos bloqueados por el partido adelantado siguen ahí solos,
+      // porque el bloqueo impide sacarlos en las jornadas intermedias.
+      const isStaleLineup =
+        currentPlayers != null && currentPlayers.length > 0 &&
+        baseIds.length > 0 && baseSavedAt != null &&
+        matchday === activeMatchday && !isUnlockWindowOpen &&
+        new Date(currentPlayers[0].created_at).getTime() < new Date(baseSavedAt).getTime()
+
+      if (currentPlayers && currentPlayers.length > 0 && !isStaleLineup) {
         // Ya tiene equipo para esta jornada: usarlo tal cual (NO regenerar)
         const sorted = currentPlayers.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         const ids = sorted.map(tp => tp.player_id)
@@ -842,8 +867,9 @@ export default function DashboardPage() {
       }
       creatingTeamRef.current.add(lockKey)
 
-      // 4. No tiene equipo para la jornada activa pero SÍ de una anterior:
-      //    heredar esos mismos 11 y persistirlos en la jornada activa.
+      // 4. No tiene equipo para la jornada activa (o el que tiene se quedó de un
+      //    tramo anterior) pero SÍ de la jornada previa: heredar esos mismos 11
+      //    y persistirlos en la jornada activa.
       if (baseIds.length > 0) {
         const rows = baseIds.map((pid, index) => ({
           player_id: pid,
@@ -859,6 +885,10 @@ export default function DashboardPage() {
         })
         if (error) console.error('[CARGAR] Error heredando alineación:', error)
         if (isMounted) {
+          // El once heredado no arrastra sustituciones: si venimos de otra
+          // jornada con cambios marcados, hay que limpiar sus badges.
+          setDbReplacedPlayers({})
+          setChangeHistory([])
           setSelectedPlayers(baseIds)
           setSavedPlayers(baseIds)
           setLoading(false)
@@ -876,15 +906,20 @@ export default function DashboardPage() {
       if (isMounted) setLoading(false)
     }
 
-    // Esperar a que el hook calcule la jornada seleccionada y cargue la config
-    if (config._isLoaded && typeof selectedMatchday === 'number' && selectedMatchday > 0) {
+    // Esperar a que el hook calcule la jornada seleccionada y cargue la config.
+    // `resolvedMatchday === selectedMatchday` garantiza que `previousMatchday`
+    // ya corresponde a ESTA jornada: si no, al cambiar de jornada se heredaría
+    // un instante de la anterior equivocada, y como heredar persiste, ese once
+    // quedaría guardado.
+    if (config._isLoaded && typeof selectedMatchday === 'number' && selectedMatchday > 0
+        && resolvedMatchday === selectedMatchday) {
       fetchInitialData(selectedMatchday)
     }
 
     return () => {
       isMounted = false
     }
-  }, [user?.id, selectedMatchday, config._isLoaded])
+  }, [user?.id, selectedMatchday, config._isLoaded, resolvedMatchday, previousMatchday, activeMatchday, isUnlockWindowOpen])
 
   // Cargar puntos de los jugadores cuando la jornada está en curso
   useEffect(() => {
@@ -967,7 +1002,11 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchOffLimits = async () => {
       const md = typeof activeMatchday === 'number' ? activeMatchday : 1
-      const prevMd = md - 1
+      // "Jornada previa comprometida" es la del tramo de juego anterior en el
+      // calendario, la misma de la que se hereda el once, no md - 1: con un
+      // partido adelantado de la J6 jugándose antes que la J4, lo que ata a la
+      // J4 es quién tenía a quién en ese partido.
+      const prevMd = (selectedMatchday === md && previousMatchday != null) ? previousMatchday : md - 1
       if (!userTeamId || prevMd < 1) {
         setOffLimitPlayerIds(new Set())
         return
@@ -1002,7 +1041,7 @@ export default function DashboardPage() {
       setOffLimitPlayerIds(offLimits)
     }
     fetchOffLimits()
-  }, [userTeamId, activeMatchday])
+  }, [userTeamId, activeMatchday, selectedMatchday, previousMatchday])
 
   useEffect(() => {
     const fetchAllPenalties = async () => {

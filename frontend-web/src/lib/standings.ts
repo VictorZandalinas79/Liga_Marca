@@ -34,6 +34,9 @@ export interface UserStanding {
   kamikaze_score?: number
   app_opens?: number
   saldo?: number
+  active_matchday_points?: number | null
+  active_matchday_played?: number
+  active_matchday_total?: number
 }
 
 export interface StandingsResult {
@@ -94,6 +97,14 @@ interface SharedData {
   sessionCounts: Map<string, number>
   financeByUser: Map<string, { amount_paid: number; infraction_penalties: number }>
   lastPlaceCount: Map<string, number>
+  allScores: {
+    player_id: string
+    total_points: number
+    fixture_id?: string
+    matchday?: number
+    minutes_played?: number
+  }[]
+  fixtureToMatchday: Map<string, number>
 }
 
 async function fetchPaginated<T>(
@@ -163,6 +174,8 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     sessionCounts: new Map(),
     financeByUser: new Map(),
     lastPlaceCount: new Map(),
+    allScores: [],
+    fixtureToMatchday: new Map(),
   })
 
   const { rows: teamPlayers, incomplete: tpIncomplete } = await fetchPaginated<TeamPlayerRow>(
@@ -204,7 +217,8 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     total_points: number
     fixture_id?: string
     matchday?: number
-  }>(supabase, 'player_scores', 'player_id, total_points, fixture_id, matchday')
+    minutes_played?: number
+  }>(supabase, 'player_scores', 'player_id, total_points, fixture_id, matchday, minutes_played')
   if (scoresIncomplete) return empty()
 
   const playerPointsByMatchday = new Map<string, Map<number, number>>()
@@ -346,6 +360,8 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     sessionCounts,
     financeByUser,
     lastPlaceCount: new Map(),
+    allScores,
+    fixtureToMatchday,
   }
 }
 
@@ -371,7 +387,8 @@ function computeDivisionStandings(
   division: DivisionId,
   teams: DivisionTeam[],
   membership: DivisionMembership,
-  shared: SharedData
+  shared: SharedData,
+  activeMatchday?: number | null
 ): UserStanding[] {
   if (teams.length === 0) return []
 
@@ -617,6 +634,21 @@ function computeDivisionStandings(
   const payLoser = config.pay_loser ?? 2
   const payRest = config.pay_rest ?? 1
 
+  // Indexar puntuaciones de la jornada activa para búsquedas O(1)
+  const activeScoresByPlayer = new Map<string, { total_points: number, minutes_played: number }>()
+  if (activeMatchday) {
+    for (const s of shared.allScores) {
+      let md: number | undefined = s.matchday && s.matchday > 0 ? s.matchday : undefined
+      if (!md && s.fixture_id) md = shared.fixtureToMatchday.get(s.fixture_id)
+      if (md === activeMatchday) {
+        activeScoresByPlayer.set(s.player_id, {
+          total_points: s.total_points || 0,
+          minutes_played: s.minutes_played || 0
+        })
+      }
+    }
+  }
+
   for (const md of shared.sortedPlayedMatchdays) {
     const participants: { userId: string; points: number }[] = []
     
@@ -712,6 +744,35 @@ function computeDivisionStandings(
     const dynamicInfractionPenalties = (userSanctionCount.get(userId) || 0) * (config.infraction_penalty_cost ?? 3)
     const saldo = (config.starting_balance ?? 40) - dynamicAmountPaid - dynamicInfractionPenalties
 
+    // Calcular puntos y jugadores que ya jugaron en la jornada activa
+    let activeMatchdayPoints: number | null = null
+    let activeMatchdayPlayed = 0
+    let activeMatchdayTotal = 0
+
+    if (activeMatchday && activeMatchday >= fantasyStart) {
+      const userTeams = userTeamsMap.get(userId) || []
+      for (const team of userTeams) {
+        const teamMatchdays = shared.teamPlayersByMatchday.get(team.teamId)
+        if (teamMatchdays && teamMatchdays.has(activeMatchday)) {
+          const players = teamMatchdays.get(activeMatchday) || []
+          const starters = players.filter(tp => tp.is_starter)
+          if (starters.length > 0) {
+            activeMatchdayPoints = activeMatchdayPoints || 0
+            activeMatchdayTotal += starters.length
+            for (const tp of starters) {
+              const pScore = activeScoresByPlayer.get(tp.player_id)
+              if (pScore) {
+                activeMatchdayPoints += pScore.total_points
+                if (pScore.minutes_played > 0) {
+                  activeMatchdayPlayed++
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     return {
       user_id: userId,
       user_name: userDisplayName(profile),
@@ -738,6 +799,9 @@ function computeDivisionStandings(
       kamikaze_score: minMinutes === Infinity ? 999999 : minMinutes,
       app_opens: shared.sessionCounts.get(userId) || 0,
       saldo,
+      active_matchday_points: activeMatchdayPoints !== null ? Math.round(activeMatchdayPoints * 10) / 10 : null,
+      active_matchday_played: activeMatchdayPlayed,
+      active_matchday_total: activeMatchdayTotal,
     }
   })
 }
@@ -750,7 +814,7 @@ function computeDivisionStandings(
  * ve en la tabla de su división. No existe ningún camino que calcule sanciones
  * mezclando divisiones.
  */
-export async function getStandings(supabase: any, division?: number | null): Promise<StandingsResult> {
+export async function getStandings(supabase: any, division?: number | null, activeMatchday?: number | null): Promise<StandingsResult> {
   const [membership, shared] = await Promise.all([
     loadDivisionMembership(supabase),
     loadSharedData(supabase),
@@ -762,7 +826,7 @@ export async function getStandings(supabase: any, division?: number | null): Pro
 
   const standings: UserStanding[] = []
   for (const d of divisionsToCompute(division)) {
-    standings.push(...computeDivisionStandings(d, membership.teamsByDivision.get(d) ?? [], membership, shared))
+    standings.push(...computeDivisionStandings(d, membership.teamsByDivision.get(d) ?? [], membership, shared, activeMatchday))
   }
 
   standings.sort((a, b) => b.total_points - a.total_points)

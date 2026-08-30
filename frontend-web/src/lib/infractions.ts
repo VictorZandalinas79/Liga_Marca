@@ -5,7 +5,7 @@ import {
   loadDivisionMembership,
   userDisplayName,
 } from '@/lib/divisions'
-import { resolveStartHoursBefore } from '@/lib/locked-teams-core'
+import { chronologicalPredecessors, computeOutOfOrderLocks, resolveStartHoursBefore, type FixtureLite } from '@/lib/locked-teams-core'
 
 export interface Infraction {
   id: string
@@ -19,12 +19,15 @@ export interface Infraction {
 }
 
 export async function getCurrentMatchday(supabase: SupabaseClient): Promise<number> {
-
-
-  // 2. Si no, calcular dinámicamente usando las fechas de fixtures y league_config (como useMatchdayLock)
+  // Se calcula dinámicamente con las fechas de fixtures y league_config, con el
+  // MISMO criterio que useMatchdayLock: la jornada es la del tramo de juego en
+  // curso o, si el mercado está abierto, la del próximo tramo que se dispute.
+  // Mirar la ventana completa de cada jornada (de su primer a su último partido)
+  // no vale: un partido adelantado estira esa ventana varias semanas y se traga
+  // los huecos de las jornadas intermedias.
   const { data: cfg } = await supabase
     .from('league_config')
-    .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after')
+    .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday')
     .eq('id', 1)
     .maybeSingle()
 
@@ -34,68 +37,72 @@ export async function getCurrentMatchday(supabase: SupabaseClient): Promise<numb
     endHoursAfter: cfg?.matchday_end_hours_after != null ? Number(cfg.matchday_end_hours_after) : 2,
   }
   const lockOffsetMs = lockOffsets.endHoursAfter * 60 * 60 * 1000
+  const fantasyStart = cfg?.fantasy_starting_matchday != null ? Number(cfg.fantasy_starting_matchday) : 1
 
   const { data: fixtures } = await supabase
     .from('fixtures')
-    .select('matchday, start_time')
+    .select('id, matchday, start_time, status, home_team_id, away_team_id')
     .order('start_time', { ascending: true })
 
   if (!fixtures || fixtures.length === 0) return 1
 
-  const numericMatchdays = fixtures
-    .filter(f => f.matchday && f.matchday > 0)
-    .map(f => f.matchday as number)
-  const maxNumericMatchday = numericMatchdays.length > 0 ? Math.max(...numericMatchdays) : 1
+  const outOfOrderIds = new Set(
+    computeOutOfOrderLocks(fixtures as FixtureLite[], lockOffsets, fantasyStart).map(l => l.fixtureId)
+  )
 
   // Agrupar por jornada
-  const jornadasMap = new Map<number, { matchday: number; start_time: string; fixtures: typeof fixtures }>()
+  const jornadasMap = new Map<number, typeof fixtures>()
   for (const fixture of fixtures) {
     const md = fixture.matchday || 1
-    if (!jornadasMap.has(md)) {
-      jornadasMap.set(md, { matchday: md, start_time: fixture.start_time, fixtures: [] })
-    }
-    jornadasMap.get(md)!.fixtures.push(fixture)
+    if (md < fantasyStart) continue
+    if (!jornadasMap.has(md)) jornadasMap.set(md, [])
+    jornadasMap.get(md)!.push(fixture)
   }
 
-  const sortedJornadas = Array.from(jornadasMap.values()).map(j => ({
-    ...j,
-    start_time: j.fixtures.reduce((min, f) => f.start_time < min ? f.start_time : min, j.fixtures[0].start_time),
-    end_time: j.fixtures.reduce((max, f) => f.start_time > max ? f.start_time : max, j.fixtures[0].start_time)
-  })).sort((a, b) => a.matchday - b.matchday)
+  // Un tramo por jornada (solo con sus partidos en orden) más un tramo por cada
+  // partido fuera de orden, etiquetado con su jornada LÓGICA.
+  interface Block { start: number; end: number; matchday: number; outOfOrder: boolean }
+  const blocks: Block[] = []
+  for (const [md, fs] of jornadasMap) {
+    const regular = fs.filter(f => !outOfOrderIds.has(f.id)).sort((a, b) => a.start_time < b.start_time ? -1 : 1)
+    if (regular.length > 0) {
+      const firstDate = new Date(regular[0].start_time)
+      blocks.push({
+        start: firstDate.getTime() - resolveStartHoursBefore(firstDate, lockOffsets) * 60 * 60 * 1000,
+        end: new Date(regular[regular.length - 1].start_time).getTime() + lockOffsetMs,
+        matchday: md,
+        outOfOrder: false,
+      })
+    }
+    for (const f of fs.filter(f => outOfOrderIds.has(f.id))) {
+      const fDate = new Date(f.start_time)
+      blocks.push({
+        start: fDate.getTime() - resolveStartHoursBefore(fDate, lockOffsets) * 60 * 60 * 1000,
+        end: fDate.getTime() + lockOffsetMs,
+        matchday: md,
+        outOfOrder: true,
+      })
+    }
+  }
+
+  if (blocks.length === 0) return 1
+  blocks.sort((a, b) => a.start - b.start)
 
   const now = Date.now()
-  // Buscar jornada activa. Puede haber más de una "activa" a la vez: un
-  // partido aplazado de una jornada anterior alarga su ventana (fin + margen)
-  // y puede solapar con el inicio de la siguiente, que ya desbloqueó sus
-  // propios cambios. En ese caso hay que quedarse con la MÁS AVANZADA (mismo
-  // criterio que usa la página de Jornada para elegir su jornada por
-  // defecto), si no, la campana se queda pegada en la jornada vieja y dejan
-  // de calcularse sanciones de la jornada real en curso.
-  for (const j of sortedJornadas) {
-    const firstDate = new Date(j.start_time)
-    const first = firstDate.getTime()
-    const last = new Date(j.end_time).getTime()
-    const unlockOffsetMs = resolveStartHoursBefore(firstDate, lockOffsets) * 60 * 60 * 1000
-    const unlock = first - unlockOffsetMs
-    const lock = last + lockOffsetMs
-    if (now >= unlock && now <= lock) {
-      return j.matchday
-    }
-  }
 
-  // Buscar próxima jornada
-  for (const j of sortedJornadas) {
-    const firstDate = new Date(j.start_time)
-    const first = firstDate.getTime()
-    const unlockOffsetMs = resolveStartHoursBefore(firstDate, lockOffsets) * 60 * 60 * 1000
-    const unlock = first - unlockOffsetMs
-    if (unlock > now) {
-      return j.matchday
-    }
+  // Tramo en curso. Con tramos solapados (un aplazado que cae dentro del fin de
+  // semana de otra jornada) manda la jornada regular, que es el hueco del
+  // calendario en el que estamos de verdad; entre iguales, la última en empezar.
+  let current: Block | null = null
+  for (const b of blocks) {
+    if (now < b.start || now > b.end) continue
+    if (!current || !b.outOfOrder || current.outOfOrder) current = b
   }
+  if (current) return current.matchday
 
-  // Si no hay próxima, devolver la última
-  return sortedJornadas.length > 0 ? sortedJornadas[sortedJornadas.length - 1].matchday : 1
+  // Mercado abierto: la jornada es la del próximo tramo que se juegue.
+  const next = blocks.find(b => b.start > now)
+  return next ? next.matchday : blocks[blocks.length - 1].matchday
 }
 
 export async function isMatchdayLockStarted(supabase: SupabaseClient, matchday: number): Promise<boolean> {
@@ -169,8 +176,42 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
     return allData
   }
 
-  // 3. Obtener todos los team_players registrados hasta la jornada actual
-  const allTeamPlayers = await fetchAll<any>('team_players', 'team_id, player_id, is_starter, is_captain, matchday', matchday)
+  // Calendario: hace falta antes que las alineaciones, porque de él sale de qué
+  // jornada viene cada jornada.
+  const { data: allFixtures } = await supabase
+    .from('fixtures')
+    .select('id, matchday, start_time, status, home_team_id, away_team_id')
+  const fixtureToMatchday = new Map<string, number>()
+  allFixtures?.forEach(f => {
+    if (f.id && f.matchday && f.matchday > 0) fixtureToMatchday.set(f.id, f.matchday)
+  })
+
+  // Jornada de la que "viene" cada jornada, en orden de CALENDARIO. Normalmente
+  // es m - 1, pero un partido adelantado rompe esa correspondencia: si la J6
+  // juega un partido antes que la J4, el once de la J4 se hereda del que jugó
+  // ese partido, y es contra ese contra el que hay que contar los cambios y la
+  // exclusividad.
+  const prevOf = chronologicalPredecessors(
+    (allFixtures || []) as FixtureLite[],
+    {
+      startHoursBeforeMidweek: configData?.matchday_start_hours_before_midweek != null ? Number(configData.matchday_start_hours_before_midweek) : 1,
+      startHoursBeforeWeekend: configData?.matchday_start_hours_before_weekend != null ? Number(configData.matchday_start_hours_before_weekend) : 1,
+      endHoursAfter: configData?.matchday_end_hours_after != null ? Number(configData.matchday_end_hours_after) : 2,
+    },
+    fantasyStart
+  )
+  // La jornada anterior a efectos de PLANTILLA (cambios y exclusividad). Las
+  // multas arrastradas y los jugadores anulados siguen mirando a m - 1: esos
+  // salen de la última jornada PUNTUADA, y la jornada de un partido adelantado
+  // no se puntúa hasta que se juegan todos sus partidos.
+  const prevLineupMd = (m: number): number => prevOf.get(m) ?? m - 1
+
+  // 3. Obtener todos los team_players registrados hasta la jornada actual.
+  //    El tope sube hasta el predecesor más lejano: con un partido adelantado,
+  //    la J4 necesita el once guardado para la J6, que va por delante.
+  let maxLineupMd = matchday
+  for (let m = fantasyStart; m <= matchday; m++) maxLineupMd = Math.max(maxLineupMd, prevLineupMd(m))
+  const allTeamPlayers = await fetchAll<any>('team_players', 'team_id, player_id, is_starter, is_captain, matchday', maxLineupMd)
 
   if (!allTeamPlayers || allTeamPlayers.length === 0) return []
 
@@ -198,12 +239,31 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
       .filter(Boolean)
   }
 
-  // Puntos de los jugadores en cada jornada (para la ordenación de exceso de cambios)
-  const allScores = await fetchAll<any>('player_scores', 'player_id, total_points, matchday', matchday)
-  
+  // Alineación EXACTA de una jornada, sin heredar de las anteriores. Hace falta
+  // para el predecesor cronológico cuando va por delante en número: el once del
+  // que viene la J4 es el que se guardó para la J6, y el helper de arriba, que
+  // coge "la última jornada guardada hasta m", devolvería otra cosa.
+  const getExactLineupForMatchday = (teamId: string, m: number): any[] =>
+    allTeamPlayers
+      .filter(tp => tp.team_id === teamId && tp.matchday === m && tp.is_starter)
+      .map(tp => {
+        const p = playerMap.get(tp.player_id)
+        return p ? { ...p, valor: p.precio, puntos: 0 } : null
+      })
+      .filter(Boolean)
+
+  // Puntos de los jugadores en cada jornada (para la ordenación de exceso de cambios).
+  // La jornada de una puntuación es la del PARTIDO en el que se logró: cada
+  // partido puntúa en la suya, también los adelantados o aplazados que se juegan
+  // fuera de su hueco del calendario. `player_scores.matchday` está sin rellenar
+  // (siempre NULL), así que filtrar por esa columna dejaba la consulta vacía y
+  // todos los jugadores a 0 puntos. Se reutiliza el mapa de `allFixtures`.
+  const allScores = await fetchAll<any>('player_scores', 'player_id, total_points, matchday, fixture_id')
+
   const scoresByMd = new Map<number, Map<string, number>>()
   allScores?.forEach(s => {
-    const md = s.matchday
+    const md = s.matchday && s.matchday > 0 ? s.matchday : fixtureToMatchday.get(s.fixture_id)
+    if (!md || md > matchday) return
     const pid = s.player_id
     if (!scoresByMd.has(md)) scoresByMd.set(md, new Map())
     const mdMap = scoresByMd.get(md)!
@@ -244,11 +304,23 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
       lineupHistory[m][tid] = new Set(starters.map(s => s.id))
     })
 
-    // heldByOthersPrev para m (dueños en m-1)
+    // heldByOthersPrev para m (dueños en la jornada de la que viene m)
     const heldByOthersPrevM = new Map<string, Map<string, string[]>>()
+    const prevLineupM = prevLineupMd(m)
+    if (!lineupHistory[prevLineupM]) {
+      // El predecesor va por delante en número (partido adelantado): su once no
+      // lo ha calculado aún el bucle. Es el que se guardó para ESA jornada; si
+      // el usuario no llegó a tocarla, se cae a la regla de siempre.
+      lineupHistory[prevLineupM] = {}
+      teamIds.forEach(tid => {
+        const exact = getExactLineupForMatchday(tid, prevLineupM)
+        const source = exact.length > 0 ? exact : getLineupForMatchday(tid, m - 1)
+        lineupHistory[prevLineupM][tid] = new Set(source.map(s => s.id))
+      })
+    }
     teamIds.forEach(tid => {
       const teamHeld = new Map<string, string[]>()
-      const prevMineOther = lineupHistory[m - 1]
+      const prevMineOther = lineupHistory[prevLineupM]
       for (const [ownerTid, pids] of Object.entries(prevMineOther)) {
         if (ownerTid !== tid) {
           const ownerTeam = teams.find(t => t.id === ownerTid)
@@ -277,11 +349,11 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
         s.puntos = pointsM?.get(s.id) || 0
       })
 
-      const prevMine = lineupHistory[m - 1][tid]
+      const prevMine = lineupHistory[prevLineupM][tid]
       const heldByOthersPrev = heldByOthersPrevM.get(tid) || new Map()
 
       const prevPenalties = penaltiesHistory[m - 1][tid]
-      const lineupPrev = lineupHistory[m - 1][tid]
+      const lineupPrev = lineupHistory[prevLineupM][tid]
       const zeroedPrev = zeroedHistory[m - 1][tid]
 
       const result = applySanctionsToTeam(
