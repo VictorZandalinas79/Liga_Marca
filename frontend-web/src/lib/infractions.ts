@@ -356,6 +356,9 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
       const lineupPrev = lineupHistory[prevLineupM][tid]
       const zeroedPrev = zeroedHistory[m - 1][tid]
 
+      const prevChangesM = prevLineupM > m ? m - 1 : prevLineupM
+      const lineupPrevForChanges = lineupHistory[prevChangesM] ? lineupHistory[prevChangesM][tid] : undefined
+
       const result = applySanctionsToTeam(
         starters,
         prevMine,
@@ -365,7 +368,8 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
         prevPenalties,
         lineupPrev,
         zeroedPrev,
-        m === fantasyStart
+        m === fantasyStart,
+        lineupPrevForChanges
       )
 
       zeroedHistory[m][tid] = new Set(result.zeroedPlayers.keys())
@@ -428,7 +432,8 @@ export function applySanctionsToTeam(
   prevPenalties?: any[],
   lineupPrev?: Set<string>,
   zeroedPrev?: Set<string>,
-  isFirstMatchday: boolean = false
+  isFirstMatchday: boolean = false,
+  lineupPrevForChanges?: Set<string>
 ): PlayerSanctionResult {
   // La jornada en la que arranca el juego (Admin → Reglas del Juego) no tiene
   // jornada anterior a efectos de sanciones, aunque la liga real lleve ya 20
@@ -444,6 +449,7 @@ export function applySanctionsToTeam(
     prevPenalties = undefined
     lineupPrev = undefined
     zeroedPrev = undefined
+    lineupPrevForChanges = undefined
   }
 
   const zeroedPlayers = new Map<string, string>()
@@ -776,8 +782,9 @@ export function applySanctionsToTeam(
   //    multas previas). El máximo lo fija el admin; antes estaba fijo en 3 aquí
   //    y el script de Python sí leía la configuración, así que la vista en vivo
   //    y las multas persistidas podían no coincidir.
-  if (lineupPrev && lineupPrev.size > 0) {
-    const newPlayers = starters.filter(s => !lineupPrev.has(s.id))
+  const changesBaseLineup = lineupPrevForChanges || lineupPrev;
+  if (changesBaseLineup && changesBaseLineup.size > 0) {
+    const newPlayers = starters.filter(s => !changesBaseLineup.has(s.id))
     const numChanges = newPlayers.length
 
     const penalizedPrev = zeroedPrev || new Set<string>()

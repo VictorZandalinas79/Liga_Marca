@@ -227,6 +227,8 @@ export default function DashboardPage() {
   const [savedPlayers, setSavedPlayers] = useState<string[]>([])
   // Alineación de la jornada ANTERIOR: sirve de base para resaltar los cambios
   const [basePlayers, setBasePlayers] = useState<string[]>([])
+  // Plantilla base para el límite de cambios (comparada contra la J3 si es adelantada)
+  const [changesBasePlayers, setChangesBasePlayers] = useState<string[]>([])
   const [dbReplacedPlayers, setDbReplacedPlayers] = useState<Record<number, string>>({})
   const [changeHistory, setChangeHistory] = useState<Array<{outId: string, inId: string, index: number}>>([])
   const [formation, setFormation] = useState<Formation>(FORMATIONS[1])
@@ -785,6 +787,7 @@ export default function DashboardPage() {
       // antigua (la última jornada guardada por debajo de esta).
       let baseIds: string[] = []
       let baseSavedAt: string | null = null
+      let changesBaseIds: string[] = []
       if (matchday > config.fantasy_starting_matchday) {
         const baseQuery = () => supabase
           .from('team_players')
@@ -810,9 +813,27 @@ export default function DashboardPage() {
           baseIds = [...new Set(prevRows.map(tp => tp.player_id))]
           baseSavedAt = prevRows[0]?.created_at ?? null
         }
+
+        // Si la jornada predecesora cronológicamente es un partido adelantado (> matchday),
+        // contamos el límite de cambios acumulados contra la última jornada regular guardada (< matchday).
+        if (previousMatchday != null && previousMatchday > matchday) {
+          const regularPrevPlayers = (await baseQuery().lt('matchday', matchday).order('matchday', { ascending: false })).data
+          if (regularPrevPlayers && regularPrevPlayers.length > 0) {
+            const regPrevMd = regularPrevPlayers[0].matchday
+            const regRows = regularPrevPlayers
+              .filter(tp => tp.matchday === regPrevMd)
+              .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+            changesBaseIds = [...new Set(regRows.map(tp => tp.player_id))]
+          } else {
+            changesBaseIds = baseIds
+          }
+        } else {
+          changesBaseIds = baseIds
+        }
       }
       if (isMounted) {
         setBasePlayers(baseIds)
+        setChangesBasePlayers(changesBaseIds)
       }
 
       // 3. Alineación de la JORNADA ACTIVA
@@ -1767,7 +1788,7 @@ export default function DashboardPage() {
   }, [availablePlayers, searchFilter, positionFilter, teamFilter, priceMinFilter, priceMaxFilter])
 
   const changedCount = changeHistory.length
-  const actualChangesCount = selectedPlayers.filter(id => !basePlayers.includes(id)).length
+  const actualChangesCount = selectedPlayers.filter(id => !changesBasePlayers.includes(id)).length
   const changesLimit = (activeMatchday && activeMatchday > config.fantasy_starting_matchday) 
         ? config.max_changes_per_matchday 
         : Infinity;

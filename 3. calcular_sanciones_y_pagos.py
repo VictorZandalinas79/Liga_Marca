@@ -230,7 +230,7 @@ def best_player(candidates, zeroed, points):
     return best
 
 
-def compute_team_sanctions(lineup, prev_mine, held_by_others_prev, points, player_meta, cfg, valid_formations, pos_max, prev_penalties=None, lineup_prev=None, zeroed_prev=None):
+def compute_team_sanctions(lineup, prev_mine, held_by_others_prev, points, player_meta, cfg, valid_formations, pos_max, prev_penalties=None, lineup_prev=None, zeroed_prev=None, lineup_prev_for_changes=None):
     """Devuelve tupla (sanctions, zeroed) para un equipo."""
     sanctions = []
     zeroed = set()
@@ -403,8 +403,9 @@ def compute_team_sanctions(lineup, prev_mine, held_by_others_prev, points, playe
                 zero([first, rest], f"Táctica incorrecta ({counts['GK']}-{formation[0]}-{formation[1]}-{formation[2]})")
 
     # 5) Exceso de cambios (máx. 3 cambios, salvo J1 y excepción de multas previas)
-    if lineup_prev is not None:
-        new_players = {pid for pid in lineup if pid not in lineup_prev}
+    changes_base_lineup = lineup_prev_for_changes if lineup_prev_for_changes is not None else lineup_prev
+    if changes_base_lineup is not None:
+        new_players = {pid for pid in lineup if pid not in changes_base_lineup}
         num_changes = len(new_players)
         
         penalized_prev = zeroed_prev if zeroed_prev else set()
@@ -613,10 +614,14 @@ def run_matchday(sb, matchday):
                 lineup_prev = None if is_first else lineup_history[prev_lineup_m][tid]
                 zeroed_prev = None if is_first else zeroed_history[m - 1][tid]
 
+                prev_changes_m = start_md - 1 if is_first else (prev_lineup_m if prev_lineup_m <= m else m - 1)
+                lineup_prev_for_changes = None if is_first else set(lineup_history[prev_changes_m][tid])
+
                 sanctions, zeroed = compute_team_sanctions(
                     lineup, prev_mine, held_by_others_prev, points_m, player_meta,
                     cfg, valid_formations, pos_max,
-                    prev_penalties=prev_penalties, lineup_prev=lineup_prev, zeroed_prev=zeroed_prev
+                    prev_penalties=prev_penalties, lineup_prev=lineup_prev, zeroed_prev=zeroed_prev,
+                    lineup_prev_for_changes=lineup_prev_for_changes
                 )
 
                 zeroed_history[m][tid] = zeroed
