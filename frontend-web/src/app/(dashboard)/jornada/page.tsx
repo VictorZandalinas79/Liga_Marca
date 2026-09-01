@@ -192,7 +192,13 @@ export default function JornadaPage() {
       const first = Math.min(...g.starts)
       const last = Math.max(...g.starts)
       // Visible cuando se bloquean los cambios (según configuración de liga)
-      const lockLeadMs = (config.matchday_start_hours_before || 1) * 60 * 60 * 1000
+      const firstDate = new Date(first)
+      const day = firstDate.getDay()
+      const isMidweek = day === 2 || day === 3 || day === 4
+      const hoursBefore = isMidweek
+        ? (config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1)
+        : (config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1)
+      const lockLeadMs = hoursBefore * 60 * 60 * 1000
       const started = now >= first - lockLeadMs
       // "En directo" solo desde que arranca de verdad el primer partido
       const live = now >= first && now <= last + MATCH_DURATION_MS

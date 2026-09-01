@@ -1789,9 +1789,6 @@ export default function DashboardPage() {
 
   const changedCount = changeHistory.length
   const actualChangesCount = selectedPlayers.filter(id => !changesBasePlayers.includes(id)).length
-  const changesLimit = (activeMatchday && activeMatchday > config.fantasy_starting_matchday) 
-        ? config.max_changes_per_matchday 
-        : Infinity;
 
   // Avisos permanentes de equipos bloqueados, agrupados por partido fuera de orden.
   const teamNameById = new Map<string, string>()
@@ -2409,7 +2406,7 @@ export default function DashboardPage() {
                   </button>
                 )}
                 <span className="text-sm text-emerald-600 font-bold">
-                  {actualChangesCount} cambio{actualChangesCount !== 1 ? 's' : ''} {changesLimit !== Infinity ? `/ ${changesLimit}` : ''}
+                  {actualChangesCount} cambio{actualChangesCount !== 1 ? 's' : ''}
                 </span>
               </div>
             )}
