@@ -845,7 +845,7 @@ export default function ClasificacionPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
+                    <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap tabular-nums">
                       <span className="text-base sm:text-xl font-bold text-emerald-400">
                         {(Math.round(standing.total_points * 10) / 10).toFixed(1)}
                       </span>

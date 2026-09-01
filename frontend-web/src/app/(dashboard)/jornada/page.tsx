@@ -1358,30 +1358,30 @@ export default function JornadaPage() {
 
       {/* Clasificación de la jornada (baja al fondo cuando se abren los equipos) */}
       {userTeams.length > 0 && (
-        <Card className={`!bg-slate-800 border-slate-700 ${showEquipos ? 'order-last' : ''}`}>
+        <Card className={`!bg-slate-800 border-slate-700 max-w-3xl mx-auto w-full ${showEquipos ? 'order-last' : ''}`}>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700">
-                    <th className="text-left py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold text-slate-300 w-5 sm:w-8">Pos</th>
-                    <th className="text-left py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold text-slate-300">Equipo</th>
+                    <th className="text-left py-1.5 px-1.5 sm:px-3 text-[9px] sm:text-sm font-semibold text-slate-300 w-6 sm:w-10">Pos</th>
+                    <th className="text-left py-1.5 px-1.5 sm:px-3 text-[9px] sm:text-sm font-semibold text-slate-300 w-[160px] sm:w-[220px]">Equipo</th>
                     <th
                       onClick={() => setSortBy('puntos')}
-                      className={`text-right py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'puntos' ? 'text-emerald-400' : 'text-slate-300'}`}
+                      className={`text-right py-1.5 px-1.5 sm:px-3 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'puntos' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Pts
                     </th>
-                    <th className="text-center py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold text-slate-300">Jug.</th>
+                    <th className="text-center py-1.5 px-1.5 sm:px-3 text-[9px] sm:text-sm font-semibold text-white">Jug.</th>
                     <th
                       onClick={() => setSortBy('valor')}
-                      className={`hidden sm:table-cell text-right py-1 px-0.5 sm:px-1 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'valor' ? 'text-emerald-400' : 'text-slate-300'}`}
+                      className={`hidden sm:table-cell text-right py-1.5 px-1.5 sm:px-3 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'valor' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Valor
                     </th>
                     <th
                       onClick={() => setSortBy('promedio')}
-                      className={`text-right py-1 pl-0.5 sm:pl-1 pr-2 sm:pr-4 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}
+                      className={`text-right py-1.5 pl-1.5 sm:pl-3 pr-2 sm:pr-4 text-[9px] sm:text-sm font-semibold cursor-pointer hover:text-white transition-colors ${sortBy === 'promedio' ? 'text-emerald-400' : 'text-slate-300'}`}
                     >
                       Prom
                     </th>
@@ -1409,31 +1409,30 @@ export default function JornadaPage() {
                         teamRefs.current[team.team_id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                       }}
                     >
-                      <td className="py-0.5 px-0.5 sm:px-1">
+                      <td className="py-1 px-1.5 sm:px-3">
                         {getPositionMedal(pos, isLast)}
                       </td>
-                      <td className="py-0.5 px-0.5 sm:px-1 whitespace-nowrap">
+                      <td className="py-1 px-1.5 sm:px-3 whitespace-nowrap">
                         <span className="font-bold text-white text-[9px] min-[360px]:text-[10px] sm:text-[15px] uppercase leading-tight">{team.user_name}</span>
                       </td>
-                      <td className="py-0.5 px-0.5 sm:px-1 text-right whitespace-nowrap">
+                      <td className="py-1 px-1.5 sm:px-3 text-right whitespace-nowrap tabular-nums">
                         <span className="text-base sm:text-xl font-bold text-emerald-400">
                           {(Math.round(team.puntos_totales * 10) / 10).toFixed(1)}
                         </span>
                         <span className="hidden sm:inline text-[8px] sm:text-[10px] text-slate-400 ml-0.5">pts</span>
                       </td>
-                      <td className="py-0.5 px-0.5 sm:px-1 text-center whitespace-nowrap">
-                        <span className="text-[9px] sm:text-xs text-slate-400 font-medium">
+                      <td className="py-1 px-1.5 sm:px-3 text-center whitespace-nowrap">
+                        <span className="text-[10px] sm:text-xs text-white font-semibold">
                           {jugaron}/{total}
                         </span>
                       </td>
-                      <td className="hidden sm:table-cell py-0.5 px-0.5 sm:px-1 text-right whitespace-nowrap">
+                      <td className="hidden sm:table-cell py-1 px-1.5 sm:px-3 text-right whitespace-nowrap">
                         <span className="text-[9px] sm:text-xs font-semibold text-slate-200">{fmtValor(team.valor_total)}</span>
                       </td>
-                      <td className="py-0.5 pl-0.5 sm:pl-1 pr-2 sm:pr-4 text-right whitespace-nowrap">
-                        <span className="text-[9px] sm:text-xs font-semibold text-slate-200">
+                      <td className="py-1 pl-1.5 sm:pl-3 pr-2 sm:pr-4 text-right whitespace-nowrap tabular-nums">
+                        <span className="text-xs sm:text-base font-bold text-white">
                           {jugaron > 0 ? (Math.round(promedio * 10) / 10).toFixed(1) : '—'}
                         </span>
-                        <span className="hidden sm:inline text-[8px] sm:text-[10px] text-slate-400 ml-0.5">pts/j</span>
                       </td>
                     </tr>
                   )
