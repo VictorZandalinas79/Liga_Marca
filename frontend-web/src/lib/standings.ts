@@ -7,6 +7,7 @@ import {
   loadDivisionMembership,
   userDisplayName,
 } from '@/lib/divisions'
+import { computeOutOfOrderLocks, type FixtureLite } from '@/lib/locked-teams-core'
 
 export interface UserStanding {
   user_id: string
@@ -192,7 +193,7 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
   const [{ data: playersData }, { data: realTeams }, { data: fixturesData }] = await Promise.all([
     supabase.from('players').select('id, position, team_id, precio, short_name, first_name').in('id', playerIds),
     supabase.from('real_teams').select('id, name'),
-    supabase.from('fixtures').select('id, matchday, status, start_time'),
+    supabase.from('fixtures').select('id, matchday, status, start_time, home_team_id, away_team_id'),
   ])
 
   const playersInfoMap = new Map<string, any>(playersData?.map((p: any) => [p.id, p]) || [])
@@ -212,6 +213,41 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     }
   })
 
+  // Jornadas con un partido adelantado (fuera de orden cronológico) cuyo resto
+  // de partidos todavía no se ha jugado: mientras dure, esa jornada solo cuenta
+  // para los jugadores de los dos equipos que disputaron el adelantado, porque
+  // es lo único que realmente se ha jugado de ella. Se levanta sola en cuanto
+  // el resto de partidos de esa jornada terminan.
+  const restrictedMatchdayTeams = new Map<number, Set<string>>()
+  {
+    const offsets = {
+      startHoursBeforeMidweek: configData?.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
+      startHoursBeforeWeekend: configData?.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
+      endHoursAfter: configData?.matchday_end_hours_after ?? 2,
+    }
+    const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
+    const advancedLocks = computeOutOfOrderLocks((fixturesData || []) as FixtureLite[], offsets, fantasyStart)
+      .filter(l => l.type === 'advanced')
+    const byMatchday = new Map<number, typeof advancedLocks>()
+    advancedLocks.forEach(l => {
+      if (!byMatchday.has(l.ownMatchday)) byMatchday.set(l.ownMatchday, [])
+      byMatchday.get(l.ownMatchday)!.push(l)
+    })
+    for (const [md, locks] of byMatchday) {
+      const mdFixtures = (fixturesData || []).filter((f: any) => f.matchday === md)
+      const allPlayed = mdFixtures.every((f: any) => {
+        const status = (f.status || '').toLowerCase()
+        if (status === 'finished') return true
+        const startTime = f.start_time ? new Date(f.start_time).getTime() : 0
+        return startTime > 0 && startTime + MATCH_DURATION_MS < Date.now()
+      })
+      if (allPlayed) continue
+      const teamIds = new Set<string>()
+      locks.forEach(l => l.teamIds.forEach(id => teamIds.add(id)))
+      restrictedMatchdayTeams.set(md, teamIds)
+    }
+  }
+
   const { rows: allScores, incomplete: scoresIncomplete } = await fetchPaginated<{
     player_id: string
     total_points: number
@@ -230,6 +266,14 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
 
     // Las jornadas anteriores al arranque del juego no suman para nadie.
     if (!md || md < fantasyStart) continue
+
+    // Jornada con partido adelantado sin terminar: solo cuentan los jugadores
+    // de los dos equipos que ya jugaron ese partido.
+    const restrictedTeamIds = restrictedMatchdayTeams.get(md)
+    if (restrictedTeamIds) {
+      const playerTeamId = playersInfoMap.get(score.player_id)?.team_id
+      if (!playerTeamId || !restrictedTeamIds.has(playerTeamId)) continue
+    }
 
     if (!playerPointsByMatchday.has(score.player_id)) {
       playerPointsByMatchday.set(score.player_id, new Map())

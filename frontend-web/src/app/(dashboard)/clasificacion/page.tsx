@@ -18,6 +18,7 @@ import { applySanctionsToTeam, getCurrentMatchday } from '@/lib/infractions'
 import { getStandings } from '@/lib/standings'
 import { DIVISION_COMBINED, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
+import { computeOutOfOrderLocks, type FixtureLite } from '@/lib/locked-teams-core'
 
 function formatPlayerName(name: string | undefined | null) {
   if (!name) return ''
@@ -281,6 +282,46 @@ export default function ClasificacionPage() {
         teamRefs.current[userId]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 100)
       return
+    }
+
+    // Si la jornada de destino tiene un partido adelantado sin terminar el resto,
+    // solo se muestran los jugadores de los dos equipos que ya jugaron ese
+    // partido: es lo único que realmente se ha disputado de esa jornada.
+    {
+      const { data: allFixturesRaw } = await supabase
+        .from('fixtures')
+        .select('id, matchday, momento, start_time, status, home_team_id, away_team_id')
+      const allFixturesLite = (allFixturesRaw || []) as FixtureLite[]
+      const offsets = {
+        startHoursBeforeMidweek: config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
+        startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
+        endHoursAfter: config.matchday_end_hours_after ?? 2,
+      }
+      const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
+      const advancedLocks = computeOutOfOrderLocks(allFixturesLite, offsets, config.fantasy_starting_matchday ?? 1)
+        .filter(l => l.type === 'advanced' && l.ownMatchday === actualMatchday)
+      if (advancedLocks.length > 0) {
+        const mdFixtures = allFixturesLite.filter(f => f.matchday === actualMatchday)
+        const allPlayed = mdFixtures.every(f => {
+          const status = (f.status || '').toLowerCase()
+          if (status === 'finished') return true
+          const startTime = f.start_time ? new Date(f.start_time).getTime() : 0
+          return startTime > 0 && startTime + MATCH_DURATION_MS < Date.now()
+        })
+        if (!allPlayed) {
+          const restrictedTeamIds = new Set<string>()
+          advancedLocks.forEach(l => l.teamIds.forEach(id => restrictedTeamIds.add(id)))
+          const { data: rosterPlayers } = await supabase
+            .from('players')
+            .select('id, team_id')
+            .in('id', teamPlayersData.map(tp => tp.player_id))
+          const teamIdByPlayer = new Map(rosterPlayers?.map(p => [p.id, p.team_id]) || [])
+          teamPlayersData = teamPlayersData.filter(tp => {
+            const tid = teamIdByPlayer.get(tp.player_id)
+            return tid && restrictedTeamIds.has(tid)
+          })
+        }
+      }
     }
 
     const playerIds = teamPlayersData.map(tp => tp.player_id)

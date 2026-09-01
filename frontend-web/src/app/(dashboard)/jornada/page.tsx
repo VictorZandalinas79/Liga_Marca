@@ -9,6 +9,7 @@ import { MetricBreakdown } from '@/components/metric-breakdown'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
+import { computeOutOfOrderLocks, type FixtureLite } from '@/lib/locked-teams-core'
 import { PrintView } from './PrintView'
 
 function formatPlayerName(name: string | undefined | null) {
@@ -113,6 +114,7 @@ export default function JornadaPage() {
   const [currentUserDivision, setCurrentUserDivision] = useState<number | null>(null)
   const [matchdayWinners, setMatchdayWinners] = useState<Set<string>>(new Set())
   const [matchdayLosers, setMatchdayLosers] = useState<Set<string>>(new Set())
+  const [allFixturesLite, setAllFixturesLite] = useState<FixtureLite[]>([])
   const supabase = createClient()
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const playerRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -144,13 +146,15 @@ export default function JornadaPage() {
     if (!config._isLoaded) return
     const { data: fixtures } = await supabase
       .from('fixtures')
-      .select('id, matchday, momento, start_time, status')
+      .select('id, matchday, momento, start_time, status, home_team_id, away_team_id')
       .order('start_time', { ascending: true })
 
     if (!fixtures) {
       setLoading(false)
       return
     }
+
+    setAllFixturesLite(fixtures as unknown as FixtureLite[])
 
     // Calcular el matchday numérico máximo
     const numericMatchdays = fixtures
@@ -380,6 +384,34 @@ export default function JornadaPage() {
       })
     }
 
+    // Si esta jornada tiene un partido adelantado (fuera de orden cronológico) y
+    // todavía no se han jugado el resto de sus partidos, solo deben mostrarse los
+    // jugadores de los dos equipos de ese partido adelantado: es lo único que
+    // realmente se ha disputado de esta jornada. La restricción se levanta sola
+    // en cuanto el resto de partidos de la jornada terminan.
+    const restrictedTeamIds = new Set<string>()
+    if (info && info.rawMatchday != null && allFixturesLite.length > 0) {
+      const offsets = {
+        startHoursBeforeMidweek: config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
+        startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
+        endHoursAfter: config.matchday_end_hours_after ?? 2,
+      }
+      const advancedLocks = computeOutOfOrderLocks(allFixturesLite, offsets, config.fantasy_starting_matchday ?? 1)
+        .filter(l => l.type === 'advanced' && l.ownMatchday === info.rawMatchday)
+      if (advancedLocks.length > 0) {
+        const mdFixtures = allFixturesLite.filter(f => f.matchday === info.rawMatchday)
+        const allPlayed = mdFixtures.every(f => {
+          const status = (f.status || '').toLowerCase()
+          if (status === 'finished') return true
+          const startTime = f.start_time ? new Date(f.start_time).getTime() : 0
+          return startTime > 0 && startTime + MATCH_DURATION_MS < Date.now()
+        })
+        if (!allPlayed) {
+          advancedLocks.forEach(l => l.teamIds.forEach(id => restrictedTeamIds.add(id)))
+        }
+      }
+    }
+
     // Obtener sanciones de la jornada anterior
     const prevMatchday = matchday - 1
     let prevPenalties: any[] = []
@@ -473,8 +505,14 @@ export default function JornadaPage() {
 
       // Todos los usuarios con equipo aparecen en la jornada independientemente de cuándo se registraron
 
-      const teamPlayers = teamPlayersByTeam.get(ut.id) || []
+      let teamPlayers = teamPlayersByTeam.get(ut.id) || []
       if (teamPlayers.length === 0) continue
+      if (restrictedTeamIds.size > 0) {
+        teamPlayers = teamPlayers.filter(tp => {
+          const p = playersById.get(tp.player_id)
+          return p?.team_id && restrictedTeamIds.has(p.team_id)
+        })
+      }
 
       const jugadores: Player[] = teamPlayers.map(tp => {
         const p = playersById.get(tp.player_id)
