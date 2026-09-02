@@ -299,7 +299,7 @@ export default function JornadaPage() {
     // Cargar todos los team_players hasta la jornada actual
     const { data: allTeamPlayers } = await supabase
       .from('team_players')
-      .select('team_id, player_id, is_starter, is_captain, matchday, replaced_player_id')
+      .select('team_id, player_id, is_starter, is_captain, matchday, replaced_player_id, position')
       .in('team_id', teamIdsUser)
       .lte('matchday', matchday)
       .order('matchday', { ascending: false })
@@ -522,7 +522,9 @@ export default function JornadaPage() {
           first_name: p?.first_name || '',
           last_name: p?.last_name || '',
           short_name: p?.short_name || '',
-          position: p?.position || '',
+          // Posición congelada en la jornada guardada; si esa fila no tiene
+          // snapshot (alineación previa a la congelación) cae a la del jugador.
+          position: tp.position || p?.position || '',
           photo: p?.photo,
           shirt_number: p?.shirt_number,
           team_id: p?.team_id,

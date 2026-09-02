@@ -504,6 +504,25 @@ def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto):
         update["photo"] = bw_foto
     return update
 
+
+def freeze_previous_position(player_id, old_pos):
+    """Antes de aplicar un cambio de posición, congela `old_pos` en las filas
+    de team_players de ese jugador que todavía no tengan snapshot propio
+    (position IS NULL = jornadas guardadas antes de que existiera esta
+    columna, o heredadas sin tocar). Así lo pasado no se mueve con el cambio,
+    y solo las alineaciones que se guarden/hereden a partir de ahora recogerán
+    la posición nueva."""
+    if not old_pos:
+        return
+    try:
+        supabase.table("team_players") \
+            .update({"position": old_pos}) \
+            .eq("player_id", player_id) \
+            .is_("position", "null") \
+            .execute()
+    except Exception as e:
+        print(f"  -> Aviso: no se pudo congelar la posición anterior de {player_id}: {e}")
+
 # Tipos nuevos que el CHECK de sync_notifications solo acepta con la migración
 # 013 aplicada. Mientras no lo esté, la notificación se guarda con un tipo
 # antiguo equivalente en vez de perderse.
@@ -823,6 +842,12 @@ def main():
                 "team_name": team_name,
                 "message": f"Ha cambiado de posición: {bw_pos}"
             })
+            # Congelar la posición antigua en las alineaciones ya guardadas: las
+            # sanciones y puntos de jornadas pasadas se calculan con la posición
+            # vigente en su momento, no con la nueva. Solo se rellenan las filas
+            # que aún no tengan snapshot propio (position IS NULL); las jornadas
+            # futuras se snapshotearán con la posición nueva al guardarse.
+            freeze_previous_position(match['id'], old_pos)
 
         # La foto es independiente: puede cambiar a la vez que la posición.
         if photo_changed:

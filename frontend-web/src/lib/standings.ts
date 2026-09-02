@@ -79,6 +79,7 @@ interface TeamPlayerRow {
   is_captain: boolean
   matchday: number
   created_at?: string
+  position?: string | null
 }
 
 /** Todo lo que NO depende de la división y por tanto se carga una sola vez. */
@@ -182,7 +183,7 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
   const { rows: teamPlayers, incomplete: tpIncomplete } = await fetchPaginated<TeamPlayerRow>(
     supabase,
     'team_players',
-    'team_id, player_id, is_starter, is_captain, matchday, created_at'
+    'team_id, player_id, is_starter, is_captain, matchday, created_at, position'
   )
   if (tpIncomplete) return empty()
   if (teamPlayers.length === 0) return { ...empty(), incomplete: false }
@@ -339,6 +340,7 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
         is_starter: tp.is_starter,
         is_captain: tp.is_captain,
         matchday: playedMd,
+        position: tp.position ?? null,
       }))
 
       // Insertar en la base de datos (persistir la herencia)
@@ -505,7 +507,7 @@ function computeDivisionStandings(
           const playerObj = {
             id: tp.player_id,
             puntos: points,
-            position: pInfo?.position || '',
+            position: tp.position || pInfo?.position || '',
             team_id: pInfo?.team_id,
             valor: pInfo?.precio ?? 0,
             team: { name: teamNameStr },

@@ -211,7 +211,7 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
   //    la J4 necesita el once guardado para la J6, que va por delante.
   let maxLineupMd = matchday
   for (let m = fantasyStart; m <= matchday; m++) maxLineupMd = Math.max(maxLineupMd, prevLineupMd(m))
-  const allTeamPlayers = await fetchAll<any>('team_players', 'team_id, player_id, is_starter, is_captain, matchday', maxLineupMd)
+  const allTeamPlayers = await fetchAll<any>('team_players', 'team_id, player_id, is_starter, is_captain, matchday, position', maxLineupMd)
 
   if (!allTeamPlayers || allTeamPlayers.length === 0) return []
 
@@ -234,7 +234,12 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
       .filter(tp => tp.team_id === teamId && tp.matchday === maxM && tp.is_starter)
       .map(tp => {
         const p = playerMap.get(tp.player_id)
-        return p ? { ...p, valor: p.precio, puntos: 0 } : null
+        // La demarcación se congela por jornada (tp.position): un cambio de
+        // posición no debe alterar retroactivamente la formación de jornadas
+        // ya guardadas. Solo se cae a la posición en vivo del jugador cuando
+        // la fila no tiene snapshot propio (alineaciones previas a la
+        // congelación).
+        return p ? { ...p, position: tp.position || p.position, valor: p.precio, puntos: 0 } : null
       })
       .filter(Boolean)
   }
@@ -248,7 +253,12 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
       .filter(tp => tp.team_id === teamId && tp.matchday === m && tp.is_starter)
       .map(tp => {
         const p = playerMap.get(tp.player_id)
-        return p ? { ...p, valor: p.precio, puntos: 0 } : null
+        // La demarcación se congela por jornada (tp.position): un cambio de
+        // posición no debe alterar retroactivamente la formación de jornadas
+        // ya guardadas. Solo se cae a la posición en vivo del jugador cuando
+        // la fila no tiene snapshot propio (alineaciones previas a la
+        // congelación).
+        return p ? { ...p, position: tp.position || p.position, valor: p.precio, puntos: 0 } : null
       })
       .filter(Boolean)
 
