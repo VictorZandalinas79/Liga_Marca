@@ -57,6 +57,62 @@ POS_LABEL = {
     "Forward": "delantero",
 }
 
+VALID_POSITIONS = {"Goalkeeper", "Defender", "Midfielder", "Forward"}
+
+POS_MAPPING = {
+    # Defender
+    "DEF": "Defender",
+    "DF": "Defender",
+    "D": "Defender",
+    "DEFENSA": "Defender",
+    "DEFENDER": "Defender",
+    # Forward
+    "DEL": "Forward",
+    "DL": "Forward",
+    "FWD": "Forward",
+    "FW": "Forward",
+    "F": "Forward",
+    "FORWARD": "Forward",
+    "DELANTERO": "Forward",
+    "ATTACKER": "Forward",
+    # Midfielder
+    "MED": "Midfielder",
+    "MD": "Midfielder",
+    "MID": "Midfielder",
+    "M": "Midfielder",
+    "MIDFIELDER": "Midfielder",
+    "CENTROCAMPISTA": "Midfielder",
+    "CENTRO": "Midfielder",
+    # Goalkeeper
+    "POR": "Goalkeeper",
+    "PT": "Goalkeeper",
+    "P": "Goalkeeper",
+    "GK": "Goalkeeper",
+    "GOALKEEPER": "Goalkeeper",
+    "PORTERO": "Goalkeeper",
+}
+
+def normalize_position(pos_raw, fallback="Midfielder"):
+    """Normaliza cualquier código/texto de posición a una de las 4 opciones válidas del enum player_position en PostgreSQL:
+    'Goalkeeper', 'Defender', 'Midfielder', 'Forward'."""
+    if not pos_raw:
+        return fallback
+    pos_str = str(pos_raw).strip()
+    if pos_str in VALID_POSITIONS:
+        return pos_str
+    upper = pos_str.upper()
+    if upper in POS_MAPPING:
+        return POS_MAPPING[upper]
+    if upper.startswith("DEL") or upper.startswith("FW") or upper == "F":
+        return "Forward"
+    if upper.startswith("DEF") or upper.startswith("D"):
+        return "Defender"
+    if upper.startswith("MED") or upper.startswith("MID") or upper.startswith("CENT") or upper == "M":
+        return "Midfielder"
+    if upper.startswith("POR") or upper.startswith("GK") or upper.startswith("PORT") or upper == "P":
+        return "Goalkeeper"
+    return fallback
+
 # La CDN de las fotos mete un cache-buster que cambia en cada scraping aunque la
 # imagen sea la misma:
 #   .../thumb/400x400/v202607201517/uploads/images/jugadores/ficha/5050.png
@@ -150,7 +206,7 @@ def build_provisional_player(bw_name, team_id, bw_pos, bw_precio, bw_price, bw_f
         "first_name": first_name,
         "last_name": last_name,
         "short_name": bw_name,
-        "position": bw_pos,
+        "position": normalize_position(bw_pos),
         "status": "active",
         "precio": bw_precio,
         "price": bw_price,
@@ -493,7 +549,7 @@ def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto):
     lugar de borrarla."""
     update = {
         "id": player_id,
-        "position": bw_pos,
+        "position": normalize_position(bw_pos),
         "precio": bw_precio,
         "price": bw_price,
         # Enforce team_id just in case
@@ -514,9 +570,10 @@ def freeze_previous_position(player_id, old_pos):
     la posición nueva."""
     if not old_pos:
         return
+    norm_old = normalize_position(old_pos)
     try:
         supabase.table("team_players") \
-            .update({"position": old_pos}) \
+            .update({"position": norm_old}) \
             .eq("player_id", player_id) \
             .is_("position", "null") \
             .execute()
@@ -752,17 +809,6 @@ def main():
 
     print("3. Cruzando datos (equipo -> fecha de nacimiento -> nombre solo como desempate)...")
 
-    POS_MAPPING = {
-        "DEL": "Forward",
-        "DL": "Forward",
-        "MED": "Midfielder",
-        "MD": "Midfielder",
-        "DEF": "Defender",
-        "DF": "Defender",
-        "POR": "Goalkeeper",
-        "PT": "Goalkeeper"
-    }
-    
     def parse_row(bw):
         """Los campos de una fila del CSV, ya normalizados."""
         try:
@@ -770,13 +816,14 @@ def main():
         except (TypeError, ValueError):
             precio = 0
         pos_raw = bw.get('Posicion', '').strip()
+        pos_norm = normalize_position(pos_raw)
         return {
             "row": bw,
             "team_name": bw.get('Equipo', '').strip(),
             "name": bw.get('Nombre', '').strip(),
             "date": parse_date(bw.get('Fecha_Nacimiento', '').strip()),
             "pos_raw": pos_raw,
-            "pos": POS_MAPPING.get(pos_raw, pos_raw),
+            "pos": pos_norm,
             "foto": bw.get('Foto', '').strip(),
             "precio": precio,
             "price": precio * 1000000,
