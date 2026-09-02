@@ -754,9 +754,13 @@ def main():
 
     POS_MAPPING = {
         "DEL": "Forward",
+        "DL": "Forward",
         "MED": "Midfielder",
+        "MD": "Midfielder",
         "DEF": "Defender",
-        "POR": "Goalkeeper"
+        "DF": "Defender",
+        "POR": "Goalkeeper",
+        "PT": "Goalkeeper"
     }
     
     def parse_row(bw):
