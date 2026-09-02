@@ -32,16 +32,16 @@ function formatDateTime(d: Date): string {
 async function fetchLockOffsets(supabase: SupabaseClient): Promise<LockOffsets> {
   const { data: cfg } = await supabase
     .from('league_config')
-    .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after')
+    .select('matchday_start_hours_before, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after')
     .eq('id', 1)
     .maybeSingle()
   return {
     startHoursBeforeMidweek: cfg?.matchday_start_hours_before_midweek != null
       ? Number(cfg.matchday_start_hours_before_midweek)
-      : DEFAULT_LOCK_OFFSETS.startHoursBeforeMidweek,
+      : (cfg?.matchday_start_hours_before != null ? Number(cfg.matchday_start_hours_before) : DEFAULT_LOCK_OFFSETS.startHoursBeforeMidweek),
     startHoursBeforeWeekend: cfg?.matchday_start_hours_before_weekend != null
       ? Number(cfg.matchday_start_hours_before_weekend)
-      : DEFAULT_LOCK_OFFSETS.startHoursBeforeWeekend,
+      : (cfg?.matchday_start_hours_before != null ? Number(cfg.matchday_start_hours_before) : DEFAULT_LOCK_OFFSETS.startHoursBeforeWeekend),
     endHoursAfter: cfg?.matchday_end_hours_after != null
       ? Number(cfg.matchday_end_hours_after)
       : DEFAULT_LOCK_OFFSETS.endHoursAfter,

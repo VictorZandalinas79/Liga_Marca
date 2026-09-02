@@ -30,6 +30,30 @@ def extract_birthdate(soup):
                 return match.group(1)
     return ""
 
+def extract_position(soup):
+    """La ficha del jugador lista la posicion por cada plataforma de fantasy
+    (Comunio, Biwenger, Futmondo, LaLiga F., Marca, Mister) en filas separadas
+    (div.info.d-flex). Aqui jugamos con datos de Biwenger, asi que hay que
+    coger su fila concreta y no la primera que aparezca en la pagina (que
+    puede ser de otra plataforma o del widget comparador de jugadores).
+    Si el jugador tiene doble demarcacion en Biwenger (p.ej. MD/DL), se
+    coge siempre la segunda."""
+    for info in soup.select('div.info.d-flex'):
+        left = info.select_one('.info-left')
+        if left and 'Biwenger' in left.get_text():
+            pos_tags = info.select('span.position-box')
+            if pos_tags:
+                return pos_tags[-1].text.strip()
+            break
+
+    # Fallback: el badge de posicion junto a la foto (paginas donde no
+    # aparece la tabla por plataforma, solo tiene una posicion).
+    badge = soup.select_one('div.mx-2.mb-3.text-center.mt-1 span.position-box')
+    if badge:
+        return badge.text.strip()
+
+    return ""
+
 def main():
     url = "https://www.futbolfantasy.com/analytics/biwenger/mercado/biwenger-fantasy"
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -107,9 +131,7 @@ def main():
                 birth_date = extract_birthdate(det_soup)
                 
                 # Posición
-                pos_tag = det_soup.select_one('span.position-box')
-                if pos_tag:
-                    position = pos_tag.text.strip()
+                position = extract_position(det_soup)
             else:
                 print(f"  -> Aviso: No se pudo cargar la url {detail_url}")
                 # Alternativa rápida para la foto: coger la pequeña de la tabla y cambiar 80x80 por 400x400
