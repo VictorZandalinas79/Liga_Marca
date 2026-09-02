@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { createServerSupabase } from '@/lib/supabase/server'
-import { getLiveInfractions, getCurrentMatchday } from '@/lib/infractions'
+import { getLiveInfractions, getCurrentMatchday, isMatchdayLockStarted } from '@/lib/infractions'
 import { isDivisionId } from '@/lib/divisions'
 
 export async function GET(request: NextRequest) {
@@ -17,6 +17,13 @@ export async function GET(request: NextRequest) {
   const division = divisionParam ? parseInt(divisionParam, 10) : null
 
   if (!currentMatchday) {
+    return NextResponse.json({ infractions: [] })
+  }
+
+  // Mientras el proceso de cambios (mercado/alineaciones) está abierto para esta jornada,
+  // no deben mostrarse sanciones en vivo: las alineaciones aún pueden cambiar.
+  const isLocked = await isMatchdayLockStarted(supabase, currentMatchday)
+  if (!isLocked) {
     return NextResponse.json({ infractions: [] })
   }
 
