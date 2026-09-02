@@ -626,12 +626,14 @@ export default function PartidoDetallePage() {
     const date = new Date(dateString)
     return {
       date: date.toLocaleDateString('es-ES', {
+        timeZone: 'Europe/Madrid',
         weekday: 'long',
         day: 'numeric',
         month: 'long',
         year: 'numeric'
       }),
       time: date.toLocaleTimeString('es-ES', {
+        timeZone: 'Europe/Madrid',
         hour: '2-digit',
         minute: '2-digit'
       })

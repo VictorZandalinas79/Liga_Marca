@@ -22,6 +22,7 @@ const HEADS_UP_MS = 14 * 24 * 60 * 60 * 1000
 
 function formatDateTime(d: Date): string {
   return d.toLocaleString('es-ES', {
+    timeZone: 'Europe/Madrid',
     day: '2-digit',
     month: 'short',
     hour: '2-digit',

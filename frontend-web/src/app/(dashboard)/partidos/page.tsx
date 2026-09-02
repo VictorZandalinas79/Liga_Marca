@@ -447,6 +447,7 @@ export default function PartidosPage() {
   const formatTime = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleTimeString('es-ES', {
+      timeZone: 'Europe/Madrid',
       hour: '2-digit',
       minute: '2-digit'
     })
@@ -455,12 +456,12 @@ export default function PartidosPage() {
   // "hace 3 min" / "hace 2 h" / "ayer 21:40"
   const formatLastUpdate = (date: Date) => {
     const diffMin = Math.floor((now - date.getTime()) / 60000)
-    const hora = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+    const hora = date.toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' })
     if (diffMin < 1) return `${hora} · hace un momento`
     if (diffMin < 60) return `${hora} · hace ${diffMin} min`
     const sameDay = new Date().toDateString() === date.toDateString()
     if (sameDay) return `${hora} · hace ${Math.floor(diffMin / 60)} h`
-    return `${date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} ${hora}`
+    return `${date.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short' })} ${hora}`
   }
 
   const getTimeUntilMatch = (startTime: string) => {

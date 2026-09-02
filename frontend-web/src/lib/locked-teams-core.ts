@@ -48,9 +48,11 @@ export const DEFAULT_LOCK_OFFSETS: LockOffsets = {
   endHoursAfter: 2,
 }
 
-/** Martes, miércoles o jueves (Date.getDay(): 0=domingo … 6=sábado). */
+/** Martes, miércoles o jueves (en zona horaria de España Europe/Madrid). */
 function isMidweekDay(d: Date): boolean {
-  const day = d.getDay()
+  const dayStr = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Madrid', weekday: 'short' }).format(d)
+  const days: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  const day = days[dayStr] ?? d.getDay()
   return day === 2 || day === 3 || day === 4
 }
 
