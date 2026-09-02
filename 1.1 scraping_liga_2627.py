@@ -33,21 +33,17 @@ def extract_birthdate(soup):
 def extract_position(soup):
     """La ficha del jugador lista la posicion por cada plataforma de fantasy
     (Comunio, Biwenger, Futmondo, LaLiga F., Marca, Mister) en filas separadas
-    (div.info.d-flex).
-    Buscamos primero la fila de 'LaLiga F.' / 'LaLiga Fantasy' y como fallback 'Biwenger'."""
-    for info in soup.select('div.info.d-flex'):
-        left = info.select_one('.info-left')
-        if left and ('LaLiga F.' in left.get_text() or 'LaLiga Fantasy' in left.get_text() or 'laliga' in str(left).lower()):
-            pos_tags = info.select('span.position-box')
-            if pos_tags:
-                return pos_tags[-1].text.strip()
-
+    (div.info.d-flex). Aqui cogemos la posicion correspondiente a Biwenger
+    (<span class="position-box ...">).
+    Si el jugador tiene doble demarcacion en Biwenger (p.ej. MD/DL), se
+    coge siempre la segunda."""
     for info in soup.select('div.info.d-flex'):
         left = info.select_one('.info-left')
         if left and 'Biwenger' in left.get_text():
             pos_tags = info.select('span.position-box')
             if pos_tags:
                 return pos_tags[-1].text.strip()
+            break
 
     # Fallback: el badge de posicion junto a la foto
     badge = soup.select_one('div.mx-2.mb-3.text-center.mt-1 span.position-box')
