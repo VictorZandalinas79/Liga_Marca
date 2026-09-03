@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { createServerSupabase } from '@/lib/supabase/server'
-import { getLiveInfractions, getCurrentMatchday, isMatchdayLockStarted } from '@/lib/infractions'
+import { getLiveInfractions, getCurrentMatchday, canShowInfractionsForMatchday } from '@/lib/infractions'
 import { getOutOfOrderMatchNotifications } from '@/lib/matchday-notifications'
 
 // Notificaciones calculadas al vuelo, sin fila en sync_notifications.
@@ -106,8 +106,8 @@ export async function GET() {
     //    Solo se muestran si no hay sanciones consolidadas (para no duplicar).
     const consolidatedUserIds = new Set((actualPenalties || []).map(p => p.user_id))
     
-    const isLocked = await isMatchdayLockStarted(supabase, currentMatchday)
-    if (isLocked) {
+    const canShowLive = await canShowInfractionsForMatchday(supabase, currentMatchday)
+    if (canShowLive) {
       // division=null → calcula TODAS las divisiones
       const liveInfractions = await getLiveInfractions(supabase, currentMatchday, null)
       

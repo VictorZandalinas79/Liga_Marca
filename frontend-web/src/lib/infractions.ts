@@ -5,7 +5,7 @@ import {
   loadDivisionMembership,
   userDisplayName,
 } from '@/lib/divisions'
-import { chronologicalPredecessors, computeOutOfOrderLocks, resolveStartHoursBefore, type FixtureLite } from '@/lib/locked-teams-core'
+import { chronologicalPredecessors, computeOutOfOrderLocks, hasUnresolvedOutOfOrderMatch, resolveStartHoursBefore, type FixtureLite } from '@/lib/locked-teams-core'
 
 export interface Infraction {
   id: string
@@ -133,6 +133,28 @@ export async function isMatchdayLockStarted(supabase: SupabaseClient, matchday: 
   const unlockTime = firstMatchDate.getTime() - unlockOffsetMs
   
   return Date.now() >= unlockTime
+}
+
+/**
+ * Si una jornada tiene un partido descolocado (adelantado/aplazado) sin
+ * resolver, no se muestran sanciones para ella hasta que se complete del
+ * todo: sus alineaciones y su historial dependen de partidos que aún no se
+ * han jugado. Una jornada normal (sin ningún fixture fuera de orden) sigue
+ * mostrando sanciones en cuanto cierra su mercado, como siempre.
+ */
+export async function canShowInfractionsForMatchday(supabase: SupabaseClient, matchday: number): Promise<boolean> {
+  const isLocked = await isMatchdayLockStarted(supabase, matchday)
+  if (!isLocked) return false
+
+  const { data: configData } = await supabase.from('league_config').select('fantasy_starting_matchday').eq('id', 1).maybeSingle()
+  const fantasyStart = Math.max(1, configData?.fantasy_starting_matchday ?? 1)
+
+  const { data: fixtures } = await supabase
+    .from('fixtures')
+    .select('id, matchday, start_time, status, home_team_id, away_team_id')
+
+  if (!fixtures) return true
+  return !hasUnresolvedOutOfOrderMatch(fixtures as FixtureLite[], matchday, fantasyStart)
 }
 
 export async function getLiveInfractions(supabase: SupabaseClient, matchday: number, division?: number | null): Promise<Infraction[]> {

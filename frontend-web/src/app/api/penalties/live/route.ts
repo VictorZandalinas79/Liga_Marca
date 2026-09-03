@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { createServerSupabase } from '@/lib/supabase/server'
-import { getLiveInfractions, getCurrentMatchday, isMatchdayLockStarted } from '@/lib/infractions'
+import { getLiveInfractions, getCurrentMatchday, canShowInfractionsForMatchday } from '@/lib/infractions'
 import { isDivisionId } from '@/lib/divisions'
 
 export async function GET(request: NextRequest) {
@@ -22,8 +22,11 @@ export async function GET(request: NextRequest) {
 
   // Mientras el proceso de cambios (mercado/alineaciones) está abierto para esta jornada,
   // no deben mostrarse sanciones en vivo: las alineaciones aún pueden cambiar.
-  const isLocked = await isMatchdayLockStarted(supabase, currentMatchday)
-  if (!isLocked) {
+  // Tampoco se muestran si la jornada tiene un partido descolocado (adelantado
+  // o aplazado) sin resolver: hasta que se complete del todo, sin que otra
+  // jornada distinta se juegue por medio, sus sanciones no son fiables.
+  const canShow = await canShowInfractionsForMatchday(supabase, currentMatchday)
+  if (!canShow) {
     return NextResponse.json({ infractions: [] })
   }
 

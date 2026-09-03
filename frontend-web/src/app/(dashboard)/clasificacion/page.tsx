@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Medal, Trophy, Star, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Minus, Search, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, MousePointerClick, History, Target, Users, AlertTriangle, ArrowUpDown, CheckCircle, X } from 'lucide-react'
+import { Medal, Trophy, Star, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Minus, Search, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, MousePointerClick, History, Target, Users, AlertTriangle, ArrowUpDown, CheckCircle, X, ArrowUp, ArrowDown } from 'lucide-react'
 
 function formatKamikazeTime(totalMinutes: number): string {
   if (totalMinutes === Infinity || totalMinutes === 999999) return '-'
@@ -803,19 +803,30 @@ export default function ClasificacionPage() {
                   
                   let bgClass = 'hover:bg-slate-700/50'
                   let borderClass = 'border-slate-700'
+                  let descCount = 0
                   
                   if (selectedDivision !== DIVISION_COMBINED && selectedDivision !== null) {
-                    const winCount = selectedDivision === 1 ? config.div1_win_percent : selectedDivision === 2 ? config.div2_win_percent : selectedDivision === 3 ? config.div3_win_percent : 0;
-                    const descCount = selectedDivision === 1 ? config.div1_descensos : selectedDivision === 2 ? config.div2_descensos : selectedDivision === 3 ? config.div3_descensos : 0;
+                    descCount = selectedDivision === 1 ? config.div1_descensos : selectedDivision === 2 ? config.div2_descensos : selectedDivision === 3 ? config.div3_descensos : 0;
+                    const totalGreenRows = (selectedDivision === 2 || selectedDivision === 3) ? 5 : (selectedDivision === 1 ? (config.div1_win_percent || 3) : 0);
                     
-                    if (index < winCount) {
-                      bgClass = 'bg-gradient-to-r from-emerald-900/60 via-emerald-900/10 to-transparent hover:from-emerald-800/60 [&>td:first-child]:shadow-[inset_3px_0_0_0_#10b981]'
-                      borderClass = 'border-emerald-800/40'
+                    if (index < totalGreenRows) {
+                      if (index >= 3) {
+                        // Filas 4ª y 5ª: verde más claro que las 3 primeras
+                        bgClass = 'bg-gradient-to-r from-emerald-950/40 via-emerald-900/10 to-transparent hover:from-emerald-900/50 [&>td:first-child]:shadow-[inset_3px_0_0_0_#34d399]'
+                        borderClass = 'border-emerald-800/30'
+                      } else {
+                        // Filas 1ª, 2ª y 3ª: verde principal
+                        bgClass = 'bg-gradient-to-r from-emerald-900/60 via-emerald-900/10 to-transparent hover:from-emerald-800/60 [&>td:first-child]:shadow-[inset_3px_0_0_0_#10b981]'
+                        borderClass = 'border-emerald-800/40'
+                      }
                     } else if (index >= standings.length - descCount) {
                       bgClass = 'bg-gradient-to-r from-red-950/70 via-red-900/20 to-transparent hover:from-red-900/70 [&>td:first-child]:shadow-[inset_3px_0_0_0_#ef4444]'
                       borderClass = 'border-red-900/40'
                     }
                   }
+
+                  const showGreenArrow = (selectedDivision === 2 || selectedDivision === 3) && index < 5
+                  const showRedArrow = (selectedDivision === 1 || selectedDivision === 2) && descCount > 0 && index >= standings.length - descCount
 
                   if (isExpanded) {
                     bgClass = 'bg-slate-600'
@@ -836,13 +847,23 @@ export default function ClasificacionPage() {
                       {getPositionMedal(standing.current_position, isLast)}
                     </td>
                     <td className="px-0.5 sm:px-1 py-1">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-white text-[9px] min-[360px]:text-[10px] sm:text-[11px] whitespace-nowrap uppercase">{standing.user_name}</p>
-                        {standing.best_matchday_points > 0 && (
-                          <p className="hidden sm:block text-[10px] text-amber-400 font-medium whitespace-nowrap">
-                            Mejor: {Math.round(standing.best_matchday_points * 10) / 10} pts (J{standing.best_matchday})
-                          </p>
-                        )}
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex items-center justify-center shrink-0">
+                          {showGreenArrow && (
+                            <ArrowUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 stroke-[2.5]" />
+                          )}
+                          {showRedArrow && (
+                            <ArrowDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 stroke-[2.5]" />
+                          )}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-white text-[9px] min-[360px]:text-[10px] sm:text-[11px] whitespace-nowrap uppercase">{standing.user_name}</p>
+                          {standing.best_matchday_points > 0 && (
+                            <p className="hidden sm:block text-[10px] text-amber-400 font-medium whitespace-nowrap">
+                              Mejor: {Math.round(standing.best_matchday_points * 10) / 10} pts (J{standing.best_matchday})
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap tabular-nums">

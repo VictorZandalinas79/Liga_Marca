@@ -235,6 +235,84 @@ export function computeOutOfOrderLocks(
   return locks
 }
 
+/** ¿Tiene esta jornada todos sus partidos ya `finished`? */
+export function isMatchdayFullyPlayed(fixtures: FixtureLite[], matchday: number): boolean {
+  const own = fixtures.filter(f => f.matchday === matchday)
+  if (own.length === 0) return false
+  return own.every(f => (f.status || '').toLowerCase() === 'finished')
+}
+
+/**
+ * Jornadas que tienen al menos un fixture cuya posición cronológica real no
+ * coincide con su hueco de calendario (adelantado o aplazado), sin importar
+ * si ese fixture concreto ya terminó o no. A diferencia de
+ * `computeOutOfOrderLocks` (que ignora los partidos ya finished porque solo
+ * le importa calcular ventanas de bloqueo activas), esto es una propiedad
+ * ESTRUCTURAL de la jornada: una vez descolocada, sigue estándolo aunque el
+ * partido descolocado ya se haya jugado, hasta que el resto de sus partidos
+ * también terminen.
+ */
+function matchdaysWithOutOfOrderFixtures(fixtures: FixtureLite[], fantasyStart: number = 1): Set<number> {
+  const numeric = fixtures.filter(
+    f => f.matchday && f.matchday >= fantasyStart && f.start_time && f.home_team_id && f.away_team_id
+  )
+  const byMatchday = new Map<number, FixtureLite[]>()
+  for (const f of numeric) {
+    const md = f.matchday as number
+    if (!byMatchday.has(md)) byMatchday.set(md, [])
+    byMatchday.get(md)!.push(f)
+  }
+
+  const repTime = new Map<number, number>()
+  for (const [md, fs] of byMatchday) {
+    const times = fs.map(f => new Date(f.start_time).getTime()).sort((a, b) => a - b)
+    repTime.set(md, times[Math.floor(times.length / 2)])
+  }
+
+  const OUT_OF_ORDER_THRESHOLD = 5 * 24 * 60 * 60 * 1000 // 5 dias
+
+  const slotFor = (t: number, ownMatchday: number): number => {
+    const ownRep = repTime.get(ownMatchday)
+    if (ownRep && Math.abs(t - ownRep) <= OUT_OF_ORDER_THRESHOLD) return ownMatchday
+    let closestMd = ownMatchday
+    let minDiff = Infinity
+    for (const [md, rep] of repTime.entries()) {
+      if (md === ownMatchday) continue
+      const diff = Math.abs(t - rep)
+      if (diff < minDiff) {
+        minDiff = diff
+        closestMd = md
+      }
+    }
+    return closestMd
+  }
+
+  const result = new Set<number>()
+  for (const f of numeric) {
+    const ownMatchday = f.matchday as number
+    const t = new Date(f.start_time).getTime()
+    if (slotFor(t, ownMatchday) !== ownMatchday) result.add(ownMatchday)
+  }
+  return result
+}
+
+/**
+ * ¿Tiene esta jornada un partido descolocado (adelantado o aplazado) que
+ * todavía no se ha resuelto? Distinto de "esta completa": una jornada normal
+ * (sin ningun fixture fuera de orden) nunca cuenta como "sin resolver" aqui,
+ * aunque le queden partidos por jugar - solo aplica cuando el propio
+ * calendario de esta jornada se ha roto por un partido jugado fuera de su
+ * hueco cronologico.
+ */
+export function hasUnresolvedOutOfOrderMatch(
+  fixtures: FixtureLite[],
+  matchday: number,
+  fantasyStart: number = 1
+): boolean {
+  if (!matchdaysWithOutOfOrderFixtures(fixtures, fantasyStart).has(matchday)) return false
+  return !isMatchdayFullyPlayed(fixtures, matchday)
+}
+
 /** ¿Está activo este bloqueo en el instante dado? */
 export function isLockActive(lock: OutOfOrderLock, now: Date = new Date()): boolean {
   const t = now.getTime()

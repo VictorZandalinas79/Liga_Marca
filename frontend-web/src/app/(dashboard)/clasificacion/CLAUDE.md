@@ -9,7 +9,6 @@
 |----|------|---|-------|------|
 | #3092 | 7:12 PM | ✅ | Enhanced last place indicator in clasificacion page | ~251 |
 | #3081 | 7:07 PM | 🔄 | Removed unused User icon import | ~166 |
-| #3080 | " | ✅ | User icon removed from standings table | ~217 |
 
 ### Jun 19, 2026
 
@@ -82,4 +81,10 @@
 | #4153 | 4:10 PM | 🔵 | Reviewing Clasificación page integration with filtered standings | ~344 |
 | #4152 | " | 🟣 | Clasificacion page filters displayed players to only advanced match participants during partial matchdays | ~507 |
 | #4140 | 4:07 PM | 🔵 | Jornada and Clasificación pages sum all matchday points without per-fixture filtering | ~643 |
+
+### Sep 3, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #4225 | 3:40 PM | 🔵 | Sanctions display logic triggers on matchday start, not completion | ~517 |
 </claude-mem-context>
