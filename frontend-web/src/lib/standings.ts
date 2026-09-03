@@ -336,19 +336,21 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
       const prevPlayers = matchdays.get(activeMd) || []
       if (prevPlayers.length === 0) continue
 
-      const inheritedRows = prevPlayers.map(tp => ({
-        team_id: teamId,
+      const rpcPlayers = prevPlayers.map((tp, i) => ({
         player_id: tp.player_id,
         is_starter: tp.is_starter,
         is_captain: tp.is_captain,
-        matchday: playedMd,
-        position: tp.position ?? null,
+        order: i,
+        replaced_player_id: null
       }))
 
-      // Insertar en la base de datos (persistir la herencia)
-      supabase.from('team_players').insert(inheritedRows).then(({ error }: any) => {
+      // Insertar en la base de datos (persistir la herencia usando la RPC con lock)
+      supabase.rpc('save_team_lineup', {
+        p_team_id: teamId,
+        p_matchday: playedMd,
+        p_players: rpcPlayers
+      }).then(({ error }: any) => {
         if (error) {
-          // Ignorar errores de duplicados (por si otra pestaña ya lo insertó)
           console.log(`[STANDINGS] Auto-herencia J${playedMd} equipo ${teamId}:`, error.message)
         }
       })

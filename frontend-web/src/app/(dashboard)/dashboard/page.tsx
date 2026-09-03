@@ -543,6 +543,9 @@ export default function DashboardPage() {
   // React Strict Mode o por cambios de activeMatchday mientras el hook resuelve).
   // Guardamos las claves `${teamId}-${matchday}` que ya estamos procesando.
   const creatingTeamRef = useRef<Set<string>>(new Set())
+  // Evita que un doble-click/doble-submit en cancelar/deshacer/confirmar cambio
+  // dispare dos llamadas a save_team_lineup casi simultáneas con estado obsoleto.
+  const lineupSavingRef = useRef(false)
 
   const getPositionCode = (position: string): string => {
     const posLower = position.toLowerCase()
@@ -1372,6 +1375,7 @@ export default function DashboardPage() {
   }
 
   const cancelChange = async (uniqueKey: string) => {
+    if (lineupSavingRef.current) return
     const playerMatch = selectedPlayersData.find(p => p._uniqueKey === uniqueKey)
     if (!playerMatch) return
     const index = playerMatch._originalIndex
@@ -1417,11 +1421,16 @@ export default function DashboardPage() {
         }
       })
       
-      await supabase.rpc('save_team_lineup', {
-        p_team_id: userTeamId,
-        p_matchday: matchdayToSave,
-        p_players: teamPlayersData
-      })
+      lineupSavingRef.current = true
+      try {
+        await supabase.rpc('save_team_lineup', {
+          p_team_id: userTeamId,
+          p_matchday: matchdayToSave,
+          p_players: teamPlayersData
+        })
+      } finally {
+        lineupSavingRef.current = false
+      }
     }
   }
 
@@ -1445,6 +1454,7 @@ export default function DashboardPage() {
 
   const confirmSwap = async () => {
     if (!pendingSwap) return
+    if (lineupSavingRef.current) return
 
     const { outId, inId, index } = pendingSwap
     const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
@@ -1480,11 +1490,17 @@ export default function DashboardPage() {
     })
 
     // Use RPC function for atomic operation
-    const { error: rpcError } = await supabase.rpc('save_team_lineup', {
-      p_team_id: userTeamId,
-      p_matchday: matchdayToSave,
-      p_players: teamPlayersData
-    })
+    lineupSavingRef.current = true
+    let rpcError
+    try {
+      ;({ error: rpcError } = await supabase.rpc('save_team_lineup', {
+        p_team_id: userTeamId,
+        p_matchday: matchdayToSave,
+        p_players: teamPlayersData
+      }))
+    } finally {
+      lineupSavingRef.current = false
+    }
 
     if (rpcError) {
       console.error('Error al guardar alineación:', rpcError)
@@ -1548,6 +1564,7 @@ export default function DashboardPage() {
 
   const undoLastChange = async () => {
     if (changeHistory.length === 0) return
+    if (lineupSavingRef.current) return
 
     const lastChange = changeHistory[changeHistory.length - 1]
     
@@ -1586,11 +1603,16 @@ export default function DashboardPage() {
         }
       })
       
-      await supabase.rpc('save_team_lineup', {
-        p_team_id: userTeamId,
-        p_matchday: matchdayToSave,
-        p_players: teamPlayersData
-      })
+      lineupSavingRef.current = true
+      try {
+        await supabase.rpc('save_team_lineup', {
+          p_team_id: userTeamId,
+          p_matchday: matchdayToSave,
+          p_players: teamPlayersData
+        })
+      } finally {
+        lineupSavingRef.current = false
+      }
     }
   }
 
