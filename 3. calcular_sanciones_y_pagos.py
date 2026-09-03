@@ -133,88 +133,17 @@ def detect_matchday(sb):
 
 
 def chronological_predecessors(fixtures, cfg, fantasy_start):
-    """Jornada de la que viene cada jornada, en orden de CALENDARIO.
-
-    Normalmente es m - 1, pero un partido fuera de orden rompe esa
-    correspondencia: si la J6 juega un partido adelantado antes de que se juegue
-    la J4, el once de la J4 se hereda del que disputó ese partido, y es contra
-    ese contra el que hay que contar los cambios y la exclusividad.
-
-    Espejo de `chronologicalPredecessors` en src/lib/locked-teams-core.ts: si se
-    toca uno hay que tocar el otro.
-    """
-    hour = timedelta(hours=1)
-    mid = float(cfg.get("matchday_start_hours_before_midweek") or 1)
-    week = float(cfg.get("matchday_start_hours_before_weekend") or 1)
-    void_status = {"cancelled", "postponed"}
-
-    def parse(ts):
-        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-
-    def start_offset(t):
-        # Martes, miércoles o jueves cuentan como entre semana.
-        return (mid if t.weekday() in (1, 2, 3) else week) * hour
-
-    by_md = {}
+    by_md = set()
     for f in fixtures:
         md = f.get("matchday")
-        if not md or md < fantasy_start or not f.get("start_time"):
-            continue
-        if (f.get("status") or "").lower() in void_status:
-            continue
-        by_md.setdefault(md, []).append(f)
-    if not by_md:
-        return {}
-
-    # Mediana de cada jornada: robusta frente a un único partido descolocado.
-    rep = {md: sorted(parse(f["start_time"]) for f in fs)[len(fs) // 2] for md, fs in by_md.items()}
-    threshold = timedelta(days=5)
-
-    def slot_for(t, own):
-        if abs(t - rep[own]) <= threshold:
-            return own
-        others = [md for md in rep if md != own]
-        return min(others, key=lambda md: abs(t - rep[md])) if others else own
-
-    out_of_order = set()
-    for md, fs in by_md.items():
-        for f in fs:
-            t = parse(f["start_time"])
-            played_slot = slot_for(t, md)
-            if played_slot == md:
-                continue
-            # Un aplazado que ya se jugó deja de descolocar nada, igual que en
-            # computeOutOfOrderLocks.
-            if md < played_slot and (f.get("status") or "").lower() == "finished":
-                continue
-            out_of_order.add(f["id"])
-
-    # Un tramo por jornada (con sus partidos en orden) y otro por cada partido
-    # fuera de orden.
-    tramos = []
-    for md, fs in by_md.items():
-        regular = [f for f in fs if f["id"] not in out_of_order]
-        if regular:
-            first = min(parse(f["start_time"]) for f in regular)
-            tramos.append((first - start_offset(first), md))
-        for f in fs:
-            if f["id"] in out_of_order:
-                t = parse(f["start_time"])
-                tramos.append((t - start_offset(t), md))
-    tramos.sort(key=lambda x: x[0])
-
-    # El tramo de referencia de una jornada es el ÚLTIMO suyo: cuando se puntúa,
-    # su alineación es la que quedó comprometida en ese tramo.
-    last_idx = {}
-    for i, (_, md) in enumerate(tramos):
-        last_idx[md] = i
-
+        if md and md >= fantasy_start:
+            by_md.add(md)
+            
     prev = {}
-    for md, idx in last_idx.items():
-        for i in range(idx - 1, -1, -1):
-            if tramos[i][1] != md:
-                prev[md] = tramos[i][1]
-                break
+    for md in sorted(list(by_md)):
+        if md > fantasy_start:
+            prev[md] = md - 1
+            
     return prev
 
 

@@ -339,17 +339,7 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
     // heldByOthersPrev para m (dueños en la jornada de la que viene m)
     const heldByOthersPrevM = new Map<string, Map<string, string[]>>()
     const prevLineupM = prevLineupMd(m)
-    if (!lineupHistory[prevLineupM]) {
-      // El predecesor va por delante en número (partido adelantado): su once no
-      // lo ha calculado aún el bucle. Es el que se guardó para ESA jornada; si
-      // el usuario no llegó a tocarla, se cae a la regla de siempre.
-      lineupHistory[prevLineupM] = {}
-      teamIds.forEach(tid => {
-        const exact = getExactLineupForMatchday(tid, prevLineupM)
-        const source = exact.length > 0 ? exact : getLineupForMatchday(tid, m - 1)
-        lineupHistory[prevLineupM][tid] = new Set(source.map(s => s.id))
-      })
-    }
+
     teamIds.forEach(tid => {
       const teamHeld = new Map<string, string[]>()
       const prevMineOther = lineupHistory[prevLineupM]

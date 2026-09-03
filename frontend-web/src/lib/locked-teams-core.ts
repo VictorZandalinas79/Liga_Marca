@@ -224,7 +224,7 @@ export function computeOutOfOrderLocks(
         ownMatchday,
         playedSlot,
         from: new Date(lockStart),
-        until: new Date(fEnd),
+        until: new Date(ownClose),
         kickoff: new Date(t),
         teamIds,
         teams,
@@ -366,46 +366,17 @@ export function chronologicalPredecessors(
   offsets: LockOffsets = DEFAULT_LOCK_OFFSETS,
   fantasyStart: number = 1
 ): Map<number, number> {
-  const outOfOrderIds = new Set(
-    computeOutOfOrderLocks(fixtures, offsets, fantasyStart).map(l => l.fixtureId)
-  )
-
-  const byMatchday = new Map<number, FixtureLite[]>()
+  const byMatchday = new Set<number>()
   for (const f of fixtures) {
-    if (!f.matchday || f.matchday < fantasyStart || !f.start_time) continue
-    if (VOID_STATUSES.has((f.status || '').toLowerCase())) continue
-    if (!byMatchday.has(f.matchday)) byMatchday.set(f.matchday, [])
-    byMatchday.get(f.matchday)!.push(f)
+    if (f.matchday && f.matchday >= fantasyStart) byMatchday.add(f.matchday)
   }
-
-  // Un tramo por jornada (con sus partidos en orden) y otro por cada partido
-  // fuera de orden, igual que los bloques de mercado de useMatchdayLock.
-  const tramos: { start: number; matchday: number }[] = []
-  for (const [md, fs] of byMatchday) {
-    const regular = fs.filter(f => !outOfOrderIds.has(f.id))
-    if (regular.length > 0) {
-      const first = Math.min(...regular.map(f => new Date(f.start_time).getTime()))
-      tramos.push({ start: first - resolveStartHoursBefore(new Date(first), offsets) * ONE_HOUR, matchday: md })
-    }
-    for (const f of fs) {
-      if (!outOfOrderIds.has(f.id)) continue
-      const t = new Date(f.start_time).getTime()
-      tramos.push({ start: t - resolveStartHoursBefore(new Date(t), offsets) * ONE_HOUR, matchday: md })
-    }
-  }
-  tramos.sort((a, b) => a.start - b.start)
-
-  const lastTramoIdx = new Map<number, number>()
-  tramos.forEach((t, i) => lastTramoIdx.set(t.matchday, i))
-
+  
   const prev = new Map<number, number>()
-  for (const [md, idx] of lastTramoIdx) {
-    for (let i = idx - 1; i >= 0; i--) {
-      if (tramos[i].matchday !== md) {
-        prev.set(md, tramos[i].matchday)
-        break
-      }
-    }
+  const sorted = Array.from(byMatchday).sort((a, b) => a - b)
+  
+  for (const md of sorted) {
+    if (md > fantasyStart) prev.set(md, md - 1)
   }
+  
   return prev
 }
