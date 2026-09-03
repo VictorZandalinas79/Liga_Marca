@@ -9,7 +9,7 @@ import { MetricBreakdown } from '@/components/metric-breakdown'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
-import { computeOutOfOrderLocks, type FixtureLite } from '@/lib/locked-teams-core'
+import { computeOutOfOrderLocks, hasUnresolvedOutOfOrderMatch, type FixtureLite } from '@/lib/locked-teams-core'
 import { PrintView } from './PrintView'
 
 function formatPlayerName(name: string | undefined | null) {
@@ -423,21 +423,13 @@ export default function JornadaPage() {
       prevPenalties = data || []
     }
 
-    // Verificar si la jornada está "intercalada" (tiene partidos de otras jornadas entre su primer y último partido)
-    let isInterleavedMatchday = false
-    if (info && info.rawMatchday != null && allFixturesLite.length > 0) {
-      const mdFixtures = allFixturesLite.filter(f => f.matchday === info.rawMatchday)
-      const validStarts = mdFixtures.map(f => f.start_time ? new Date(f.start_time).getTime() : 0).filter(t => t > 0)
-      if (validStarts.length > 0) {
-        const minStart = Math.min(...validStarts)
-        const maxStart = Math.max(...validStarts)
-        const otherFixtures = allFixturesLite.filter(f => f.matchday !== info.rawMatchday)
-        isInterleavedMatchday = otherFixtures.some(f => {
-          const t = f.start_time ? new Date(f.start_time).getTime() : 0
-          return t > minStart && t < maxStart
-        })
-      }
-    }
+    // Jornada con un partido fuera de orden (adelantado/aplazado) sin resolver: no
+    // se muestran sanciones hasta que se complete del todo, igual que en
+    // infractions.ts (getLiveInfractions / canShowInfractionsForMatchday).
+    const isInterleavedMatchday = !!(
+      info && info.rawMatchday != null && allFixturesLite.length > 0 &&
+      hasUnresolvedOutOfOrderMatch(allFixturesLite, info.rawMatchday, config.fantasy_starting_matchday ?? 1)
+    )
 
     // Datos de jugadores (incluye precio para el valor del equipo)
     const { data: playersData } = await supabase

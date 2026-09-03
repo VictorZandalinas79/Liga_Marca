@@ -799,18 +799,23 @@ function computeDivisionStandings(
       const userTeams = userTeamsMap.get(userId) || []
       for (const team of userTeams) {
         const teamMatchdays = shared.teamPlayersByMatchday.get(team.teamId)
-        if (teamMatchdays && teamMatchdays.has(activeMatchday)) {
-          const players = teamMatchdays.get(activeMatchday) || []
-          const starters = players.filter(tp => tp.is_starter)
-          if (starters.length > 0) {
-            activeMatchdayPoints = activeMatchdayPoints || 0
-            activeMatchdayTotal += starters.length
-            for (const tp of starters) {
-              const pScore = activeScoresByPlayer.get(tp.player_id)
-              if (pScore) {
-                activeMatchdayPoints += pScore.total_points
-                if (pScore.minutes_played > 0) {
-                  activeMatchdayPlayed++
+        if (teamMatchdays) {
+          const availableMds = Array.from(teamMatchdays.keys()).filter(m => m <= activeMatchday)
+          if (availableMds.length > 0) {
+            const targetMd = Math.max(...availableMds)
+            const players = teamMatchdays.get(targetMd) || []
+            const starters = players.filter(tp => tp.is_starter)
+
+            if (starters.length > 0) {
+              activeMatchdayPoints = activeMatchdayPoints || 0
+              activeMatchdayTotal += starters.length
+              for (const tp of starters) {
+                const pScore = activeScoresByPlayer.get(tp.player_id)
+                if (pScore) {
+                  activeMatchdayPoints += pScore.total_points
+                  if (pScore.minutes_played > 0) {
+                    activeMatchdayPlayed++
+                  }
                 }
               }
             }
