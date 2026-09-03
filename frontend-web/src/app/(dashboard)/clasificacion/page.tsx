@@ -287,6 +287,11 @@ export default function ClasificacionPage() {
     // Si la jornada de destino tiene un partido adelantado sin terminar el resto,
     // solo se muestran los jugadores de los dos equipos que ya jugaron ese
     // partido: es lo único que realmente se ha disputado de esa jornada.
+    
+    const actualMatchday = teamPlayersData[0].matchday
+    
+    let isInterleavedMatchday = false
+
     {
       const { data: allFixturesRaw } = await supabase
         .from('fixtures')
@@ -298,6 +303,21 @@ export default function ClasificacionPage() {
         endHoursAfter: config.matchday_end_hours_after ?? 2,
       }
       const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
+
+      if (actualMatchday != null && allFixturesLite.length > 0) {
+        const mdFixtures = allFixturesLite.filter(f => f.matchday === actualMatchday)
+        const validStarts = mdFixtures.map(f => f.start_time ? new Date(f.start_time).getTime() : 0).filter(t => t > 0)
+        if (validStarts.length > 0) {
+          const minStart = Math.min(...validStarts)
+          const maxStart = Math.max(...validStarts)
+          const otherFixtures = allFixturesLite.filter(f => f.matchday !== actualMatchday)
+          isInterleavedMatchday = otherFixtures.some(f => {
+            const t = f.start_time ? new Date(f.start_time).getTime() : 0
+            return t > minStart && t < maxStart
+          })
+        }
+      }
+
       const advancedLocks = computeOutOfOrderLocks(allFixturesLite, offsets, config.fantasy_starting_matchday ?? 1)
         .filter(l => l.type === 'advanced' && l.ownMatchday === actualMatchday)
       if (advancedLocks.length > 0) {
@@ -327,7 +347,6 @@ export default function ClasificacionPage() {
     const playerIds = teamPlayersData.map(tp => tp.player_id)
     const replacedPlayerIds = teamPlayersData.map(tp => tp.replaced_player_id).filter(Boolean) as string[]
     const allQueryPlayerIds = [...new Set([...playerIds, ...replacedPlayerIds])]
-    const actualMatchday = teamPlayersData[0].matchday
 
     const { data: playersData } = await supabase
       .from('players')
@@ -480,7 +499,7 @@ export default function ClasificacionPage() {
     
     const isCurrentOpenMatchday = isLeagueOpen && actualMatchday === currentMatchday;
     
-    const sanctionResult = isCurrentOpenMatchday
+    const sanctionResult = (isCurrentOpenMatchday || isInterleavedMatchday)
       ? { zeroedPlayers: new Map<string, string>(), netPoints: starters.reduce((sum, j) => sum + (j.puntos || 0), 0) }
       : applySanctionsToTeam(
           starters, 

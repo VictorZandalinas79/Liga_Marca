@@ -423,6 +423,22 @@ export default function JornadaPage() {
       prevPenalties = data || []
     }
 
+    // Verificar si la jornada está "intercalada" (tiene partidos de otras jornadas entre su primer y último partido)
+    let isInterleavedMatchday = false
+    if (info && info.rawMatchday != null && allFixturesLite.length > 0) {
+      const mdFixtures = allFixturesLite.filter(f => f.matchday === info.rawMatchday)
+      const validStarts = mdFixtures.map(f => f.start_time ? new Date(f.start_time).getTime() : 0).filter(t => t > 0)
+      if (validStarts.length > 0) {
+        const minStart = Math.min(...validStarts)
+        const maxStart = Math.max(...validStarts)
+        const otherFixtures = allFixturesLite.filter(f => f.matchday !== info.rawMatchday)
+        isInterleavedMatchday = otherFixtures.some(f => {
+          const t = f.start_time ? new Date(f.start_time).getTime() : 0
+          return t > minStart && t < maxStart
+        })
+      }
+    }
+
     // Datos de jugadores (incluye precio para el valor del equipo)
     const { data: playersData } = await supabase
       .from('players')
@@ -595,17 +611,21 @@ export default function JornadaPage() {
         }
       })
 
-      const sanctionResult = applySanctionsToTeam(
-        starters,
-        prevMine,
-        heldByOthersPrev,
-        config,
-        isLiveMatchday,
-        prevTeamPenalties,
-        lineupPrevSet,
-        zeroedPrevSet,
-        matchday === Math.max(1, config.fantasy_starting_matchday)
-      )
+      let sanctionResult = { zeroedPlayers: new Map<string, string>() }
+      
+      if (!isInterleavedMatchday) {
+        sanctionResult = applySanctionsToTeam(
+          starters,
+          prevMine,
+          heldByOthersPrev,
+          config,
+          isLiveMatchday,
+          prevTeamPenalties,
+          lineupPrevSet,
+          zeroedPrevSet,
+          matchday === Math.max(1, config.fantasy_starting_matchday)
+        )
+      }
 
       // 4. Update points and set sanctionReason
       jugadores.forEach(j => {
@@ -629,57 +649,62 @@ export default function JornadaPage() {
       
 
       // Calcular warning de exceso de cambios visual
-      const prevIds = prevStartersByTeam.get(ut.id) || []
-      const currentStarterIds = starters.map(j => j.id)
-      const inIds = currentStarterIds.filter(id => !prevIds.includes(id))
-      if (inIds.length > 3) {
-        jugadores.forEach(jug => {
-          if (inIds.includes(jug.id)) {
-            jug.hasSubstitutionWarning = true
-          }
-        })
-      }
+      let hasBudgetWarning = false
+      let hasTacticsWarning = false
 
-      // Validar Presupuesto
-      const valor_starters = starters.reduce((sum, p) => sum + (p.valor || 0), 0)
-      const hasBudgetWarning = valor_starters > config.budget_limit
-
-      // Validar Táctica
-      const counts = { GK: 0, DEF: 0, MID: 0, FWD: 0 }
-      starters.forEach(p => {
-        const posLower = (p.position || '').toLowerCase()
-        let code = 'MID'
-        if (posLower.includes('goalkeeper') || posLower === 'gk') code = 'GK'
-        else if (posLower.includes('defender') || posLower === 'def') code = 'DEF'
-        else if (posLower.includes('midfielder') || posLower === 'mid') code = 'MID'
-        else if (posLower.includes('forward') || posLower === 'fwd') code = 'FWD'
-        counts[code as keyof typeof counts] = (counts[code as keyof typeof counts] || 0) + 1
-      })
-      const validFormations = config.formations.map(f => {
-        const parts = f.split('-').map(n => parseInt(n.trim(), 10))
-        return { defenders: parts[0], midfielders: parts[1], forwards: parts[2] }
-      })
-      const isFormationValid = counts.GK === 1 && validFormations.some(f => 
-        f.defenders === counts.DEF && f.midfielders === counts.MID && f.forwards === counts.FWD
-      )
-      const hasTacticsWarning = !isFormationValid
-
-      // Validar Max Jugadores por Equipo
-      const teamCounts = new Map<string, number>()
-      starters.forEach(p => {
-        if (p.team_id) {
-          teamCounts.set(p.team_id, (teamCounts.get(p.team_id) || 0) + 1)
-        }
-      })
-      teamCounts.forEach((count, tId) => {
-        if (count > config.max_players_per_team) {
-          jugadores.forEach(j => {
-            if (j.is_starter && j.team_id === tId) {
-              j.hasMaxTeamWarning = true
+      if (!isInterleavedMatchday) {
+        const prevIds = prevStartersByTeam.get(ut.id) || []
+        const currentStarterIds = starters.map(j => j.id)
+        const inIds = currentStarterIds.filter(id => !prevIds.includes(id))
+        if (inIds.length > 3) {
+          jugadores.forEach(jug => {
+            if (inIds.includes(jug.id)) {
+              jug.hasSubstitutionWarning = true
             }
           })
         }
-      })
+
+        // Validar Presupuesto
+        const valor_starters = starters.reduce((sum, p) => sum + (p.valor || 0), 0)
+        hasBudgetWarning = valor_starters > config.budget_limit
+
+        // Validar Táctica
+        const counts = { GK: 0, DEF: 0, MID: 0, FWD: 0 }
+        starters.forEach(p => {
+          const posLower = (p.position || '').toLowerCase()
+          let code = 'MID'
+          if (posLower.includes('goalkeeper') || posLower === 'gk') code = 'GK'
+          else if (posLower.includes('defender') || posLower === 'def') code = 'DEF'
+          else if (posLower.includes('midfielder') || posLower === 'mid') code = 'MID'
+          else if (posLower.includes('forward') || posLower === 'fwd') code = 'FWD'
+          counts[code as keyof typeof counts] = (counts[code as keyof typeof counts] || 0) + 1
+        })
+        const validFormations = config.formations.map(f => {
+          const parts = f.split('-').map(n => parseInt(n.trim(), 10))
+          return { defenders: parts[0], midfielders: parts[1], forwards: parts[2] }
+        })
+        const isFormationValid = counts.GK === 1 && validFormations.some(f => 
+          f.defenders === counts.DEF && f.midfielders === counts.MID && f.forwards === counts.FWD
+        )
+        hasTacticsWarning = !isFormationValid
+
+        // Validar Max Jugadores por Equipo
+        const teamCounts = new Map<string, number>()
+        starters.forEach(p => {
+          if (p.team_id) {
+            teamCounts.set(p.team_id, (teamCounts.get(p.team_id) || 0) + 1)
+          }
+        })
+        teamCounts.forEach((count, tId) => {
+          if (count > config.max_players_per_team) {
+            jugadores.forEach(j => {
+              if (j.is_starter && j.team_id === tId) {
+                j.hasMaxTeamWarning = true
+              }
+            })
+          }
+        })
+      }
 
       teams.push({
         team_id: ut.id,
@@ -757,6 +782,27 @@ export default function JornadaPage() {
         const fetchInfractions = async () => {
           const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
           if (!info) return
+
+          // Verificar si la jornada está intercalada
+          let isInterleavedMatchday = false
+          if (info.rawMatchday != null && allFixturesLite.length > 0) {
+            const mdFixtures = allFixturesLite.filter(f => f.matchday === info.rawMatchday)
+            const validStarts = mdFixtures.map(f => f.start_time ? new Date(f.start_time).getTime() : 0).filter(t => t > 0)
+            if (validStarts.length > 0) {
+              const minStart = Math.min(...validStarts)
+              const maxStart = Math.max(...validStarts)
+              const otherFixtures = allFixturesLite.filter(f => f.matchday !== info.rawMatchday)
+              isInterleavedMatchday = otherFixtures.some(f => {
+                const t = f.start_time ? new Date(f.start_time).getTime() : 0
+                return t > minStart && t < maxStart
+              })
+            }
+          }
+
+          if (isInterleavedMatchday) {
+            if (isActive) setMatchdayInfractions([])
+            return
+          }
 
           let infractionsData: any[] = []
         // 1. Siempre intentar obtener las sanciones consolidadas de la base de datos.
