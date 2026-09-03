@@ -1644,7 +1644,13 @@ export default function JornadaPage() {
                                     <>
                                       {/* One Line Setup */}
                                       <div className="flex items-center w-full min-w-0">
-                                        <span className={`font-bold whitespace-nowrap truncate text-[14px] tracking-tight ${isPenalized ? 'text-red-800' : player.hasPlayed ? 'text-slate-700' : 'text-slate-900'}`}>
+                                        <span className={`font-bold whitespace-nowrap tracking-tight ${
+                                          (player.short_name || '').length > 15
+                                            ? 'text-[10px]'
+                                            : (player.short_name || '').length > 11
+                                            ? 'text-[12px]'
+                                            : 'text-[14px]'
+                                        } ${isPenalized ? 'text-red-800' : player.hasPlayed ? 'text-slate-700' : 'text-slate-900'}`}>
                                           {formatPlayerName(player.short_name)}
                                         </span>
                                         {isPenalized && <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0 ml-1" />}
