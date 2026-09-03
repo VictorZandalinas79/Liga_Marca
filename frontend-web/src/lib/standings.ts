@@ -107,6 +107,7 @@ interface SharedData {
     minutes_played?: number
   }[]
   fixtureToMatchday: Map<string, number>
+  restrictedMatchdayTeams: Map<number, Set<string>>
 }
 
 async function fetchPaginated<T>(
@@ -178,6 +179,7 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     lastPlaceCount: new Map(),
     allScores: [],
     fixtureToMatchday: new Map(),
+    restrictedMatchdayTeams: new Map(),
   })
 
   const { rows: teamPlayers, incomplete: tpIncomplete } = await fetchPaginated<TeamPlayerRow>(
@@ -408,6 +410,7 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     lastPlaceCount: new Map(),
     allScores,
     fixtureToMatchday,
+    restrictedMatchdayTeams,
   }
 }
 
@@ -796,6 +799,12 @@ function computeDivisionStandings(
     let activeMatchdayTotal = 0
 
     if (activeMatchday && activeMatchday >= fantasyStart) {
+      // Si la jornada activa tiene un partido adelantado sin resolver, de
+      // momento solo han jugado (o están jugando) los dos equipos reales de
+      // ese partido: el "X/11" debe contar solo esos titulares, igual que
+      // hace la página Jornada con restrictedTeamIds.
+      const restrictedRealTeamIds = shared.restrictedMatchdayTeams.get(activeMatchday)
+
       const userTeams = userTeamsMap.get(userId) || []
       for (const team of userTeams) {
         const teamMatchdays = shared.teamPlayersByMatchday.get(team.teamId)
@@ -804,7 +813,13 @@ function computeDivisionStandings(
           if (availableMds.length > 0) {
             const targetMd = Math.max(...availableMds)
             const players = teamMatchdays.get(targetMd) || []
-            const starters = players.filter(tp => tp.is_starter)
+            let starters = players.filter(tp => tp.is_starter)
+            if (restrictedRealTeamIds) {
+              starters = starters.filter(tp => {
+                const realTeamId = shared.playersInfoMap.get(tp.player_id)?.team_id
+                return realTeamId && restrictedRealTeamIds.has(realTeamId)
+              })
+            }
 
             if (starters.length > 0) {
               activeMatchdayPoints = activeMatchdayPoints || 0
