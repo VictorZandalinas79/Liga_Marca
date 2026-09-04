@@ -543,7 +543,7 @@ def find_transfer(bw_name, bw_date, team_id, all_api_players, matched_api_ids):
     return None, score
 
 
-def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto):
+def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto, bw_name=None):
     """Payload de actualización. La foto solo se toca si el scraping trajo una:
     si viene vacía (fallo puntual al leer la ficha) se conserva la que había en
     lugar de borrarla."""
@@ -556,6 +556,8 @@ def build_update(player_id, team_id, bw_pos, bw_precio, bw_price, bw_foto):
         "team_id": team_id,
         "is_in_biwenger": True,
     }
+    if bw_name:
+        update["short_name"] = bw_name
     if bw_foto:
         update["photo"] = bw_foto
     return update
@@ -913,7 +915,7 @@ def main():
                 "message": f"Foto actualizada: {bw_foto}"
             })
 
-        updates.append(build_update(match['id'], team_id, bw_pos, d["precio"], d["price"], bw_foto))
+        updates.append(build_update(match['id'], team_id, bw_pos, d["precio"], d["price"], bw_foto, bw_name=bw_name))
 
     # --- Pasada 1: cada jugador contra su propio equipo ---------------------
     pendientes = []

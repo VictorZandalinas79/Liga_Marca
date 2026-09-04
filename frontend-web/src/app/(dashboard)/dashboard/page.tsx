@@ -1753,7 +1753,7 @@ export default function DashboardPage() {
 
       if (q) {
         // Cached normalized names to avoid recalculating on every filter run
-        const displayName = (p as any)._normalizedName || ((p as any)._normalizedName = normalize(p.short_name || `${p.first_name || ''} ${p.last_name || ''}`))
+        const displayName = (p as any)._normalizedName || ((p as any)._normalizedName = normalize(`${p.short_name || ''} ${p.first_name || ''} ${p.last_name || ''}`))
         const teamName = (p as any)._normalizedTeam || ((p as any)._normalizedTeam = normalize(p.team?.name || ''))
         return displayName.includes(q) || teamName.includes(q)
       }

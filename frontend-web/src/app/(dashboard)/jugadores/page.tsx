@@ -105,7 +105,7 @@ function PlayerSearchPicker({
     ? players
         .filter(p => {
           const q = normalize(query)
-          const displayName = normalize(p.short_name || `${p.first_name} ${p.last_name}`)
+          const displayName = normalize(`${p.short_name || ''} ${p.first_name || ''} ${p.last_name || ''}`)
           return displayName.includes(q) || normalize(p.team?.name || '').includes(q)
         })
         .slice(0, 40)
@@ -411,7 +411,7 @@ export default function JugadoresPage() {
   const filteredPlayers = players
     .filter(p => {
       const q = normalize(filter)
-      const displayName = normalize(p.short_name || `${p.first_name} ${p.last_name}`)
+      const displayName = normalize(`${p.short_name || ''} ${p.first_name || ''} ${p.last_name || ''}`)
       const matchesFilter = !q || displayName.includes(q)
       const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
       const matchesTeam = teamFilter === 'ALL' || p.team_id === teamFilter
