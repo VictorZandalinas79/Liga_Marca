@@ -93,34 +93,48 @@ def main():
             if md not in matchday_starts or st < matchday_starts[md]:
                 matchday_starts[md] = st
 
-    # 2. Buscar qué jornada ha empezado ya, y si no ha sido procesada aún
+    # 2. Buscar qué jornadas han empezado ya, y cuáles no han sido procesadas
     # Solo miramos jornadas cuyo inicio es en el pasado (ya han empezado)
-    started_matchdays = [md for md, st in matchday_starts.items() if st <= now]
+    started_matchdays = sorted(md for md, st in matchday_starts.items() if st <= now)
     if not started_matchdays:
         print("ℹ️ Ninguna jornada ha empezado aún.")
         return
-        
-    # La jornada actual es la más reciente (máximo número de jornada) que ya ha empezado
-    current_matchday = max(started_matchdays)
-    
-    # 3. Comprobar si ya fue inicializada. 
-    # Utilizamos matchday_payments como flag: si hay pagos (aunque sean 0), ya se procesó.
-    try:
-        resp = sb.table("matchday_payments").select("id").eq("matchday", current_matchday).limit(1).execute()
-        if resp.data:
-            print(f"ℹ️ La jornada {current_matchday} ya fue inicializada previamente.")
-            return
-    except Exception as e:
-        print(f"⚠️ Error al comprobar matchday_payments: {e}")
-        return
 
-    # 3b. Si esta jornada tiene un partido descolocado (adelantado/aplazado)
-    # todavía sin resolver, no se calculan sanciones ni se avisa por email
-    # todavía: hay que esperar a que se complete del todo. Se volverá a
-    # comprobar en la siguiente ejecución (no se marca nada en
-    # matchday_payments, así no se pierde el disparo cuando sí termine).
-    if _is_unresolved_out_of_order_matchday(fixtures, current_matchday):
-        print(f"ℹ️ La jornada {current_matchday} tiene un partido descolocado sin resolver. Se espera a que se complete.")
+    # Un partido adelantado hace que la jornada a la que pertenece "empiece"
+    # mucho antes que jornadas anteriores con número menor (p.ej. el
+    # adelantado de la J6 puede jugarse antes que el primer partido de la
+    # J4). Si solo miráramos la jornada con el número más alto que ya
+    # empezó, la J4 se quedaría bloqueada para siempre en cuanto el
+    # adelantado de la J6 arrancara, porque el "máximo" quedaría fijado en 6.
+    # Por eso recorremos TODAS las jornadas ya empezadas y sin procesar, en
+    # orden, y procesamos cada una que ya esté lista (sin partidos
+    # descolocados pendientes).
+    current_matchday = None
+    for md in started_matchdays:
+        # 3. Comprobar si ya fue inicializada.
+        # Utilizamos matchday_payments como flag: si hay pagos (aunque sean 0), ya se procesó.
+        try:
+            resp = sb.table("matchday_payments").select("id").eq("matchday", md).limit(1).execute()
+            if resp.data:
+                continue  # esta jornada ya se procesó, seguimos con la siguiente
+        except Exception as e:
+            print(f"⚠️ Error al comprobar matchday_payments de la jornada {md}: {e}")
+            return
+
+        # 3b. Si esta jornada tiene un partido descolocado (adelantado/aplazado)
+        # todavía sin resolver, no se calculan sanciones ni se avisa por email
+        # todavía: hay que esperar a que se complete del todo. Se volverá a
+        # comprobar en la siguiente ejecución (no se marca nada en
+        # matchday_payments, así no se pierde el disparo cuando sí termine).
+        if _is_unresolved_out_of_order_matchday(fixtures, md):
+            print(f"ℹ️ La jornada {md} tiene un partido descolocado sin resolver. Se espera a que se complete.")
+            continue
+
+        current_matchday = md
+        break  # procesamos una jornada por ejecución; el resto se revisan en la siguiente pasada
+
+    if current_matchday is None:
+        print("ℹ️ No hay ninguna jornada empezada pendiente de procesar en este momento.")
         return
 
     print("=" * 60)
