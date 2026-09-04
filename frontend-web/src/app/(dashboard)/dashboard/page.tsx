@@ -124,24 +124,7 @@ function PitchPlayerCard({
           {player.precio ? `${player.precio}M` : '-'}
         </div>
 
-        {/* Reemplazado (arriba izquierda) */}
-        {replacedPlayer && (
-          <div 
-            className="absolute -top-3 -left-3 sm:-top-4 sm:-left-4 flex flex-row items-center gap-1 z-30 cursor-help bg-white/95 px-1.5 py-0.5 rounded-full shadow-sm border border-slate-200"
-            title={`Reemplaza a: ${replacedPlayer.short_name || replacedPlayer.first_name}`}
-          >
-            <div className="w-[12px] h-[12px] sm:w-[14px] sm:h-[14px] rounded-full bg-[#EFE9DD] flex flex-col items-center justify-center -space-y-[3px] shrink-0">
-              <ArrowLeft className="w-2 h-2 text-[#CD4C4C] stroke-[4]" />
-              <ArrowRight className="w-2 h-2 text-[#5D9C44] stroke-[4]" />
-            </div>
-            {replacedPlayer.team?.logo_url && (
-              <img src={replacedPlayer.team.logo_url} className="w-[12px] h-[12px] sm:w-[14px] sm:h-[14px] object-contain shrink-0" alt="" />
-            )}
-            <span className="text-[8px] sm:text-[9px] font-bold text-[#CD4C4C] whitespace-nowrap leading-none truncate max-w-[50px] sm:max-w-[60px]">
-              {formatPlayerName(replacedPlayer.short_name || replacedPlayer.first_name)}
-            </span>
-          </div>
-        )}
+
       </div>
 
       {/* Nombre del jugador */}
@@ -256,7 +239,7 @@ export default function DashboardPage() {
   const [userRanks, setUserRanks] = useState<any>(null)
   const [loadingRanks, setLoadingRanks] = useState(true)
   const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'stats' | 'penalties'>('stats')
+  const [activeTab, setActiveTab] = useState<'substitutions' | 'stats' | 'penalties'>('substitutions')
   const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>>(new Map())
   const [allFixturesLite, setAllFixturesLite] = useState<FixtureLite[]>([])
 
@@ -348,9 +331,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // Si isUnlockWindowOpen es FALSE, el mercado está ABIERTO (no hay partidos en juego).
-    // En ese caso, ocultamos Rendimiento y forzamos Sanciones.
+    // En ese caso, ocultamos Rendimiento.
     if (!isUnlockWindowOpen && activeTab === 'stats') {
-      setActiveTab('penalties')
+      setActiveTab('substitutions')
     }
   }, [isUnlockWindowOpen, activeTab])
   // Jugadores vetados por exclusividad: los tiene otro usuario en la jornada
@@ -2346,36 +2329,7 @@ export default function DashboardPage() {
                         )}
                       </div>
 
-                      {replacedPlayer && (
-                        <div className="absolute z-40 flex flex-col items-center pointer-events-none drop-shadow-xl 
-                          -top-5 sm:-top-[8cqw] left-1/2 -translate-x-1/2 
-                          md:top-[9cqw] md:left-auto md:-right-[4cqw] md:translate-x-0 md:items-center
-                        ">
-                          <div className="relative">
-                            {replacedPlayer.photo ? (
-                              <img
-                                src={replacedPlayer.photo}
-                                className="w-5 h-5 sm:w-7 sm:h-7 md:w-10 md:h-10 rounded-full object-cover border-[1.5px] border-red-400 shadow-xl bg-slate-200 grayscale-[10%]"
-                              />
-                            ) : (
-                              <div className="w-5 h-5 sm:w-7 sm:h-7 md:w-10 md:h-10 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[8px] sm:text-[10px] font-bold border-[1.5px] border-red-400 shadow-xl">
-                                {replacedPlayer.shirt_number || '?'}
-                              </div>
-                            )}
-                            {replacedPlayer.team?.logo_url && (
-                              <img
-                                src={replacedPlayer.team.logo_url}
-                                className="absolute -bottom-1 -left-1 w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 object-contain bg-white rounded-full p-[1px] shadow-sm"
-                              />
-                            )}
-                          </div>
-                          <div className="mt-0.5 md:mt-1 bg-black/95 rounded px-1.5 md:px-1.5 py-0.5 flex flex-col items-center shadow-xl border border-red-500/30">
-                            <p className="font-bold text-red-100 text-[5px] sm:text-[7px] md:text-[7px] leading-tight truncate text-center max-w-[35px] sm:max-w-[45px]">
-                              {replacedPlayer.short_name || replacedPlayer.first_name}
-                            </p>
-                          </div>
-                        </div>
-                      )}
+
                     </div>
                   )
                 })}
@@ -2441,12 +2395,25 @@ export default function DashboardPage() {
             )}
           </div>
         )}
+
+
       </div>
 
-      {/* Columna Derecha: Rendimiento y Sanciones */}
+      {/* Columna Derecha: Rendimiento, Sustituciones y Sanciones */}
       <div className="w-full lg:flex-1 lg:self-stretch flex flex-col">
         {/* ================= PESTAÑAS SUB-NAVEGACIÓN (RESPONSIVE GRID) ================= */}
-        <div className={`grid ${!isUnlockWindowOpen ? 'grid-cols-1' : 'grid-cols-2'} gap-1.5 sm:gap-3 bg-slate-100/90 p-1.5 rounded-xl shadow-inner border border-slate-200/50 mb-6 shrink-0`}>
+        <div className={`grid ${!isUnlockWindowOpen ? 'grid-cols-2' : 'grid-cols-3'} gap-1.5 sm:gap-2 bg-slate-100/90 p-1.5 rounded-xl shadow-inner border border-slate-200/50 mb-6 shrink-0`}>
+          <button
+            onClick={() => setActiveTab('substitutions')}
+            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeTab === 'substitutions'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-650 hover:bg-white/55 hover:text-slate-900'
+            }`}
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Sustituciones</span>
+          </button>
           {isUnlockWindowOpen && (
             <button
               onClick={() => setActiveTab('stats')}
@@ -2476,10 +2443,172 @@ export default function DashboardPage() {
         {/* Contenedor de contenido de pestañas con scroll independiente en ordenador */}
         <div className="lg:flex-1 lg:max-h-[640px] xl:max-h-[710px] 2xl:max-h-[720px] lg:overflow-y-auto pr-1 scrollbar-none pb-2">
 
+      {/* VISTA 1: SUSTITUCIONES DE LA JORNADA */}
+      {activeTab === 'substitutions' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {selectedMatchday > (config?.fantasy_starting_matchday ?? 1) ? (
+            <Card className="w-full border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden bg-white/95 backdrop-blur-sm transition-all duration-300">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/20">
+                      <ArrowLeftRight className="w-4.5 h-4.5 text-white" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-extrabold text-slate-900 tracking-tight" style={{ fontFamily: 'var(--font-outfit)' }}>
+                          Sustituciones de la Jornada {selectedMatchday}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Jugadores del once inicial sustituidos respecto a la jornada anterior
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {substitutionsList.length > 0 && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                      {substitutionsList.length} cambio{substitutionsList.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+
+                {substitutionsList.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 px-4 text-center bg-slate-50/70 rounded-xl border border-dashed border-slate-200">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-2 text-slate-400">
+                      <ArrowLeftRight className="w-5 h-5" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-700">Sin sustituciones en la Jornada {selectedMatchday}</p>
+                    <p className="text-xs text-slate-400 mt-1">La alineación no ha realizado cambios respecto a la jornada anterior.</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {substitutionsList.map(({ inPlayer, outPlayer }, idx) => {
+                      const inPts = playerPoints.get(inPlayer.id)
+                      const outPts = playerPoints.get(outPlayer.id)
+
+                      const outName = formatPlayerName(outPlayer.short_name || outPlayer.first_name)
+                      const inName = formatPlayerName(inPlayer.short_name || inPlayer.first_name)
+
+                      return (
+                        <div
+                          key={idx}
+                          className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-3.5 shadow-xs hover:shadow-md transition-all duration-300"
+                        >
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
+                            {/* JUGADOR QUE SALE (Sustituido) */}
+                            <div className="flex items-center gap-3 min-w-0 flex-1 bg-red-50/70 p-2.5 sm:p-3 rounded-xl border border-red-100/90 shadow-2xs">
+                              {outPlayer.photo ? (
+                                <img
+                                  src={outPlayer.photo}
+                                  alt={outName}
+                                  className="w-14 sm:w-16 h-16 sm:h-20 object-contain object-bottom drop-shadow-md shrink-0 grayscale-[35%] opacity-85"
+                                />
+                              ) : (
+                                <div className="w-12 h-14 rounded-xl bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold border border-red-200 shrink-0">
+                                  {outPlayer.shirt_number || '?'}
+                                </div>
+                              )}
+
+                              <div className="min-w-0 flex-1 flex flex-col justify-center">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[9px] font-black text-red-700 bg-red-100 border border-red-200 px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wider">
+                                    SALE
+                                  </span>
+                                  <span className={`text-[8px] font-bold text-white px-1.5 py-0.5 rounded-sm leading-none shrink-0 ${getPositionColor(outPlayer.position)}`}>
+                                    {getPositionLabel(outPlayer.position)}
+                                  </span>
+                                  {outPlayer.team?.logo_url && (
+                                    <img
+                                      src={outPlayer.team.logo_url}
+                                      alt=""
+                                      className="w-4.5 h-4.5 object-contain shrink-0"
+                                    />
+                                  )}
+                                </div>
+                                <p className="text-xs sm:text-sm font-bold text-slate-800 leading-snug mt-1 break-words">
+                                  {outName}
+                                </p>
+                                <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 font-medium">
+                                  <span className="font-semibold">{outPlayer.precio ? `${outPlayer.precio}M` : '-'}</span>
+                                  {outPts !== undefined && (
+                                    <span className="font-extrabold text-slate-600 bg-white/90 px-1.5 py-0.2 rounded border border-slate-200/80 shadow-2xs">
+                                      {outPts} pts
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* ICONO CENTRAL DE INTERCAMBIO */}
+                            <div className="flex flex-col items-center justify-center shrink-0 py-0.5 sm:py-0">
+                              <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-md border-2 border-white">
+                                <ArrowLeftRight className="w-4 h-4 text-amber-400" />
+                              </div>
+                            </div>
+
+                            {/* JUGADOR QUE ENTRA (Nuevo Starter) */}
+                            <div className="flex items-center gap-3 min-w-0 flex-1 bg-emerald-50/70 p-2.5 sm:p-3 rounded-xl border border-emerald-100/90 shadow-2xs">
+                              {inPlayer.photo ? (
+                                <img
+                                  src={inPlayer.photo}
+                                  alt={inName}
+                                  className="w-14 sm:w-16 h-16 sm:h-20 object-contain object-bottom drop-shadow-md shrink-0"
+                                />
+                              ) : (
+                                <div className="w-12 h-14 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-bold border border-emerald-200 shrink-0">
+                                  {inPlayer.shirt_number || '?'}
+                                </div>
+                              )}
+
+                              <div className="min-w-0 flex-1 flex flex-col justify-center">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[9px] font-black text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wider">
+                                    ENTRA
+                                  </span>
+                                  <span className={`text-[8px] font-bold text-white px-1.5 py-0.5 rounded-sm leading-none shrink-0 ${getPositionColor(inPlayer.position)}`}>
+                                    {getPositionLabel(inPlayer.position)}
+                                  </span>
+                                  {inPlayer.team?.logo_url && (
+                                    <img
+                                      src={inPlayer.team.logo_url}
+                                      alt=""
+                                      className="w-4.5 h-4.5 object-contain shrink-0"
+                                    />
+                                  )}
+                                </div>
+                                <p className="text-xs sm:text-sm font-bold text-slate-900 leading-snug mt-1 break-words">
+                                  {inName}
+                                </p>
+                                <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 font-medium">
+                                  <span className="font-semibold">{inPlayer.precio ? `${inPlayer.precio}M` : '-'}</span>
+                                  {inPts !== undefined && (
+                                    <span className="font-black text-emerald-700 bg-emerald-100/90 px-1.5 py-0.2 rounded border border-emerald-200 shadow-2xs">
+                                      {inPts} pts
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="text-center py-10 px-4 text-slate-400 bg-white rounded-2xl border border-slate-100 shadow-sm">
+              En la primera jornada del juego no aplican sustituciones.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* VISTA 2: RENDIMIENTO Y RANKINGS */}
       {activeTab === 'stats' && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          {/* Tarjetas de Estadísticas Principales */}
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <div className="bg-white border border-slate-100 rounded-2xl p-3 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-4 hover:shadow-md transition-shadow">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-500/10 flex items-center justify-center shrink-0">
@@ -3066,141 +3195,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Lista de Jugadores Sustituidos y que han entrado */}
-      {selectedMatchday > (config?.fantasy_starting_matchday ?? 1) && (
-        <Card className="w-full mt-6 border border-slate-100 rounded-2xl shadow-sm overflow-hidden bg-white animate-in fade-in duration-300">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-slate-100">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
-                <ArrowLeftRight className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-800" style={{ fontFamily: 'var(--font-outfit)' }}>
-                  Sustituciones de la Jornada {selectedMatchday}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Jugadores del once inicial que fueron sustituidos respecto a la jornada anterior
-                </p>
-              </div>
-            </div>
 
-            {substitutionsList.length === 0 ? (
-              <div className="text-center py-6 text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                No se realizaron sustituciones en esta jornada.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {substitutionsList.map(({ inPlayer, outPlayer }, idx) => {
-                  const inPts = playerPoints.get(inPlayer.id)
-                  const outPts = playerPoints.get(outPlayer.id)
-
-                  return (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between gap-2 p-3 bg-slate-50/70 border border-slate-100 rounded-xl hover:shadow-sm transition-all"
-                    >
-                      {/* JUGADOR QUE SALE (Sustituido) */}
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <span className="text-[9px] font-black text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded shrink-0">
-                          SALE
-                        </span>
-                        <div className="relative shrink-0">
-                          {outPlayer.photo ? (
-                            <img
-                              src={outPlayer.photo}
-                              alt={outPlayer.short_name}
-                              className="w-10 h-10 rounded-full object-cover border border-slate-200 bg-white grayscale-[40%]"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-450 border border-slate-200">
-                              {outPlayer.shirt_number || '?'}
-                            </div>
-                          )}
-                          {outPlayer.team?.logo_url && (
-                            <img
-                              src={outPlayer.team.logo_url}
-                              alt=""
-                              className="absolute -bottom-1 -right-1 w-4 h-4 object-contain bg-white rounded-full p-0.5 shadow-xs border border-slate-100"
-                            />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-650 truncate">
-                            {formatPlayerName(outPlayer.short_name || outPlayer.first_name)}
-                          </p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className={`text-[8px] font-bold text-white px-1 py-0.2 rounded-sm leading-none shrink-0 ${getPositionColor(outPlayer.position)}`}>
-                              {getPositionLabel(outPlayer.position)}
-                            </span>
-                            <span className="text-[9px] text-slate-400 font-medium">
-                              {outPlayer.precio ? `${outPlayer.precio}M` : '-'}
-                            </span>
-                          </div>
-                        </div>
-                        {outPts !== undefined && (
-                          <div className="ml-auto text-slate-400 font-bold text-xs shrink-0 pr-1">
-                            {outPts} pts
-                          </div>
-                        )}
-                      </div>
-
-                      {/* FLECHA DE CAMBIO */}
-                      <div className="flex items-center justify-center text-slate-400 px-1">
-                        <ArrowRight className="w-4 h-4" />
-                      </div>
-
-                      {/* JUGADOR QUE ENTRA (Nuevo Starter) */}
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded shrink-0">
-                          ENTRA
-                        </span>
-                        <div className="relative shrink-0">
-                          {inPlayer.photo ? (
-                            <img
-                              src={inPlayer.photo}
-                              alt={inPlayer.short_name}
-                              className="w-10 h-10 rounded-full object-cover border border-slate-200 bg-white"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 border border-slate-200">
-                              {inPlayer.shirt_number || '?'}
-                            </div>
-                          )}
-                          {inPlayer.team?.logo_url && (
-                            <img
-                              src={inPlayer.team.logo_url}
-                              alt=""
-                              className="absolute -bottom-1 -right-1 w-4 h-4 object-contain bg-white rounded-full p-0.5 shadow-xs border border-slate-100"
-                            />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800 truncate">
-                            {formatPlayerName(inPlayer.short_name || inPlayer.first_name)}
-                          </p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className={`text-[8px] font-bold text-white px-1 py-0.2 rounded-sm leading-none shrink-0 ${getPositionColor(inPlayer.position)}`}>
-                              {getPositionLabel(inPlayer.position)}
-                            </span>
-                            <span className="text-[9px] text-slate-400 font-medium">
-                              {inPlayer.precio ? `${inPlayer.precio}M` : '-'}
-                            </span>
-                          </div>
-                        </div>
-                        {inPts !== undefined && (
-                          <div className="ml-auto text-emerald-600 font-black text-xs shrink-0 pr-1">
-                            {inPts} pts
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
 
       {/* Modal de confirmación de cambio de jugador */}
