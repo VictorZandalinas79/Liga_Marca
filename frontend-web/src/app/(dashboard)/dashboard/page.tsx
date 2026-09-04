@@ -934,7 +934,13 @@ export default function DashboardPage() {
           ? (await baseQuery().eq('matchday', previousMatchday)).data
           : null
         if (!prevPlayers || prevPlayers.length === 0) {
-          prevPlayers = (await baseQuery().lt('matchday', matchday).order('matchday', { ascending: false })).data
+          const { data: latestSaved } = await baseQuery().order('created_at', { ascending: false }).limit(20)
+          if (latestSaved && latestSaved.length > 0) {
+            const newestCreatedAt = latestSaved[0].created_at
+            prevPlayers = latestSaved.filter(tp => tp.created_at === newestCreatedAt)
+          } else {
+            prevPlayers = (await baseQuery().lt('matchday', matchday).order('matchday', { ascending: false })).data
+          }
         }
 
         if (prevPlayers && prevPlayers.length > 0) {
