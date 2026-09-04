@@ -488,11 +488,22 @@ function computeDivisionStandings(
     const currentStartersByTeam = new Map<string, string[]>()
     const currentSquadByTeam = new Map<string, string[]>()
 
+    // Jornada con partido adelantado (o aplazado) sin terminar: solo se ha
+    // jugado un partido suelto de ella, no la jornada completa. Las sanciones
+    // (y la plantilla que cuenta como "anterior" para la exclusividad) solo
+    // deben calcularse sobre una jornada resuelta del todo — si no, se estaría
+    // sancionando o comparando plantillas de una jornada que técnicamente aún
+    // no ha pasado para casi nadie. `restrictedMatchdayTeams` ya marca (con
+    // sus claves) qué jornadas están en ese estado.
+    const mdUnresolved = shared.restrictedMatchdayTeams.has(md)
+
     for (const [userId, userTeams] of userTeamsMap.entries()) {
       if (!userPointsByMatchday.has(userId)) userPointsByMatchday.set(userId, new Map())
       if (!userMatchdaysFromTeamPlayers.has(userId)) userMatchdaysFromTeamPlayers.set(userId, new Set())
 
       for (const team of userTeams) {
+        if (mdUnresolved) continue
+
         const teamMatchdays = shared.teamPlayersByMatchday.get(team.teamId)
         if (!teamMatchdays) continue
 
@@ -584,6 +595,19 @@ function computeDivisionStandings(
 
         const mdPoints = startersList.reduce((sum, s) => sum + s.puntos, 0)
         userPointsByMatchday.get(userId)!.set(md, userPointsByMatchday.get(userId)!.get(md)! + mdPoints)
+      }
+    }
+
+    // Si esta jornada no está resuelta del todo, nadie ha "jugado" todavía a
+    // estos efectos: se conserva la plantilla anterior de todos los equipos,
+    // para que la cadena de exclusividad no se rompa cuando la jornada se
+    // complete de verdad.
+    if (mdUnresolved) {
+      for (const [teamId, starters] of prevStartersByTeam.entries()) {
+        if (!currentStartersByTeam.has(teamId)) currentStartersByTeam.set(teamId, starters)
+      }
+      for (const [teamId, squad] of prevSquadByTeam.entries()) {
+        if (!currentSquadByTeam.has(teamId)) currentSquadByTeam.set(teamId, squad)
       }
     }
 

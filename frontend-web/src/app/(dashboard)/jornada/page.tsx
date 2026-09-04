@@ -204,8 +204,13 @@ export default function JornadaPage() {
         : (config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1)
       const lockLeadMs = hoursBefore * 60 * 60 * 1000
       const started = now >= first - lockLeadMs
-      // "En directo" solo desde que arranca de verdad el primer partido
-      const live = now >= first && now <= last + MATCH_DURATION_MS
+      // "En directo" solo mientras se esté jugando de verdad algún partido de
+      // esta jornada. OJO: no basta con mirar [first, last] del grupo, porque
+      // un adelantado/aplazado puede dejar semanas de hueco entre su fecha y
+      // el resto de la jornada (p.ej. el adelantado de la J6 el 3 sept y el
+      // resto el 15-17 sept) — en ese hueco (tramo de cambios) la jornada NO
+      // está en directo, aunque now caiga entre first y last.
+      const live = g.starts.some(s => now >= s && now <= s + MATCH_DURATION_MS)
       return {
         matchday: displayNumber,
         momento: g.momento ?? undefined,
@@ -248,11 +253,27 @@ export default function JornadaPage() {
       return
     }
 
-    // Por defecto: la jornada en directo (la más alta si hay varias), si no, la última empezada
+    // Por defecto: la jornada que se está disputando ahora mismo (en directo,
+    // la más alta si hay varias). Si no hay ninguna en directo -tramo de
+    // cambios- se muestra la jornada anterior. "Anterior" no es simplemente
+    // "la de número más alto que ya empezó": una jornada puede figurar como
+    // "empezada" solo porque tiene un adelantado ya jugado (p.ej. la J6),
+    // aunque el resto de esa jornada -y jornadas intermedias como la J4- no
+    // se hayan disputado. En ese caso no hay que quedarse en la J6 por
+    // defecto, sino en la última jornada realmente resuelta.
     const liveOnes = startedInfos.filter(m => m.live)
-    const defaultMatchday = liveOnes.length > 0
-      ? liveOnes[liveOnes.length - 1].matchday
-      : startedInfos[startedInfos.length - 1].matchday
+    let defaultMatchday: number
+    if (liveOnes.length > 0) {
+      defaultMatchday = liveOnes[liveOnes.length - 1].matchday
+    } else {
+      const fantasyStart = config?.fantasy_starting_matchday ?? 1
+      const resolvedInfos = startedInfos.filter(m =>
+        typeof m.matchday !== 'number' || !hasUnresolvedOutOfOrderMatch(fixtures as FixtureLite[], m.matchday, fantasyStart)
+      )
+      defaultMatchday = resolvedInfos.length > 0
+        ? resolvedInfos[resolvedInfos.length - 1].matchday
+        : startedInfos[startedInfos.length - 1].matchday
+    }
 
     setSelectedMatchday(defaultMatchday)
   }
