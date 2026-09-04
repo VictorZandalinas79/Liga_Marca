@@ -2329,19 +2329,19 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      <div className="absolute -top-[4cqw] -right-[4cqw] z-40 flex items-center gap-[1cqw]">
+                      <div className="absolute -top-[5cqw] -right-[5cqw] z-40 flex items-center gap-[1cqw]">
                         {isLockedPlayer && (
-                          <div className="w-[12cqw] h-[12cqw] bg-red-500 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20" title="Jugador bloqueado: partido fuera de jornada">
-                            <Lock className="w-[6cqw] h-[6cqw] text-white" />
+                          <div className="w-[16cqw] h-[16cqw] bg-gradient-to-br from-red-600 to-rose-700 rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(225,29,72,0.6)] border-2 border-white" title="Jugador bloqueado: partido fuera de jornada">
+                            <Lock className="w-[9cqw] h-[9cqw] text-white stroke-[2.5]" />
                           </div>
                         )}
                         {isChanged && !isLockedPlayer && (
                           <button
                             onClick={e => { e.stopPropagation(); setCancelConfirmUniqueKey(player._uniqueKey) }}
-                            className="w-[12cqw] h-[12cqw] bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20 transition-colors"
+                            className="w-[17cqw] h-[17cqw] bg-gradient-to-br from-rose-500 via-red-600 to-rose-700 hover:from-rose-400 hover:to-red-500 rounded-full flex items-center justify-center shadow-[0_4px_14px_rgba(225,29,72,0.75)] border-2 border-white transition-all duration-300 hover:scale-115 hover:rotate-90 active:scale-95 group/cancelbtn"
                             title="Cancelar cambio"
                           >
-                            <X className="w-[6cqw] h-[6cqw] text-white" />
+                            <X className="w-[10cqw] h-[10cqw] text-white stroke-[3.5] filter drop-shadow-sm" />
                           </button>
                         )}
                       </div>
