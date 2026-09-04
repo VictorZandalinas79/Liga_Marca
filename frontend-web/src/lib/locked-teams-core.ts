@@ -171,7 +171,6 @@ export function computeOutOfOrderLocks(
     // Un partido cancelado o sin fecha ya no descoloca nada: no bloquea a nadie.
     const status = (f.status || '').toLowerCase()
     if (VOID_STATUSES.has(status)) continue
-    if (status === 'finished') continue
 
     // Cierre de la jornada propia: último partido EN ORDEN de esa jornada + endOffset.
     const siblings = byMatchday.get(ownMatchday)!.filter(x => {
@@ -194,6 +193,8 @@ export function computeOutOfOrderLocks(
     if (ownMatchday < playedSlot) {
       // APLAZADO: pertenece a una jornada anterior pero se juega más tarde.
       // Bloqueado desde que cierra su jornada hasta que el partido termina.
+      // Si ya consta como jugado, se levanta el bloqueo sin esperar a fEnd.
+      if (status === 'finished') continue
       locks.push({
         fixtureId: f.id,
         type: 'delayed',

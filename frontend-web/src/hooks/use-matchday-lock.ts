@@ -281,6 +281,12 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       if (refBlock) {
         for (const b of blocks) {
           if (b.start >= refBlock.start) break
+          // Un partido fuera de orden (aplazado/adelantado) no es el
+          // predecesor real de calendario: es un partido de OTRA jornada
+          // colado en este hueco. La herencia debe seguir el hueco regular
+          // anterior (p.ej. la J4 hereda de la J3 aunque entre medias se
+          // haya jugado el adelantado de la J6).
+          if (b.outOfOrder) continue
           if (b.matchday !== targetMatchday) previousMatchday = b.matchday
         }
       }

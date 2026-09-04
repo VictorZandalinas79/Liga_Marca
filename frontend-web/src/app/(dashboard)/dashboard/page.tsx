@@ -1383,6 +1383,12 @@ export default function DashboardPage() {
     const outPlayer = replacedPlayerByUniqueKey.get(uniqueKey)
     if (!outPlayer) return
 
+    if (isPlayerLocked(playerMatch.id) || isPlayerLocked(outPlayer.id)) {
+      alert('Este cambio no se puede cancelar: uno de los jugadores implicados está bloqueado por un partido fuera de jornada.')
+      setCancelConfirmUniqueKey(null)
+      return
+    }
+
     const newSelected = [...selectedPlayers]
     newSelected[index] = outPlayer.id
     setSelectedPlayers(newSelected)
@@ -2341,7 +2347,7 @@ export default function DashboardPage() {
                             <Lock className="w-[6cqw] h-[6cqw] text-white" />
                           </div>
                         )}
-                        {isChanged && (
+                        {isChanged && !isLockedPlayer && (
                           <button
                             onClick={e => { e.stopPropagation(); setCancelConfirmUniqueKey(player._uniqueKey) }}
                             className="w-[12cqw] h-[12cqw] bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg border-[1.5px] border-white/20 transition-colors"
