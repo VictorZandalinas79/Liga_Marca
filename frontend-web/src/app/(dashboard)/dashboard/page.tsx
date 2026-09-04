@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
-import { useLockedTeams, useOpenMatchdays } from '@/lib/locked-teams'
+import { useLockedTeams, useOpenMatchdays, computeOutOfOrderLocks, type FixtureLite } from '@/lib/locked-teams'
 import { useLeagueConfig } from '@/lib/league-config'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isInMarket } from '@/lib/market'
@@ -36,7 +36,7 @@ function formatPlayerName(name: string): string {
   return trimmed
 }
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react'
+import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight, ArrowLeft, Loader2, AlertCircle } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 import { getStandings } from '@/lib/standings'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
@@ -258,6 +258,8 @@ export default function DashboardPage() {
   const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'stats' | 'penalties'>('stats')
   const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>>(new Map())
+  const [allFixturesLite, setAllFixturesLite] = useState<FixtureLite[]>([])
+
   const [showWarningsModal, setShowWarningsModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentModalCountdown, setPaymentModalCountdown] = useState(30)
@@ -271,6 +273,50 @@ export default function DashboardPage() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const { openMatchdays, recommendedMatchday, loaded: openMatchdaysLoaded } = useOpenMatchdays()
   const config = useLeagueConfig()
+
+  useEffect(() => {
+    const fetchFixtures = async () => {
+      const { data } = await supabase
+        .from('fixtures')
+        .select('id, matchday, start_time, status, home_team_id, away_team_id')
+      if (data) setAllFixturesLite(data as FixtureLite[])
+    }
+    fetchFixtures()
+  }, [supabase])
+
+  const MATCH_DURATION_MS = 105 * 60 * 1000
+
+  // Equipos permitidos si estamos en el tramo de un partido adelantado (fuera de orden cronológico).
+  // Si la jornada seleccionada (ej. J6) tiene un partido adelantado ya jugado/en curso, pero el resto de partidos de la J6
+  // no se han jugado aún, sólo deben mostrarse los jugadores de los 2 equipos reales de dicho partido adelantado.
+  const restrictedTeamIds = useMemo(() => {
+    const set = new Set<string>()
+    if (typeof selectedMatchday !== 'number' || selectedMatchday <= 0 || !allFixturesLite.length || !config) return set
+
+    const offsets = {
+      startHoursBeforeMidweek: config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
+      startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
+      endHoursAfter: config.matchday_end_hours_after ?? 2,
+    }
+
+    const advancedLocks = computeOutOfOrderLocks(allFixturesLite, offsets, config.fantasy_starting_matchday ?? 1)
+      .filter(l => l.type === 'advanced' && l.ownMatchday === selectedMatchday)
+
+    if (advancedLocks.length > 0) {
+      const mdFixtures = allFixturesLite.filter(f => f.matchday === selectedMatchday)
+      const allPlayed = mdFixtures.every(f => {
+        const status = (f.status || '').toLowerCase()
+        if (status === 'finished') return true
+        const startTime = f.start_time ? new Date(f.start_time).getTime() : 0
+        return startTime > 0 && startTime + MATCH_DURATION_MS < Date.now()
+      })
+      if (!allPlayed) {
+        advancedLocks.forEach(l => l.teamIds.forEach(id => set.add(id)))
+      }
+    }
+
+    return set
+  }, [selectedMatchday, allFixturesLite, config])
 
   // Jornadas que se listan en el selector: la activa (siempre, para poder
   // hacer los cambios de mercado) + las que estén "abiertas" (con partidos ya
@@ -1539,7 +1585,13 @@ export default function DashboardPage() {
       return a._originalIndex - b._originalIndex
     })
 
-  // Mapa entrante (por uniqueKey) -> jugador reemplazado (saliente).
+  const displayedPlayersData = useMemo(() => {
+    if (restrictedTeamIds.size === 0) return selectedPlayersData
+    return selectedPlayersData.filter(p => p.team_id && restrictedTeamIds.has(p.team_id))
+  }, [selectedPlayersData, restrictedTeamIds])
+
+  const pitchPlayersData = displayedPlayersData
+
   const { replacedPlayerByUniqueKey, unchangedKeys } = useMemo(() => {
     const result = new Map<string, Player>()
     const unchanged = new Set<string>()
@@ -1573,7 +1625,6 @@ export default function DashboardPage() {
       // 3. Si no hay ni cambio en memoria ni en BD, o es la J1, es un titular base
       unchanged.add(player._uniqueKey)
     }
-
 
     return { replacedPlayerByUniqueKey: result, unchangedKeys: unchanged }
   }, [selectedPlayersData, changeHistory, dbReplacedPlayers, players, selectedMatchday, config])
@@ -2070,7 +2121,7 @@ export default function DashboardPage() {
                   >
                     {/* Delanteros */}
                     <div className="flex flex-col items-center gap-2 w-full sm:translate-y-8">
-                      {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD')).map((subRow, rowIdx, rowsArr) => {
+                      {splitRowPlayers(pitchPlayersData.filter(p => getPositionCode(p.position) === 'FWD')).map((subRow, rowIdx, rowsArr) => {
                         const isSplit = rowsArr.length > 1
                         return (
                           <div 
@@ -2089,14 +2140,14 @@ export default function DashboardPage() {
                           </div>
                         )
                       })}
-                      {selectedPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
+                      {pitchPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length === 0 && (
                         <div className="text-[10px] text-white/30 italic">Sin Delanteros</div>
                       )}
                     </div>
 
                     {/* Mediocampistas */}
                     <div className="flex flex-col items-center gap-2 w-full">
-                      {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID')).map((subRow, rowIdx, rowsArr) => {
+                      {splitRowPlayers(pitchPlayersData.filter(p => getPositionCode(p.position) === 'MID')).map((subRow, rowIdx, rowsArr) => {
                         const isSplit = rowsArr.length > 1
                         return (
                           <div 
@@ -2115,14 +2166,14 @@ export default function DashboardPage() {
                           </div>
                         )
                       })}
-                      {selectedPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
+                      {pitchPlayersData.filter(p => getPositionCode(p.position) === 'MID').length === 0 && (
                         <div className="text-[10px] text-white/30 italic">Sin Centrocampistas</div>
                       )}
                     </div>
 
                     {/* Defensas */}
                     <div className="flex flex-col items-center gap-2 w-full">
-                      {splitRowPlayers(selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF')).map((subRow, rowIdx, rowsArr) => {
+                      {splitRowPlayers(pitchPlayersData.filter(p => getPositionCode(p.position) === 'DEF')).map((subRow, rowIdx, rowsArr) => {
                         const isSplit = rowsArr.length > 1
                         return (
                           <div 
@@ -2141,14 +2192,14 @@ export default function DashboardPage() {
                           </div>
                         )
                       })}
-                      {selectedPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
+                      {pitchPlayersData.filter(p => getPositionCode(p.position) === 'DEF').length === 0 && (
                         <div className="text-[10px] text-white/30 italic">Sin Defensas</div>
                       )}
                     </div>
 
                     {/* Portero */}
                     <div className={`flex justify-center flex-wrap items-center gap-1 ${userDivision === 1 ? '-translate-y-4 sm:-translate-y-6 translate-x-2' : ''}`}>
-                      {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
+                      {pitchPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
                         <div 
                           key={player._uniqueKey} 
                           className="cursor-pointer" 
@@ -2157,7 +2208,7 @@ export default function DashboardPage() {
                           <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
                         </div>
                       ))}
-                      {selectedPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
+                      {pitchPlayersData.filter(p => getPositionCode(p.position) === 'GK').length === 0 && (
                         <div className="text-[10px] text-white/30 italic">Sin Portero</div>
                       )}
                     </div>
@@ -2172,11 +2223,12 @@ export default function DashboardPage() {
                 }}
               >
                 <div className="absolute inset-0 rounded-3xl pointer-events-none shadow-[inset_0_0_60px_rgba(0,0,0,0.7)]" />
-                {selectedPlayersData.map((player, idx) => {
+                {displayedPlayersData.map((player, idx) => {
                   const isChanged = !unchangedKeys.has(player._uniqueKey)
                   const isLockedPlayer = isTeamLocked(player.team_id)
                   const replacedPlayer = isChanged ? replacedPlayerByUniqueKey.get(player._uniqueKey) : undefined
                   const displayName = formatPlayerName(player.short_name || player.first_name || '')
+
                   return (
                     <div
                       key={player._uniqueKey}
@@ -2321,7 +2373,20 @@ export default function DashboardPage() {
                     </div>
                   )
                 })}
-                {Array.from({ length: Math.max(0, 11 - selectedPlayersData.length) }).map((_, i) => {
+                {restrictedTeamIds.size > 0 && displayedPlayersData.length === 0 && (
+                  <div className="col-span-full py-12 flex flex-col items-center justify-center text-center">
+                    <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mb-3 text-slate-400">
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-300">
+                      No tienes jugadores de los equipos disputando el partido adelantado de la Jornada {selectedMatchday}.
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Se mostrarán tus 11 jugadores cuando comience la semana oficial de la Jornada {selectedMatchday}.
+                    </p>
+                  </div>
+                )}
+                {restrictedTeamIds.size === 0 && Array.from({ length: Math.max(0, 11 - selectedPlayersData.length) }).map((_, i) => {
                   const emptyIdx = selectedPlayersData.length + i
                   return (
                     <div
