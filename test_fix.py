@@ -2,13 +2,10 @@ import os
 from supabase import create_client
 from dotenv import load_dotenv
 
-load_dotenv('frontend-web/.env.local')
-load_dotenv('frontend-web/.env')
+load_dotenv("frontend-web/.env.local")
+url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
+key = os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 
-url = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-client = create_client(url, key)
-
-for mid in ['ekk0usjk6blgzpziu4ho01zo', 's2odkp4oybdaqou9lx1fd6ok']:
-    res = client.table('fixtures').select('id, home_team_id').eq('id', mid).execute()
-    print(mid, res.data)
+supabase = create_client(url, key)
+response = supabase.table("fixtures").select("id, matchday, start_time, status, momento").gt("start_time", "2026-09-04T00:00:00").order("start_time").limit(10).execute()
+print(response.data)

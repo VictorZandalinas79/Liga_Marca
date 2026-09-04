@@ -104,9 +104,6 @@ export function useOpenMatchdays(): OpenMatchdaysState {
       }
 
       const openMatchdays: number[] = []
-      let recommendedMatchday: number | null = null
-      let bestDistance = Infinity
-
       const endOffsetMs = offsets.endHoursAfter * 60 * 60 * 1000
 
       for (const [md, fs] of byMatchday) {
@@ -120,18 +117,40 @@ export function useOpenMatchdays(): OpenMatchdaysState {
         // Está "abierta" si hemos entrado en su ventana de mercado y aún no la hemos superado
         if (now >= unlockTime && now <= lockTime) {
           openMatchdays.push(md)
-
-          for (const f of fs) {
-            const distance = f.status === 'live' ? 0 : Math.abs(new Date(f.start_time).getTime() - now)
-            if (distance < bestDistance) {
-              bestDistance = distance
-              recommendedMatchday = md
-            }
-          }
         }
       }
 
       openMatchdays.sort((a, b) => a - b)
+
+      // Determinar la jornada más próxima que se va a disputar (o que está en directo)
+      let recommendedMatchday: number | null = null
+      let earliestNextTime = Infinity
+
+      for (const [md, fs] of byMatchday) {
+        for (const f of fs) {
+          if (!f.start_time) continue
+          const fTime = new Date(f.start_time).getTime()
+          const isFinished = f.status === 'finished' || f.status === 'cancelled' || f.status === 'postponed'
+
+          let score: number | null = null
+          if (f.status === 'live') {
+            score = 0 // En directo: prioridad máxima
+          } else if (!isFinished && fTime >= now - 3 * 60 * 60 * 1000) {
+            score = fTime // Próximo partido de esta jornada
+          }
+
+          if (score !== null && score < earliestNextTime) {
+            earliestNextTime = score
+            recommendedMatchday = md
+          }
+        }
+      }
+
+      // Si no hay partidos futuros/en directo (ej. final de temporada), usar la última jornada abierta o la mayor disponible
+      if (recommendedMatchday === null && openMatchdays.length > 0) {
+        recommendedMatchday = openMatchdays[openMatchdays.length - 1]
+      }
+
       setState({ openMatchdays, recommendedMatchday, loaded: true })
     }
     run()

@@ -282,10 +282,8 @@ export default function DashboardPage() {
       .sort((a, b) => a - b)
       .filter(md => md >= (config?.fantasy_starting_matchday ?? 1))
   }, [openMatchdays, activeMatchday, config?.fantasy_starting_matchday])
-  // Al resolver los datos por primera vez, se posiciona en la jornada abierta
-  // con el partido más cercano/en juego (si hay alguna); si no, en la activa.
-  // Si la jornada activa cambia más adelante en la sesión (rollover), se sigue
-  // sincronizando con ella como antes.
+  // Al resolver los datos por primera vez, se posiciona en la jornada más próxima
+  // a disputarse (recommendedMatchday) si la hay; si no, en la activa.
   const initialMatchdaySetRef = useRef(false)
   useEffect(() => {
     if (typeof activeMatchday !== 'number' || activeMatchday <= 0) return
@@ -295,8 +293,6 @@ export default function DashboardPage() {
       if (!openMatchdaysLoaded) return
       setSelectedMatchday(recommendedMatchday ?? activeMatchday)
       initialMatchdaySetRef.current = true
-    } else {
-      setSelectedMatchday(activeMatchday)
     }
   }, [activeMatchday, recommendedMatchday, openMatchdaysLoaded])
   const { isLocked, isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, currentMatchday: resolvedMatchday, previousMatchday, upcomingLocks, isCloseToStart } = useMatchdayLock(selectedMatchday)
@@ -545,7 +541,13 @@ export default function DashboardPage() {
   const creatingTeamRef = useRef<Set<string>>(new Set())
   // Evita que un doble-click/doble-submit en cancelar/deshacer/confirmar cambio
   // dispare dos llamadas a save_team_lineup casi simultáneas con estado obsoleto.
+  // Antes de tener el estado `isSavingLineup` espejado abajo, esta ref por sí
+  // sola hacía que un segundo clic mientras el primero seguía en vuelo se
+  // descartara EN SILENCIO (el guard hacía `return` antes de tocar ningún
+  // estado): el usuario veía "guardado" el primero y creía que los demás
+  // cambios también se habían guardado, cuando en realidad se habían perdido.
   const lineupSavingRef = useRef(false)
+  const [isSavingLineup, setIsSavingLineup] = useState(false)
 
   const getPositionCode = (position: string): string => {
     const posLower = position.toLowerCase()
@@ -1428,6 +1430,7 @@ export default function DashboardPage() {
       })
       
       lineupSavingRef.current = true
+      setIsSavingLineup(true)
       try {
         await supabase.rpc('save_team_lineup', {
           p_team_id: userTeamId,
@@ -1436,6 +1439,7 @@ export default function DashboardPage() {
         })
       } finally {
         lineupSavingRef.current = false
+        setIsSavingLineup(false)
       }
     }
   }
@@ -1610,6 +1614,7 @@ export default function DashboardPage() {
       })
       
       lineupSavingRef.current = true
+      setIsSavingLineup(true)
       try {
         await supabase.rpc('save_team_lineup', {
           p_team_id: userTeamId,
@@ -1618,6 +1623,7 @@ export default function DashboardPage() {
         })
       } finally {
         lineupSavingRef.current = false
+        setIsSavingLineup(false)
       }
     }
   }
@@ -3250,15 +3256,17 @@ export default function DashboardPage() {
               <div className="flex gap-3">
                 <button
                   onClick={cancelSwap}
-                  className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-lg font-medium transition-colors"
+                  disabled={isSavingLineup}
+                  className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={confirmSwap}
-                  className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+                  disabled={isSavingLineup}
+                  className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Confirmar
+                  {isSavingLineup ? 'Guardando...' : 'Confirmar'}
                 </button>
               </div>
             </div>
@@ -3281,15 +3289,17 @@ export default function DashboardPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setCancelConfirmUniqueKey(null)}
-                  className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors text-sm"
+                  disabled={isSavingLineup}
+                  className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Mantener
                 </button>
                 <button
                   onClick={() => cancelChange(cancelConfirmUniqueKey)}
-                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors text-sm"
+                  disabled={isSavingLineup}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Cancelar cambio
+                  {isSavingLineup ? 'Guardando...' : 'Cancelar cambio'}
                 </button>
               </div>
             </div>
