@@ -36,7 +36,7 @@ function formatPlayerName(name: string): string {
   return trimmed
 }
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight, ArrowLeft } from 'lucide-react'
+import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 import { getStandings } from '@/lib/standings'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
@@ -548,6 +548,87 @@ export default function DashboardPage() {
   // cambios también se habían guardado, cuando en realidad se habían perdido.
   const lineupSavingRef = useRef(false)
   const [isSavingLineup, setIsSavingLineup] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved')
+  const saveMutexRef = useRef<Promise<any>>(Promise.resolve())
+
+  // Función unificada y segura para persistir alineaciones en Supabase
+  const executeLineupSave = async (
+    targetSelected: string[],
+    targetChangeHistory: Array<{ outId: string; inId: string; index: number }>,
+    targetDbReplaced: Record<number, string>
+  ) => {
+    saveMutexRef.current = saveMutexRef.current.then(async () => {
+      if (!userTeamId) return
+
+      if (targetSelected.length !== 11) {
+        console.warn('[SAVE LINEUP] Cancelado: La alineación debe tener 11 jugadores.')
+        return
+      }
+
+      setIsSavingLineup(true)
+      setSaveStatus('saving')
+
+      const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+
+      const teamPlayersData = targetSelected.map((pid, i) => {
+        let replacedId: string | null = null
+        if (activeMatchday && config && matchdayToSave > config.fantasy_starting_matchday) {
+          if (targetDbReplaced[i]) replacedId = targetDbReplaced[i]
+          else {
+            const ch = targetChangeHistory.find(c => c.index === i)
+            if (ch) replacedId = ch.outId
+          }
+        }
+        if (replacedId === pid) replacedId = null
+
+        return {
+          player_id: pid,
+          is_starter: true,
+          is_captain: i === 0,
+          order: i,
+          replaced_player_id: replacedId
+        }
+      })
+
+      let attempts = 0
+      let success = false
+      let lastError: any = null
+
+      while (attempts < 3 && !success) {
+        attempts++
+        try {
+          const { error } = await supabase.rpc('save_team_lineup', {
+            p_team_id: userTeamId,
+            p_matchday: matchdayToSave,
+            p_players: teamPlayersData
+          })
+          if (!error) {
+            success = true
+          } else {
+            lastError = error
+            console.warn(`[SAVE LINEUP] Intento ${attempts} falló:`, error.message)
+            if (attempts < 3) await new Promise(r => setTimeout(r, 500 * attempts))
+          }
+        } catch (err) {
+          lastError = err
+          if (attempts < 3) await new Promise(r => setTimeout(r, 500 * attempts))
+        }
+      }
+
+      setIsSavingLineup(false)
+
+      if (success) {
+        setSavedPlayers(targetSelected)
+        setSaveStatus('saved')
+      } else {
+        console.error('[SAVE LINEUP] Error definitivo guardando alineación:', lastError)
+        setSaveStatus('error')
+        alert('⚠️ No se pudo guardar el cambio en el servidor debido a un problema de conexión. Por favor, inténtalo de nuevo.')
+      }
+    })
+
+    return saveMutexRef.current
+  }
 
   const getPositionCode = (position: string): string => {
     const posLower = position.toLowerCase()
@@ -1255,18 +1336,11 @@ export default function DashboardPage() {
       return
     }
 
-    // Garantía dura: nunca se guarda un equipo que no tenga exactamente 11
-    // jugadores. Esto es lo que permitió en el pasado que un usuario acabara
-    // con 22 jugadores duplicados en una jornada.
     if (selectedPlayers.length !== 11) {
       alert(`Tu equipo tiene ${selectedPlayers.length} jugadores. Debe tener exactamente 11 para poder guardarlo.`)
       return
     }
 
-    // Un jugador que ya no está en Biwenger se conserva en el equipo de quien lo
-    // tenía, pero no se puede fichar de nuevo. Se comprueba aquí y no solo al
-    // pintar el mercado porque la selección puede venir de una alineación
-    // heredada o de un cambio deshecho, no siempre de la lista filtrada.
     const yaEnPlantilla = new Set([...savedPlayers, ...basePlayers])
     const noFichables = selectedPlayers.filter(id => {
       if (yaEnPlantilla.has(id)) return false
@@ -1281,28 +1355,17 @@ export default function DashboardPage() {
       return
     }
 
-    console.log('[GUARDAR] Iniciando guardado...')
-    console.log('[GUARDAR] user:', user)
-    console.log('[GUARDAR] userTeamId:', userTeamId)
-    console.log('[GUARDAR] selectedPlayers:', selectedPlayers)
-    console.log('[GUARDAR] currentMatchday:', currentMatchday)
-
-    // Comprobar que el usuario está autenticado
     if (!user?.id) {
       const { data: { user: currentUser } } = await supabase.auth.getUser()
       if (!currentUser) {
-        console.error('[GUARDAR] Usuario no autenticado')
         alert('Error: Usuario no autenticado. Por favor, inicia sesión de nuevo.')
         window.location.href = '/'
         return
       }
-      console.log('[GUARDAR] Usuario obtenido desde auth:', currentUser.id)
     }
 
     let teamIdToUse = userTeamId
-
     if (!teamIdToUse) {
-      console.log('[GUARDAR] Creando nuevo equipo...')
       const userId = user?.id || (await supabase.auth.getUser()).data.user?.id
       const { data: newTeam, error: teamError } = await supabase
         .from('user_teams')
@@ -1310,74 +1373,18 @@ export default function DashboardPage() {
         .select('id')
         .single()
 
-      if (teamError) {
-        console.error('[GUARDAR] Error creando equipo:', JSON.stringify(teamError, null, 2))
-        console.error('[GUARDAR] Error details:', teamError)
-        alert('Error creando equipo: ' + (teamError.message || JSON.stringify(teamError)))
+      if (teamError || !newTeam) {
+        alert('Error creando equipo: ' + (teamError?.message || 'Error desconocido'))
         return
       }
-
-      if (newTeam) {
-        teamIdToUse = newTeam.id
-        setUserTeamId(newTeam.id)
-        console.log('[GUARDAR] Equipo creado:', newTeam.id)
-      } else {
-        console.error('[GUARDAR] No se pudo crear el equipo')
-        return
-      }
+      teamIdToUse = newTeam.id
+      setUserTeamId(newTeam.id)
     }
 
-    const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
-
-    // Guardar mediante la función RPC atómica (DELETE+INSERT en una sola
-    // transacción). Un delete+insert hecho como dos llamadas separadas desde
-    // el cliente deja una ventana de carrera: si esta función se dispara dos
-    // veces casi a la vez (doble clic, dos pestañas, reintento de red), ambas
-    // pueden borrar y luego insertar, duplicando toda la alineación. Esto es
-    // justo lo que le pasó a un usuario, que acabó con 22 jugadores en una
-    // jornada. También preservamos aquí replaced_player_id, que antes se
-    // perdía al guardar por este camino.
-    const teamPlayers = selectedPlayers.map((playerId, index) => {
-      let replacedId: string | null = null
-      if (activeMatchday && config && matchdayToSave > config.fantasy_starting_matchday) {
-        if (dbReplacedPlayers[index]) replacedId = dbReplacedPlayers[index]
-        else {
-          const ch = changeHistory.find(c => c.index === index)
-          if (ch) replacedId = ch.outId
-        }
-      }
-      if (replacedId === playerId) replacedId = null
-
-      return {
-        player_id: playerId,
-        is_starter: true,
-        is_captain: index === 0,
-        order: index,
-        replaced_player_id: replacedId,
-      }
-    })
-
-    console.log(`[GUARDAR] Guardando alineación (RPC atómica) en matchday ${matchdayToSave}`)
-    console.log('[GUARDAR] Payload:', JSON.stringify(teamPlayers, null, 2))
-
-    const { error } = await supabase.rpc('save_team_lineup', {
-      p_team_id: teamIdToUse,
-      p_matchday: matchdayToSave,
-      p_players: teamPlayers,
-    })
-
-    if (error) {
-      console.error('[GUARDAR] Error al guardar:', JSON.stringify(error, null, 2))
-      alert('Error al guardar: ' + (error.message || JSON.stringify(error)))
-    } else {
-      console.log('[GUARDAR] Equipo guardado correctamente:', teamPlayers.length, 'jugadores')
-      setSavedPlayers(selectedPlayers)
-      setChangeHistory([])
-    }
+    await executeLineupSave(selectedPlayers, changeHistory, dbReplacedPlayers)
   }
 
   const cancelChange = async (uniqueKey: string) => {
-    if (lineupSavingRef.current) return
     const playerMatch = selectedPlayersData.find(p => p._uniqueKey === uniqueKey)
     if (!playerMatch) return
     const index = playerMatch._originalIndex
@@ -1393,55 +1400,17 @@ export default function DashboardPage() {
 
     const newSelected = [...selectedPlayers]
     newSelected[index] = outPlayer.id
-    setSelectedPlayers(newSelected)
 
-    // Remove ALL changes for this index from the history
     const newChangeHistory = changeHistory.filter(ch => ch.index !== index)
-    setChangeHistory(newChangeHistory)
-    
-    // Remove from dbReplacedPlayers
     const newDbReplaced = { ...dbReplacedPlayers }
     delete newDbReplaced[index]
-    setDbReplacedPlayers(newDbReplaced)
 
+    setSelectedPlayers(newSelected)
+    setChangeHistory(newChangeHistory)
+    setDbReplacedPlayers(newDbReplaced)
     setCancelConfirmUniqueKey(null)
 
-    if (userTeamId) {
-      const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
-      
-      const teamPlayersData = newSelected.map((pid, i) => {
-        let replacedId = null
-        if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
-          if (newDbReplaced[i]) replacedId = newDbReplaced[i]
-          else {
-            const ch = newChangeHistory.find(c => c.index === i)
-            if (ch) replacedId = ch.outId
-          }
-        }
-        if (replacedId === pid) replacedId = null
-        
-        return {
-          player_id: pid,
-          is_starter: true,
-          is_captain: i === 0,
-          order: i,
-          replaced_player_id: replacedId
-        }
-      })
-      
-      lineupSavingRef.current = true
-      setIsSavingLineup(true)
-      try {
-        await supabase.rpc('save_team_lineup', {
-          p_team_id: userTeamId,
-          p_matchday: matchdayToSave,
-          p_players: teamPlayersData
-        })
-      } finally {
-        lineupSavingRef.current = false
-        setIsSavingLineup(false)
-      }
-    }
+    await executeLineupSave(newSelected, newChangeHistory, newDbReplaced)
   }
 
   const swapPlayer = (newPlayerId: string) => {
@@ -1454,8 +1423,6 @@ export default function DashboardPage() {
       return
     }
     if (playerToSwap) {
-      // Modelo "permitir + sancionar": no se bloquea el cambio aquí; el exceso
-      // sobre el límite se avisa como ruleWarning y se sanciona al cerrar la jornada.
       setPendingSwap({ outId: playerToSwap.id, inId: newPlayerId, index: playerToSwap.index })
       setShowSwapConfirm(true)
       closePlayerSelector()
@@ -1464,62 +1431,23 @@ export default function DashboardPage() {
 
   const confirmSwap = async () => {
     if (!pendingSwap) return
-    if (lineupSavingRef.current) return
 
     const { outId, inId, index } = pendingSwap
     const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
+
     const newChangeHistory = (activeMatchday && config && matchdayToSave > config.fantasy_starting_matchday) 
       ? [...changeHistory, { outId, inId, index }]
       : []
-    setChangeHistory(newChangeHistory)
-    
+
     const newSelected = [...selectedPlayers]
     newSelected[index] = inId
+
+    setChangeHistory(newChangeHistory)
     setSelectedPlayers(newSelected)
-
-    if (!userTeamId) return
-
-    const teamPlayersData = newSelected.map((playerId, i) => {
-      let replacedId = null
-      if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
-        if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
-        else {
-          const ch = newChangeHistory.find(c => c.index === i)
-          if (ch) replacedId = ch.outId
-        }
-      }
-      if (replacedId === playerId) replacedId = null
-      
-      return {
-        player_id: playerId,
-        is_starter: true,
-        is_captain: i === 0,
-        order: i,
-        replaced_player_id: replacedId
-      }
-    })
-
-    // Use RPC function for atomic operation
-    lineupSavingRef.current = true
-    let rpcError
-    try {
-      ;({ error: rpcError } = await supabase.rpc('save_team_lineup', {
-        p_team_id: userTeamId,
-        p_matchday: matchdayToSave,
-        p_players: teamPlayersData
-      }))
-    } finally {
-      lineupSavingRef.current = false
-    }
-
-    if (rpcError) {
-      console.error('Error al guardar alineación:', rpcError)
-      alert('Error guardando la alineación. Por favor, inténtalo de nuevo.')
-      return
-    }
-
     setPendingSwap(null)
     setShowSwapConfirm(false)
+
+    await executeLineupSave(newSelected, newChangeHistory, dbReplacedPlayers)
   }
 
   const cancelSwap = () => {
@@ -1574,14 +1502,14 @@ export default function DashboardPage() {
 
   const undoLastChange = async () => {
     if (changeHistory.length === 0) return
-    if (lineupSavingRef.current) return
 
     const lastChange = changeHistory[changeHistory.length - 1]
     
     const newSelected = [...selectedPlayers]
     newSelected[lastChange.index] = lastChange.outId
-    setSelectedPlayers(newSelected)
+
     const newChangeHistory = changeHistory.slice(0, -1)
+    setSelectedPlayers(newSelected)
     setChangeHistory(newChangeHistory)
     setPlayerToSwap(null)
     setSearchFilter('')
@@ -1590,42 +1518,7 @@ export default function DashboardPage() {
     setPriceMinFilter('')
     setPriceMaxFilter('')
 
-    if (userTeamId) {
-      const matchdayToSave = typeof activeMatchday === 'number' && activeMatchday > 0 ? activeMatchday : 1
-      
-      const teamPlayersData = newSelected.map((pid, i) => {
-        let replacedId = null
-        if (activeMatchday && config && activeMatchday > config.fantasy_starting_matchday) {
-          if (dbReplacedPlayers[i]) replacedId = dbReplacedPlayers[i]
-          else {
-            const ch = newChangeHistory.find(c => c.index === i)
-            if (ch) replacedId = ch.outId
-          }
-        }
-        if (replacedId === pid) replacedId = null
-        
-        return {
-          player_id: pid,
-          is_starter: true,
-          is_captain: i === 0,
-          order: i,
-          replaced_player_id: replacedId
-        }
-      })
-      
-      lineupSavingRef.current = true
-      setIsSavingLineup(true)
-      try {
-        await supabase.rpc('save_team_lineup', {
-          p_team_id: userTeamId,
-          p_matchday: matchdayToSave,
-          p_players: teamPlayersData
-        })
-      } finally {
-        lineupSavingRef.current = false
-        setIsSavingLineup(false)
-      }
-    }
+    await executeLineupSave(newSelected, newChangeHistory, dbReplacedPlayers)
   }
 
   const selectedPlayersData = selectedPlayers
@@ -1946,6 +1839,22 @@ export default function DashboardPage() {
     }
   }
 
+  // Avisar de jugadores duplicados ÚNICAMENTE cuando la jornada ya está en juego (isUnlockWindowOpen)
+  // y ya no se pueden realizar cambios. No se avisa antes del cierre para no incitar a rectificar el error.
+  if (isUnlockWindowOpen) {
+    const playerCountsInTeam = new Map<string, number>()
+    for (const p of selectedPlayersData) {
+      playerCountsInTeam.set(p.id, (playerCountsInTeam.get(p.id) || 0) + 1)
+    }
+    for (const [pid, count] of playerCountsInTeam.entries()) {
+      if (count > 1) {
+        const p = selectedPlayersData.find(x => x.id === pid)
+        const name = p ? (p.short_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()) : 'Jugador'
+        ruleWarnings.push(`${name} está repetido ${count} veces en la alineación (sancionado).`)
+      }
+    }
+  }
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando...</div>
   }
@@ -2100,6 +2009,21 @@ export default function DashboardPage() {
                 )}
               </div>
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                {saveStatus === 'saving' && (
+                  <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-bold text-[11px] animate-pulse">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Guardando...
+                  </span>
+                )}
+                {saveStatus === 'saved' && (
+                  <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md font-bold text-[11px]">
+                    <Check className="w-3 h-3 text-emerald-600" /> Guardado
+                  </span>
+                )}
+                {saveStatus === 'error' && (
+                  <span className="inline-flex items-center gap-1 text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md font-bold text-[11px]">
+                    ⚠️ Error al guardar
+                  </span>
+                )}
                 <span>{selectedPlayersData.length}/11 jugadores</span>
               </div>
             </div>
