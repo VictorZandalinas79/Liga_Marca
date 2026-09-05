@@ -586,7 +586,7 @@ function computeDivisionStandings(
               outPoints += playerPointsByMatchday.get(outIds[i])?.get(md) ?? 0
             }
 
-            if (md > 1) {
+            if (md > fantasyStart) {
               userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + (inPoints - outPoints))
               userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + numChanges)
             }
