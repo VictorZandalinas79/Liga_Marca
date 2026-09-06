@@ -1646,13 +1646,26 @@ export default function JornadaPage() {
                                     <img
                                       src={player.photo}
                                       alt=""
-                                      className={`w-8 h-8 rounded-full object-cover border ${
-                                        isPenalized ? 'border-red-500' : player.hasPlayed ? 'border-slate-400 opacity-70' : 'border-slate-300'
+                                      className={`w-8 h-8 rounded-full object-cover ${
+                                        player.replacedPlayer
+                                          ? 'border-2 border-emerald-500 shadow-sm'
+                                          : isPenalized
+                                          ? 'border border-red-500'
+                                          : player.hasPlayed
+                                          ? 'border border-slate-400 opacity-70'
+                                          : 'border border-slate-300'
                                       }`}
+                                      title={player.replacedPlayer ? `Entra: ${formatPlayerName(player.short_name)}` : undefined}
                                     />
                                   ) : (
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border ${
-                                      isPenalized ? 'border-red-500 bg-red-100 text-red-700' : player.hasPlayed ? 'border-slate-400 bg-slate-400 text-slate-700' : 'border-slate-400 bg-slate-200 text-slate-600'
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                                      player.replacedPlayer
+                                        ? 'border-2 border-emerald-500 bg-emerald-50 text-emerald-800'
+                                        : isPenalized
+                                        ? 'border border-red-500 bg-red-100 text-red-700'
+                                        : player.hasPlayed
+                                        ? 'border border-slate-400 bg-slate-400 text-slate-700'
+                                        : 'border border-slate-400 bg-slate-200 text-slate-600'
                                     }`}>
                                       {player.shirt_number || '?'}
                                     </div>
@@ -1663,26 +1676,26 @@ export default function JornadaPage() {
                                 <div className="flex flex-col min-w-0 flex-1 justify-center gap-0.5">
                                   {player.replacedPlayer ? (
                                     <>
-                                      {/* One Line Setup */}
-                                      <div className="flex items-center w-full min-w-0">
-                                        <span className={`font-bold whitespace-nowrap tracking-tight ${
+                                      {/* Incoming Player */}
+                                      <div className="flex items-center gap-1 w-full min-w-0">
+                                        <span className={`font-extrabold whitespace-nowrap tracking-tight ${
                                           (player.short_name || '').length > 15
                                             ? 'text-[10px]'
                                             : (player.short_name || '').length > 11
                                             ? 'text-[12px]'
-                                            : 'text-[14px]'
+                                            : 'text-[13px]'
                                         } ${isPenalized ? 'text-red-800' : player.hasPlayed ? 'text-slate-700' : 'text-slate-900'}`}>
                                           {formatPlayerName(player.short_name)}
                                         </span>
+                                        <span className="text-[10px] font-black text-emerald-600 shrink-0 leading-none" title="Entra">↑</span>
                                         {isPenalized && <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0 ml-1" />}
                                       </div>
-                                      {/* Substituted Player */}
-                                      <div className="flex items-center gap-1 w-full min-w-0 -mt-[1px]">
-                                        <div className="flex flex-col items-center justify-center shrink-0 w-[15px] h-[15px] rounded-full bg-[#EFE9DD] -space-y-[4px]">
-                                          <ArrowLeft className="w-2 h-2 text-[#CD4C4C] stroke-[4]" />
-                                          <ArrowRight className="w-2 h-2 text-[#5D9C44] stroke-[4]" />
-                                        </div>
-                                        <span className="font-bold truncate text-[10px] text-[#CD4C4C] leading-none">{formatPlayerName(player.replacedPlayer.short_name)}</span>
+                                      {/* Outgoing Player (Clean text without strikethrough) */}
+                                      <div className="flex items-center gap-1 w-full min-w-0 -mt-[2px]">
+                                        <span className="font-semibold truncate text-[10px] text-rose-600/90 leading-none">
+                                          {formatPlayerName(player.replacedPlayer.short_name)}
+                                        </span>
+                                        <span className="text-[9px] font-black text-rose-500 shrink-0 leading-none" title="Sale">↓</span>
                                         {player.replacedPlayer.team?.logo_url && (
                                           <img src={player.replacedPlayer.team.logo_url} alt="" className="w-2.5 h-2.5 object-contain shrink-0" />
                                         )}
@@ -1725,7 +1738,7 @@ export default function JornadaPage() {
                                   {player.replacedPlayer && (
                                     <div className="flex items-center gap-1 mb-[2px] justify-end">
                                       {player.shirt_number && <span className="font-black text-slate-700 text-[10px]">{player.shirt_number}</span>}
-                                      {player.team?.logo_url && <img src={player.team.logo_url} alt="" className="w-3 h-3 object-contain" />}
+                                      {player.team?.logo_url && <img src={player.team.logo_url} alt="" className="w-3.5 h-3.5 object-contain" />}
                                       <span className="text-[10px] text-slate-500 font-bold">{fmtValor(player.valor || 0)}</span>
                                     </div>
                                   )}
