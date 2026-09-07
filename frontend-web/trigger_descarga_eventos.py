@@ -356,7 +356,7 @@ class MatchEventDownloader:
                 self.provisional_players = {self.home_team_id: [], self.away_team_id: []}
                 for t_id in [self.home_team_id, self.away_team_id]:
                     if t_id:
-                        prov_res = self.supabase.table('players').select('id, short_name, first_name, last_name, team_id').eq('team_id', t_id).like('id', 'prov_%').execute()
+                        prov_res = self.supabase.table('players').select('id, short_name, first_name, last_name, team_id').eq('team_id', t_id).or_('id.like.prov_%,id.like.bw_%,is_provisional.eq.true').execute()
                         if prov_res.data:
                             self.provisional_players[t_id] = prov_res.data
                             print(f"   ℹ️  Encontrados {len(prov_res.data)} jugadores provisionales en equipo {t_id}")
@@ -1280,10 +1280,10 @@ class MatchEventDownloader:
             if response.data:
                 return response.data[0]['id']
 
-        # Estrategia principal: buscar directamente por Opta ID en la BD
-        response_direct = self.supabase.table('players').select('id').eq('id', api_player_id).execute()
+        # Estrategia principal: buscar por Opta ID directo en 'id' o en 'external_id'
+        response_direct = self.supabase.table('players').select('id').or_(f"id.eq.{api_player_id},external_id.eq.{api_player_id}").execute()
         if response_direct.data:
-            return api_player_id
+            return response_direct.data[0]['id']
 
         # Si llegamos aquí, el jugador no está en la BD. 
         # Intentamos buscar si es un jugador provisional del equipo
@@ -1294,12 +1294,20 @@ class MatchEventDownloader:
             
             for prov in self.provisional_players[team_id]:
                 prov_display = prov.get('short_name') or f"{prov.get('first_name') or ''} {prov.get('last_name') or ''}".strip()
-                score = difflib.SequenceMatcher(None, norm_name, normalize_name(prov_display)).ratio()
+                norm_prov = normalize_name(prov_display)
+                score = difflib.SequenceMatcher(None, norm_name, norm_prov).ratio()
+                
+                # Coincidencia por apellido si el nombre viene abreviado (ej. "N. Gudelj" vs "Nemanja Gudelj")
+                name_words = norm_name.split()
+                prov_words = norm_prov.split()
+                if name_words and prov_words and name_words[-1] == prov_words[-1] and len(name_words[-1]) > 3:
+                    score = max(score, 0.90)
+
                 if score > best_score:
                     best_score = score
                     best_match = prov
             
-            if best_match and best_score > 0.85:
+            if best_match and best_score >= 0.80:
                 prov_id = best_match['id']
                 prov_display = best_match.get('short_name') or f"{best_match.get('first_name') or ''} {best_match.get('last_name') or ''}".strip()
                 print(f"   🔄 Promoviendo provisional '{prov_display}' ({prov_id}) -> '{player_name}' ({api_player_id}) con {best_score:.2f} similitud")
