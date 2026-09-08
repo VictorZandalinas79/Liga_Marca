@@ -505,14 +505,9 @@ export default function PartidoDetallePage() {
       const hasScoreData = scoresData && scoresData.length > 0
 
       if (hasScoreData) {
-        // Mostrar solo jugadores que tienen datos de partido
-        return playersWithStats.filter(p =>
-          (p.total_points && p.total_points > 0) ||
-          (p.goals && p.goals > 0) ||
-          (p.assists && p.assists > 0) ||
-          (p.minutes_played && p.minutes_played > 0) ||
-          (p.is_starter !== undefined && p.is_starter)
-        )
+        // Mostrar los jugadores que forman parte de la convocatoria de este partido
+        // (titulares, suplentes que jugaron y suplentes en el banquillo que no llegaron a entrar)
+        return playersWithStats.filter(p => scoresMap.has(p.id))
       }
 
       return playersWithStats
@@ -706,6 +701,9 @@ export default function PartidoDetallePage() {
     return 'MED'
   }
 
+  // Suplentes que no llegaron a saltar al campo: se muestran aparte, en el banquillo
+  const isUnusedSub = (p: Player) => !p.is_starter && !(p.minutes_played && p.minutes_played > 0)
+
   const getPositionColor = (position: string) => {
     const code = getPositionLabel(position)
     const colors: Record<string, string> = {
@@ -888,6 +886,43 @@ export default function PartidoDetallePage() {
     )
   }
 
+  // Banquillo: suplentes convocados que no llegaron a saltar al campo
+  const renderBenchSection = (players: Player[]) => (
+    <div>
+      <h4 className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase mb-2">
+        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13" />
+          <path d="M2 19h20" />
+          <path d="M8 19v-5" />
+          <path d="M16 19v-5" />
+        </svg>
+        Banquillo
+      </h4>
+      <div className="flex flex-wrap gap-1.5">
+        {players
+          .sort((a, b) => getPositionOrder(a.calc_position || a.position) - getPositionOrder(b.calc_position || b.position))
+          .map(player => (
+            <button
+              key={player.id}
+              onClick={() => setSelectedPlayer(player)}
+              className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 hover:border-emerald-500 rounded-full pl-1 pr-2.5 py-1 transition-colors"
+            >
+              {player.photo ? (
+                <img src={player.photo} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
+              ) : (
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 ${getPositionColor(player.calc_position || player.position)}`}>
+                  {getPositionLabel(player.calc_position || player.position)[0]}
+                </span>
+              )}
+              <span className="text-[10.5px] font-semibold text-slate-200 truncate max-w-[90px]">
+                {getMobilePlayerName(player)}
+              </span>
+            </button>
+          ))}
+      </div>
+    </div>
+  )
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando partido...</div>
   }
@@ -1047,53 +1082,55 @@ export default function PartidoDetallePage() {
 
           <div className="space-y-2 sm:space-y-4">
             {/* Porteros */}
-            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'POR').length > 0 && (
+            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'POR' && !isUnusedSub(p)).length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-amber-600 uppercase mb-2">Porteros</h4>
                 <div className="space-y-2">
                   {homePlayers
-                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'POR')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'POR' && !isUnusedSub(p))
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Defensas */}
-            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF').length > 0 && (
+            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF' && !isUnusedSub(p)).length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-blue-600 uppercase mb-2">Defensas</h4>
                 <div className="space-y-2">
                   {homePlayers
-                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF' && !isUnusedSub(p))
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Medios */}
-            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'MED').length > 0 && (
+            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'MED' && !isUnusedSub(p)).length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-emerald-600 uppercase mb-2">Mediocampistas</h4>
                 <div className="space-y-2">
                   {homePlayers
-                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'MED')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'MED' && !isUnusedSub(p))
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Delanteros */}
-            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL').length > 0 && (
+            {homePlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL' && !isUnusedSub(p)).length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-red-600 uppercase mb-2">Delanteros</h4>
                 <div className="space-y-2">
                   {homePlayers
-                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL' && !isUnusedSub(p))
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
+            {/* Banquillo */}
+            {homePlayers.filter(isUnusedSub).length > 0 && renderBenchSection(homePlayers.filter(isUnusedSub))}
           </div>
         </div>
 
@@ -1112,53 +1149,55 @@ export default function PartidoDetallePage() {
 
           <div className="space-y-2 sm:space-y-4">
             {/* Porteros */}
-            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'POR').length > 0 && (
+            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'POR' && !isUnusedSub(p)).length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-amber-600 uppercase mb-2">Porteros</h4>
                 <div className="space-y-2">
                   {awayPlayers
-                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'POR')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'POR' && !isUnusedSub(p))
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Defensas */}
-            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF').length > 0 && (
+            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF' && !isUnusedSub(p)).length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-blue-600 uppercase mb-2">Defensas</h4>
                 <div className="space-y-2">
                   {awayPlayers
-                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEF' && !isUnusedSub(p))
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Medios */}
-            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'MED').length > 0 && (
+            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'MED' && !isUnusedSub(p)).length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-emerald-600 uppercase mb-2">Mediocampistas</h4>
                 <div className="space-y-2">
                   {awayPlayers
-                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'MED')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'MED' && !isUnusedSub(p))
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
             {/* Delanteros */}
-            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL').length > 0 && (
+            {awayPlayers.filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL' && !isUnusedSub(p)).length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-red-600 uppercase mb-2">Delanteros</h4>
                 <div className="space-y-2">
                   {awayPlayers
-                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL')
+                    .filter(p => getPositionLabel(p.calc_position || p.position) === 'DEL' && !isUnusedSub(p))
                     .sort((a, b) => Number(b.is_starter) - Number(a.is_starter))
                     .map(renderPlayerCard)}
                 </div>
               </div>
             )}
+            {/* Banquillo */}
+            {awayPlayers.filter(isUnusedSub).length > 0 && renderBenchSection(awayPlayers.filter(isUnusedSub))}
           </div>
         </div>
       </div>

@@ -172,6 +172,7 @@ class MatchEventDownloader:
         self.entry_minutes = {}
         self.total_minutes = {}
         self.on_pitch = set()
+        self.bench_players = set()  # Suplentes convocados que no han entrado al campo
         self.teams = set()
         self.points = {}
         self.stats = {}
@@ -960,8 +961,17 @@ class MatchEventDownloader:
             self.team_goals_scored.setdefault(team_id, 0)
         q30 = self.get_qualifier(event, Q_PLAYERS_INVOLVED)
         if q30 and isinstance(q30, str):
-            for pid in [p.strip() for p in q30.split(',')][:11]:
+            player_ids = [p.strip() for p in q30.split(',') if p.strip()]
+            for pid in player_ids[:11]:
                 self.init_player(pid, team_id, 0)
+            # Resto de la convocatoria: suplentes que aún no han entrado (banquillo).
+            # Se registran con 0 puntos/minutos para que aparezcan en player_scores
+            # y el frontend pueda mostrarlos en el banquillo hasta que entren.
+            for pid in player_ids[11:]:
+                self.init_player_stats_if_none(pid)
+                self.players_team[pid] = team_id
+                self.points.setdefault(pid, 0)
+                self.bench_players.add(pid)
         return True
 
     def _handle_sub_off(self, event, current_min):

@@ -43,5 +43,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #4423 | 7:12 AM | 🔵 | Opta lineup parsing ignores qualifier 131 and substitutes | ~567 |
 | #4422 | 6:46 AM | 🔵 | Player confusion bug traced to fuzzy name matching and provisional player promotion | ~561 |
 </claude-mem-context>
