@@ -77,6 +77,14 @@ def main():
     sb = get_client()
     now = datetime.now(timezone.utc)
     
+    # 0. Obtener la jornada inicial configurada para la liga (fantasy_starting_matchday)
+    try:
+        cfg_resp = sb.table("league_config").select("fantasy_starting_matchday").eq("id", 1).limit(1).execute()
+        fantasy_start = (cfg_resp.data[0].get("fantasy_starting_matchday") or 1) if cfg_resp.data else 1
+    except Exception as e:
+        print(f"⚠️ Error al obtener league_config: {e}")
+        fantasy_start = 1
+
     # 1. Obtener todos los partidos para encontrar el inicio de cada jornada
     try:
         resp = sb.table("fixtures").select("id, matchday, start_time, status").execute()
@@ -89,15 +97,15 @@ def main():
     for f in fixtures:
         md = f.get("matchday")
         st = _parse_ts(f.get("start_time"))
-        if md and md > 0 and st:
+        if md and md >= fantasy_start and st:
             if md not in matchday_starts or st < matchday_starts[md]:
                 matchday_starts[md] = st
 
     # 2. Buscar qué jornadas han empezado ya, y cuáles no han sido procesadas
-    # Solo miramos jornadas cuyo inicio es en el pasado (ya han empezado)
+    # Solo miramos jornadas que sean >= fantasy_start y cuyo inicio es en el pasado (ya han empezado)
     started_matchdays = sorted(md for md, st in matchday_starts.items() if st <= now)
     if not started_matchdays:
-        print("ℹ️ Ninguna jornada ha empezado aún.")
+        print(f"ℹ️ Ninguna jornada (>= {fantasy_start}) ha empezado aún.")
         return
 
     # Un partido adelantado hace que la jornada a la que pertenece "empiece"

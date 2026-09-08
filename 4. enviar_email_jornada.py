@@ -17,6 +17,12 @@ def send_matchday_start_emails(matchday):
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     
     try:
+        cfg_resp = supabase.table("league_config").select("fantasy_starting_matchday").eq("id", 1).limit(1).execute()
+        fantasy_start = (cfg_resp.data[0].get("fantasy_starting_matchday") or 1) if cfg_resp.data else 1
+        if int(matchday) < fantasy_start:
+            print(f"ℹ️ La jornada {matchday} es anterior al inicio de la liga ({fantasy_start}). No se envían correos.")
+            return
+
         profiles_resp = supabase.table("profiles").select("id, email, full_name, division").execute()
         profiles = profiles_resp.data or []
 
@@ -65,11 +71,12 @@ def send_matchday_start_emails(matchday):
         if not email:
             continue
 
-        name = p.get("full_name") or email.split("@")[0]
         division = p.get("division")
+        if division not in (1, 2, 3):
+            # Usuarios sin división asignada no compiten: no se les envía correo
+            continue
 
-        # Sin división asignada no se compite en ninguna tabla: no hay sanciones
-        # que mostrar (el admin las asigna antes de la primera jornada).
+        name = p.get("full_name") or email.split("@")[0]
         sanctions_html = sanctions_html_by_division.get(division, "")
 
         context = {
