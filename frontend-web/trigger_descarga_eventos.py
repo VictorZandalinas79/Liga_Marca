@@ -389,6 +389,13 @@ class MatchEventDownloader:
                             pos = pos_map.get(player.get('position', '').lower().strip(), 'MED')
                             self.positions_table[pid] = pos
                             self.player_positions_map[pid] = pos
+                            # Nombre de la plantilla: el evento de alineacion (typeId 34)
+                            # solo trae IDs, asi que sin esto 'find_player_id' llega con
+                            # nombre vacio y no puede emparejar a los provisionales.
+                            name = (player.get('matchName') or player.get('knownName')
+                                    or f"{player.get('firstName') or ''} {player.get('lastName') or ''}".strip())
+                            if name:
+                                self.player_names.setdefault(pid, name)
                             loaded += 1
                 except Exception: pass
 
@@ -1663,6 +1670,12 @@ class MatchEventDownloader:
         print(f"{'='*60}")
 
         if not self.download_squads(): print("⚠️ No se pudieron descargar los squads, continuando...")
+        # Siempre, tambien cuando los squads bajan bien: 'download_squads' solo
+        # llamaba a 'load_teams_from_db' en sus ramas de error, asi que en el caso
+        # normal nos quedabamos sin 'matchday' (se subia null) y sin la lista de
+        # provisionales, y los fichajes recientes (fila 'bw-...') nunca se promovian:
+        # sus titulares se saltaban y el once aparecia incompleto en el frontend.
+        self.load_teams_from_db()
         self.load_positions()
         headers = self.load_headers()
 
