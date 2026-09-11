@@ -33,6 +33,15 @@ BASE_OUTPUT_PATH = Path("./data/Partidos_Individuales")
 print(f"DEBUG: SUPABASE_URL={SUPABASE_URL}")
 print(f"DEBUG: SUPABASE_KEY present={bool(SUPABASE_KEY)}")
 
+# Mapa de posiciones (Biwenger/Opta -> codigo interno). A nivel de modulo porque
+# lo necesitan tanto 'load_positions' como la promocion de provisionales.
+POS_MAP = {
+    'goalkeeper': 'POR', 'portero': 'POR', 'g': 'POR', 'gk': 'POR',
+    'defender': 'DEF', 'defensa': 'DEF', 'd': 'DEF', 'df': 'DEF',
+    'midfielder': 'MED', 'centrocampista': 'MED', 'm': 'MED', 'mf': 'MED',
+    'attacker': 'DEL', 'striker': 'DEL', 'forward': 'DEL', 'delantero': 'DEL', 'a': 'DEL', 'f': 'DEL', 'fw': 'DEL'
+}
+
 # Sistema de puntuación inicial
 BASE_SCORE = 0
 
@@ -368,12 +377,7 @@ class MatchEventDownloader:
             print(f"   ⚠️ Error cargando equipos desde BD: {e}")
 
     def load_positions(self):
-        pos_map = {
-            'goalkeeper': 'POR', 'portero': 'POR', 'g': 'POR', 'gk': 'POR',
-            'defender': 'DEF', 'defensa': 'DEF', 'd': 'DEF', 'df': 'DEF',
-            'midfielder': 'MED', 'centrocampista': 'MED', 'm': 'MED', 'mf': 'MED',
-            'attacker': 'DEL', 'striker': 'DEL', 'forward': 'DEL', 'delantero': 'DEL', 'a': 'DEL', 'f': 'DEL', 'fw': 'DEL'
-        }
+        pos_map = POS_MAP
         squads_path = BASE_OUTPUT_PATH / self.match_id / "squads"
         loaded = 0
         
@@ -1348,9 +1352,23 @@ class MatchEventDownloader:
                 return
             row = res.data[0]
             row['id'] = real_id
-            
+            # Ya no es provisional: si se quedara marcado, seguiria entrando en la
+            # lista de candidatos a emparejar por nombre en partidos siguientes y
+            # podria robarle el ID a otro jugador desconocido de nombre parecido.
+            if 'is_provisional' in row:
+                row['is_provisional'] = False
+
             # 2. Insertar nueva fila con el real_id
             self.supabase.table('players').upsert(row).execute()
+
+            # 'load_positions' indexa por players.id, y en esta pasada la fila aun
+            # tenia el ID provisional, asi que la posicion de Biwenger no se le
+            # aplico y mandaria la de Opta. Biwenger manda: la reasignamos ya.
+            pos_raw = (row.get('position') or '').lower().strip()
+            if pos_raw:
+                pos = POS_MAP.get(pos_raw, 'MED')
+                self.positions_table[real_id] = pos
+                self.player_positions_map[real_id] = pos
             
             # 3. Mover referencias en team_players, player_scores, match_events
             for table in ["team_players", "player_scores", "match_events"]:
