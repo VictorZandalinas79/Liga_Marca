@@ -195,6 +195,7 @@ class MatchEventDownloader:
         self.team_goals_scored = {}
         self.player_positions_map = {}
         self.sub_events = {} # NUEVO: eventId -> playerId (para cruzar suplentes y titulares)
+        self.opta_players_meta = {} # Mapeo pid -> {dateOfBirth, shirtNumber, name, ...}
         self.home_team_id = None
         self.away_team_id = None
         self.matchday = None
@@ -366,7 +367,7 @@ class MatchEventDownloader:
                 self.provisional_players = {self.home_team_id: [], self.away_team_id: []}
                 for t_id in [self.home_team_id, self.away_team_id]:
                     if t_id:
-                        prov_res = self.supabase.table('players').select('id, short_name, first_name, last_name, team_id').eq('team_id', t_id).or_('id.like.prov_%,id.like.bw_%,is_provisional.eq.true').execute()
+                        prov_res = self.supabase.table('players').select('id, short_name, first_name, last_name, team_id, date_of_birth, shirt_number').eq('team_id', t_id).or_('id.like.prov_%,id.like.bw_%,is_provisional.eq.true').execute()
                         if prov_res.data:
                             self.provisional_players[t_id] = prov_res.data
                             print(f"   ℹ️  Encontrados {len(prov_res.data)} jugadores provisionales en equipo {t_id}")
@@ -400,6 +401,11 @@ class MatchEventDownloader:
                                     or f"{player.get('firstName') or ''} {player.get('lastName') or ''}".strip())
                             if name:
                                 self.player_names.setdefault(pid, name)
+                            self.opta_players_meta[pid] = {
+                                'dateOfBirth': player.get('dateOfBirth'),
+                                'shirtNumber': player.get('shirtNumber'),
+                                'name': name
+                            }
                             loaded += 1
                 except Exception: pass
 
@@ -1310,28 +1316,56 @@ class MatchEventDownloader:
         # Intentamos buscar si es un jugador provisional del equipo
         if team_id in self.provisional_players and self.provisional_players[team_id]:
             norm_name = normalize_name(player_name)
+            opta_info = self.opta_players_meta.get(api_player_id, {})
+            opta_dob = str(opta_info.get('dateOfBirth') or '').strip()
+
+            # 1. Comprobar si hay jugadores con la misma fecha de nacimiento en este equipo
+            dob_matches = []
+            if opta_dob:
+                dob_matches = [
+                    p for p in self.provisional_players[team_id]
+                    if str(p.get('date_of_birth') or '').strip() == opta_dob
+                ]
+
+            # 2. Definir candidatos:
+            # - Si hay coincidentes por fecha, evaluar y desempatar por nombre entre ellos.
+            # - Si no hay ninguno con fecha coincidente, evaluar por nombre entre todos los provisionales.
+            candidates = dob_matches if len(dob_matches) > 0 else self.provisional_players[team_id]
+            has_dob_match = len(dob_matches) > 0
+
             best_match = None
             best_score = 0.0
+            best_reason = ""
             
-            for prov in self.provisional_players[team_id]:
+            for prov in candidates:
                 prov_display = prov.get('short_name') or f"{prov.get('first_name') or ''} {prov.get('last_name') or ''}".strip()
                 norm_prov = normalize_name(prov_display)
-                score = difflib.SequenceMatcher(None, norm_name, norm_prov).ratio()
+                name_score = difflib.SequenceMatcher(None, norm_name, norm_prov).ratio()
                 
                 # Coincidencia por apellido si el nombre viene abreviado (ej. "N. Gudelj" vs "Nemanja Gudelj")
                 name_words = norm_name.split()
                 prov_words = norm_prov.split()
                 if name_words and prov_words and name_words[-1] == prov_words[-1] and len(name_words[-1]) > 3:
-                    score = max(score, 0.90)
+                    name_score = max(name_score, 0.90)
 
-                if score > best_score:
-                    best_score = score
+                reasons = [f"nombre: {name_score:.2f}"]
+
+                if has_dob_match:
+                    # Coincidencia en fecha: desempate por nombre entre los coincidentes de fecha
+                    final_score = 0.90 + (0.10 * name_score)
+                    reasons.append("fecha nacimiento coincidente")
+                else:
+                    final_score = name_score
+
+                if final_score > best_score:
+                    best_score = final_score
                     best_match = prov
+                    best_reason = ", ".join(reasons)
             
             if best_match and best_score >= 0.80:
                 prov_id = best_match['id']
                 prov_display = best_match.get('short_name') or f"{best_match.get('first_name') or ''} {best_match.get('last_name') or ''}".strip()
-                print(f"   🔄 Promoviendo provisional '{prov_display}' ({prov_id}) -> '{player_name}' ({api_player_id}) con {best_score:.2f} similitud")
+                print(f"   🔄 Promoviendo provisional '{prov_display}' ({prov_id}) -> '{player_name}' ({api_player_id}) con {best_score:.2f} similitud [{best_reason}]")
                 self.promote_provisional_player(best_match, api_player_id)
                 
                 # Lo quitamos de la lista para no volver a emparejarlo
