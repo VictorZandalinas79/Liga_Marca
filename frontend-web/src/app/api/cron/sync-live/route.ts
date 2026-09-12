@@ -74,10 +74,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, synced: 0, message: 'Nada que sincronizar ahora mismo' })
     }
 
-    await dispatchLiveSync({ fixture_ids: fixtureIds.join(',') })
+    const result = await dispatchLiveSync({ fixture_ids: fixtureIds.join(',') })
 
     return NextResponse.json({
       success: true,
+      dispatched: result.dispatched,
       synced: fixtureIds.length,
       fixture_ids: fixtureIds,
     })

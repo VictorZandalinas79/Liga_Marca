@@ -13,7 +13,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'fixture_id es requerido' }, { status: 400 })
     }
 
-    await dispatchLiveSync({ fixture_ids: String(fixture_id) })
+    const result = await dispatchLiveSync({ fixture_ids: String(fixture_id) })
+
+    if (!result.dispatched) {
+      return NextResponse.json({
+        success: true,
+        queued: false,
+        message: 'Ya hay una sincronización en marcha; los puntos se actualizarán en 1-2 min',
+      })
+    }
 
     return NextResponse.json({
       success: true,

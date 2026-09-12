@@ -25,7 +25,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No hay fixtures válidos' }, { status: 400 })
     }
 
-    await dispatchLiveSync({ fixture_ids: ids.join(',') })
+    const result = await dispatchLiveSync({ fixture_ids: ids.join(',') })
+
+    if (!result.dispatched) {
+      return NextResponse.json({
+        success: true,
+        queued: false,
+        message: 'Ya hay una sincronización en marcha',
+        count: ids.length,
+      })
+    }
 
     return NextResponse.json({
       success: true,

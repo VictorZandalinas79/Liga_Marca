@@ -17,11 +17,61 @@ export type DispatchInputs = {
   matchday?: string
 }
 
+export type DispatchResult =
+  | { dispatched: true }
+  // Ya había un sync en marcha y no se ha lanzado otro
+  | { dispatched: false; activeRunId: number }
+
 import { exec } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
-export async function dispatchLiveSync(inputs: DispatchInputs): Promise<void> {
+// ── Límite global de disparos ──────────────────────────────────────────────
+// sync-live.yml tiene `cancel-in-progress: true`: cada disparo nuevo mata al
+// que está corriendo. Un sync completo tarda ~135 s, y el margen de 5 min entre
+// disparos del frontend vive en sessionStorage, o sea, es POR PESTAÑA: con
+// varios usuarios mirando un partido llegaban disparos cada pocos segundos
+// (medido el 12/09/2026) y ningún sync habría llegado a terminar.
+//
+// El cerrojo es el propio GitHub: si hay un run sin terminar que arrancó hace
+// menos de ACTIVE_RUN_WINDOW_MS, no se dispara otro. Pasado ese margen el run
+// se da por atascado (en cola sin runner, o colgado) y se dispara igual, para
+// que el nuevo lo cancele y la cola no vuelva a quedarse bloqueada.
+//
+// pg_cron dispara directamente desde SQL y no pasa por aquí; como solo lo hace
+// cada 5 min, como mucho cancela un sync cada 5 min y no deja la cola sin avanzar.
+const ACTIVE_RUN_WINDOW_MS = 4 * 60 * 1000
+
+async function findActiveRun(token: string): Promise<number | null> {
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW}/runs?per_page=10`
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      cache: 'no-store',
+    })
+    if (!res.ok) return null
+    const { workflow_runs: runs = [] } = await res.json()
+    const now = Date.now()
+    for (const run of runs) {
+      if (run.status === 'completed') continue
+      const startedMs = Math.max(
+        new Date(run.created_at).getTime() || 0,
+        new Date(run.run_started_at).getTime() || 0,
+      )
+      if (now - startedMs < ACTIVE_RUN_WINDOW_MS) return run.id
+    }
+    return null
+  } catch {
+    // Si no se puede consultar GitHub, mejor sincronizar de más que quedarse sin sync
+    return null
+  }
+}
+
+export async function dispatchLiveSync(inputs: DispatchInputs): Promise<DispatchResult> {
   const token = process.env.GITHUB_DISPATCH_TOKEN
   if (!token) {
     if (process.env.NODE_ENV === 'development') {
@@ -54,9 +104,14 @@ export async function dispatchLiveSync(inputs: DispatchInputs): Promise<void> {
       const child = exec(`${pythonPath} ci/run_live_sync.py`, { env })
       child.stdout?.on('data', console.log)
       child.stderr?.on('data', console.error)
-      return
+      return { dispatched: true }
     }
     throw new Error('Falta GITHUB_DISPATCH_TOKEN en el entorno')
+  }
+
+  const activeRunId = await findActiveRun(token)
+  if (activeRunId !== null) {
+    return { dispatched: false, activeRunId }
   }
 
   const url = `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW}/dispatches`
@@ -85,4 +140,6 @@ export async function dispatchLiveSync(inputs: DispatchInputs): Promise<void> {
     }
     throw new Error(`GitHub dispatch falló (${res.status}): ${detail}`)
   }
+
+  return { dispatched: true }
 }
