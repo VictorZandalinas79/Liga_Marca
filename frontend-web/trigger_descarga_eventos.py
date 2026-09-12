@@ -1376,9 +1376,21 @@ class MatchEventDownloader:
                     filas = self.supabase.table(table).select('*').eq('player_id', prov_id).execute().data or []
                     for f in filas:
                         if table == "team_players":
-                            # En team_players tenemos UNIQUE(team_id, player_id)
-                            ya = self.supabase.table(table).select('id').eq('team_id', f['team_id']).eq('player_id', real_id).execute().data
-                            if ya:
+                            # Una alineacion es POR JORNADA: el mismo equipo tiene una
+                            # fila de este jugador en CADA jornada en la que lo alinea.
+                            # Sin filtrar por `matchday`, al repuntar la primera fila las
+                            # demas veian "ya existe" y se BORRABAN, dejando onces de 10
+                            # jugadores (y su sancion por tactica incorrecta detras).
+                            # El UNIQUE(team_id, player_id) que justificaba el borrado ya
+                            # no existe: lo quito 023_allow_duplicate_players.sql.
+                            q = self.supabase.table(table).select('id') \
+                                .eq('team_id', f['team_id']).eq('player_id', real_id)
+                            md = f.get('matchday')
+                            q = q.is_('matchday', 'null') if md is None else q.eq('matchday', md)
+                            if q.execute().data:
+                                # Colision de verdad: el provisional y el jugador real
+                                # estan en el MISMO once. Solo ahi sobra la fila.
+                                print(f"      ⚠️ {prov_id} y {real_id} coinciden en la J{md} del equipo {f['team_id']}: se borra la fila provisional")
                                 self.supabase.table(table).delete().eq('id', f['id']).execute()
                                 continue
                         self.supabase.table(table).update({'player_id': real_id}).eq('id', f['id']).execute()

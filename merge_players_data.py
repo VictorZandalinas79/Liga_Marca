@@ -275,8 +275,14 @@ def find_real_counterpart(prov, api_players):
 def repoint_player_references(prov_id, real_id):
     """Traspasa al id real las filas que apuntan al provisional.
 
-    team_players tiene UNIQUE(team_id, player_id): si el usuario ya tenía al
-    jugador real fichado, la fila provisional se borra en lugar de actualizarse.
+    En `team_players` la alineación es POR JORNADA: un mismo equipo tiene una
+    fila de este jugador en CADA jornada en la que lo alinea. La comprobación de
+    duplicado tiene que incluir `matchday`; sin él, al repuntar la primera fila
+    las demás veían "ya existe" y se BORRABAN, dejando onces de 10 jugadores.
+    El UNIQUE(team_id, player_id) que justificaba ese borrado ya no existe: lo
+    quitó 023_allow_duplicate_players.sql. Solo se borra la fila provisional
+    cuando choca con el jugador real DENTRO DEL MISMO once.
+
     Las tablas que no existan en este despliegue se ignoran.
     """
     movidas = 0
@@ -289,9 +295,12 @@ def repoint_player_references(prov_id, real_id):
         for fila in filas:
             try:
                 if tabla == "team_players":
-                    ya = supabase.table(tabla).select("id") \
-                        .eq("team_id", fila["team_id"]).eq("player_id", real_id).execute().data
-                    if ya:
+                    q = supabase.table(tabla).select("id") \
+                        .eq("team_id", fila["team_id"]).eq("player_id", real_id)
+                    md = fila.get("matchday")
+                    q = q.is_("matchday", "null") if md is None else q.eq("matchday", md)
+                    if q.execute().data:
+                        print(f"   Aviso: {prov_id} y {real_id} coinciden en la J{md} del equipo {fila['team_id']}: se borra la fila provisional")
                         supabase.table(tabla).delete().eq("id", fila["id"]).execute()
                         continue
                 supabase.table(tabla).update({"player_id": real_id}).eq("id", fila["id"]).execute()
