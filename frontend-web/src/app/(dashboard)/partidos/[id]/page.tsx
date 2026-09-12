@@ -236,9 +236,14 @@ const PLAY_WINDOW_AFTER_MS = 3 * 60 * 60 * 1000
 
 // Un partido de hace tres jornadas ya no tiene nada que sincronizar; para esos
 // queda el botón manual.
+//
+// OJO con `status === 'live'`: si nunca llega el evento de fin, el partido se
+// queda colgado en 'live' para siempre. Antes eso abría la ventana sin límite y
+// cada pestaña abierta seguía refrescando cada 30 s y encolando un workflow
+// cada 5 min indefinidamente. Ahora 'live' solo evita que se cierre la ventana
+// antes de tiempo; el tope por reloj se aplica igual.
 const isInPlayWindow = (fixture: Fixture): boolean => {
-  if (fixture.status === 'live') return true
-  if (!fixture.start_time) return false
+  if (!fixture.start_time) return fixture.status === 'live'
   const elapsedMs = Date.now() - new Date(fixture.start_time).getTime()
   return elapsedMs > -PLAY_WINDOW_BEFORE_MS && elapsedMs < PLAY_WINDOW_AFTER_MS
 }
@@ -263,6 +268,13 @@ export default function PartidoDetallePage() {
 
   // Refrescos pendientes tras lanzar un sync
   const postSyncTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  // Plantillas y escudos por equipo. Ni una ni otros cambian mientras rueda el
+  // balón, pero `fetchPartido` los volvía a pedir en cada tick (cada 30 s):
+  // ~32 KB de players + los escudos por refresco, para recibir siempre lo
+  // mismo. Se piden una vez por equipo y se reutilizan mientras no se recargue.
+  const teamPlayersCacheRef = useRef<Map<string, any[]>>(new Map())
+  const teamsCacheRef = useRef<Map<string, Team>>(new Map())
 
   // El margen entre disparos vive en sessionStorage para que entrar y salir del
   // partido (o abrirlo en otra pestaña) no encole workflows de más.
@@ -323,58 +335,59 @@ export default function PartidoDetallePage() {
 
     setFixture(fixtureData)
 
-    // 1b. Marca de tiempo del último sync. `fixtures.current_minute` guarda el
-    // minuto del último evento descargado, así que para hacerlo correr entre
-    // sincronizaciones necesitamos saber cuándo se escribió.
-    const { data: lastWrite } = await supabase
+    // 1b. Las puntuaciones del partido, UNA sola vez para los dos equipos.
+    // Antes esto vivía dentro de `loadTeamPlayers`, que se llama una vez por
+    // equipo: la misma consulta de 128 columnas viajaba dos veces (117 KB cada
+    // una) en cada refresco, y el refresco es cada 30 s. Aquí sale una vez y
+    // cada equipo filtra sobre lo ya descargado.
+    const { data: allScoresData } = await supabase
       .from('player_scores')
-      .select('updated_at')
+      .select('*')
       .eq('fixture_id', fixtureId)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
 
-    setDataTimestamp(lastWrite?.updated_at ? new Date(lastWrite.updated_at) : null)
+    // Marca de tiempo del último sync. `fixtures.current_minute` guarda el
+    // minuto del último evento descargado, así que para hacerlo correr entre
+    // sincronizaciones necesitamos saber cuándo se escribió. Sale del lote que
+    // ya tenemos en memoria, en vez de una segunda consulta a la misma tabla.
+    const lastWriteMs = (allScoresData || []).reduce((max, s) => {
+      const t = s.updated_at ? new Date(s.updated_at).getTime() : 0
+      return t > max ? t : max
+    }, 0)
 
-    // 2. Obtener equipos con escudos
-    const { data: teamsData } = await supabase
-      .from('real_teams')
-      .select('id, name, logo_url')
-      .in('id', [fixtureData.home_team_id, fixtureData.away_team_id])
+    setDataTimestamp(lastWriteMs > 0 ? new Date(lastWriteMs) : null)
 
-    const homeTeamData = teamsData?.find(t => t.id === fixtureData.home_team_id)
-    const awayTeamData = teamsData?.find(t => t.id === fixtureData.away_team_id)
+    // 2. Obtener equipos con escudos (solo la primera vez: no cambian)
+    const teamIds = [fixtureData.home_team_id, fixtureData.away_team_id]
+    if (teamIds.some(id => !teamsCacheRef.current.has(id))) {
+      const { data: teamsData } = await supabase
+        .from('real_teams')
+        .select('id, name, logo_url')
+        .in('id', teamIds)
+      for (const t of teamsData || []) teamsCacheRef.current.set(t.id, t)
+    }
 
-    setHomeTeam(homeTeamData || null)
-    setAwayTeam(awayTeamData || null)
+    setHomeTeam(teamsCacheRef.current.get(fixtureData.home_team_id) || null)
+    setAwayTeam(teamsCacheRef.current.get(fixtureData.away_team_id) || null)
 
     // 4. Obtener jugadores de ambos equipos con sus stats
     const loadTeamPlayers = async (teamId: string) => {
-      // Obtener jugadores del equipo
-      const { data: playersData } = await supabase
-        .from('players')
-        .select('*')
-        .eq('team_id', teamId)
-        .order('short_name', { ascending: true })
+      // Obtener jugadores del equipo (cacheados: la plantilla no cambia durante
+      // el partido, y esto se ejecuta en cada refresco del directo)
+      let playersData = teamPlayersCacheRef.current.get(teamId)
+      if (!playersData) {
+        const { data } = await supabase
+          .from('players')
+          .select('*')
+          .eq('team_id', teamId)
+          .order('short_name', { ascending: true })
+        if (!data) return []
+        playersData = data
+        teamPlayersCacheRef.current.set(teamId, data)
+      }
 
-      if (!playersData) return []
-
-      // Obtener player_scores para este partido específico
-      const playerIds = playersData.map(p => p.id)
-
-      // Primero obtener todos los player_scores del fixture
-      const { data: allScoresData } = await supabase
-        .from('player_scores')
-        .select('*')
-        .eq('fixture_id', fixtureId)
-
-      console.log('player_scores encontrados:', allScoresData?.length || 0)
-      console.log('fixture_id:', fixtureId)
-      console.log('IDs de jugadores en players:', playerIds.slice(0, 5))
-      console.log('IDs en player_scores:', allScoresData?.map(s => s.player_id).slice(0, 5))
-
-      // Filtrar solo los de este equipo
-      const scoresData = allScoresData?.filter(s => playerIds.includes(s.player_id)) || []
+      // Filtrar, del lote ya descargado arriba, los de este equipo
+      const playerIds = new Set(playersData.map(p => p.id))
+      const scoresData = allScoresData?.filter(s => playerIds.has(s.player_id)) || []
 
       const scoresMap = new Map(scoresData.map(s => [s.player_id, s]))
 

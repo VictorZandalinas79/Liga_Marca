@@ -202,7 +202,9 @@ export default function JugadorDetallePage() {
   const [activeRadarAxis, setActiveRadarAxis] = useState<number | null>(null)
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [compareTarget, setCompareTarget] = useState<string>('media-pos')
-  const [compareScores, setCompareScores] = useState<PlayerScore[]>([])
+  // Partial: las consultas de comparación solo piden las columnas que usa
+  // calculateRadarStats, no las 128 de player_scores.
+  const [compareScores, setCompareScores] = useState<Partial<PlayerScore>[]>([])
   const [comparePlayer, setComparePlayer] = useState<Player | null>(null)
   const [rankInfo, setRankInfo] = useState<{ global: number, positional: number, totalPlayers: number, totalPositionalPlayers: number } | null>(null)
   
@@ -436,9 +438,12 @@ export default function JugadorDetallePage() {
       const loadPositionAverage = async () => {
         if (!player?.position) return
         const posCode = getPositionLabel(player.position)
+        // Solo las columnas que consume calculateRadarStats. Con select('*')
+        // esto se traía las 128 columnas de player_scores para un cuarto de la
+        // tabla: megas de egress por abrir un desplegable.
         const { data } = await supabase
           .from('player_scores')
-          .select('*')
+          .select('goals, assists, intent_assists, penalties_won, shots_on_target, takeons_won, clean_sheet, saves, clearances, relevo_points, minutes_played, yellow_cards, red_cards, penalties_conceded')
           .eq('position', posCode)
         if (data) {
           setCompareScores(data)
@@ -448,9 +453,11 @@ export default function JugadorDetallePage() {
       setComparePlayer(null)
     } else if (compareTarget === 'media-gen') {
       const loadGeneralAverage = async () => {
+        // Sin filtro esto descarga player_scores ENTERA. Acotado a las columnas
+        // del radar, el mismo cálculo sale por una fracción del tráfico.
         const { data } = await supabase
           .from('player_scores')
-          .select('*')
+          .select('goals, assists, intent_assists, penalties_won, shots_on_target, takeons_won, clean_sheet, saves, clearances, relevo_points, minutes_played, yellow_cards, red_cards, penalties_conceded')
         if (data) {
           setCompareScores(data)
         }
@@ -464,7 +471,7 @@ export default function JugadorDetallePage() {
           setComparePlayer(p)
           const { data } = await supabase
             .from('player_scores')
-            .select('*')
+            .select('goals, assists, intent_assists, penalties_won, shots_on_target, takeons_won, clean_sheet, saves, clearances, relevo_points, minutes_played, yellow_cards, red_cards, penalties_conceded')
             .eq('player_id', p.id)
           if (data) {
             setCompareScores(data)
@@ -1106,7 +1113,7 @@ export default function JugadorDetallePage() {
     metrics: { label: string; value: number | string }[]
   }
 
-  const calculateRadarStats = (scoresList: PlayerScore[], posCode: string): RadarAxis[] => {
+  const calculateRadarStats = (scoresList: Partial<PlayerScore>[], posCode: string): RadarAxis[] => {
     const n = (v: any) => Number(v) || 0
     const matches = scoresList.length
 

@@ -29,9 +29,22 @@ on:
         default: ''
 
 # Evita solapes si una ejecución tarda más que el intervalo del cron.
+#
+# `cancel-in-progress: true` y no false, a propósito. Con false, el 12/09/2026
+# el run #15869 se quedó atascado en `queued` (sin runner asignado) y retuvo el
+# hueco del grupo: los ~100 disparos siguientes se apilaron en la única plaza
+# pendiente cancelándose unos a otros, y el sync estuvo muerto más de una hora
+# con el partido de las 19:00 congelado en el minuto 74. `timeout-minutes` no
+# rescata de esto: ese reloj solo corre cuando el job ya está ejecutándose, así
+# que un run encolado no caduca nunca.
+#
+# Con true, cada disparo nuevo cancela al anterior y ocupa su sitio, así que un
+# run atascado no puede volver a bloquear la cola. Cancelar un sync a medias no
+# pierde nada: trigger_descarga_eventos.py relee el feed de eventos entero y
+# hace upsert, o sea que la siguiente pasada rehace el trabajo desde cero.
 concurrency:
   group: sync-live
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   sync:

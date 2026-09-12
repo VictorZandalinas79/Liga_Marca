@@ -333,7 +333,10 @@ export default function PartidosPage() {
   // ── ¿Toca auto-refrescar? ──────────────────────────────────────────────
   // Depende de `now`, que avanza solo, así que el directo se enciende y se
   // apaga sin necesidad de recargar la página.
-  const hasLiveFixtures = fixtures.some(f => f.status === 'live')
+  // Un partido que se queda colgado en 'live' (nunca llegó el evento de fin)
+  // mantenía esto en true para siempre: la pestaña seguía releyendo Supabase
+  // cada 45 s indefinidamente. La ventana por reloj de abajo ya cubre a los
+  // partidos 'live' de verdad, así que aquí basta con el estado dentro de ella.
   const hasFixturesInPlayWindow = fixtures.some(f => {
     if (!f.start_time) return false
     // Se mira el estado real del partido, NO `has_lineups`: ese flag solo dice
@@ -345,7 +348,7 @@ export default function PartidosPage() {
     // Desde media hora antes del pitido inicial hasta 3 h después
     return elapsedMs > -PREMATCH_WINDOW_MS && elapsedMs < POSTMATCH_WINDOW_MS
   })
-  const shouldAutoRefresh = hasLiveFixtures || hasFixturesInPlayWindow || now < pollUntil
+  const shouldAutoRefresh = hasFixturesInPlayWindow || now < pollUntil
 
   // ── Auto-procesado ─────────────────────────────────────────────────────
   // Antes, esta página solo releía Supabase (refreshCurrent): si nadie abría
