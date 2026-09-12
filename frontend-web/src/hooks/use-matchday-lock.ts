@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { loadCalendar, type CalendarFixture } from '@/lib/calendar-store'
 import { computeOutOfOrderLocks, resolveStartHoursBefore, type FixtureLite, type LockOffsets, type OutOfOrderLock } from '@/lib/locked-teams-core'
 
 let lastLogKey = ''
@@ -9,7 +9,7 @@ let lastLogKey = ''
  * locked-teams-core) no lleva `momento`, y aquí sí hace falta para agrupar las
  * jornadas especiales.
  */
-type FixtureWithMomento = FixtureLite & { momento: string | null }
+type FixtureWithMomento = CalendarFixture
 
 interface MatchdayLockState {
   isLocked: boolean
@@ -67,7 +67,10 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       resolveStartHoursBefore(date, offsets) * 60 * 60 * 1000
 
     const fetchMatchdayData = async () => {
-      const supabase = createClient()
+      // Calendario y config salen de la caché compartida (lib/calendar-store):
+      // este hook se monta varias veces por página y cada instancia no debe
+      // bajarse la tabla fixtures por su cuenta.
+      const { fixtures: allFixtures, config: cfg } = await loadCalendar()
 
       // Offsets configurables (Admin → Reglas del Juego): cuándo empieza la
       // jornada (cierra el mercado) y cuándo se considera cerrada. El inicio
@@ -75,23 +78,12 @@ export function useMatchdayLock(currentMatchday?: number): MatchdayLockState {
       let lockOffsets: LockOffsets = { startHoursBeforeMidweek: 1, startHoursBeforeWeekend: 1, endHoursAfter: 2 }
       let lockOffsetMs = 2 * 60 * 60 * 1000    // 2h después del último partido
       let fantasyStart = 1                     // jornada en la que arranca el juego
-      const { data: cfg } = await supabase
-        .from('league_config')
-        .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday')
-        .eq('id', 1)
-        .maybeSingle()
       if (cfg) {
         if (cfg.matchday_start_hours_before_midweek != null) lockOffsets.startHoursBeforeMidweek = Number(cfg.matchday_start_hours_before_midweek)
         if (cfg.matchday_start_hours_before_weekend != null) lockOffsets.startHoursBeforeWeekend = Number(cfg.matchday_start_hours_before_weekend)
         if (cfg.matchday_end_hours_after != null) lockOffsetMs = Number(cfg.matchday_end_hours_after) * 60 * 60 * 1000
         if (cfg.fantasy_starting_matchday != null) fantasyStart = Number(cfg.fantasy_starting_matchday)
       }
-
-      // Obtener todos los fixtures ordenados por fecha
-      const { data: allFixtures } = await supabase
-        .from('fixtures')
-        .select('id, matchday, momento, start_time, status, home_team_id, away_team_id, home_team:real_teams!home_team_id(name), away_team:real_teams!away_team_id(name)')
-        .order('start_time', { ascending: true })
 
       if (cancelled) return
 

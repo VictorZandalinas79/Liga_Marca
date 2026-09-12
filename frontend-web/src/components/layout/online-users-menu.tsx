@@ -1,15 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Users } from 'lucide-react'
+import { useOnlineUsers } from '@/hooks/use-online-users'
 
 export function OnlineUsersMenu() {
-  const [usersOnline, setUsersOnline] = useState<Array<{ id: string; full_name: string }>>([])
-  const [onlineCount, setOnlineCount] = useState(0)
+  const usersOnline = useOnlineUsers()
+  const onlineCount = usersOnline.length
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const supabase = createClient()
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -20,58 +19,6 @@ export function OnlineUsersMenu() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-
-  useEffect(() => {
-    const fetchOnlineUsers = async () => {
-      try {
-        const { data: sessions, error: sessionsError } = await supabase
-          .from('user_sessions')
-          .select('user_id, last_activity_at')
-          .order('last_activity_at', { ascending: false })
-
-        if (sessionsError) return
-
-        if (sessions && sessions.length > 0) {
-          const now = Date.now()
-          const fiveMinutesAgo = now - (5 * 60 * 1000)
-
-          const sessionIds = sessions
-            .filter((s: any) => {
-              if (!s.last_activity_at) return false
-              const lastActivity = new Date(s.last_activity_at).getTime()
-              return lastActivity > fiveMinutesAgo
-            })
-            .map((s: any) => s.user_id)
-
-          if (sessionIds.length > 0) {
-            const { data: profiles, error: profilesError } = await supabase
-              .from('profiles')
-              .select('id, full_name')
-              .in('id', sessionIds)
-
-            if (profilesError) return
-
-            setUsersOnline(profiles || [])
-            setOnlineCount(profiles?.length || 0)
-          } else {
-            setOnlineCount(0)
-            setUsersOnline([])
-          }
-        } else {
-          setOnlineCount(0)
-          setUsersOnline([])
-        }
-      } catch (err) {
-        console.error('[USUARIOS EN LÍNEA] Error:', err)
-        setOnlineCount(0)
-        setUsersOnline([])
-      }
-    }
-
-    fetchOnlineUsers()
-    const interval = setInterval(fetchOnlineUsers, 15000)
-    return () => clearInterval(interval)
-  }, [supabase])
 
   return (
     <div className="relative" ref={ref}>

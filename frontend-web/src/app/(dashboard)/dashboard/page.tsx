@@ -233,9 +233,6 @@ export default function DashboardPage() {
   const [teamFixtureMap, setTeamFixtureMap] = useState<Map<string, string>>(new Map())
   const [statsModalPlayer, setStatsModalPlayer] = useState<any | null>(null)
   const [statsModalFixture, setStatsModalFixture] = useState<any | null>(null)
-  const [usersOnline, setUsersOnline] = useState<Array<{ id: string; full_name: string }>>([])
-  const [onlineCount, setOnlineCount] = useState(0)
-  const [showOnlineList, setShowOnlineList] = useState(false)
   const [userRanks, setUserRanks] = useState<any>(null)
   const [loadingRanks, setLoadingRanks] = useState(true)
   const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
@@ -1217,72 +1214,6 @@ export default function DashboardPage() {
     }
     fetchLiveInfractions()
   }, [selectedMatchday, userDivision])
-
-  useEffect(() => {
-    const fetchOnlineUsers = async () => {
-      try {
-        const { data: sessions, error: sessionsError } = await supabase
-          .from('user_sessions')
-          .select('user_id, last_activity_at')
-          .order('last_activity_at', { ascending: false })
-
-        console.log('[FETCH SESSIONS]', { sessions, sessionsError })
-
-        if (sessionsError) {
-          console.error('[FETCH SESSIONS] Error:', sessionsError)
-          return
-        }
-
-        if (sessions && sessions.length > 0) {
-          const now = Date.now()
-          const fiveMinutesAgo = now - (5 * 60 * 1000)
-
-          const sessionIds = sessions
-            .filter((s: any) => {
-              if (!s.last_activity_at) return false
-              const lastActivity = new Date(s.last_activity_at).getTime()
-              return lastActivity > fiveMinutesAgo
-            })
-            .map((s: any) => s.user_id)
-
-          console.log('[ACTIVE SESSIONS]', { sessionIds, count: sessionIds.length })
-
-          if (sessionIds.length > 0) {
-            const { data: profiles, error: profilesError } = await supabase
-              .from('profiles')
-              .select('id, full_name')
-              .in('id', sessionIds)
-
-            console.log('[PROFILES]', { profiles, profilesError })
-
-            if (profilesError) {
-              console.error('[PROFILES] Error:', profilesError)
-              return
-            }
-
-            setUsersOnline(profiles || [])
-            setOnlineCount(profiles?.length || 0)
-          } else {
-            setOnlineCount(0)
-            setUsersOnline([])
-          }
-        } else {
-          setOnlineCount(0)
-          setUsersOnline([])
-        }
-      } catch (err) {
-        console.error('[USUARIOS EN LÍNEA] Error:', err)
-        setOnlineCount(0)
-        setUsersOnline([])
-      }
-    }
-
-    if (isRegistered) {
-      fetchOnlineUsers()
-      const interval = setInterval(fetchOnlineUsers, 15000)
-      return () => clearInterval(interval)
-    }
-  }, [isRegistered, supabase])
 
   useEffect(() => {
     const fetchRanks = async () => {

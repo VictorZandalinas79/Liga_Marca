@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { loadCalendar, type LeagueConfigRow } from '@/lib/calendar-store'
 import {
   computeLockedTeams,
   computeOutOfOrderLocks,
@@ -14,15 +15,10 @@ import {
 // desde el servidor. Se reexporta para no romper los imports existentes.
 export * from '@/lib/locked-teams-core'
 
-/** Lee los offsets de Admin → Reglas del Juego, con los valores por defecto. */
-export async function fetchLockOffsets(
-  supabase: ReturnType<typeof createClient>
-): Promise<LockOffsets> {
-  const { data: cfg } = await supabase
-    .from('league_config')
-    .select('matchday_start_hours_before, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after')
-    .eq('id', 1)
-    .maybeSingle()
+/** Offsets de Admin → Reglas del Juego a partir de la fila de league_config, con los valores por defecto. */
+export function lockOffsetsFromConfig(
+  cfg: Partial<LeagueConfigRow> | null | undefined
+): LockOffsets {
   return {
     startHoursBeforeMidweek: cfg?.matchday_start_hours_before_midweek != null
       ? Number(cfg.matchday_start_hours_before_midweek)
@@ -36,22 +32,28 @@ export async function fetchLockOffsets(
   }
 }
 
+/** Lee los offsets de Admin → Reglas del Juego, con los valores por defecto. */
+export async function fetchLockOffsets(
+  supabase: ReturnType<typeof createClient>
+): Promise<LockOffsets> {
+  const { data: cfg } = await supabase
+    .from('league_config')
+    .select('matchday_start_hours_before, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after')
+    .eq('id', 1)
+    .maybeSingle()
+  return lockOffsetsFromConfig(cfg)
+}
+
 /** Hook: equipos bloqueados ahora mismo, refrescado cada minuto. */
 export function useLockedTeams(): LockedTeam[] {
   const [locked, setLocked] = useState<LockedTeam[]>([])
 
   useEffect(() => {
     const run = async () => {
-      const supabase = createClient()
-      const [offsets, { data: leagueData }, { data }] = await Promise.all([
-        fetchLockOffsets(supabase),
-        supabase.from('league_config').select('fantasy_starting_matchday').eq('id', 1).maybeSingle(),
-        supabase
-          .from('fixtures')
-          .select('id,matchday,start_time,status,home_team_id,away_team_id'),
-      ])
-      const fantasyStart = leagueData?.fantasy_starting_matchday ?? 1
-      setLocked(computeLockedTeams((data || []) as FixtureLite[], new Date(), offsets, fantasyStart))
+      const { fixtures, config } = await loadCalendar()
+      const offsets = lockOffsetsFromConfig(config)
+      const fantasyStart = config?.fantasy_starting_matchday ?? 1
+      setLocked(computeLockedTeams((fixtures || []) as FixtureLite[], new Date(), offsets, fantasyStart))
     }
     run()
     const interval = setInterval(run, 60 * 1000)
@@ -81,16 +83,10 @@ export function useOpenMatchdays(): OpenMatchdaysState {
 
   useEffect(() => {
     const run = async () => {
-      const supabase = createClient()
-      const [offsets, { data: leagueData }, { data }] = await Promise.all([
-        fetchLockOffsets(supabase),
-        supabase.from('league_config').select('fantasy_starting_matchday').eq('id', 1).maybeSingle(),
-        supabase
-          .from('fixtures')
-          .select('id,matchday,start_time,status,home_team_id,away_team_id'),
-      ])
-      const fantasyStart = leagueData?.fantasy_starting_matchday ?? 1
-      const fixtures = (data || []) as FixtureLite[]
+      const { fixtures: calendarFixtures, config } = await loadCalendar()
+      const offsets = lockOffsetsFromConfig(config)
+      const fantasyStart = config?.fantasy_starting_matchday ?? 1
+      const fixtures = (calendarFixtures || []) as FixtureLite[]
       const outOfOrderIds = new Set(computeOutOfOrderLocks(fixtures, offsets, fantasyStart).map(l => l.fixtureId))
       const now = Date.now()
 
