@@ -999,7 +999,7 @@ export default function JugadorDetallePage() {
       for (const blk of relevoBlocks) {
         const hit = blk.metrics.find((m) => m.met)
         const shown = hit ?? blk.metrics[0]
-        const fmtVal = (v: number, unit: 'count' | 'pct') =>
+        const fmtVal = (v: number, unit: 'count' | 'pct' | 'flat' | string) =>
           unit === 'pct' ? `${v.toFixed(0)}%` : String(parseFloat(v.toFixed(2)))
         const detail = shown
           ? `${shown.label} ${fmtVal(shown.value, shown.unit)} (mín. ${fmtVal(shown.target, shown.unit)})`

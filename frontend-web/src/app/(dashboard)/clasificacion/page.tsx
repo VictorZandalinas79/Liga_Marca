@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, Fragment } from 'react'
+import { useEffect, useState, useRef, useMemo, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -15,10 +15,10 @@ function formatKamikazeTime(totalMinutes: number): string {
   return `${mins} min ${secs} s`
 }
 import { applySanctionsToTeam, getCurrentMatchday } from '@/lib/infractions'
-import { getStandings } from '@/lib/standings'
+import { getStandings, type UserStanding } from '@/lib/standings'
 import { DIVISION_COMBINED, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
-import { computeOutOfOrderLocks, type FixtureLite } from '@/lib/locked-teams-core'
+import { advancedOnlyTeamIds, hideSanctionsForMatchday, type FixtureLite } from '@/lib/locked-teams-core'
 
 function formatPlayerName(name: string | undefined | null) {
   if (!name) return ''
@@ -30,36 +30,6 @@ function formatPlayerName(name: string | undefined | null) {
     }
   }
   return trimmed
-}
-
-interface UserStanding {
-  user_id: string
-  user_name: string
-  division: number
-  total_points: number
-  average_points: number
-  current_position: number
-  previous_position: number
-  position_change: number
-  teams_count: number
-  matches_played: number
-  last_3_jornadas_avg: number
-  last_5_trend: 'up' | 'down' | 'stable'
-  best_change_score: number
-  total_changes: number
-  successful_changes: number
-  change_impact_points: number
-  podium_finishes: number
-  bottom_finishes: number
-  best_matchday_points: number
-  best_matchday: number
-  sanctioned_matchdays: number
-  kamikaze_score?: number
-  app_opens?: number
-  saldo?: number
-  active_matchday_points?: number | null
-  active_matchday_played?: number
-  active_matchday_total?: number
 }
 
 interface MatchdayStatus {
@@ -89,7 +59,7 @@ export default function ClasificacionPage() {
   // división. Arranca en null hasta conocer la del usuario para no cargar nada global.
   const [selectedDivision, setSelectedDivision] = useState<number | null>(null)
   const [currentUserDivision, setCurrentUserDivision] = useState<number | null>(null)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
   // Cada fetch lleva un id. Si mientras está en vuelo arranca otro (cambio de
   // división, de orden o el refresco automático), el viejo se descarta al volver
@@ -201,9 +171,15 @@ export default function ClasificacionPage() {
   }, [])
 
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 30 * 1000)
+    // Solo auto-refrescar si la jornada está en juego y la pestaña está en primer plano
+    if (isLeagueOpen) return
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      setTick(t => t + 1)
+    }, 60 * 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [isLeagueOpen])
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -302,45 +278,28 @@ export default function ClasificacionPage() {
         startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
         endHoursAfter: config.matchday_end_hours_after ?? 2,
       }
-      const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
-
+      // Mismo criterio que Jornada (ver hideSanctionsForMatchday). Antes se miraba
+      // si había partidos de otra jornada entre el primero y el último de esta, y
+      // con un adelantado eso se cumple siempre: la J6 no habría tenido sanciones nunca.
       if (actualMatchday != null && allFixturesLite.length > 0) {
-        const mdFixtures = allFixturesLite.filter(f => f.matchday === actualMatchday)
-        const validStarts = mdFixtures.map(f => f.start_time ? new Date(f.start_time).getTime() : 0).filter(t => t > 0)
-        if (validStarts.length > 0) {
-          const minStart = Math.min(...validStarts)
-          const maxStart = Math.max(...validStarts)
-          const otherFixtures = allFixturesLite.filter(f => f.matchday !== actualMatchday)
-          isInterleavedMatchday = otherFixtures.some(f => {
-            const t = f.start_time ? new Date(f.start_time).getTime() : 0
-            return t > minStart && t < maxStart
-          })
-        }
+        isInterleavedMatchday = hideSanctionsForMatchday(allFixturesLite, actualMatchday, offsets, config.fantasy_starting_matchday ?? 1)
       }
 
-      const advancedLocks = computeOutOfOrderLocks(allFixturesLite, offsets, config.fantasy_starting_matchday ?? 1)
-        .filter(l => l.type === 'advanced' && l.ownMatchday === actualMatchday)
-      if (advancedLocks.length > 0) {
-        const mdFixtures = allFixturesLite.filter(f => f.matchday === actualMatchday)
-        const allPlayed = mdFixtures.every(f => {
-          const status = (f.status || '').toLowerCase()
-          if (status === 'finished') return true
-          const startTime = f.start_time ? new Date(f.start_time).getTime() : 0
-          return startTime > 0 && startTime + MATCH_DURATION_MS < Date.now()
+      // Hasta que cierra el mercado del resto de la jornada, solo los jugadores
+      // de los dos equipos del adelantado (ver advancedOnlyTeamIds).
+      const restrictedTeamIds = actualMatchday != null
+        ? advancedOnlyTeamIds(allFixturesLite, actualMatchday, offsets, config.fantasy_starting_matchday ?? 1)
+        : new Set<string>()
+      if (restrictedTeamIds.size > 0) {
+        const { data: rosterPlayers } = await supabase
+          .from('players')
+          .select('id, team_id')
+          .in('id', teamPlayersData.map(tp => tp.player_id))
+        const teamIdByPlayer = new Map(rosterPlayers?.map(p => [p.id, p.team_id]) || [])
+        teamPlayersData = teamPlayersData.filter(tp => {
+          const tid = teamIdByPlayer.get(tp.player_id)
+          return tid && restrictedTeamIds.has(tid)
         })
-        if (!allPlayed) {
-          const restrictedTeamIds = new Set<string>()
-          advancedLocks.forEach(l => l.teamIds.forEach(id => restrictedTeamIds.add(id)))
-          const { data: rosterPlayers } = await supabase
-            .from('players')
-            .select('id, team_id')
-            .in('id', teamPlayersData.map(tp => tp.player_id))
-          const teamIdByPlayer = new Map(rosterPlayers?.map(p => [p.id, p.team_id]) || [])
-          teamPlayersData = teamPlayersData.filter(tp => {
-            const tid = teamIdByPlayer.get(tp.player_id)
-            return tid && restrictedTeamIds.has(tid)
-          })
-        }
       }
     }
 
@@ -368,24 +327,25 @@ export default function ClasificacionPage() {
 
     const fixtureIds = fixturesForMatchday?.map(f => f.id) || []
 
-    // Obtener puntos de la jornada específica (NO acumulativos)
-    // Primero por matchday, si no hay resultados, por fixture_id
+    // Obtener puntos de la jornada específica (NO acumulativos). Por fixture_id
+    // primero: player_scores.matchday está a null en los partidos sincronizados
+    // antes de la J5 (entre ellos el adelantado de la J6), y filtrando por
+    // matchday se perderían en cuanto entraran puntos del resto de la jornada.
     let scores = null
-    const { data: scoresByMatchday } = await supabase
-      .from('player_scores')
-      .select('player_id, total_points, goals, assists, yellow_cards, red_cards')
-      .eq('matchday', actualMatchday)
-      .in('player_id', playerIds)
-
-    if (scoresByMatchday && scoresByMatchday.length > 0) {
-      scores = scoresByMatchday
-    } else if (fixtureIds.length > 0) {
+    if (fixtureIds.length > 0) {
       const { data: scoresByFixture } = await supabase
         .from('player_scores')
         .select('player_id, total_points, goals, assists, yellow_cards, red_cards')
         .in('fixture_id', fixtureIds)
         .in('player_id', playerIds)
       scores = scoresByFixture
+    } else {
+      const { data: scoresByMatchday } = await supabase
+        .from('player_scores')
+        .select('player_id, total_points, goals, assists, yellow_cards, red_cards')
+        .eq('matchday', actualMatchday)
+        .in('player_id', playerIds)
+      scores = scoresByMatchday
     }
 
     const playerPointsMap = new Map<string, number>()

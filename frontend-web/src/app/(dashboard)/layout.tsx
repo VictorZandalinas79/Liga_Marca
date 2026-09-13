@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Trophy, Users, Calendar, LogOut, Home, CircleDot, Lock, Gauge, ShieldCheck, Menu, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
@@ -30,7 +30,7 @@ export default function DashboardLayout({
   const [userName, setUserName] = useState<string>('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const { isUnlockWindowOpen, timeUntilLock } = useMatchdayLock()
   const pathname = usePathname()
   
@@ -45,7 +45,7 @@ export default function DashboardLayout({
       }
     }
     getUser()
-  }, [])
+  }, [supabase])
 
   useEffect(() => {
     let sessionId: string | null = null
@@ -53,15 +53,11 @@ export default function DashboardLayout({
     const updateUserSession = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          console.log('[SESSION] No user found')
-          return
-        }
+        if (!user) return
 
         const now = new Date().toISOString()
 
         if (!sessionId) {
-          console.log('[SESSION] Creating new session for user:', user.id)
           const { data: newSession, error: insertError } = await supabase
             .from('user_sessions')
             .insert({
@@ -71,34 +67,14 @@ export default function DashboardLayout({
             })
             .select()
 
-          console.log('[SESSION] Insert result:', { newSession, insertError })
-
-          if (insertError) {
-            console.error('[SESSION] Insert error:', {
-              message: insertError.message,
-              details: insertError.details,
-              hint: insertError.hint,
-              code: insertError.code,
-              full: insertError
-            })
-            return
-          }
-
-          if (newSession && newSession.length > 0) {
+          if (!insertError && newSession && newSession.length > 0) {
             sessionId = newSession[0].id
-            console.log('[SESSION] Session created:', sessionId)
           }
         } else {
-          const { error: updateError } = await supabase
+          await supabase
             .from('user_sessions')
             .update({ last_activity_at: now })
             .eq('id', sessionId)
-
-          if (updateError) {
-            console.error('[SESSION] Update error:', updateError)
-          } else {
-            console.log('[SESSION] Session updated:', sessionId)
-          }
         }
       } catch (err) {
         console.error('[SESSION] Unexpected error:', err)
@@ -106,17 +82,29 @@ export default function DashboardLayout({
     }
 
     updateUserSession()
-    const interval = setInterval(updateUserSession, 30000)
+    // Sondeo de presencia a 60s, solo cuando la pestaña está en primer plano
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        updateUserSession()
+      }
+    }, 60000)
+
+    const onVisible = () => {
+      if (!document.hidden) {
+        updateUserSession()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
 
     return () => {
       clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
       if (sessionId) {
-        console.log('[SESSION] Cleaning up session:', sessionId)
         supabase
           .from('user_sessions')
           .delete()
           .eq('id', sessionId)
-          .then(() => console.log('[SESSION] Session deleted'))
+          .then(() => {})
       }
     }
   }, [supabase])

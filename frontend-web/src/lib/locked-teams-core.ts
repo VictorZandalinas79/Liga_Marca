@@ -314,6 +314,64 @@ export function hasUnresolvedOutOfOrderMatch(
   return !isMatchdayFullyPlayed(fixtures, matchday)
 }
 
+/**
+ * Equipos reales cuyos jugadores son lo único que se muestra de una jornada con
+ * partido adelantado. Antes de que cierre el mercado del resto de la jornada,
+ * lo único disputado es el adelantado y el once para los demás partidos aún se
+ * está editando, así que solo se enseñan los jugadores de esos dos equipos
+ * (bloqueados, así que son los mismos que tenía cada usuario en el adelantado).
+ * En cuanto cierra ese mercado (p.ej. el martes 1 h antes del primer partido
+ * regular de la J6) se devuelve un conjunto vacío y se ven los 11.
+ */
+export function advancedOnlyTeamIds(
+  fixtures: FixtureLite[],
+  matchday: number,
+  offsets: LockOffsets = DEFAULT_LOCK_OFFSETS,
+  fantasyStart: number = 1,
+  now: Date = new Date()
+): Set<string> {
+  const restricted = new Set<string>()
+  const locks = computeOutOfOrderLocks(fixtures, offsets, fantasyStart)
+    .filter(l => l.type === 'advanced' && l.ownMatchday === matchday)
+  if (locks.length === 0) return restricted
+
+  const advancedIds = new Set(locks.map(l => l.fixtureId))
+  const regularStarts = fixtures
+    .filter(f =>
+      f.matchday === matchday && !advancedIds.has(f.id) && f.start_time &&
+      !VOID_STATUSES.has((f.status || '').toLowerCase())
+    )
+    .map(f => new Date(f.start_time).getTime())
+  if (regularStarts.length > 0) {
+    const firstRegular = Math.min(...regularStarts)
+    const marketClose = firstRegular - resolveStartHoursBefore(new Date(firstRegular), offsets) * ONE_HOUR
+    if (now.getTime() >= marketClose) return restricted
+  }
+
+  locks.forEach(l => l.teamIds.forEach(id => restricted.add(id)))
+  return restricted
+}
+
+/**
+ * ¿Hay que ocultar las sanciones de esta jornada?
+ *  - Con partido ADELANTADO: solo mientras únicamente cuenta el adelantado, es
+ *    decir, hasta que cierra el mercado del resto de la jornada. Desde ahí la
+ *    jornada se trata como una normal: sanciones en vivo contra la jornada previa.
+ *  - Con partido APLAZADO: hasta que se juegue la jornada entera, como antes.
+ */
+export function hideSanctionsForMatchday(
+  fixtures: FixtureLite[],
+  matchday: number,
+  offsets: LockOffsets = DEFAULT_LOCK_OFFSETS,
+  fantasyStart: number = 1,
+  now: Date = new Date()
+): boolean {
+  const hasAdvanced = computeOutOfOrderLocks(fixtures, offsets, fantasyStart)
+    .some(l => l.type === 'advanced' && l.ownMatchday === matchday)
+  if (hasAdvanced) return advancedOnlyTeamIds(fixtures, matchday, offsets, fantasyStart, now).size > 0
+  return hasUnresolvedOutOfOrderMatch(fixtures, matchday, fantasyStart)
+}
+
 /** ¿Está activo este bloqueo en el instante dado? */
 export function isLockActive(lock: OutOfOrderLock, now: Date = new Date()): boolean {
   const t = now.getTime()

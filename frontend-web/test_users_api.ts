@@ -6,6 +6,6 @@ dotenv.config({ path: '.env.local' })
 async function run() {
   const res = await GET()
   const data = await res.json()
-  console.log(data.users.slice(0, 5).map(u => ({ id: u.id, saldo: u.saldo, amount_paid: u.amount_paid })))
+  console.log(data.users.slice(0, 5).map((u: any) => ({ id: u.id, saldo: u.saldo, amount_paid: u.amount_paid })))
 }
 run()

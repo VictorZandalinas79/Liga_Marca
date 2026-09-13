@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { applyMarketFilter } from '@/lib/market'
@@ -203,6 +203,12 @@ function PlayerSearchPicker({
   )
 }
 
+let cachedPlayersData: {
+  players: Player[]
+  teams: Array<{ id: string; name: string; logo_url?: string }>
+  timestamp: number
+} | null = null
+
 export default function JugadoresPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [filter, setFilter] = useState('')
@@ -218,7 +224,7 @@ export default function JugadoresPage() {
   const [playerBId, setPlayerBId] = useState<string>('')
   const [per90Mode, setPer90Mode] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const exportToExcel = () => {
     const headers = ['Nombre', 'Equipo', 'Posición', 'Precio (M)']
@@ -242,6 +248,13 @@ export default function JugadoresPage() {
 
   useEffect(() => {
     const fetchPlayers = async () => {
+      if (cachedPlayersData && Date.now() - cachedPlayersData.timestamp < 5 * 60 * 1000) {
+        setTeams(cachedPlayersData.teams)
+        setPlayers(cachedPlayersData.players)
+        setLoading(false)
+        return
+      }
+
       const PAGE_SIZE = 1000
       const playersData: any[] = []
       let from = 0
@@ -271,13 +284,13 @@ export default function JugadoresPage() {
         .in('id', teamIds)
       const teamsMap = new Map(teamsData?.map(t => [t.id, t]) || [])
 
-      setTeams(
-        teamIds.map(id => ({
-          id,
-          name: teamsMap.get(id)?.name || 'Sin nombre',
-          logo_url: teamsMap.get(id)?.logo_url,
-        })).sort((a, b) => a.name.localeCompare(b.name))
-      )
+      const computedTeams = teamIds.map(id => ({
+        id,
+        name: teamsMap.get(id)?.name || 'Sin nombre',
+        logo_url: teamsMap.get(id)?.logo_url,
+      })).sort((a, b) => a.name.localeCompare(b.name))
+
+      setTeams(computedTeams)
 
       const allScores: any[] = []
       let scoresFrom = 0
@@ -364,6 +377,11 @@ export default function JugadoresPage() {
       })
 
       setPlayers(playersWithStats)
+      cachedPlayersData = {
+        players: playersWithStats,
+        teams: computedTeams,
+        timestamp: Date.now()
+      }
       setLoading(false)
     }
 

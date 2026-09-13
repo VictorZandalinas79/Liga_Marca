@@ -5,7 +5,7 @@ import {
   loadDivisionMembership,
   userDisplayName,
 } from '@/lib/divisions'
-import { chronologicalPredecessors, computeOutOfOrderLocks, hasUnresolvedOutOfOrderMatch, resolveStartHoursBefore, type FixtureLite } from '@/lib/locked-teams-core'
+import { chronologicalPredecessors, computeOutOfOrderLocks, hideSanctionsForMatchday, resolveStartHoursBefore, type FixtureLite } from '@/lib/locked-teams-core'
 
 export interface Infraction {
   id: string
@@ -136,25 +136,32 @@ export async function isMatchdayLockStarted(supabase: SupabaseClient, matchday: 
 }
 
 /**
- * Si una jornada tiene un partido descolocado (adelantado/aplazado) sin
- * resolver, no se muestran sanciones para ella hasta que se complete del
- * todo: sus alineaciones y su historial dependen de partidos que aún no se
- * han jugado. Una jornada normal (sin ningún fixture fuera de orden) sigue
- * mostrando sanciones en cuanto cierra su mercado, como siempre.
+ * Sanciones en vivo de una jornada: desde que cierra su mercado, salvo que
+ * hideSanctionsForMatchday diga lo contrario (una jornada con adelantado antes
+ * de que cierre el mercado del resto, o una con aplazado sin jugar entera).
  */
 export async function canShowInfractionsForMatchday(supabase: SupabaseClient, matchday: number): Promise<boolean> {
   const isLocked = await isMatchdayLockStarted(supabase, matchday)
   if (!isLocked) return false
 
-  const { data: configData } = await supabase.from('league_config').select('fantasy_starting_matchday').eq('id', 1).maybeSingle()
+  const { data: configData } = await supabase
+    .from('league_config')
+    .select('fantasy_starting_matchday, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after')
+    .eq('id', 1)
+    .maybeSingle()
   const fantasyStart = Math.max(1, configData?.fantasy_starting_matchday ?? 1)
+  const offsets = {
+    startHoursBeforeMidweek: configData?.matchday_start_hours_before_midweek != null ? Number(configData.matchday_start_hours_before_midweek) : 1,
+    startHoursBeforeWeekend: configData?.matchday_start_hours_before_weekend != null ? Number(configData.matchday_start_hours_before_weekend) : 1,
+    endHoursAfter: configData?.matchday_end_hours_after != null ? Number(configData.matchday_end_hours_after) : 2,
+  }
 
   const { data: fixtures } = await supabase
     .from('fixtures')
     .select('id, matchday, start_time, status, home_team_id, away_team_id')
 
   if (!fixtures) return true
-  return !hasUnresolvedOutOfOrderMatch(fixtures as FixtureLite[], matchday, fantasyStart)
+  return !hideSanctionsForMatchday(fixtures as FixtureLite[], matchday, offsets, fantasyStart)
 }
 
 export async function getLiveInfractions(supabase: SupabaseClient, matchday: number, division?: number | null): Promise<Infraction[]> {

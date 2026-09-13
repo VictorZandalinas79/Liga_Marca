@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Bell, Copy, Check } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 
 type NotificationType =
   | 'fixture_changed'
@@ -52,7 +51,7 @@ export function NotificationBell() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [copiedAll, setCopiedAll] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const supabase = createClient()
+  const lastFetchedRef = useRef<number>(0)
 
   useEffect(() => {
     setMounted(true)
@@ -148,13 +147,20 @@ export function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications()
-    // Antes solo se cargaba una vez al montar: si la pestaña llevaba abierta
-    // desde antes de que se cerrara el periodo de cambios de una jornada, la
-    // sanción nunca aparecía sin recargar la página a mano. Refrescamos cada
-    // 2 minutos para que las sanciones en vivo aparezcan solas al cerrarse.
-    const interval = setInterval(fetchNotifications, 120000)
+    // Sondeo ligero cada 5 minutos en segundo plano si la pestaña está visible
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      fetchNotifications()
+    }, 300000)
     return () => clearInterval(interval)
   }, [])
+
+  // Refrescar al abrir la campana si han pasado más de 60 segundos
+  useEffect(() => {
+    if (open && Date.now() - lastFetchedRef.current > 60000) {
+      fetchNotifications()
+    }
+  }, [open])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -168,42 +174,14 @@ export function NotificationBell() {
   }, [])
 
   async function fetchNotifications() {
+    lastFetchedRef.current = Date.now()
     try {
       const res = await fetch('/api/notifications', { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
-        // Excluir las sanciones que venían del API de notificaciones (penalties/live-inf)
-        // porque ahora las obtenemos directamente de /api/penalties/live
-        const rawNotifs = (data.notifications || []).filter(
-          (n: any) => !String(n.id).startsWith('penalty-') && !String(n.id).startsWith('live-inf-')
-        )
-
-        // Obtener sanciones directamente de /api/penalties/live para TODAS las
-        // divisiones, el mismo endpoint que usa la página de Jornada.
-        let sanctionNotifs: Notification[] = []
-        try {
-          const divResults = await Promise.all(
-            [1, 2, 3].map(async (div) => {
-              const r = await fetch(`/api/penalties/live?division=${div}`, { cache: 'no-store' })
-              if (!r.ok) return []
-              const d = await r.json()
-              return (d.infractions || []).map((inf: any) => ({
-                id: `live-inf-${inf.id || `${div}-${inf.user_id}-${inf.description}`}`,
-                type: 'players_locked' as NotificationType,
-                title: `Sanción en Juego J${inf.matchday}: ${inf.full_name}`,
-                body: `${inf.description} (Puntuarán 0 pts esta jornada)`,
-                created_at: new Date().toISOString(),
-                read_at: null,
-                division: div,
-              }))
-            })
-          )
-          sanctionNotifs = divResults.flat()
-        } catch (e) {
-          console.error('Error fetching live sanctions:', e)
-        }
-
-        const allNotifs = [...sanctionNotifs, ...rawNotifs]
+        // /api/notifications ya consolida las notificaciones estándar, avisos de partidos
+        // intercalados y sanciones (tanto consolidadas como en vivo para todas las divisiones).
+        const allNotifs: Notification[] = data.notifications || []
 
         // Cargar IDs leídos localmente
         let readIds: string[] = []
@@ -220,10 +198,6 @@ export function NotificationBell() {
           return n
         })
 
-        // Sin filtro por fecha: la tabla solo contiene ya las novedades de la
-        // última sincronización, porque los scripts la vacían al empezar. El
-        // corte de 5 días que había aquí solo servía para dejar la campana en
-        // blanco si el workflow se retrasaba.
         setNotifications(processed)
       }
     } catch {}

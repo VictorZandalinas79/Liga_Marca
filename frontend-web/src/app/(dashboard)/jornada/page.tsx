@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,7 +9,7 @@ import { MetricBreakdown } from '@/components/metric-breakdown'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
-import { computeOutOfOrderLocks, hasUnresolvedOutOfOrderMatch, type FixtureLite } from '@/lib/locked-teams-core'
+import { advancedOnlyTeamIds, hideSanctionsForMatchday, type FixtureLite } from '@/lib/locked-teams-core'
 import { PrintView } from './PrintView'
 
 function formatPlayerName(name: string | undefined | null) {
@@ -42,7 +42,7 @@ interface Player {
   isPlaying?: boolean
   hasSubstitutionWarning?: boolean
   hasMaxTeamWarning?: boolean
-  replacedPlayer?: { id: string; short_name?: string; first_name?: string; photo?: string } | null
+  replacedPlayer?: { id: string; short_name?: string; first_name?: string; photo?: string; team?: { name?: string; logo_url?: string } } | null
   originalPuntos?: number
   sanctionReason?: string
 }
@@ -114,6 +114,7 @@ export default function JornadaPage() {
   const [currentUserDivision, setCurrentUserDivision] = useState<number | null>(null)
   const [matchdayWinners, setMatchdayWinners] = useState<Set<string>>(new Set())
   const [matchdayLosers, setMatchdayLosers] = useState<Set<string>>(new Set())
+  const [expandedTableTeamId, setExpandedTableTeamId] = useState<string | null>(null)
   const [allFixturesLite, setAllFixturesLite] = useState<FixtureLite[]>([])
   const supabase = createClient()
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -128,12 +129,13 @@ export default function JornadaPage() {
     const { data: playerData } = await supabase.from('players').select('*').eq('id', playerId).single()
 
     let scoresData: Record<string, any> | null = null
-    if (info?.rawMatchday) {
-      const { data } = await supabase.from('player_scores').select('*').eq('player_id', playerId).eq('matchday', info.rawMatchday).maybeSingle()
+    // Por fixture_id primero: player_scores.matchday puede estar a null (ver loadUserTeamsForMatchday)
+    if (info?.fixtureIds?.length) {
+      const { data } = await supabase.from('player_scores').select('*').eq('player_id', playerId).in('fixture_id', info.fixtureIds).limit(1).maybeSingle()
       scoresData = data
     }
-    if (!scoresData && info?.fixtureIds?.length) {
-      const { data } = await supabase.from('player_scores').select('*').eq('player_id', playerId).in('fixture_id', info.fixtureIds).maybeSingle()
+    if (!scoresData && info?.rawMatchday) {
+      const { data } = await supabase.from('player_scores').select('*').eq('player_id', playerId).eq('matchday', info.rawMatchday).limit(1).maybeSingle()
       scoresData = data
     }
 
@@ -268,7 +270,11 @@ export default function JornadaPage() {
     } else {
       const fantasyStart = config?.fantasy_starting_matchday ?? 1
       const resolvedInfos = startedInfos.filter(m =>
-        typeof m.matchday !== 'number' || !hasUnresolvedOutOfOrderMatch(fixtures as FixtureLite[], m.matchday, fantasyStart)
+        typeof m.matchday !== 'number' || !hideSanctionsForMatchday(fixtures as FixtureLite[], m.matchday, {
+          startHoursBeforeMidweek: config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
+          startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
+          endHoursAfter: config.matchday_end_hours_after ?? 2,
+        }, fantasyStart)
       )
       defaultMatchday = resolvedInfos.length > 0
         ? resolvedInfos[resolvedInfos.length - 1].matchday
@@ -405,33 +411,17 @@ export default function JornadaPage() {
       })
     }
 
-    // Si esta jornada tiene un partido adelantado (fuera de orden cronológico) y
-    // todavía no se han jugado el resto de sus partidos, solo deben mostrarse los
-    // jugadores de los dos equipos de ese partido adelantado: es lo único que
-    // realmente se ha disputado de esta jornada. La restricción se levanta sola
-    // en cuanto el resto de partidos de la jornada terminan.
-    const restrictedTeamIds = new Set<string>()
-    if (info && info.rawMatchday != null && allFixturesLite.length > 0) {
-      const offsets = {
-        startHoursBeforeMidweek: config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
-        startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
-        endHoursAfter: config.matchday_end_hours_after ?? 2,
-      }
-      const advancedLocks = computeOutOfOrderLocks(allFixturesLite, offsets, config.fantasy_starting_matchday ?? 1)
-        .filter(l => l.type === 'advanced' && l.ownMatchday === info.rawMatchday)
-      if (advancedLocks.length > 0) {
-        const mdFixtures = allFixturesLite.filter(f => f.matchday === info.rawMatchday)
-        const allPlayed = mdFixtures.every(f => {
-          const status = (f.status || '').toLowerCase()
-          if (status === 'finished') return true
-          const startTime = f.start_time ? new Date(f.start_time).getTime() : 0
-          return startTime > 0 && startTime + MATCH_DURATION_MS < Date.now()
-        })
-        if (!allPlayed) {
-          advancedLocks.forEach(l => l.teamIds.forEach(id => restrictedTeamIds.add(id)))
-        }
-      }
-    }
+    // Si esta jornada tiene un partido adelantado y aún no ha cerrado el mercado
+    // del resto de sus partidos, solo se muestran los jugadores de los dos
+    // equipos del adelantado: es lo único disputado, y el resto del once se está
+    // editando todavía. Al cerrar ese mercado se ven los 11 de cada usuario.
+    const restrictedTeamIds = info && info.rawMatchday != null && allFixturesLite.length > 0
+      ? advancedOnlyTeamIds(allFixturesLite, info.rawMatchday, {
+          startHoursBeforeMidweek: config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
+          startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
+          endHoursAfter: config.matchday_end_hours_after ?? 2,
+        }, config.fantasy_starting_matchday ?? 1)
+      : new Set<string>()
 
     // Obtener sanciones de la jornada anterior
     const prevMatchday = matchday - 1
@@ -444,12 +434,16 @@ export default function JornadaPage() {
       prevPenalties = data || []
     }
 
-    // Jornada con un partido fuera de orden (adelantado/aplazado) sin resolver: no
-    // se muestran sanciones hasta que se complete del todo, igual que en
-    // infractions.ts (getLiveInfractions / canShowInfractionsForMatchday).
+    // Sanciones y avisos ocultos mientras la jornada no cuente como normal, igual
+    // que en infractions.ts (canShowInfractionsForMatchday): con un adelantado,
+    // hasta que cierra el mercado del resto; con un aplazado, hasta jugarla entera.
     const isInterleavedMatchday = !!(
       info && info.rawMatchday != null && allFixturesLite.length > 0 &&
-      hasUnresolvedOutOfOrderMatch(allFixturesLite, info.rawMatchday, config.fantasy_starting_matchday ?? 1)
+      hideSanctionsForMatchday(allFixturesLite, info.rawMatchday, {
+        startHoursBeforeMidweek: config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
+        startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
+        endHoursAfter: config.matchday_end_hours_after ?? 2,
+      }, config.fantasy_starting_matchday ?? 1)
     )
 
     // Datos de jugadores (incluye precio para el valor del equipo)
@@ -466,28 +460,25 @@ export default function JornadaPage() {
       .in('id', realTeamIds)
     const teamsMap = new Map(teamsData?.map(t => [t.id, t]) || [])
 
-    // Puntos de la jornada: merge por (matchday, player_id) usando la columna matchday.
-    // Si está vacío (momento o columna aún sin rellenar), caemos a filtrar por fixture_id.
+    // Puntos de la jornada por fixture_id, no por player_scores.matchday: esa
+    // columna solo la rellena el sync desde la J5, y un adelantado sincronizado
+    // antes (el de la J6) la tiene a null. Filtrando por matchday, en cuanto
+    // entraran puntos del resto de la jornada se perderían los del adelantado.
     let scoresData: PlayerScoreItem[] | null = null
-    if (info && info.rawMatchday != null) {
+    if (info && info.fixtureIds.length > 0) {
+      const res = await supabase
+        .from('player_scores')
+        .select('player_id, total_points')
+        .in('fixture_id', info.fixtureIds)
+        .in('player_id', playerIds)
+      scoresData = res.data as PlayerScoreItem[] | null
+    } else if (info && info.rawMatchday != null) {
       const res = await supabase
         .from('player_scores')
         .select('player_id, total_points')
         .eq('matchday', info.rawMatchday)
         .in('player_id', playerIds)
       scoresData = res.data as PlayerScoreItem[] | null
-    }
-
-    // Aserción segura para obtener la longitud sin provocar el error "never"
-    const scoresCount = (scoresData as PlayerScoreItem[])?.length ?? 0
-
-    if (scoresCount === 0 && info && info.fixtureIds.length > 0) {
-      const res = await supabase
-        .from('player_scores')
-        .select('player_id, total_points')
-        .in('fixture_id', info.fixtureIds)
-        .in('player_id', playerIds)
-      scoresData = res.data as { player_id: string; total_points: number }[] | null
     }
 
     const playerPointsMap = new Map<string, number>()
@@ -796,23 +787,18 @@ export default function JornadaPage() {
           const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
           if (!info) return
 
-          // Verificar si la jornada está intercalada
-          let isInterleavedMatchday = false
-          if (info.rawMatchday != null && allFixturesLite.length > 0) {
-            const mdFixtures = allFixturesLite.filter(f => f.matchday === info.rawMatchday)
-            const validStarts = mdFixtures.map(f => f.start_time ? new Date(f.start_time).getTime() : 0).filter(t => t > 0)
-            if (validStarts.length > 0) {
-              const minStart = Math.min(...validStarts)
-              const maxStart = Math.max(...validStarts)
-              const otherFixtures = allFixturesLite.filter(f => f.matchday !== info.rawMatchday)
-              isInterleavedMatchday = otherFixtures.some(f => {
-                const t = f.start_time ? new Date(f.start_time).getTime() : 0
-                return t > minStart && t < maxStart
-              })
-            }
-          }
+          // Mismo criterio que las alineaciones (ver hideSanctionsForMatchday). Antes
+          // se miraba si había partidos de otra jornada entre el primero y el
+          // último de esta, lo que con un adelantado se cumple SIEMPRE y dejaba
+          // la jornada sin sanciones incluso ya terminada.
+          const hideSanctions = info.rawMatchday != null && allFixturesLite.length > 0 &&
+            hideSanctionsForMatchday(allFixturesLite, info.rawMatchday, {
+              startHoursBeforeMidweek: config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
+              startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
+              endHoursAfter: config.matchday_end_hours_after ?? 2,
+            }, config.fantasy_starting_matchday ?? 1)
 
-          if (isInterleavedMatchday) {
+          if (hideSanctions) {
             if (isActive) setMatchdayInfractions([])
             return
           }
@@ -1138,6 +1124,268 @@ export default function JornadaPage() {
     }
   }
 
+  const renderTeamCard = (team: UserTeam, displayPos: number) => {
+    const isCurrentUser = currentUserId === team.user_id
+    const isWinner = matchdayWinners.has(team.team_id)
+    const isLoser = matchdayLosers.has(team.team_id)
+
+    return (
+      <Card
+        key={team.team_id}
+        ref={(el) => { teamRefs.current[team.team_id] = el; }}
+        className={`bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 rounded-xl scroll-mt-20 overflow-hidden min-w-0 flex flex-col ${
+          isCurrentUser ? 'ring-2 ring-emerald-500 border-emerald-500' : ''
+        }`}
+      >
+        <CardContent className="p-0">
+          {/* Cabecera del equipo - Fondo blanco */}
+          <div className="px-3 py-2.5 bg-white border-b border-slate-200 flex items-center gap-2.5">
+            {/* Posición en verde (ganador), rojo (perdedor) o negro (resto) */}
+            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
+              isWinner ? 'bg-emerald-600 text-white' :
+              isLoser ? 'bg-red-600 text-white' :
+              'bg-slate-900 text-white'
+            }`}>
+              <span className="text-xs sm:text-sm font-extrabold">{displayPos}º</span>
+            </div>
+            
+            {/* Info: Nombre arriba, stats abajo */}
+            <div className="flex flex-col flex-1 min-w-0">
+              <div className="flex items-baseline gap-2">
+                <h3 className="font-extrabold text-slate-900 text-[11px] sm:text-xs uppercase leading-tight tracking-tight whitespace-nowrap truncate">{team.user_name}</h3>
+              </div>
+              
+              <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-semibold text-slate-400 leading-none">Sist</span>
+                  <span className={`text-[11px] font-mono font-bold leading-none ${team.hasTacticsWarning ? 'text-red-600 animate-pulse font-black' : 'text-slate-700'}`}>{getFormacion(team.jugadores)}</span>
+                </div>
+                <div className="w-px h-3 bg-slate-200" />
+                <span className={`text-[11px] font-bold leading-none ${team.hasBudgetWarning ? 'text-red-600 animate-pulse font-black' : 'text-slate-700'}`}>{fmtValor(team.valor_total)}</span>
+                <div className="w-px h-3 bg-slate-200" />
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-semibold text-slate-400 leading-none">Pts</span>
+                  <span className="text-[12px] sm:text-[13px] font-black text-emerald-600 leading-none">{(Math.round(team.puntos_totales * 10) / 10).toFixed(1)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Jugadores */}
+          <div className="px-1.5 pb-2 pt-1">
+            <div className="space-y-1">
+              {(['Titulares', 'Suplentes'] as const).map((grupo) => {
+                const jugadoresGrupo = team.jugadores.filter(p =>
+                  grupo === 'Titulares' ? p.is_starter : !p.is_starter
+                )
+                if (jugadoresGrupo.length === 0) return null
+                return (
+                  <div key={grupo}>
+                    {grupo !== 'Titulares' && (
+                      <p className="text-xs font-semibold text-slate-500 uppercase mb-2 mt-2">{grupo}</p>
+                    )}
+                    <div className="flex flex-col gap-0">
+                      {jugadoresGrupo.map((player, idx) => {
+                        const matchKey = `${team.team_id}-${player.id}`
+                        const isMatch = matchSet.has(matchKey)
+                        const isActive = matchKey === activeMatchKey
+
+                        let finalSanctionReason = player.sanctionReason;
+                        if (!finalSanctionReason) {
+                          const matchedInf = matchdayInfractions.find((inf: any) => {
+                            const matchesUser = inf.user_id === team.user_id || inf.team_id === team.team_id
+                            if (!matchesUser) return false
+
+                            const descLower = (inf.description || '').toLowerCase()
+                            
+                            // 1. Mencion de nombre de jugador
+                            const shortName = (player.short_name || '').toLowerCase().trim()
+                            const firstName = (player.first_name || '').toLowerCase().trim()
+                            if (shortName && descLower.includes(shortName)) return true
+                            if (firstName && descLower.includes(firstName)) return true
+
+                            // 2. Mencion de equipo real en sancion de max por equipo
+                            const realTeamName = (player.team?.name || '').toLowerCase().trim()
+                            if (realTeamName && descLower.includes(realTeamName) && descLower.includes('jugadores de')) {
+                              return true
+                            }
+
+                            return false
+                          })
+                          if (matchedInf) {
+                            finalSanctionReason = matchedInf.description;
+                          }
+                        }
+                        const isPenalized = !!finalSanctionReason;
+
+                        return (
+                        <div
+                          key={matchKey}
+                          ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
+                          onClick={() => openPlayerStats(player.id, finalSanctionReason)}
+                          className={`flex items-center justify-between px-1 rounded-lg transition-all gap-1 cursor-pointer ${
+                            isActive
+                              ? 'ring-2 ring-orange-500 ring-offset-1 shadow-md relative z-10 scale-[1.02]'
+                              : isMatch
+                              ? 'ring-2 ring-amber-400 ring-offset-1'
+                              : ''
+                          } ${
+                            isPenalized
+                              ? 'bg-red-50 border border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-sm'
+                              : isActive
+                              ? 'bg-orange-200 hover:bg-orange-300'
+                              : isMatch
+                              ? 'bg-yellow-100 hover:bg-yellow-200'
+                              : player.isPlaying
+                              ? 'bg-red-50 border border-red-200 animate-pulse hover:bg-red-100 text-red-900 shadow-sm'
+                              : player.hasPlayed
+                              ? 'bg-slate-200 hover:bg-slate-300'
+                              : 'bg-slate-50 hover:bg-slate-100'
+                          }`}
+                        >
+                          {/* Position & Order Leftmost */}
+                          <div className="shrink-0 flex flex-col items-center justify-center mr-0.5 min-w-[28px]">
+                            <Badge className={`text-[9px] px-1 py-0 shrink-0 leading-none ${getPositionColor(player.position)}`}>
+                              {getPositionLabel(player.position)}
+                            </Badge>
+                            <span className="text-[10px] font-bold text-slate-400 mt-1 leading-none">{idx + 1}</span>
+                          </div>
+
+                          {/* Photo */}
+                          <div className="shrink-0 mr-1 flex items-center justify-center">
+                            {player.photo ? (
+                              <img
+                                src={player.photo}
+                                alt=""
+                                className={`w-8 h-8 rounded-full object-cover ${
+                                  player.replacedPlayer
+                                    ? 'border-2 border-emerald-500 shadow-sm'
+                                    : isPenalized
+                                    ? 'border border-red-500'
+                                    : player.hasPlayed
+                                    ? 'border border-slate-400 opacity-70'
+                                    : 'border border-slate-300'
+                                }`}
+                                title={player.replacedPlayer ? `Entra: ${formatPlayerName(player.short_name)}` : undefined}
+                              />
+                            ) : (
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                                player.replacedPlayer
+                                  ? 'border-2 border-emerald-500 bg-emerald-50 text-emerald-800'
+                                  : isPenalized
+                                  ? 'border border-red-500 bg-red-100 text-red-700'
+                                  : player.hasPlayed
+                                  ? 'border border-slate-400 bg-slate-400 text-slate-700'
+                                  : 'border border-slate-400 bg-slate-200 text-slate-600'
+                              }`}>
+                                {player.shirt_number || '?'}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Left Side: Stacked Name + Info */}
+                          <div className="flex flex-col min-w-0 flex-1 justify-center gap-0.5">
+                            {player.replacedPlayer ? (
+                              <>
+                                {/* Incoming Player */}
+                                <div className="flex items-center gap-1 w-full min-w-0">
+                                  <span className={`font-extrabold whitespace-nowrap tracking-tight ${
+                                    (player.short_name || '').length > 15
+                                      ? 'text-[10px]'
+                                      : (player.short_name || '').length > 11
+                                      ? 'text-[12px]'
+                                      : 'text-[13px]'
+                                  } ${isPenalized ? 'text-red-800' : player.hasPlayed ? 'text-slate-700' : 'text-slate-900'}`}>
+                                    {formatPlayerName(player.short_name)}
+                                  </span>
+                                  <span className="text-[10px] font-black text-emerald-600 shrink-0 leading-none" title="Entra">↑</span>
+                                  {isPenalized && <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0 ml-1" />}
+                                </div>
+                                {/* Outgoing Player (Clean text without strikethrough) */}
+                                <div className="flex items-center gap-1 w-full min-w-0 -mt-[2px]">
+                                  <span className="font-semibold truncate text-[10px] text-rose-600/90 leading-none">
+                                    {formatPlayerName(player.replacedPlayer.short_name)}
+                                  </span>
+                                  <span className="text-[9px] font-black text-rose-500 shrink-0 leading-none" title="Sale">↓</span>
+                                  {player.replacedPlayer.team?.logo_url && (
+                                    <img src={player.replacedPlayer.team.logo_url} alt="" className="w-2.5 h-2.5 object-contain shrink-0" />
+                                  )}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {/* Row 1: Name and badges */}
+                                <div className="flex items-center gap-1.5 min-w-0 w-full">
+                                  <span className={`font-semibold whitespace-nowrap ${
+                                    (player.short_name || '').length > 15
+                                      ? 'text-[10px]'
+                                      : 'text-xs'
+                                  } ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
+                                    {formatPlayerName(player.short_name)}
+                                  </span>
+                                  {isPenalized && (
+                                    <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0" />
+                                  )}
+                                </div>
+                                
+                                {/* Row 2: Metadata (Shirt, Photo, Team, Value) */}
+                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 min-w-0 w-full">
+                                  {player.shirt_number && (
+                                    <span className="font-black text-slate-600 shrink-0">{player.shirt_number}</span>
+                                  )}
+                                  
+                                  {player.team?.logo_url && (
+                                    <img src={player.team.logo_url} alt="" className="w-3 h-3 object-contain shrink-0" title={player.team?.name} />
+                                  )}
+                                  
+                                  <span className="shrink-0 text-[10px] text-slate-400 font-medium">{fmtValor(player.valor || 0)}</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Right Side: Points + Replacement */}
+                          <div className="flex flex-col items-end justify-center shrink-0 min-w-0 pl-1">
+                            {player.replacedPlayer && (
+                              <div className="flex items-center gap-1 mb-[2px] justify-end">
+                                {player.shirt_number && <span className="font-black text-slate-700 text-[10px]">{player.shirt_number}</span>}
+                                {player.team?.logo_url && <img src={player.team.logo_url} alt="" className="w-3.5 h-3.5 object-contain" />}
+                                <span className="text-[10px] text-slate-500 font-bold">{fmtValor(player.valor || 0)}</span>
+                              </div>
+                            )}
+                            {player.sanctionReason ? (
+                              <div className="flex flex-col items-end justify-center leading-none">
+                                <span className="text-[9px] font-bold text-red-500 line-through mb-0.5 whitespace-nowrap">
+                                  {(Math.round((player.originalPuntos ?? 0) * 10) / 10).toFixed(1)} pts
+                                </span>
+                                <span className="text-sm font-extrabold text-red-600 whitespace-nowrap">
+                                  0 pts
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-baseline justify-end leading-none">
+                                <span className={`text-base font-extrabold tracking-tight ${
+                                  (player.puntos || 0) < 0 ? 'text-red-600' : (player.puntos || 0) >= 0 && (player.puntos || 0) < 6 ? 'text-orange-600' : 'text-emerald-600'
+                                } ${player.hasPlayed ? 'opacity-70' : ''}`}>
+                                  {(Math.round((player.puntos ?? 0) * 10) / 10).toFixed(1)}
+                                </span>
+                                <span className="text-[10px] text-slate-500 ml-0.5">pts</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )})}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando jornada...</div>
   }
@@ -1458,46 +1706,63 @@ export default function JornadaPage() {
                     const isCurrentUser = currentUserId === team.user_id
                     const isWinner = matchdayWinners.has(team.team_id)
                     const isLoser = matchdayLosers.has(team.team_id)
+                    const isExpanded = expandedTableTeamId === team.team_id
                     return (
-                    <tr
-                      key={team.team_id}
-                      className={`border-b transition-colors cursor-pointer ${
-                        isWinner ? 'bg-emerald-600/40 border-emerald-500 hover:bg-emerald-500/50' :
-                        isLoser ? 'bg-red-900/40 border-red-700 hover:bg-red-800/60' :
-                        isCurrentUser ? 'bg-emerald-900/30 animate-pulse border-slate-700' : 'border-slate-700 hover:bg-slate-700/50'
-                      }`}
-                      onClick={() => {
-                        teamRefs.current[team.team_id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                      }}
-                    >
-                      <td className="py-1 px-1.5 sm:px-3">
-                        {getPositionMedal(pos, isLast)}
-                      </td>
-                      <td className="py-1 px-1.5 sm:px-3 whitespace-nowrap">
-                        <span className="font-bold text-white text-[9px] min-[360px]:text-[10px] sm:text-[15px] uppercase leading-tight">{team.user_name}</span>
-                      </td>
-                      <td className="py-1 px-1.5 sm:px-3 text-right whitespace-nowrap tabular-nums">
-                        <span className="text-base sm:text-xl font-bold text-emerald-400">
-                          {(Math.round(team.puntos_totales * 10) / 10).toFixed(1)}
-                        </span>
-                        <span className="hidden sm:inline text-[8px] sm:text-[10px] text-slate-400 ml-0.5">pts</span>
-                      </td>
-                      <td className="py-1 px-1.5 sm:px-3 text-center whitespace-nowrap">
-                        <span className="text-[10px] sm:text-xs text-white font-semibold">
-                          {jugaron}/{total}
-                        </span>
-                      </td>
-                      <td className="hidden sm:table-cell py-1 px-1.5 sm:px-3 text-right whitespace-nowrap">
-                        <span className="text-[9px] sm:text-xs font-semibold text-slate-200">{fmtValor(team.valor_total)}</span>
-                      </td>
-                      <td className="py-1 pl-1.5 sm:pl-3 pr-2 sm:pr-4 text-right whitespace-nowrap tabular-nums">
-                        <span className="text-xs sm:text-base font-bold text-white">
-                          {jugaron > 0 ? (Math.round(promedio * 10) / 10).toFixed(1) : '—'}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
+                      <Fragment key={team.team_id}>
+                        <tr
+                          className={`border-b transition-colors cursor-pointer ${
+                            isExpanded ? 'bg-slate-700/80 border-slate-600 ring-1 ring-emerald-500/50' :
+                            isWinner ? 'bg-emerald-600/40 border-emerald-500 hover:bg-emerald-500/50' :
+                            isLoser ? 'bg-red-900/40 border-red-700 hover:bg-red-800/60' :
+                            isCurrentUser ? 'bg-emerald-900/30 animate-pulse border-slate-700' : 'border-slate-700 hover:bg-slate-700/50'
+                          }`}
+                          onClick={() => {
+                            setExpandedTableTeamId(prev => prev === team.team_id ? null : team.team_id)
+                          }}
+                        >
+                          <td className="py-1 px-1.5 sm:px-3">
+                            {getPositionMedal(pos, isLast)}
+                          </td>
+                          <td className="py-1 px-1.5 sm:px-3 whitespace-nowrap">
+                            <span className="font-bold text-white text-[9px] min-[360px]:text-[10px] sm:text-[15px] uppercase leading-tight flex items-center gap-1.5">
+                              {team.user_name}
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                {isExpanded ? '▲' : '▼'}
+                              </span>
+                            </span>
+                          </td>
+                          <td className="py-1 px-1.5 sm:px-3 text-right whitespace-nowrap tabular-nums">
+                            <span className="text-base sm:text-xl font-bold text-emerald-400">
+                              {(Math.round(team.puntos_totales * 10) / 10).toFixed(1)}
+                            </span>
+                            <span className="hidden sm:inline text-[8px] sm:text-[10px] text-slate-400 ml-0.5">pts</span>
+                          </td>
+                          <td className="py-1 px-1.5 sm:px-3 text-center whitespace-nowrap">
+                            <span className="text-[10px] sm:text-xs text-white font-semibold">
+                              {jugaron}/{total}
+                            </span>
+                          </td>
+                          <td className="hidden sm:table-cell py-1 px-1.5 sm:px-3 text-right whitespace-nowrap">
+                            <span className="text-[9px] sm:text-xs font-semibold text-slate-200">{fmtValor(team.valor_total)}</span>
+                          </td>
+                          <td className="py-1 pl-1.5 sm:pl-3 pr-2 sm:pr-4 text-right whitespace-nowrap tabular-nums">
+                            <span className="text-xs sm:text-base font-bold text-white">
+                              {jugaron > 0 ? (Math.round(promedio * 10) / 10).toFixed(1) : '—'}
+                            </span>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="border-b border-slate-700 bg-slate-900/95">
+                            <td colSpan={6} className="p-2 sm:p-4">
+                              <div className="max-w-md mx-auto">
+                                {renderTeamCard(team, pos)}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1508,273 +1773,7 @@ export default function JornadaPage() {
       {/* Equipos de usuarios - Mini tablas por usuario (desplegable) */}
       {showEquipos && (userTeams.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {sortedTeams.map((team, index) => {
-            const displayPos = index + 1
-            const isCurrentUser = currentUserId === team.user_id
-            const isWinner = matchdayWinners.has(team.team_id)
-            const isLoser = matchdayLosers.has(team.team_id)
-            return (
-            <Card
-              key={team.team_id}
-              ref={(el) => { teamRefs.current[team.team_id] = el; }}
-              className={`!border-slate-300 shadow-md scroll-mt-20 overflow-hidden min-w-0 flex flex-col ${
-                isCurrentUser ? '!border-emerald-500 ring-2 ring-emerald-500/50' : ''
-              } ${isWinner ? 'bg-emerald-50' : isLoser ? 'bg-red-50' : ''}`}
-            >
-              <CardContent className="p-0">
-                {/* Cabecera del equipo */}
-                <div className={`px-3 py-2 border-b flex items-center gap-3 ${
-                  isWinner ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 border-emerald-800' :
-                  isLoser ? 'bg-gradient-to-r from-red-600 to-red-700 border-red-800' :
-                  'bg-gradient-to-r from-slate-700 to-slate-800 border-slate-600'
-                }`}>
-                  {/* Posición */}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    displayPos === 1 ? 'bg-yellow-500' :
-                    displayPos === 2 ? 'bg-gray-400' :
-                    displayPos === 3 ? 'bg-amber-600' :
-                    'bg-emerald-600'
-                  }`}>
-                    <span className="text-white text-sm font-bold">{displayPos}º</span>
-                  </div>
-                  
-                  {/* Info: Nombre arriba, stats abajo */}
-                  <div className="flex flex-col flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <h3 className="font-bold text-white text-[11px] sm:text-xs uppercase leading-tight tracking-tighter whitespace-nowrap">{team.user_name}</h3>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex items-center gap-1">
-                        <p className="text-[10px] text-slate-400 leading-none">Sist</p>
-                        <p className={`text-[11px] font-mono font-bold leading-none ${team.hasTacticsWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{getFormacion(team.jugadores)}</p>
-                      </div>
-                      <div className="w-px h-3 bg-slate-500" />
-                      <p className={`text-[11px] font-bold leading-none ${team.hasBudgetWarning ? 'text-red-500 animate-pulse' : 'text-slate-200'}`}>{fmtValor(team.valor_total)}</p>
-                      <div className="w-px h-3 bg-slate-500" />
-                      <div className="flex items-center gap-1">
-                        <p className="text-[10px] text-slate-400 leading-none">Pts</p>
-                        <p className="text-[12px] font-bold text-emerald-400 leading-none">{(Math.round(team.puntos_totales * 10) / 10).toFixed(1)}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Jugadores */}
-                <div className="px-1.5 pb-2 pt-1">
-                  <div className="space-y-1">
-                    {(['Titulares', 'Suplentes'] as const).map((grupo) => {
-                      const jugadoresGrupo = team.jugadores.filter(p =>
-                        grupo === 'Titulares' ? p.is_starter : !p.is_starter
-                      )
-                      if (jugadoresGrupo.length === 0) return null
-                      return (
-                        <div key={grupo}>
-                          {grupo !== 'Titulares' && (
-                            <p className="text-xs font-semibold text-slate-500 uppercase mb-2 mt-2">{grupo}</p>
-                          )}
-                          <div className="flex flex-col gap-0">
-                            {jugadoresGrupo.map((player, idx) => {
-                              const matchKey = `${team.team_id}-${player.id}`
-                              const isMatch = matchSet.has(matchKey)
-                              const isActive = matchKey === activeMatchKey
-
-                              let finalSanctionReason = player.sanctionReason;
-                              if (!finalSanctionReason) {
-                                const matchedInf = matchdayInfractions.find((inf: any) => {
-                                  const matchesUser = inf.user_id === team.user_id || inf.team_id === team.team_id
-                                  if (!matchesUser) return false
-
-                                  const descLower = (inf.description || '').toLowerCase()
-                                  
-                                  // 1. Mencion de nombre de jugador
-                                  const shortName = (player.short_name || '').toLowerCase().trim()
-                                  const firstName = (player.first_name || '').toLowerCase().trim()
-                                  if (shortName && descLower.includes(shortName)) return true
-                                  if (firstName && descLower.includes(firstName)) return true
-
-                                  // 2. Mencion de equipo real en sancion de max por equipo
-                                  const realTeamName = (player.team?.name || '').toLowerCase().trim()
-                                  if (realTeamName && descLower.includes(realTeamName) && descLower.includes('jugadores de')) {
-                                    return true
-                                  }
-
-                                  return false
-                                })
-                                if (matchedInf) {
-                                  finalSanctionReason = matchedInf.description;
-                                }
-                              }
-                              const isPenalized = !!finalSanctionReason;
-
-                              return (
-                              <div
-                                key={matchKey}
-                                ref={isMatch ? (el) => { playerRefs.current[matchKey] = el; } : undefined}
-                                onClick={() => openPlayerStats(player.id, finalSanctionReason)}
-                                className={`flex items-center justify-between px-1 rounded-lg transition-all gap-1 cursor-pointer ${
-                                  isActive
-                                    ? 'ring-2 ring-orange-500 ring-offset-1 shadow-md relative z-10 scale-[1.02]'
-                                    : isMatch
-                                    ? 'ring-2 ring-amber-400 ring-offset-1'
-                                    : ''
-                                } ${
-                                  isPenalized
-                                    ? 'bg-red-50 border border-red-500 animate-pulse hover:bg-red-100 text-red-950 shadow-sm'
-                                    : isActive
-                                    ? 'bg-orange-200 hover:bg-orange-300'
-                                    : isMatch
-                                    ? 'bg-yellow-100 hover:bg-yellow-200'
-                                    : player.isPlaying
-                                    ? 'bg-red-50 border border-red-200 animate-pulse hover:bg-red-100 text-red-900 shadow-sm'
-                                    : player.hasPlayed
-                                    ? 'bg-slate-200 hover:bg-slate-300'
-                                    : 'bg-slate-50 hover:bg-slate-100'
-                                }`}
-                              >
-                                {/* Position & Order Leftmost */}
-                                <div className="shrink-0 flex flex-col items-center justify-center mr-0.5 min-w-[28px]">
-                                  <Badge className={`text-[9px] px-1 py-0 shrink-0 leading-none ${getPositionColor(player.position)}`}>
-                                    {getPositionLabel(player.position)}
-                                  </Badge>
-                                  <span className="text-[10px] font-bold text-slate-400 mt-1 leading-none">{idx + 1}</span>
-                                </div>
-
-                                {/* Photo */}
-                                <div className="shrink-0 mr-1 flex items-center justify-center">
-                                  {player.photo ? (
-                                    <img
-                                      src={player.photo}
-                                      alt=""
-                                      className={`w-8 h-8 rounded-full object-cover ${
-                                        player.replacedPlayer
-                                          ? 'border-2 border-emerald-500 shadow-sm'
-                                          : isPenalized
-                                          ? 'border border-red-500'
-                                          : player.hasPlayed
-                                          ? 'border border-slate-400 opacity-70'
-                                          : 'border border-slate-300'
-                                      }`}
-                                      title={player.replacedPlayer ? `Entra: ${formatPlayerName(player.short_name)}` : undefined}
-                                    />
-                                  ) : (
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                                      player.replacedPlayer
-                                        ? 'border-2 border-emerald-500 bg-emerald-50 text-emerald-800'
-                                        : isPenalized
-                                        ? 'border border-red-500 bg-red-100 text-red-700'
-                                        : player.hasPlayed
-                                        ? 'border border-slate-400 bg-slate-400 text-slate-700'
-                                        : 'border border-slate-400 bg-slate-200 text-slate-600'
-                                    }`}>
-                                      {player.shirt_number || '?'}
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Left Side: Stacked Name + Info */}
-                                <div className="flex flex-col min-w-0 flex-1 justify-center gap-0.5">
-                                  {player.replacedPlayer ? (
-                                    <>
-                                      {/* Incoming Player */}
-                                      <div className="flex items-center gap-1 w-full min-w-0">
-                                        <span className={`font-extrabold whitespace-nowrap tracking-tight ${
-                                          (player.short_name || '').length > 15
-                                            ? 'text-[10px]'
-                                            : (player.short_name || '').length > 11
-                                            ? 'text-[12px]'
-                                            : 'text-[13px]'
-                                        } ${isPenalized ? 'text-red-800' : player.hasPlayed ? 'text-slate-700' : 'text-slate-900'}`}>
-                                          {formatPlayerName(player.short_name)}
-                                        </span>
-                                        <span className="text-[10px] font-black text-emerald-600 shrink-0 leading-none" title="Entra">↑</span>
-                                        {isPenalized && <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0 ml-1" />}
-                                      </div>
-                                      {/* Outgoing Player (Clean text without strikethrough) */}
-                                      <div className="flex items-center gap-1 w-full min-w-0 -mt-[2px]">
-                                        <span className="font-semibold truncate text-[10px] text-rose-600/90 leading-none">
-                                          {formatPlayerName(player.replacedPlayer.short_name)}
-                                        </span>
-                                        <span className="text-[9px] font-black text-rose-500 shrink-0 leading-none" title="Sale">↓</span>
-                                        {player.replacedPlayer.team?.logo_url && (
-                                          <img src={player.replacedPlayer.team.logo_url} alt="" className="w-2.5 h-2.5 object-contain shrink-0" />
-                                        )}
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <>
-                                      {/* Row 1: Name and badges */}
-                                      <div className="flex items-center gap-1.5 min-w-0 w-full">
-                                        <span className={`font-semibold whitespace-nowrap ${
-                                          (player.short_name || '').length > 15
-                                            ? 'text-[10px]'
-                                            : 'text-xs'
-                                        } ${isPenalized ? 'text-red-800 font-extrabold' : player.hasPlayed ? 'text-slate-500' : 'text-slate-900'}`}>
-                                          {formatPlayerName(player.short_name)}
-                                        </span>
-                                        {isPenalized && (
-                                          <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse shrink-0" />
-                                        )}
-                                      </div>
-                                      
-                                      {/* Row 2: Metadata (Shirt, Photo, Team, Value) */}
-                                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 min-w-0 w-full">
-                                        {player.shirt_number && (
-                                          <span className="font-black text-slate-600 shrink-0">{player.shirt_number}</span>
-                                        )}
-                                        
-                                        {player.team?.logo_url && (
-                                          <img src={player.team.logo_url} alt="" className="w-3 h-3 object-contain shrink-0" title={player.team?.name} />
-                                        )}
-                                        
-                                        <span className="shrink-0 text-[10px] text-slate-400 font-medium">{fmtValor(player.valor || 0)}</span>
-                                      </div>
-                                    </>
-                                  )}
-                                </div>
-
-                                {/* Right Side: Points + Replacement */}
-                                <div className="flex flex-col items-end justify-center shrink-0 min-w-0 pl-1">
-                                  {player.replacedPlayer && (
-                                    <div className="flex items-center gap-1 mb-[2px] justify-end">
-                                      {player.shirt_number && <span className="font-black text-slate-700 text-[10px]">{player.shirt_number}</span>}
-                                      {player.team?.logo_url && <img src={player.team.logo_url} alt="" className="w-3.5 h-3.5 object-contain" />}
-                                      <span className="text-[10px] text-slate-500 font-bold">{fmtValor(player.valor || 0)}</span>
-                                    </div>
-                                  )}
-                                  {player.sanctionReason ? (
-                                    <div className="flex flex-col items-end justify-center leading-none">
-                                      <span className="text-[9px] font-bold text-red-500 line-through mb-0.5 whitespace-nowrap">
-                                        {(Math.round((player.originalPuntos ?? 0) * 10) / 10).toFixed(1)} pts
-                                      </span>
-                                      <span className="text-sm font-extrabold text-red-600 whitespace-nowrap">
-                                        0 pts
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-baseline justify-end leading-none">
-                                      <span className={`text-base font-extrabold tracking-tight ${
-                                        (player.puntos || 0) < 0 ? 'text-red-600' : (player.puntos || 0) >= 0 && (player.puntos || 0) < 6 ? 'text-orange-600' : 'text-emerald-600'
-                                      } ${player.hasPlayed ? 'opacity-70' : ''}`}>
-                                        {(Math.round((player.puntos ?? 0) * 10) / 10).toFixed(1)}
-                                      </span>
-                                      <span className="text-[10px] text-slate-500 ml-0.5">pts</span>
-                                    </div>
-                                  )}
-                                  
-
-                                </div>
-                              </div>
-                            )})}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )})}
+          {sortedTeams.map((team, index) => renderTeamCard(team, index + 1))}
         </div>
       ) : (
         <Card>
