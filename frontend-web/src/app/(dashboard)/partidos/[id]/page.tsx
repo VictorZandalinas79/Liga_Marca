@@ -616,6 +616,7 @@ export default function PartidoDetallePage() {
     if (fixture.status === 'finished') return
 
     const tick = () => {
+      if (document.hidden) return // sin descargas en pestañas de fondo
       if (!isInPlayWindow(fixture)) return
       if (canAutoSync(fixture.id)) {
         markAutoSync(fixture.id)
@@ -626,8 +627,19 @@ export default function PartidoDetallePage() {
     }
 
     tick()
-    const interval = setInterval(tick, 30000) // 30 segundos
-    return () => clearInterval(interval)
+    // El motor solo escribe datos nuevos cada AUTO_SYNC_COOLDOWN_MS (5 min); las
+    // rondas de en medio no tienen nada nuevo que traer (salvo el sync de otra
+    // pestaña, que igual cae dentro de este margen). 60 s en vez de 30 s reduce
+    // a la mitad la descarga de fixtures+player_scores sin perder datos.
+    const interval = setInterval(tick, 60000)
+    const onVisible = () => {
+      if (!document.hidden) fetchPartido()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [fixture?.id, fixture?.status, fixture?.start_time])
 
   const formatDateTime = (dateString: string) => {
