@@ -5,10 +5,16 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { getLiveInfractions, getCurrentMatchday, canShowInfractionsForMatchday } from '@/lib/infractions'
 import { isDivisionId } from '@/lib/divisions'
 
+interface PenaltyCacheEntry {
+  timestamp: number
+  infractions: any[]
+}
+
+const livePenaltiesCache = new Map<string, PenaltyCacheEntry>()
+const CACHE_TTL_MS = 60_000 // 60 segundos
+
 export async function GET(request: NextRequest) {
   const supabase = await createServerSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  // if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const matchdayParam = request.nextUrl.searchParams.get('matchday')
   const currentMatchday = matchdayParam ? parseInt(matchdayParam, 10) : await getCurrentMatchday(supabase)
@@ -18,6 +24,20 @@ export async function GET(request: NextRequest) {
 
   if (!currentMatchday) {
     return NextResponse.json({ infractions: [] })
+  }
+
+  const cacheKey = `${currentMatchday}-${division ?? 'all'}`
+  const now = Date.now()
+  const cached = livePenaltiesCache.get(cacheKey)
+  if (cached && (now - cached.timestamp) < CACHE_TTL_MS) {
+    return NextResponse.json(
+      { infractions: cached.infractions },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+        },
+      }
+    )
   }
 
   // Mientras el proceso de cambios (mercado/alineaciones) está abierto para esta jornada,
@@ -45,14 +65,22 @@ export async function GET(request: NextRequest) {
 
   const { data: penalties, error: penError } = await penaltiesQuery
 
-  console.log('[LIVE_API] currentMatchday:', currentMatchday, 'division:', division)
-  console.log('[LIVE_API] infractions computed:', infractions.length)
-  console.log('[LIVE_API] penalties data:', penalties, 'error:', penError)
-
+  let resultInfractions = infractions
   if (penalties && penalties.length > 0) {
-    console.log('[LIVE_API] Penalties exist, returning empty live infractions')
-    return NextResponse.json({ infractions: [] })
+    resultInfractions = []
   }
 
-  return NextResponse.json({ infractions })
+  livePenaltiesCache.set(cacheKey, {
+    timestamp: now,
+    infractions: resultInfractions,
+  })
+
+  return NextResponse.json(
+    { infractions: resultInfractions },
+    {
+      headers: {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+      },
+    }
+  )
 }

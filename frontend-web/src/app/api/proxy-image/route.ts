@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const runtime = 'edge'
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const url = searchParams.get('url')
@@ -21,21 +23,18 @@ export async function GET(request: Request) {
       return new NextResponse('Forbidden domain', { status: 403 })
     }
 
-    const res = await fetch(url, {
-      next: { revalidate: 86400 }, // Cachear por 1 día
-    })
+    const res = await fetch(url)
 
     if (!res.ok) {
       return new NextResponse(`Failed to fetch image: ${res.statusText}`, { status: res.status })
     }
 
     const contentType = res.headers.get('content-type') || 'image/png'
-    const arrayBuffer = await res.arrayBuffer()
 
-    return new NextResponse(arrayBuffer, {
+    return new NextResponse(res.body, {
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+        'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
         'Access-Control-Allow-Origin': '*',
       },
     })

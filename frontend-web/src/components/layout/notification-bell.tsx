@@ -176,7 +176,7 @@ export function NotificationBell() {
   async function fetchNotifications() {
     lastFetchedRef.current = Date.now()
     try {
-      const res = await fetch('/api/notifications', { cache: 'no-store' })
+      const res = await fetch('/api/notifications')
       if (res.ok) {
         const data = await res.json()
         // /api/notifications ya consolida las notificaciones estándar, avisos de partidos
