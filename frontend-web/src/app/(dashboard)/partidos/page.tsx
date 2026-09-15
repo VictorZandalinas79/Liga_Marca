@@ -312,7 +312,10 @@ export default function PartidosPage() {
     if (ids.length === 0) return
 
     const [{ data: fresh }, nextScores] = await Promise.all([
-      supabase.from('fixtures').select('*').in('id', ids),
+      supabase
+        .from('fixtures')
+        .select('id, status, home_score, away_score, current_minute, updated_at')
+        .in('id', ids),
       fetchScores(supabase, ids)
     ])
 

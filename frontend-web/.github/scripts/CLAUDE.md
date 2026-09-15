@@ -7,6 +7,5 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #4551 | 4:46 PM | 🔴 | Reduced fixtures query egress by replacing select('*') with explicit column list | ~387 |
-| #4550 | " | 🔴 | Optimized live match polling to reduce Supabase egress in partidos page | ~471 |
+| #4546 | 4:42 PM | 🔵 | PostgREST egress sources identified in LFM Vilafranca fantasy league | ~562 |
 </claude-mem-context>

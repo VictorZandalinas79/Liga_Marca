@@ -22,10 +22,6 @@
 | #4261 | 8:43 PM | ✅ | Committed standings fix for out-of-order match player counting | ~259 |
 | #4260 | " | 🔴 | Active matchday player count now respects advanced match restrictions | ~319 |
 | #4259 | " | 🔴 | Export restrictedMatchdayTeams from standings data loader | ~329 |
-| #4258 | " | 🔴 | Fixed missing restrictedMatchdayTeams initialization in empty SharedData fallback | ~334 |
-| #4257 | " | 🔴 | Fixed standings calculation for matchdays with unresolved out-of-order matches | ~325 |
-| #4256 | 8:41 PM | 🔴 | Unified out-of-order matchday detection across all dashboard pages | ~400 |
-| #4255 | " | 🔄 | Centralized out-of-order matchday detection logic | ~415 |
 
 ### Sep 4, 2026
 
@@ -73,6 +69,10 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #4549 | 4:43 PM | 🔵 | Comprehensive egress analysis reveals prior optimizations and remaining high-traffic patterns | ~756 |
+| #4547 | " | 🔵 | Prior egress optimizations already reduced polling from 102KB/15s to shared 60s cache | ~596 |
+| #4546 | 4:42 PM | 🔵 | PostgREST egress sources identified in LFM Vilafranca fantasy league | ~562 |
+| #4545 | " | 🔵 | Identified multiple frontend polling sources causing Supabase egress | ~527 |
 | #4544 | 6:02 AM | 🔵 | Sanctions display timing already correct - no changes needed | ~703 |
 | #4543 | 6:00 AM | 🟣 | Mi Equipo now displays all 11 players with individual lock states instead of filtering by advanced match | ~669 |
 | #4541 | 5:55 AM | 🔵 | Technical diagnosis for removing Mi Equipo player filtering and showing all 11 players with lock states | ~836 |
