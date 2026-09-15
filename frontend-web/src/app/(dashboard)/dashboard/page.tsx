@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
-import { useLockedTeams, useOpenMatchdays, computeOutOfOrderLocks, type FixtureLite } from '@/lib/locked-teams'
+import { useLockedTeams, useOpenMatchdays } from '@/lib/locked-teams'
 import { useLeagueConfig } from '@/lib/league-config'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isInMarket } from '@/lib/market'
@@ -36,7 +36,7 @@ function formatPlayerName(name: string): string {
   return trimmed
 }
 import { Badge } from '@/components/ui/badge'
-import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight, ArrowLeft, Loader2, AlertCircle } from 'lucide-react'
+import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 import { getStandings } from '@/lib/standings'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
@@ -238,7 +238,6 @@ export default function DashboardPage() {
   const [selectedRanking, setSelectedRanking] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'substitutions' | 'stats' | 'penalties'>('substitutions')
   const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { total: number, avg: number, history: {md: number, pts: number}[] }>>(new Map())
-  const [allFixturesLite, setAllFixturesLite] = useState<FixtureLite[]>([])
 
   const [showWarningsModal, setShowWarningsModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
@@ -253,50 +252,6 @@ export default function DashboardPage() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const { openMatchdays, recommendedMatchday, loaded: openMatchdaysLoaded } = useOpenMatchdays()
   const config = useLeagueConfig()
-
-  useEffect(() => {
-    const fetchFixtures = async () => {
-      const { data } = await supabase
-        .from('fixtures')
-        .select('id, matchday, start_time, status, home_team_id, away_team_id')
-      if (data) setAllFixturesLite(data as FixtureLite[])
-    }
-    fetchFixtures()
-  }, [supabase])
-
-  const MATCH_DURATION_MS = 105 * 60 * 1000
-
-  // Equipos permitidos si estamos en el tramo de un partido adelantado (fuera de orden cronológico).
-  // Si la jornada seleccionada (ej. J6) tiene un partido adelantado ya jugado/en curso, pero el resto de partidos de la J6
-  // no se han jugado aún, sólo deben mostrarse los jugadores de los 2 equipos reales de dicho partido adelantado.
-  const restrictedTeamIds = useMemo(() => {
-    const set = new Set<string>()
-    if (typeof selectedMatchday !== 'number' || selectedMatchday <= 0 || !allFixturesLite.length || !config) return set
-
-    const offsets = {
-      startHoursBeforeMidweek: config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
-      startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
-      endHoursAfter: config.matchday_end_hours_after ?? 2,
-    }
-
-    const advancedLocks = computeOutOfOrderLocks(allFixturesLite, offsets, config.fantasy_starting_matchday ?? 1)
-      .filter(l => l.type === 'advanced' && l.ownMatchday === selectedMatchday)
-
-    if (advancedLocks.length > 0) {
-      const mdFixtures = allFixturesLite.filter(f => f.matchday === selectedMatchday)
-      const allPlayed = mdFixtures.every(f => {
-        const status = (f.status || '').toLowerCase()
-        if (status === 'finished') return true
-        const startTime = f.start_time ? new Date(f.start_time).getTime() : 0
-        return startTime > 0 && startTime + MATCH_DURATION_MS < Date.now()
-      })
-      if (!allPlayed) {
-        advancedLocks.forEach(l => l.teamIds.forEach(id => set.add(id)))
-      }
-    }
-
-    return set
-  }, [selectedMatchday, allFixturesLite, config])
 
   // Jornadas que se listan en el selector: la activa (siempre, para poder
   // hacer los cambios de mercado) + las que estén "abiertas" (con partidos ya
@@ -363,139 +318,65 @@ export default function DashboardPage() {
   
   useEffect(() => {
     const fetchHistory = async () => {
-      if (!userTeamId || typeof selectedMatchday !== 'number') return;
+      if (!user?.id) return;
 
-      // Jornada en la que arranca el juego: antes de ella los equipos de los
-      // usuarios no contabilizan, aunque los jugadores ya estén puntuando.
       const fantasyStart = Math.max(1, config.fantasy_starting_matchday);
 
-      const { data: allTpData } = await supabase
-        .from('team_players')
-        .select('team_id, player_id, matchday, is_starter')
-        .eq('is_starter', true)
-        .order('matchday', { ascending: true });
+      // Usar el motor oficial de clasificación (getStandings) para obtener exactamente
+      // las mismas puntuaciones por jornada calculadas para la liga y división.
+      const { standings: standingsData, lastPlayedMatchday } = await getStandings(supabase, userDivision, null);
 
-      if (!allTpData || allTpData.length === 0) return;
+      if (!standingsData || standingsData.length === 0) return;
 
-      const { data: fixturesData } = await supabase.from('fixtures').select('id, matchday');
-      const fixtureToMatchday = new Map<string, number>();
-      fixturesData?.forEach(f => {
-        if (f.matchday) fixtureToMatchday.set(f.id, f.matchday);
+      const myStanding = standingsData.find(s => s.user_id === user.id);
+      const myMatchdayPoints = myStanding?.matchday_points || {};
+
+      // Obtener las sanciones registradas por jornada para marcar los puntos rojos
+      const { data: penaltiesData } = await supabase
+        .from('penalties')
+        .select('matchday, points')
+        .eq('user_id', user.id);
+
+      const penaltyMatchdays = new Set<number>();
+      (penaltiesData || []).forEach(p => {
+        const md = typeof p.matchday === 'string' ? parseInt(p.matchday, 10) : p.matchday;
+        if (md) penaltyMatchdays.add(md);
       });
-
-      const { data: allTeamsData } = await supabase.from('teams').select('id, user_id');
-      const teamToUserId = new Map<string, string>();
-      allTeamsData?.forEach(t => teamToUserId.set(t.id, t.user_id));
-
-      const maxMd = Math.max(...allTpData.map(t => t.matchday || 1));
-      const targetMaxMd = typeof selectedMatchday === 'number' ? selectedMatchday - 1 : maxMd;
-      
-      const tpByTeamAndMatchday = new Map<string, Map<number, typeof allTpData>>();
-      allTpData.forEach(t => {
-        const md = t.matchday || 1;
-        if (!tpByTeamAndMatchday.has(t.team_id)) tpByTeamAndMatchday.set(t.team_id, new Map());
-        if (!tpByTeamAndMatchday.get(t.team_id)!.has(md)) tpByTeamAndMatchday.get(t.team_id)!.set(md, []);
-        tpByTeamAndMatchday.get(t.team_id)!.get(md)!.push(t);
-      });
-
-      const computedLineupsByTeam = new Map<string, Map<number, typeof allTpData>>();
-      const allUsedPlayerIds = new Set<string>();
-
-      for (const [teamId, mdMap] of tpByTeamAndMatchday.entries()) {
-        const computedMap = new Map<number, typeof allTpData>();
-        let lastValidLineup: typeof allTpData = [];
-
-        // Se recorre desde la J1 para poder arrastrar el último once válido,
-        // pero solo se contabiliza a partir de la jornada de inicio del juego.
-        for (let md = 1; md <= targetMaxMd; md++) {
-          if (mdMap.has(md) && mdMap.get(md)!.length > 0) {
-            lastValidLineup = mdMap.get(md)!;
-          }
-          if (md >= fantasyStart && lastValidLineup.length > 0) {
-            computedMap.set(md, lastValidLineup);
-            lastValidLineup.forEach(t => allUsedPlayerIds.add(t.player_id));
-          }
-        }
-        computedLineupsByTeam.set(teamId, computedMap);
-      }
-
-      if (allUsedPlayerIds.size === 0) return;
-
-      const { data: scoresData } = await supabase
-        .from('player_scores')
-        .select('player_id, matchday, fixture_id, total_points')
-        .in('player_id', Array.from(allUsedPlayerIds));
-
-      const teamPointsByMatchday = new Map<string, Map<number, number>>();
-      
-      for (const [teamId, mdMap] of computedLineupsByTeam.entries()) {
-        const uid = teamToUserId.get(teamId);
-        const userPenalties = uid ? allPenalties.filter(p => p.user_id === uid) : [];
-        const ptsMap = new Map<number, number>();
-
-        for (const [md, starters] of mdMap.entries()) {
-          let rawPoints = 0;
-          starters.forEach(s => {
-             const score = scoresData?.find(ps => {
-               let psMd = ps.matchday;
-               if (!psMd && ps.fixture_id) psMd = fixtureToMatchday.get(ps.fixture_id);
-               return ps.player_id === s.player_id && psMd === md;
-             });
-             rawPoints += (score?.total_points || 0);
-          });
-
-          const mdPenalties = userPenalties.filter(p => p.matchday === md);
-          let totalDeduction = 0;
-          mdPenalties.forEach(p => {
-             totalDeduction += (typeof p.points === 'string' ? parseFloat(p.points) : p.points);
-          });
-
-          const netPoints = Math.max(0, rawPoints - totalDeduction);
-          ptsMap.set(md, netPoints);
-        }
-        teamPointsByMatchday.set(teamId, ptsMap);
-      }
 
       const history = [];
-      for (let md = fantasyStart; md <= targetMaxMd; md++) {
+      const maxMd = lastPlayedMatchday || 1;
+
+      for (let md = fantasyStart; md <= maxMd; md++) {
         if (openMatchdays.includes(md)) continue;
 
-        const myMap = computedLineupsByTeam.get(userTeamId);
-        let myPoints = 0;
-        let myHasPenalty = false;
-        if (myMap && myMap.has(md)) {
-          myPoints = teamPointsByMatchday.get(userTeamId)?.get(md) || 0;
-          const userPenalties = allPenalties.filter(p => p.user_id === user?.id && p.matchday === md);
-          myHasPenalty = userPenalties.length > 0;
-        }
+        // Mis puntos en esta jornada exactamente como los calcula Clasificación / Jornada
+        const myPoints = myMatchdayPoints[md] ?? 0;
 
+        // Calcular la media de la liga/división en esa jornada
         let sum = 0;
         let count = 0;
-        for (const [teamId, ptsMap] of teamPointsByMatchday.entries()) {
-          if (ptsMap.has(md)) {
-            sum += ptsMap.get(md)!;
+        for (const s of standingsData) {
+          if (s.matchday_points && s.matchday_points[md] !== undefined) {
+            sum += s.matchday_points[md];
             count++;
           }
         }
-        const avg = count > 0 ? (sum / count) : 0;
+        const avg = count > 0 ? sum / count : 0;
 
         history.push({
-           matchday: md,
-           name: `J${md}`,
-           points: Math.round(myPoints * 10) / 10,
-           avgPoints: Math.round(avg * 10) / 10,
-           hasPenalty: myHasPenalty
+          matchday: md,
+          name: `J${md}`,
+          points: Math.round(myPoints * 10) / 10,
+          avgPoints: Math.round(avg * 10) / 10,
+          hasPenalty: penaltyMatchdays.has(md)
         });
       }
 
       setHistoricalPoints(history);
     }
     
-    // Solo disparar cuando allPenalties esté cargado
-    if (allPenalties.length >= 0) {
-      fetchHistory();
-    }
-  }, [userTeamId, activeMatchday, allPenalties, user?.id, supabase, config.fantasy_starting_matchday, openMatchdays]);
+    fetchHistory();
+  }, [user?.id, supabase, config.fantasy_starting_matchday, openMatchdays, userDivision]);
 
   useEffect(() => {
     const fetchAllPlayerStats = async () => {
@@ -1505,10 +1386,10 @@ export default function DashboardPage() {
       return a._originalIndex - b._originalIndex
     })
 
-  const displayedPlayersData = useMemo(() => {
-    if (restrictedTeamIds.size === 0) return selectedPlayersData
-    return selectedPlayersData.filter(p => p.team_id && restrictedTeamIds.has(p.team_id))
-  }, [selectedPlayersData, restrictedTeamIds])
+  // Se muestran siempre los 11 jugadores; el bloqueo por partido adelantado
+  // se refleja jugador a jugador con isTeamLocked (candado + no editable),
+  // no ocultando el resto del once heredado.
+  const displayedPlayersData = selectedPlayersData
 
   const pitchPlayersData = displayedPlayersData
 
@@ -2264,20 +2145,7 @@ export default function DashboardPage() {
                     </div>
                   )
                 })}
-                {restrictedTeamIds.size > 0 && displayedPlayersData.length === 0 && (
-                  <div className="col-span-full py-12 flex flex-col items-center justify-center text-center">
-                    <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mb-3 text-slate-400">
-                      <AlertCircle className="w-6 h-6" />
-                    </div>
-                    <p className="text-sm font-semibold text-slate-300">
-                      No tienes jugadores de los equipos disputando el partido adelantado de la Jornada {selectedMatchday}.
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Se mostrarán tus 11 jugadores cuando comience la semana oficial de la Jornada {selectedMatchday}.
-                    </p>
-                  </div>
-                )}
-                {restrictedTeamIds.size === 0 && Array.from({ length: Math.max(0, 11 - selectedPlayersData.length) }).map((_, i) => {
+                {Array.from({ length: Math.max(0, 11 - selectedPlayersData.length) }).map((_, i) => {
                   const emptyIdx = selectedPlayersData.length + i
                   return (
                     <div
@@ -2860,12 +2728,7 @@ export default function DashboardPage() {
             <div className="w-full h-[250px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
-                  data={[
-                    ...historicalPoints,
-                    (typeof selectedMatchday === 'number' && teamStats?.puntosTotales !== undefined) 
-                      ? { matchday: selectedMatchday, name: `J${selectedMatchday}`, points: teamStats.puntosTotales, hasPenalty: sanctionResult?.zeroedPlayers?.size > 0 || liveInfractions.some(i => i.user_id === user?.id) }
-                      : null
-                  ].filter(Boolean)}
+                  data={historicalPoints}
                   margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />

@@ -38,18 +38,15 @@ export interface UserStanding {
   active_matchday_points?: number | null
   active_matchday_played?: number
   active_matchday_total?: number
+  matchday_points?: Record<number, number>
 }
 
 export interface StandingsResult {
   standings: UserStanding[]
   lastPlayedMatchday: number
-  /**
-   * `true` si alguna de las páginas de `team_players` o `player_scores` falló.
-   * Con los datos a medias saldrían puntuaciones más bajas que las reales, así
-   * que quien pinte la tabla debe conservar la anterior en lugar de mostrar
-   * esto.
-   */
   incomplete: boolean
+  matchdayPoints?: Map<string, Map<number, number>>
+  leagueAverages?: Map<number, number>
 }
 
 interface LeagueConfig {
@@ -894,6 +891,7 @@ function computeDivisionStandings(
       active_matchday_points: activeMatchdayPoints !== null ? Math.round(activeMatchdayPoints * 10) / 10 : null,
       active_matchday_played: activeMatchdayPlayed,
       active_matchday_total: activeMatchdayTotal,
+      matchday_points: Object.fromEntries(Array.from(pointsMap.entries()).map(([k, v]) => [k, Math.round(v * 10) / 10])),
     }
   })
 }
