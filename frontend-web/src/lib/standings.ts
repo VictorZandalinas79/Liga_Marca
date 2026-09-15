@@ -7,7 +7,7 @@ import {
   loadDivisionMembership,
   userDisplayName,
 } from '@/lib/divisions'
-import { computeOutOfOrderLocks, type FixtureLite } from '@/lib/locked-teams-core'
+import { computeOutOfOrderLocks, advancedOnlyTeamIds, type FixtureLite } from '@/lib/locked-teams-core'
 
 export interface UserStanding {
   user_id: string
@@ -225,26 +225,17 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
       startHoursBeforeWeekend: configData?.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
       endHoursAfter: configData?.matchday_end_hours_after ?? 2,
     }
-    const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
-    const advancedLocks = computeOutOfOrderLocks((fixturesData || []) as FixtureLite[], offsets, fantasyStart)
+    const allFixtures = (fixturesData || []) as FixtureLite[]
+    const mdsWithAdvanced = new Set<number>()
+    computeOutOfOrderLocks(allFixtures, offsets, fantasyStart)
       .filter(l => l.type === 'advanced')
-    const byMatchday = new Map<number, typeof advancedLocks>()
-    advancedLocks.forEach(l => {
-      if (!byMatchday.has(l.ownMatchday)) byMatchday.set(l.ownMatchday, [])
-      byMatchday.get(l.ownMatchday)!.push(l)
-    })
-    for (const [md, locks] of byMatchday) {
-      const mdFixtures = (fixturesData || []).filter((f: any) => f.matchday === md)
-      const allPlayed = mdFixtures.every((f: any) => {
-        const status = (f.status || '').toLowerCase()
-        if (status === 'finished') return true
-        const startTime = f.start_time ? new Date(f.start_time).getTime() : 0
-        return startTime > 0 && startTime + MATCH_DURATION_MS < Date.now()
-      })
-      if (allPlayed) continue
-      const teamIds = new Set<string>()
-      locks.forEach(l => l.teamIds.forEach(id => teamIds.add(id)))
-      restrictedMatchdayTeams.set(md, teamIds)
+      .forEach(l => mdsWithAdvanced.add(l.ownMatchday))
+
+    for (const md of mdsWithAdvanced) {
+      const restricted = advancedOnlyTeamIds(allFixtures, md, offsets, fantasyStart)
+      if (restricted.size > 0) {
+        restrictedMatchdayTeams.set(md, restricted)
+      }
     }
   }
 
