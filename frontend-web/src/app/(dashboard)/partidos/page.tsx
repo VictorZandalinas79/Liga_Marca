@@ -61,7 +61,7 @@ const PREMATCH_WINDOW_MS = 30 * 60 * 1000
 // 'live' (90' + descanso + descuento + retrasos de kick-off).
 const POSTMATCH_WINDOW_MS = 3 * 60 * 60 * 1000
 // Estados en los que el partido ya no da más datos: se deja de refrescar.
-const TERMINAL_STATUSES = new Set(['finished', 'cancelled', 'postponed'])
+const TERMINAL_STATUSES = new Set(['finished', 'cancelled', 'postponed', 'suspended'])
 // Cada cuánto se recalcula el "ahora" (ventana de juego, minutos transcurridos).
 // Sin esto la página no se enteraba de que un partido había empezado hasta que
 // algo la re-renderizaba, y el auto-refresco no llegaba a arrancar nunca.
@@ -490,7 +490,31 @@ export default function PartidosPage() {
   ) => {
     const s = (status || '').toLowerCase()
 
-    // 1) En juego: badge rojo + minuto del último evento descargado
+    // 1) Suspendido / cancelado / aplazado / >10 min desde la hora de inicio sin eventos en juego:
+    const isPostponedOrSuspended =
+      s === 'postponed' ||
+      s === 'suspended' ||
+      (startTime && new Date(startTime).getTime() + 10 * 60 * 1000 < now && !isFixtureInPlay(status, currentMinute) && !FINISHED_STATUSES.has(s))
+
+    if (s === 'cancelled') {
+      return (
+        <Badge className="bg-amber-600 text-white text-xs flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" />
+          Cancelado
+        </Badge>
+      )
+    }
+
+    if (isPostponedOrSuspended) {
+      return (
+        <Badge className="bg-amber-600 text-white text-xs flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" />
+          Partido suspendido
+        </Badge>
+      )
+    }
+
+    // 2) En juego: badge rojo + minuto del último evento descargado
     if (isFixtureInPlay(status, currentMinute)) {
       // El minuto se muestra aunque sea 0 (pitido inicial recién dado)
       const showMinute = currentMinute !== undefined && currentMinute !== null && currentMinute >= 0
@@ -509,22 +533,12 @@ export default function PartidosPage() {
       )
     }
 
-    // 2) Terminado: no depende de las puntuaciones, solo del estado de la API
+    // 3) Terminado: no depende de las puntuaciones, solo del estado de la API
     if (FINISHED_STATUSES.has(s)) {
       return (
         <Badge className="bg-emerald-600 text-white text-xs flex items-center gap-1">
           <CheckCircle className="w-3 h-3" />
           Completo
-        </Badge>
-      )
-    }
-
-    // 3) Suspendido / cancelado: antes caían en el "Incompleto" rojo
-    if (s === 'postponed' || s === 'cancelled') {
-      return (
-        <Badge className="bg-amber-600 text-white text-xs flex items-center gap-1">
-          <AlertCircle className="w-3 h-3" />
-          {s === 'postponed' ? 'Aplazado' : 'Cancelado'}
         </Badge>
       )
     }

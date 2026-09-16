@@ -48,7 +48,7 @@ UPCOMING_WINDOW = 30    # empieza dentro de los próximos 30 min (alineaciones)
 # siguen refrescando por la red de seguridad (b) hasta pasar a 'finished'.
 LIVE_WINDOW = 180
 
-TERMINAL_STATUSES = {"finished", "cancelled", "postponed"}
+TERMINAL_STATUSES = {"finished", "cancelled", "postponed", "suspended"}
 
 
 def log(msg: str):

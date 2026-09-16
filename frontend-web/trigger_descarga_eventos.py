@@ -1437,7 +1437,7 @@ class MatchEventDownloader:
         except Exception as e:
             print(f"      ❌ Fallo promocionando {prov_id} a {real_id}: {e}")
 
-    def update_match_score(self, match_ended=False, current_minute=0, match_started=True):
+    def update_match_score(self, match_ended=False, current_minute=0, match_started=True, match_status=None):
         """Actualiza el marcador del partido en la tabla fixtures.
 
         match_ended=True solo cuando la API ha emitido el evento de tiempo
@@ -1462,7 +1462,9 @@ class MatchEventDownloader:
         home_goals = self.team_goals_scored.get(self.home_team_id, 0)
         away_goals = self.team_goals_scored.get(self.away_team_id, 0)
 
-        if match_ended:
+        if match_status and match_status in ('postponed', 'suspended', 'cancelled'):
+            new_status = match_status
+        elif match_ended:
             new_status = 'finished'
         elif match_started:
             new_status = 'live'
@@ -1820,11 +1822,24 @@ class MatchEventDownloader:
 
             self.upload_to_supabase()
 
+            # Detectar si el partido está suspendido, aplazado o cancelado en Opta
+            match_details = data.get('liveData', {}).get('matchDetails', {})
+            match_info = data.get('matchInfo', {})
+            raw_match_status = (
+                match_details.get('matchStatus') or
+                match_info.get('matchStatus') or ''
+            ).strip().lower()
+
+            match_status_to_pass = None
+            if raw_match_status in ('postponed', 'suspended', 'cancelled'):
+                match_status_to_pass = 'postponed' if raw_match_status in ('postponed', 'suspended') else raw_match_status
+
             # Actualizar marcador del partido (solo 'finished' si llegó el tiempo completo)
             self.update_match_score(
                 match_ended=match_ended,
                 current_minute=current_minute,
                 match_started=match_started,
+                match_status=match_status_to_pass,
             )
 
             print(f"\n{'='*60}")

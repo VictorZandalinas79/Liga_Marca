@@ -970,7 +970,11 @@ export default function PartidoDetallePage() {
         <CardContent className="p-4 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
             <div className="flex items-center gap-3">
-              {fixture?.status === 'live' ? (
+              {fixture?.status === 'postponed' || fixture?.status === 'suspended' || (fixture?.start_time && new Date(fixture.start_time).getTime() + 10 * 60 * 1000 < Date.now() && fixture?.status !== 'live' && fixture?.status !== 'finished') ? (
+                <Badge className="bg-amber-600 text-white flex items-center gap-1">
+                  Partido suspendido
+                </Badge>
+              ) : fixture?.status === 'live' ? (
                 <div className="flex items-center gap-2">
                   <Badge className="bg-red-500 text-white animate-pulse">
                     En Juego
