@@ -10,6 +10,7 @@ import { applySanctionsToTeam } from '@/lib/infractions'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
 import { advancedOnlyTeamIds, hideSanctionsForMatchday, type FixtureLite } from '@/lib/locked-teams-core'
+import { fetchLivePenalties } from '@/lib/live-penalties-client'
 import { PrintView } from './PrintView'
 
 function formatPlayerName(name: string | undefined | null) {
@@ -823,11 +824,7 @@ export default function JornadaPage() {
           infractionsData = dbPenaltiesDiv
         } else if (info.started) {
           // 2. Si el mercado ya está cerrado (jornada iniciada) y no hay sanciones consolidadas, buscar las dinámicas
-          const res = await fetch(`/api/penalties/live?matchday=${selectedMatchday}&division=${selectedDivision}`)
-          if (res.ok) {
-            const data = await res.json()
-            infractionsData = data.infractions || []
-          }
+          infractionsData = await fetchLivePenalties(selectedMatchday, selectedDivision) as any[]
         }
         if (isActive) {
           setMatchdayInfractions(infractionsData)

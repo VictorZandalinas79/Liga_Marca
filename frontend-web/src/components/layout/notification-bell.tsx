@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Bell, Copy, Check } from 'lucide-react'
+import { useNotificationsFeed } from '@/hooks/use-notifications-feed'
 
 type NotificationType =
   | 'fixture_changed'
@@ -40,7 +41,10 @@ const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-']
 const isDerived = (id: string | number) => DERIVED_ID_PREFIXES.some(p => String(id).startsWith(p))
 
 export function NotificationBell() {
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  // Feed compartido entre las dos instancias montadas de la campana
+  // (móvil y escritorio): un solo sondeo y una sola petición por pestaña.
+  const { notifications: rawNotifications, refresh, setNotifications } = useNotificationsFeed()
+  const notifications = rawNotifications as Notification[]
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('partidos')
   const [mounted, setMounted] = useState(false)
@@ -51,7 +55,6 @@ export function NotificationBell() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [copiedAll, setCopiedAll] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const lastFetchedRef = useRef<number>(0)
 
   useEffect(() => {
     setMounted(true)
@@ -145,22 +148,11 @@ export function NotificationBell() {
 
   const unreadCount = notifications.filter(n => !n.read_at).length
 
+  // El sondeo (5 min, solo con la pestaña visible) vive en useNotificationsFeed.
+  // Al abrir la campana se refresca si el feed lleva más de 60 s sin actualizarse.
   useEffect(() => {
-    fetchNotifications()
-    // Sondeo ligero cada 5 minutos en segundo plano si la pestaña está visible
-    const interval = setInterval(() => {
-      if (typeof document !== 'undefined' && document.hidden) return
-      fetchNotifications()
-    }, 300000)
-    return () => clearInterval(interval)
-  }, [])
-
-  // Refrescar al abrir la campana si han pasado más de 60 segundos
-  useEffect(() => {
-    if (open && Date.now() - lastFetchedRef.current > 60000) {
-      fetchNotifications()
-    }
-  }, [open])
+    if (open) refresh()
+  }, [open, refresh])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -172,36 +164,6 @@ export function NotificationBell() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-
-  async function fetchNotifications() {
-    lastFetchedRef.current = Date.now()
-    try {
-      const res = await fetch('/api/notifications')
-      if (res.ok) {
-        const data = await res.json()
-        // /api/notifications ya consolida las notificaciones estándar, avisos de partidos
-        // intercalados y sanciones (tanto consolidadas como en vivo para todas las divisiones).
-        const allNotifs: Notification[] = data.notifications || []
-
-        // Cargar IDs leídos localmente
-        let readIds: string[] = []
-        try {
-          const stored = localStorage.getItem('read_notifications')
-          if (stored) readIds = JSON.parse(stored)
-        } catch {}
-
-        // Mapear combinando read_at de la base de datos y de localStorage
-        const processed = allNotifs.map((n: Notification) => {
-          if (readIds.includes(n.id)) {
-            return { ...n, read_at: n.read_at || new Date().toISOString() }
-          }
-          return n
-        })
-
-        setNotifications(processed)
-      }
-    } catch {}
-  }
 
   useEffect(() => {
     if (open) {

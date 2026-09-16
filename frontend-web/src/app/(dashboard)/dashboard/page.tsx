@@ -40,6 +40,7 @@ import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Use
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 import { getStandings } from '@/lib/standings'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
+import { fetchLivePenalties } from '@/lib/live-penalties-client'
 interface Player {
   id: string
   first_name: string
@@ -1085,13 +1086,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchLiveInfractions = async () => {
-      try {
-        const res = await fetch(`/api/penalties/live?matchday=${selectedMatchday}&division=${userDivision}`)
-        if (res.ok) {
-          const data = await res.json()
-          setLiveInfractions(data.infractions || [])
-        }
-      } catch {}
+      // Sin división aún resuelta la API no puede responder nada útil: evitamos
+      // la petición inicial desperdiciada de cada carga de página.
+      if (userDivision == null || selectedMatchday == null) {
+        setLiveInfractions([])
+        return
+      }
+      setLiveInfractions(await fetchLivePenalties(selectedMatchday, userDivision) as any[])
     }
     fetchLiveInfractions()
   }, [selectedMatchday, userDivision])
