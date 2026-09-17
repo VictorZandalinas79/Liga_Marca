@@ -249,8 +249,8 @@ def detect_out_of_order(fixtures_payload, fantasy_start=1):
     result = {}
     for fid, md, st in rows:
         slot = slot_for(st, md)
-        if slot != md:
-            result[fid] = ("delayed" if md < slot else "advanced", md)
+        if slot != md and md > slot:
+            result[fid] = ("advanced", md)
     return result
 
 
@@ -463,8 +463,8 @@ OPTA_STATUS_MAP = {
 
 # Estados que NUNCA deben retroceder a 'scheduled' en un upsert de calendario:
 # los escribe el motor de directo (trigger_descarga_eventos.py) y son la única
-# señal que tiene la página Partidos para saber que hay partido en juego.
-PROTECTED_STATUSES = {"live", "finished"}
+# señal que tiene la página Partidos para saber que hay partido en juego o suspendido.
+PROTECTED_STATUSES = {"live", "finished", "postponed", "suspended"}
 
 
 def normalize_status(raw):
@@ -600,18 +600,16 @@ def upload_fixtures_to_supabase(matches):
                     "title": "Cambio de horario",
                     "body": f"{display}: {old_fmt} → {new_fmt}"
                 })
-                # Si el nuevo horario deja el partido fuera de su jornada, los
-                # jugadores de ambos equipos quedan bloqueados: avisamos en la campana.
+                # Si el nuevo horario es de un partido adelantado, los jugadores quedan bloqueados
                 if fid in out_of_order:
                     tipo, md = out_of_order[fid]
-                    motivo = ("aplazado a una jornada posterior" if tipo == "delayed"
-                              else "adelantado a una jornada anterior")
-                    schedule_notifications.append({
-                        "type": "players_locked",
-                        "title": "Jugadores bloqueados",
-                        "body": (f"{display}: partido de la J{md} {motivo}. "
-                                 f"Sus jugadores quedan bloqueados hasta que se resuelva.")
-                    })
+                    if tipo == "advanced":
+                        schedule_notifications.append({
+                            "type": "players_locked",
+                            "title": "Jugadores bloqueados",
+                            "body": (f"{display}: partido de la J{md} adelantado a una jornada anterior. "
+                                     f"Sus jugadores quedan bloqueados hasta que se resuelva.")
+                        })
 
     # Subir a Supabase
     try:

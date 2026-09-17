@@ -103,15 +103,25 @@ export function useOpenMatchdays(): OpenMatchdaysState {
       const endOffsetMs = offsets.endHoursAfter * 60 * 60 * 1000
 
       for (const [md, fs] of byMatchday) {
-        const times = fs.map(f => new Date(f.start_time).getTime())
+        const regularFs = fs.filter(f => {
+          const s = (f.status || '').toLowerCase()
+          return s !== 'postponed' && s !== 'suspended' && s !== 'cancelled'
+        })
+        const times = (regularFs.length > 0 ? regularFs : fs).map(f => new Date(f.start_time).getTime())
         const minStart = Math.min(...times)
         const maxStart = Math.max(...times)
         const startOffsetMs = resolveStartHoursBefore(new Date(minStart), offsets) * 60 * 60 * 1000
         const unlockTime = minStart - startOffsetMs
         const lockTime = maxStart + endOffsetMs
 
-        // Está "abierta" si hemos entrado en su ventana de mercado y aún no la hemos superado
-        if (now >= unlockTime && now <= lockTime) {
+        const hasPendingPostponed = fs.some(f => {
+          const s = (f.status || '').toLowerCase()
+          return s === 'postponed' || s === 'suspended'
+        })
+
+        // Está "abierta" si hemos entrado en su ventana de mercado y aún no la hemos superado,
+        // o si tiene un partido aplazado pendiente de disputar.
+        if ((now >= unlockTime && now <= lockTime) || (hasPendingPostponed && now >= unlockTime)) {
           openMatchdays.push(md)
         }
       }

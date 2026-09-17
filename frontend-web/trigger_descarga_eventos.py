@@ -1822,6 +1822,12 @@ class MatchEventDownloader:
 
             self.upload_to_supabase()
 
+            # Detectar si algún evento contiene qualifierId 227 (partido suspendido que se reanudará otro día)
+            has_q227 = any(
+                any(q.get('qualifierId') == 227 for q in e.get('qualifier', []))
+                for e in events
+            )
+
             # Detectar si el partido está suspendido, aplazado o cancelado en Opta
             match_details = data.get('liveData', {}).get('matchDetails', {})
             match_info = data.get('matchInfo', {})
@@ -1831,8 +1837,9 @@ class MatchEventDownloader:
             ).strip().lower()
 
             match_status_to_pass = None
-            if raw_match_status in ('postponed', 'suspended', 'cancelled'):
-                match_status_to_pass = 'postponed' if raw_match_status in ('postponed', 'suspended') else raw_match_status
+            if has_q227 or raw_match_status in ('postponed', 'suspended', 'cancelled'):
+                match_status_to_pass = 'postponed' if (has_q227 or raw_match_status in ('postponed', 'suspended')) else raw_match_status
+                print(f"   🌧️ Partido suspendido/aplazado detectado (qualifierId 227 = {has_q227}, matchStatus = {raw_match_status})")
 
             # Actualizar marcador del partido (solo 'finished' si llegó el tiempo completo)
             self.update_match_score(

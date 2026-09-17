@@ -37,7 +37,7 @@ type Tab = 'partidos' | 'jugadores' | 'sanciones'
  * partido intercalado): no tienen fila en base de datos, así que su estado de
  * leído se guarda en localStorage.
  */
-const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-']
+const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-', 'postponed-fx-']
 const isDerived = (id: string | number) => DERIVED_ID_PREFIXES.some(p => String(id).startsWith(p))
 
 export function NotificationBell() {
@@ -50,7 +50,14 @@ export function NotificationBell() {
   const [mounted, setMounted] = useState(false)
 
   const isSancion = (n: Notification) => String(n.id).startsWith('penalty-') || String(n.id).startsWith('live-inf-')
-  const isPartido = (n: Notification) => !isSancion(n) && (n.type === 'fixture_changed' || n.type === 'players_locked' || String(n.id).startsWith('locked-fx-'))
+  const isPartido = (n: Notification) =>
+    !isSancion(n) && (
+      n.type === 'fixture_changed' ||
+      n.type === 'players_locked' ||
+      n.type === 'match_postponed' ||
+      String(n.id).startsWith('locked-fx-') ||
+      String(n.id).startsWith('postponed-fx-')
+    )
   const isJugador = (n: Notification) => !isPartido(n) && !isSancion(n)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [copiedAll, setCopiedAll] = useState(false)
@@ -276,6 +283,7 @@ export function NotificationBell() {
 
   const typeIcon: Record<string, string> = {
     fixture_changed: '📅',
+    match_postponed: '🌧️',
     new_player: '🆕',
     sync_complete: '✅',
     players_locked: '🔒',

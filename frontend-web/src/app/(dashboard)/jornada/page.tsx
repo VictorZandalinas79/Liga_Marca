@@ -383,16 +383,26 @@ export default function JornadaPage() {
     // Equipos reales que ya han jugado o están jugando en esta jornada
     const playedTeamIds = new Set<string>()
     const liveTeamIds = new Set<string>()
+    const postponedFixtureIds = new Set<string>()
     if (info && info.fixtureIds.length > 0) {
       const now = Date.now()
       const { data: fixtureDetails } = await supabase
         .from('fixtures')
-        .select('home_team_id, away_team_id, status, start_time, current_minute')
+        .select('id, home_team_id, away_team_id, status, start_time, current_minute')
         .in('id', info.fixtureIds)
       fixtureDetails?.forEach(f => {
         const startTime = f.start_time ? new Date(f.start_time).getTime() : 0
-        const isFinished = f.status === 'finished' || f.status === 'ft' || f.status === 'completed'
+        const statusLower = (f.status || '').toLowerCase()
+        const isPostponed = statusLower === 'postponed' || statusLower === 'suspended' || statusLower === 'cancelled'
         
+        // Si el partido está suspendido/aplazado/cancelado, NUNCA cuenta como terminado ni en juego:
+        // los jugadores deben figurar como que aún no han jugado.
+        if (isPostponed) {
+          if (f.id) postponedFixtureIds.add(f.id)
+          return
+        }
+
+        const isFinished = statusLower === 'finished' || statusLower === 'ft' || statusLower === 'completed'
         const matchEnded = isFinished || (startTime > 0 && startTime + MATCH_DURATION_MS < now)
         
         if (matchEnded) {
@@ -401,7 +411,7 @@ export default function JornadaPage() {
         } else {
           // Si no ha terminado, pero ya empezó o la API dice live
           const isLive = startTime > 0 && now >= startTime
-          const statusLive = f.status === 'live' || ['1h', '2h', 'ht', 'in play', 'playing'].includes((f.status || '').toLowerCase())
+          const statusLive = statusLower === 'live' || ['1h', '2h', 'ht', 'in play', 'playing'].includes(statusLower)
           const hasMin = f.current_minute !== undefined && f.current_minute !== null && f.current_minute > 0
           
           if (isLive || statusLive || hasMin) {
@@ -465,25 +475,26 @@ export default function JornadaPage() {
     // columna solo la rellena el sync desde la J5, y un adelantado sincronizado
     // antes (el de la J6) la tiene a null. Filtrando por matchday, en cuanto
     // entraran puntos del resto de la jornada se perderían los del adelantado.
-    let scoresData: PlayerScoreItem[] | null = null
+    let scoresData: (PlayerScoreItem & { fixture_id?: string })[] | null = null
     if (info && info.fixtureIds.length > 0) {
       const res = await supabase
         .from('player_scores')
-        .select('player_id, total_points')
+        .select('player_id, total_points, fixture_id')
         .in('fixture_id', info.fixtureIds)
         .in('player_id', playerIds)
-      scoresData = res.data as PlayerScoreItem[] | null
+      scoresData = res.data as (PlayerScoreItem & { fixture_id?: string })[] | null
     } else if (info && info.rawMatchday != null) {
       const res = await supabase
         .from('player_scores')
-        .select('player_id, total_points')
+        .select('player_id, total_points, fixture_id')
         .eq('matchday', info.rawMatchday)
         .in('player_id', playerIds)
-      scoresData = res.data as PlayerScoreItem[] | null
+      scoresData = res.data as (PlayerScoreItem & { fixture_id?: string })[] | null
     }
 
     const playerPointsMap = new Map<string, number>()
     scoresData?.forEach(s => {
+      if (s.fixture_id && postponedFixtureIds.has(s.fixture_id)) return
       playerPointsMap.set(s.player_id, (playerPointsMap.get(s.player_id) || 0) + (s.total_points || 0))
     })
 

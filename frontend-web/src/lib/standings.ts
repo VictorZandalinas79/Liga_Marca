@@ -239,6 +239,16 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     }
   }
 
+  const postponedFixtureIds = new Set<string>()
+  fixturesData?.forEach((f: any) => {
+    if (f.id) {
+      const s = (f.status || '').toLowerCase()
+      if (s === 'postponed' || s === 'suspended' || s === 'cancelled') {
+        postponedFixtureIds.add(f.id)
+      }
+    }
+  })
+
   const { rows: allScores, incomplete: scoresIncomplete } = await fetchPaginated<{
     player_id: string
     total_points: number
@@ -251,6 +261,7 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
   const playerPointsByMatchday = new Map<string, Map<number, number>>()
   for (const score of allScores) {
     if (!playerIdSet.has(score.player_id)) continue
+    if (score.fixture_id && postponedFixtureIds.has(score.fixture_id)) continue
 
     let md: number | undefined = score.matchday && score.matchday > 0 ? score.matchday : undefined
     if (!md && score.fixture_id) md = fixtureToMatchday.get(score.fixture_id)

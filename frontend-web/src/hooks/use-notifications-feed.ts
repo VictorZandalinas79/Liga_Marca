@@ -23,7 +23,7 @@ export interface FeedNotification {
  * peticiones en vuelo y TTL, y el estado (leídos) se comparte entre instancias.
  */
 const POLL_MS = 5 * 60 * 1000
-const TTL_MS = 60 * 1000
+const TTL_MS = 0
 
 const EMPTY: FeedNotification[] = []
 let current: FeedNotification[] = EMPTY

@@ -24,7 +24,7 @@
 
 const ONE_HOUR = 60 * 60 * 1000
 /** El partido ya no se va a jugar tal cual: deja de bloquear en cualquier caso. */
-const VOID_STATUSES = new Set(['cancelled', 'postponed'])
+const VOID_STATUSES = new Set(['cancelled', 'postponed', 'suspended'])
 
 /** Offsets configurables desde Admin → Reglas del Juego (league_config). */
 export interface LockOffsets {
@@ -191,21 +191,10 @@ export function computeOutOfOrderLocks(
     }
 
     if (ownMatchday < playedSlot) {
-      // APLAZADO: pertenece a una jornada anterior pero se juega más tarde.
-      // Bloqueado desde que cierra su jornada hasta que el partido termina.
-      // Si ya consta como jugado, se levanta el bloqueo sin esperar a fEnd.
-      if (status === 'finished') continue
-      locks.push({
-        fixtureId: f.id,
-        type: 'delayed',
-        ownMatchday,
-        playedSlot,
-        from: new Date(ownClose),
-        until: new Date(fEnd),
-        kickoff: new Date(t),
-        teamIds,
-        teams,
-      })
+      // APLAZADO / SUSPENDIDO: pertenece a una jornada anterior pero se juega más tarde.
+      // Los partidos aplazados/suspendidos NO bloquean jugadores. La nueva fecha se ignora a efectos
+      // de bloqueo y los puntos se sumarán a la jornada correspondiente cuando se juegue.
+      continue
     } else {
       // ADELANTADO: pertenece a una jornada posterior pero se juega antes.
       // Bloqueado desde X horas antes del partido adelantado hasta que termina (fEnd).

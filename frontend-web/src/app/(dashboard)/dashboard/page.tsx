@@ -8,6 +8,7 @@ import { MetricBreakdown } from '@/components/metric-breakdown'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 import { useLockedTeams, useOpenMatchdays } from '@/lib/locked-teams'
 import { useLeagueConfig } from '@/lib/league-config'
+import { loadCalendar } from '@/lib/calendar-store'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isInMarket } from '@/lib/market'
 import { Card, CardContent } from '@/components/ui/card'
@@ -152,7 +153,10 @@ function PitchPlayerCard({
   )
 }
 
-function getStagger(len: number, idx: number) {
+function getStagger(len: number, idx: number, pos?: string, fwdCount?: number) {
+  if (pos === 'MID' && len === 4 && fwdCount === 3) {
+    return ''
+  }
   if (len >= 5) {
     return idx % 2 === 0 ? '-translate-y-3 sm:-translate-y-5 lg:-translate-y-7' : 'translate-y-3 sm:translate-y-5 lg:translate-y-7'
   }
@@ -253,17 +257,39 @@ export default function DashboardPage() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const { openMatchdays, recommendedMatchday, loaded: openMatchdaysLoaded } = useOpenMatchdays()
   const config = useLeagueConfig()
+  const [allFixturesLite, setAllFixturesLite] = useState<{ matchday: number | null; status: string | null }[]>([])
+
+  useEffect(() => {
+    loadCalendar().then(({ fixtures }) => {
+      if (fixtures) {
+        setAllFixturesLite(fixtures)
+      }
+    })
+  }, [])
+
+  const postponedMatchdays = useMemo(() => {
+    const set = new Set<number>()
+    if (allFixturesLite && allFixturesLite.length > 0) {
+      allFixturesLite.forEach(f => {
+        const s = (f.status || '').toLowerCase()
+        if ((s === 'postponed' || s === 'suspended') && f.matchday && f.matchday > 0) {
+          set.add(f.matchday)
+        }
+      })
+    }
+    return set
+  }, [allFixturesLite])
 
   // Jornadas que se listan en el selector: la activa (siempre, para poder
-  // hacer los cambios de mercado) + las que estén "abiertas" (con partidos ya
-  // jugados y por jugar), p.ej. la jornada anterior aún sin terminar.
+  // hacer los cambios de mercado) + las que estén "abiertas" + con partidos aplazados.
   const selectableMatchdays = useMemo(() => {
     const set = new Set(openMatchdays)
     if (typeof activeMatchday === 'number' && activeMatchday > 0) set.add(activeMatchday)
+    postponedMatchdays.forEach(md => set.add(md))
     return [...set]
       .sort((a, b) => a - b)
       .filter(md => md >= (config?.fantasy_starting_matchday ?? 1))
-  }, [openMatchdays, activeMatchday, config?.fantasy_starting_matchday])
+  }, [openMatchdays, activeMatchday, config?.fantasy_starting_matchday, postponedMatchdays])
   // Al resolver los datos por primera vez, se posiciona en la jornada más próxima
   // a disputarse (recommendedMatchday) si la hay; si no, en la activa.
   const initialMatchdaySetRef = useRef(false)
@@ -1393,6 +1419,7 @@ export default function DashboardPage() {
   const displayedPlayersData = selectedPlayersData
 
   const pitchPlayersData = displayedPlayersData
+  const fwdCountOnPitch = pitchPlayersData.filter(p => getPositionCode(p.position) === 'FWD').length
 
   const { replacedPlayerByUniqueKey, unchangedKeys } = useMemo(() => {
     const result = new Map<string, Player>()
@@ -1819,7 +1846,14 @@ export default function DashboardPage() {
                       className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 text-xs font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                     >
                       <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                      <span>Jornada {selectedMatchday} {selectedMatchday === activeMatchday ? '(Activa)' : ''}</span>
+                      <span>
+                        Jornada {selectedMatchday}{' '}
+                        {selectedMatchday === activeMatchday
+                          ? '(Activa)'
+                          : postponedMatchdays.has(selectedMatchday)
+                          ? '(Partido Suspendido)'
+                          : ''}
+                      </span>
                       <ChevronDown className={`w-3 h-3 text-slate-500 shrink-0 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
                     </button>
 
@@ -1828,10 +1862,12 @@ export default function DashboardPage() {
                         {/* Overlay invisible para cerrar el menú al hacer clic fuera */}
                         <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
                         
-                        <div className="absolute left-0 mt-1.5 w-48 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-1.5 max-h-56 overflow-y-auto scrollbar-none animate-in fade-in slide-in-from-top-2 duration-150">
+                        <div className="absolute left-0 mt-1.5 w-56 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-1.5 max-h-56 overflow-y-auto scrollbar-none animate-in fade-in slide-in-from-top-2 duration-150">
                           {selectableMatchdays.map((md) => {
                             const isCurrent = md === selectedMatchday
                             const isActive = md === activeMatchday
+                            const isPostponed = postponedMatchdays.has(md)
+                            const label = isActive ? '(Activa)' : isPostponed ? '(Partido Suspendido)' : ''
                             return (
                               <button
                                 key={md}
@@ -1846,8 +1882,8 @@ export default function DashboardPage() {
                                 }`}
                               >
                                 <span className="flex items-center gap-2">
-                                  <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                                  Jornada {md} {isActive ? '(Activa)' : ''}
+                                  <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : isPostponed ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                                  Jornada {md} {label}
                                 </span>
                                 {isCurrent && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
                               </button>
@@ -1933,7 +1969,7 @@ export default function DashboardPage() {
                             {subRow.map((player, idx) => (
                               <div 
                                 key={player._uniqueKey} 
-                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20 cursor-pointer`}
+                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx, 'FWD', fwdCountOnPitch)} z-20 cursor-pointer`}
                                 onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
                               >
                                 <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
@@ -1959,7 +1995,7 @@ export default function DashboardPage() {
                             {subRow.map((player, idx) => (
                               <div 
                                 key={player._uniqueKey} 
-                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20 cursor-pointer`}
+                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx, 'MID', fwdCountOnPitch)} z-20 cursor-pointer`}
                                 onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
                               >
                                 <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
@@ -1985,7 +2021,7 @@ export default function DashboardPage() {
                             {subRow.map((player, idx) => (
                               <div 
                                 key={player._uniqueKey} 
-                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx)} z-20 cursor-pointer`}
+                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx, 'DEF', fwdCountOnPitch)} z-20 cursor-pointer`}
                                 onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
                               >
                                 <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />

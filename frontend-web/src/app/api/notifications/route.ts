@@ -7,7 +7,7 @@ import { getOutOfOrderMatchNotifications } from '@/lib/matchday-notifications'
 
 // Notificaciones calculadas al vuelo, sin fila en sync_notifications.
 // (No se exporta: en un route.ts solo valen los exports que Next reconoce.)
-const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-']
+const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-', 'postponed-fx-']
 
 // Caché en memoria para evitar llamadas masivas a la base de datos y
 // recálculos pesados de sanciones en vivo con cada usuario conectado.
@@ -19,7 +19,7 @@ interface CachedNotificationsPayload {
 }
 
 let cachedPayload: CachedNotificationsPayload | null = null
-const CACHE_TTL_MS = 60_000 // 60 segundos de caché compartida en servidor
+const CACHE_TTL_MS = 0 // Sin caché en servidor para reflejar cambios al instante
 
 export async function GET() {
   const supabase = await createServerSupabase()
@@ -45,7 +45,28 @@ export async function GET() {
 
     if (notifError) return NextResponse.json({ error: notifError.message }, { status: 500 })
 
-    let visibleStandard = standardNotifications || []
+    let visibleStandard = (standardNotifications || [])
+      .filter(n => {
+        const body = (n.body || '').toLowerCase()
+        // Omitir notificaciones antiguas de bloqueos por aplazamiento
+        if (body.includes('aplazado a una jornada posterior') || body.includes('quedan bloqueados hasta que se resuelva')) {
+          return false
+        }
+        return true
+      })
+      .map(n => {
+        const body = n.body || ''
+        const title = n.title || ''
+        if (body.includes('Levante vs Athletic') || body.includes('Levante UD') || (title === 'Cambio de horario' && body.includes('Levante'))) {
+          return {
+            ...n,
+            type: 'match_postponed',
+            title: 'Partido suspendido (J6)',
+            body: 'Levante UD vs Athletic Club: el partido cambia de día por la suspensión (se jugará el 21 oct, 20:00) y la jornada quedará finalizada cuando se acabe de jugar este partido.'
+          }
+        }
+        return n
+      })
 
     // Fotos de jugadores referenciados
     const playerIds = visibleStandard.map(n => n.player_id).filter(Boolean)
