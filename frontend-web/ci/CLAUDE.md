@@ -69,4 +69,11 @@
 | #4549 | 4:43 PM | 🔵 | Comprehensive egress analysis reveals prior optimizations and remaining high-traffic patterns | ~756 |
 | #4548 | " | 🔵 | Primary egress source is 45-second select('*') polling on fixtures during live matches | ~673 |
 | #4546 | 4:42 PM | 🔵 | PostgREST egress sources identified in LFM Vilafranca fantasy league | ~562 |
+
+### Sep 17, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #4606 | 4:43 PM | 🔵 | Matchday transition opens without waiting for postponed matches; points added retroactively when match completes | ~946 |
+| #4605 | " | 🔵 | Current postponed match behavior allows J7 to open while J6 postponed match pending | ~727 |
 </claude-mem-context>

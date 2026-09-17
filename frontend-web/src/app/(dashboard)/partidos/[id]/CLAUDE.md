@@ -8,7 +8,6 @@
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
 | #2764 | 9:42 PM | ✅ | Passes bonus threshold increased from 10 to 20 completed passes | ~320 |
-| #2749 | 9:18 PM | ✅ | Match detail page scoring rules synchronized and box entries added | ~286 |
 
 ### Jun 10, 2026
 
@@ -29,7 +28,6 @@
 | #3881 | 5:18 PM | ✅ | Player card name positioning adjusted on match detail page | ~224 |
 | #3879 | 5:15 PM | 🟣 | Enhanced RELEVO points visibility in match player cards | ~293 |
 | #3878 | 5:11 PM | 🟣 | Added color-coded minutes display to indicate participation bonus threshold | ~299 |
-| #3877 | " | ✅ | UI refinement for player starter/substitute badge styling | ~358 |
 | #3860 | 4:50 PM | 🔵 | Root cause identified: sync success toast doesn't guarantee backend completion | ~564 |
 | #3854 | 4:46 PM | 🔵 | Match sync mechanism already exists via UI button | ~482 |
 
