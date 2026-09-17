@@ -490,11 +490,10 @@ export default function PartidosPage() {
   ) => {
     const s = (status || '').toLowerCase()
 
-    // 1) Suspendido / cancelado / aplazado / >10 min desde la hora de inicio sin eventos en juego:
+    // 1) Suspendido / cancelado / aplazado:
     const isPostponedOrSuspended =
       s === 'postponed' ||
-      s === 'suspended' ||
-      (startTime && new Date(startTime).getTime() + 10 * 60 * 1000 < now && !isFixtureInPlay(status, currentMinute) && !FINISHED_STATUSES.has(s))
+      s === 'suspended'
 
     if (s === 'cancelled') {
       return (
