@@ -454,11 +454,11 @@ OPTA_STATUS_MAP = {
     "fixture": "scheduled",
     "playing": "live",
     "played": "finished",
-    "postponed": "postponed",
+    "postponed": "scheduled",
     "cancelled": "cancelled",
     "canceled": "cancelled",
     "abandoned": "cancelled",
-    "suspended": "postponed",
+    "suspended": "scheduled",
 }
 
 # Estados que NUNCA deben retroceder a 'scheduled' en un upsert de calendario:
