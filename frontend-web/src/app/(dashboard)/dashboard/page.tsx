@@ -303,10 +303,17 @@ export default function DashboardPage() {
       initialMatchdaySetRef.current = true
     }
   }, [activeMatchday, recommendedMatchday, openMatchdaysLoaded])
-  const { isLocked, isUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, currentMatchday: resolvedMatchday, previousMatchday, upcomingLocks, isCloseToStart } = useMatchdayLock(selectedMatchday)
+  const { isLocked: rawIsLocked, isUnlockWindowOpen: rawIsUnlockWindowOpen, timeUntilLock, timeUntilUnlock, unlockTime, lockTime, currentMomento, currentMatchday: resolvedMatchday, previousMatchday, upcomingLocks, isCloseToStart } = useMatchdayLock(selectedMatchday)
   // Equipos bloqueados por partidos fuera de orden de jornada (aplazados/adelantados).
   // Estos jugadores no se pueden cambiar aunque el mercado general esté abierto.
   const lockedTeams = useLockedTeams()
+  // Una jornada suspendida que ya no es la activa (p.ej. J6 suspendida mientras
+  // la activa es J7) se trata como bloqueada: el partido está a punto de acabar
+  // y no deben poder hacerse cambios, aunque al excluir el fixture suspendido
+  // del cálculo de bloqueos (use-matchday-lock) nunca generaría ventana de cierre.
+  const isSuspendedNonActiveMatchday = postponedMatchdays.has(selectedMatchday) && selectedMatchday !== activeMatchday
+  const isUnlockWindowOpen = rawIsUnlockWindowOpen || isSuspendedNonActiveMatchday
+  const isLocked = rawIsLocked || isSuspendedNonActiveMatchday
 
   useEffect(() => {
     // Si isUnlockWindowOpen es FALSE, el mercado está ABIERTO (no hay partidos en juego).
