@@ -196,6 +196,8 @@ class MatchEventDownloader:
         self.player_positions_map = {}
         self.sub_events = {} # NUEVO: eventId -> playerId (para cruzar suplentes y titulares)
         self.opta_players_meta = {} # Mapeo pid -> {dateOfBirth, shirtNumber, name, ...}
+        self._db_ids = None     # ids de players ya en BD (precarga de upload_to_supabase)
+        self._by_external = {}  # external_id -> players.id
         self.home_team_id = None
         self.away_team_id = None
         self.matchday = None
@@ -1298,8 +1300,21 @@ class MatchEventDownloader:
         Busca el ID del jugador en la tabla players por ID (Opta ID = ID en BD).
         No usa coincidencia por nombre para evitar mapeos incorrectos.
         """
+        # Con la precarga de 'preload_player_ids' se resuelve en memoria: antes eran
+        # de 1 a 3 peticiones por jugador y pasada, que en día de partido multiplicaban
+        # por 40 la ingesta de logs de Supabase.
+        if self._db_ids is not None:
+            if api_player_id.startswith('cult_'):
+                if api_player_id in self._db_ids:
+                    return api_player_id
+                if api_player_id.replace('cult_', '') in self._by_external:
+                    return self._by_external[api_player_id.replace('cult_', '')]
+            if api_player_id in self._db_ids:
+                return api_player_id
+            if api_player_id in self._by_external:
+                return self._by_external[api_player_id]
         # Estrategia 0: Si el api_player_id empieza por 'cult_', buscar por external_id
-        if api_player_id.startswith('cult_'):
+        elif api_player_id.startswith('cult_'):
             response = self.supabase.table('players').select('id').eq('id', api_player_id).execute()
             if response.data:
                 return api_player_id
@@ -1308,9 +1323,10 @@ class MatchEventDownloader:
                 return response.data[0]['id']
 
         # Estrategia principal: buscar por Opta ID directo en 'id' o en 'external_id'
-        response_direct = self.supabase.table('players').select('id').or_(f"id.eq.{api_player_id},external_id.eq.{api_player_id}").execute()
-        if response_direct.data:
-            return response_direct.data[0]['id']
+        if self._db_ids is None:
+            response_direct = self.supabase.table('players').select('id').or_(f"id.eq.{api_player_id},external_id.eq.{api_player_id}").execute()
+            if response_direct.data:
+                return response_direct.data[0]['id']
 
         # Si llegamos aquí, el jugador no está en la BD. 
         # Intentamos buscar si es un jugador provisional del equipo
@@ -1394,6 +1410,8 @@ class MatchEventDownloader:
 
             # 2. Insertar nueva fila con el real_id
             self.supabase.table('players').upsert(row).execute()
+            if self._db_ids is not None:
+                self._db_ids.add(real_id)
 
             # 'load_positions' indexa por players.id, y en esta pasada la fila aun
             # tenia el ID provisional, asi que la posicion de Biwenger no se le
@@ -1493,9 +1511,59 @@ class MatchEventDownloader:
         except Exception as e:
             print(f"   ❌ Error actualizando marcador: {e}")
 
+    def preload_player_ids(self, api_ids):
+        """Carga de una vez qué jugadores del partido existen en 'players' (por id o
+        external_id), para que find_player_id no consulte la BD jugador a jugador.
+        Si falla, se deja _db_ids en None y find_player_id vuelve a consultar uno a uno."""
+        wanted = set(api_ids) | {i.replace('cult_', '') for i in api_ids if i.startswith('cult_')}
+        wanted = sorted(wanted)
+        db_ids, by_external = set(), {}
+        try:
+            for i in range(0, len(wanted), 100):
+                lista = ','.join(f'"{x}"' for x in wanted[i:i + 100])
+                rows = self.supabase.table('players').select('id, external_id') \
+                    .or_(f"id.in.({lista}),external_id.in.({lista})").execute().data or []
+                for r in rows:
+                    db_ids.add(r['id'])
+                    if r.get('external_id') is not None:
+                        by_external.setdefault(str(r['external_id']), r['id'])
+        except Exception as e:
+            print(f"   ⚠️ No se pudo precargar jugadores ({e}); se consultarán uno a uno")
+            return
+        self._db_ids, self._by_external = db_ids, by_external
+
+    def _write_scores(self, rows, existing):
+        """Escribe los player_scores en bloque, con el mismo reintento de antes si la
+        BD no tiene alguna columna. Las filas ya existentes van por upsert sobre su
+        'id' (dispara igual el trigger de updated_at) y las nuevas en un insert."""
+        with_id = [dict(p, id=row_id) for p in rows for row_id in existing.get(p['player_id'], [])]
+        new = [p for p in rows if p['player_id'] not in existing]
+        written = set()
+        for batch, op in ((with_id, 'upsert'), (new, 'insert')):
+            while batch:
+                try:
+                    resp = getattr(self.supabase.table('player_scores'), op)(batch).execute()
+                    written.update(r['player_id'] for r in (resp.data or []))
+                    break
+                except Exception as e:
+                    import re
+                    msg = getattr(e, 'message', None) or (e.args[0].get('message') if e.args and isinstance(e.args[0], dict) else None) or str(e)
+                    match = re.search(r"Could not find the '([^']+)' column", msg)
+                    if match and match.group(1) in batch[0]:
+                        missing_col = match.group(1)
+                        print(f"   ⚠️ Column '{missing_col}' not found in DB schema. Removing from payload and retrying...")
+                        batch = [{k: v for k, v in p.items() if k != missing_col} for p in batch]
+                        continue
+                    print(f"  ❌ Error subiendo player_scores ({op} de {len(batch)} filas): {e}")
+                    break
+        return written
+
     def upload_to_supabase(self):
         """Sube los player_scores a Supabase usando los nombres de columnas correctos."""
         print("\n📤 Subiendo datos a Supabase...")
+
+        self.preload_player_ids([pid for pid in self.points if self.players_team.get(pid)])
+        pending = []  # (player_id, total_points, payload)
 
         for player_id, total_points in self.points.items():
             team_id = self.players_team.get(player_id)
@@ -1508,8 +1576,11 @@ class MatchEventDownloader:
             if db_player_id == player_id:
                 # Verificar que el jugador existe en la BD (solo por ID, sin restricción de equipo:
                 # un jugador puede estar en BD con team_id de club pero jugar en selección nacional)
-                exists = self.supabase.table('players').select('id').eq('id', player_id).execute()
-                if not exists.data:
+                if self._db_ids is not None:
+                    found = player_id in self._db_ids
+                else:
+                    found = bool(self.supabase.table('players').select('id').eq('id', player_id).execute().data)
+                if not found:
                     print(f"   ⚠️ Saltando {self.player_names.get(player_id, player_id)}: no encontrado en BD")
                     continue
                 print(f"   ✓ Usando mismo ID: {player_id}")
@@ -1681,54 +1752,32 @@ class MatchEventDownloader:
                 'replaced_player_id': stats.get('replaced_player_id', None),
             }
 
-            payload = player_score_data.copy()
-            while True:
-                try:
-                    existing = self.supabase.table('player_scores').select('id').eq('player_id', db_player_id).eq('fixture_id', self.fixture_id).execute()
-                    if existing.data:
-                        response = self.supabase.table('player_scores').update(payload).eq('player_id', db_player_id).eq('fixture_id', self.fixture_id).execute()
-                    else:
-                        response = self.supabase.table('player_scores').insert(payload).execute()
+            pending.append((player_id, total_points, player_score_data))
 
-                    if response.data:
-                        player_name = self.player_names.get(player_id, player_id)
-                        relevo_pts = stats.get('relevo_points', 0)
-                        print(f"  ✅ {player_name}: {int(total_points)} pts (Relevo: {relevo_pts}) ({mins_played}')")
-                    break
-                except Exception as e:
-                    import re
-                    err_msg = str(e)
-                    match = re.search(r"Could not find the '([^']+)' column", err_msg)
-                    if match:
-                        missing_col = match.group(1)
-                        if missing_col in payload:
-                            print(f"   ⚠️ Column '{missing_col}' not found in DB schema. Removing from payload and retrying...")
-                            del payload[missing_col]
-                            continue
+        if not pending:
+            return
 
-                    # Handle dict-like structure from supabase Python API Error
-                    try:
-                        err_dict = None
-                        if isinstance(e, dict):
-                            err_dict = e
-                        elif hasattr(e, 'message'):
-                            err_dict = {'message': getattr(e, 'message'), 'code': getattr(e, 'code', '')}
-                        elif hasattr(e, 'args') and e.args and isinstance(e.args[0], dict):
-                            err_dict = e.args[0]
+        # Una fila por jugador de BD: si dos IDs de Opta acaban en el mismo jugador,
+        # gana la última, como pasaba antes al actualizar la misma fila dos veces.
+        rows = list({p['player_id']: p for _, _, p in pending}.values())
 
-                        if err_dict and 'message' in err_dict:
-                            match = re.search(r"Could not find the '([^']+)' column", err_dict['message'])
-                            if match:
-                                missing_col = match.group(1)
-                                if missing_col in payload:
-                                    print(f"   ⚠️ Column '{missing_col}' not found in DB schema. Removing from payload and retrying...")
-                                    del payload[missing_col]
-                                    continue
-                    except:
-                        pass
+        existing = {}
+        try:
+            for r in self.supabase.table('player_scores').select('id, player_id') \
+                    .eq('fixture_id', self.fixture_id).execute().data or []:
+                existing.setdefault(r['player_id'], []).append(r['id'])
+        except Exception as e:
+            print(f"  ❌ Error leyendo player_scores del partido: {e}")
+            return
 
-                    print(f"  ❌ Error subiendo {player_id}: {e}")
-                    break
+        written = self._write_scores(rows, existing)
+
+        for player_id, total_points, payload in pending:
+            if payload['player_id'] in written:
+                player_name = self.player_names.get(player_id, player_id)
+                relevo_pts = self.stats.get(player_id, {}).get('relevo_points', 0)
+                mins_played = self.total_minutes.get(player_id, 0)
+                print(f"  ✅ {player_name}: {int(total_points)} pts (Relevo: {relevo_pts}) ({mins_played}')")
 
     def run(self):
         print(f"\n{'='*60}")
