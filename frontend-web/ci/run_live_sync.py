@@ -19,9 +19,11 @@ pasamos el mismo valor como ambos argumentos.
 import os
 import sys
 import subprocess
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import httpx
 from supabase import create_client
 from dotenv import load_dotenv
 
@@ -63,6 +65,24 @@ def get_client():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
+def execute_with_retry(query, attempts=3, delay=5):
+    """Ejecuta una consulta de PostgREST reintentando ante cortes de conexión.
+
+    Supabase a veces cierra la conexión HTTP/2 sin responder
+    (httpx.RemoteProtocolError: Server disconnected). Es un fallo transitorio:
+    sin reintento tumbaba la pasada entera antes de lanzar ningún partido.
+    Solo se reintentan errores de transporte; los errores de la API se propagan.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            return query.execute()
+        except httpx.TransportError as e:
+            if attempt == attempts:
+                raise
+            log(f"⚠️ Error de conexión con Supabase ({e}); reintento {attempt}/{attempts - 1} en {delay}s")
+            time.sleep(delay)
+
+
 def fixtures_to_sync(sb):
     """Devuelve la lista de fixtures a sincronizar según el modo."""
     ids_env = os.environ.get("SYNC_FIXTURE_IDS", "").strip()
@@ -72,7 +92,7 @@ def fixtures_to_sync(sb):
     if ids_env:
         ids = [i.strip() for i in ids_env.split(",") if i.strip()]
         log(f"🎯 Modo IDs explícitos: {ids}")
-        res = sb.table("fixtures").select("*").in_("id", ids).execute()
+        res = execute_with_retry(sb.table("fixtures").select("*").in_("id", ids))
         return res.data or []
 
     # Modo 2: jornada completa (botón "sincronizar jornada")
@@ -80,10 +100,10 @@ def fixtures_to_sync(sb):
         log(f"🎯 Modo jornada completa: {matchday_env}")
         try:
             md = int(matchday_env)
-            res = sb.table("fixtures").select("*").eq("matchday", md).execute()
+            res = execute_with_retry(sb.table("fixtures").select("*").eq("matchday", md))
         except ValueError:
             # Puede ser un "momento" (ej. "Fase Final") en vez de número
-            res = sb.table("fixtures").select("*").eq("momento", matchday_env).execute()
+            res = execute_with_retry(sb.table("fixtures").select("*").eq("momento", matchday_env))
         return res.data or []
 
     # Modo 3: cron automático
@@ -94,12 +114,11 @@ def fixtures_to_sync(sb):
     # (a) Ventana de tiempo: partidos a punto de empezar o recién empezados.
     # start_time se guarda en UTC sin zona (ej. 2026-06-06T18:00:00); comparamos
     # como string ISO, que es ordenable lexicográficamente.
-    res = (
+    res = execute_with_retry(
         sb.table("fixtures")
         .select("*")
         .gte("start_time", live_from)
         .lte("start_time", upcoming_to)
-        .execute()
     )
     rows = list(res.data or [])
 
@@ -107,7 +126,7 @@ def fixtures_to_sync(sb):
     # start_time quede fuera de la ventana de LIVE_WINDOW (prórrogas, retrasos o
     # un partido que se quedó "colgado" en vivo porque nunca llegó el evento de
     # fin). Así nunca deja de refrescarse hasta pasar a 'finished'.
-    res_live = sb.table("fixtures").select("*").eq("status", "live").execute()
+    res_live = execute_with_retry(sb.table("fixtures").select("*").eq("status", "live"))
     rows += list(res_live.data or [])
 
     # Deduplica por id y descarta los terminales.
