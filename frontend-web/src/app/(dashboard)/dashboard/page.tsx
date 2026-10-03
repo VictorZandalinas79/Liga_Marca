@@ -11,6 +11,7 @@ import { useLeagueConfig } from '@/lib/league-config'
 import { loadCalendar } from '@/lib/calendar-store'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isInMarket } from '@/lib/market'
+import { getTeamColors } from '@/lib/team-colors'
 import { Card, CardContent } from '@/components/ui/card'
 
 
@@ -2061,131 +2062,133 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : (
-              <div 
-                className="relative grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-4 sm:gap-6 lg:gap-8 p-6 sm:p-8 md:p-10 rounded-3xl shadow-[inset_0_10px_30px_rgba(0,0,0,0.6)] border-[4px] border-[#064e3b]" 
-                style={{
-                  backgroundImage: 'repeating-linear-gradient(0deg, #15803d, #15803d 40px, #14532d 40px, #14532d 80px)',
-                }}
-              >
-                <div className="absolute inset-0 rounded-3xl pointer-events-none shadow-[inset_0_0_60px_rgba(0,0,0,0.7)]" />
+              <div className="relative overflow-hidden rounded-3xl bg-slate-950 ring-1 ring-white/10 shadow-[0_20px_50px_-12px_rgba(2,6,23,0.6)]">
+                {/* Fondo: noche de estadio con focos y líneas del campo */}
+                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(16,185,129,0.35),transparent_60%),radial-gradient(ellipse_50%_40%_at_100%_110%,rgba(59,130,246,0.18),transparent_60%),radial-gradient(ellipse_50%_40%_at_0%_110%,rgba(245,158,11,0.12),transparent_60%)]" />
+                <div className="absolute inset-0 pointer-events-none opacity-[0.07] bg-[repeating-linear-gradient(90deg,#fff_0,#fff_1px,transparent_1px,transparent_80px)]" />
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 sm:w-80 sm:h-80 rounded-full border border-white/[0.06] pointer-events-none" />
+                <div className="absolute left-1/2 inset-y-0 w-px bg-white/[0.06] pointer-events-none" />
+
+                <div className="relative grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-5 lg:gap-6 p-4 sm:p-6 md:p-8">
                 {displayedPlayersData.map((player, idx) => {
                   const isChanged = !unchangedKeys.has(player._uniqueKey)
                   const isLockedPlayer = isTeamLocked(player.team_id)
-                  const replacedPlayer = isChanged ? replacedPlayerByUniqueKey.get(player._uniqueKey) : undefined
                   const displayName = formatPlayerName(player.short_name || player.first_name || '')
+                  const posLabel = getPositionLabel(player.position)
+                  const posDot = ({ POR: 'bg-amber-400', DEF: 'bg-blue-400', MED: 'bg-emerald-400', DEL: 'bg-rose-400' } as Record<string, string>)[posLabel] ?? 'bg-slate-400'
+                  // Colores del club para teñir la ficha
+                  const tc = getTeamColors(player.team?.name)
 
                   return (
                     <div
                       key={player._uniqueKey}
                       onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
-                      className={`@container relative z-10 w-full aspect-[5/7] transition-all duration-300 group ${
+                      className={`@container relative z-10 w-full aspect-[5/7] transition-all duration-300 ease-out group ${
                         isUnlockWindowOpen || isLockedPlayer
-                          ? 'cursor-not-allowed opacity-70'
-                          : 'cursor-pointer hover:scale-105 hover:-translate-y-2 hover:z-50'
+                          ? 'cursor-not-allowed'
+                          : 'cursor-pointer hover:-translate-y-1.5 hover:z-50'
                       }`}
-                      style={{
-                        filter: 'drop-shadow(0 25px 25px rgba(0,0,0,0.9)) drop-shadow(0 10px 10px rgba(0,0,0,0.7))'
-                      }}
+                      style={{ '--tc': tc.primary } as React.CSSProperties}
                     >
-                      <div className={`absolute inset-0 overflow-hidden rounded-xl border ${
-                        isUnlockWindowOpen
-                          ? 'bg-slate-900 border-slate-800'
-                          : isLockedPlayer
-                            ? 'bg-slate-900 border-red-900'
-                            : isChanged
-                              ? 'bg-gradient-to-br from-emerald-900/90 to-slate-900 border-emerald-500/50'
-                              : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 group-hover:border-amber-500/50'
+                      <div className={`absolute inset-0 overflow-hidden rounded-2xl bg-white ring-1 transition-all duration-300 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.6)] group-hover:shadow-[0_18px_40px_-12px_rgba(0,0,0,0.75)] ${
+                        isLockedPlayer
+                          ? 'ring-red-500/60'
+                          : isChanged
+                            ? 'ring-[3px] ring-emerald-400'
+                            : `ring-white/40 ${isUnlockWindowOpen ? '' : 'group-hover:ring-[var(--tc)]'}`
                       }`}>
+                        {/* Halo con los colores del club */}
+                        <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(120% 65% at 30% 0%, ${tc.primary}66, transparent 70%), radial-gradient(90% 55% at 100% 40%, ${tc.secondary}33, transparent 70%), linear-gradient(to bottom, ${tc.primary}1f, #f8fafc 80%)` }} />
+                        <div className="absolute top-0 inset-x-0 h-[2cqw]" style={{ backgroundImage: `linear-gradient(90deg, ${tc.primary} 0 60%, ${tc.secondary} 60% 100%)` }} />
+
+                        {/* Escudo de fondo como marca de agua */}
                         {player.team?.logo_url && (
-                          <img 
-                            src={player.team.logo_url} 
-                            alt="Fondo" 
-                            className="absolute left-1/2 -translate-x-1/2 top-[-25%] w-[110%] h-[110%] object-contain opacity-20 pointer-events-none filter blur-[2px]"
+                          <img
+                            src={player.team.logo_url}
+                            alt=""
+                            className="absolute -right-[18%] top-[6%] w-[85%] h-[85%] object-contain opacity-[0.25] pointer-events-none"
                           />
                         )}
 
-                        <div className="absolute inset-x-0 bottom-0 h-[30%] bg-black z-10 pointer-events-none" />
-                        <div className="absolute inset-x-0 bottom-[30%] h-[30%] bg-gradient-to-t from-black via-black/80 to-transparent z-10 pointer-events-none" />
+                        {/* Dorsal de alineación (grande, tenue) */}
+                        <span className="absolute top-[4cqw] right-[5cqw] z-20 font-black text-[22cqw] leading-none text-slate-900/10 tabular-nums select-none">
+                          {idx + 1}
+                        </span>
 
-                        <div className="absolute top-[3cqw] left-[3cqw] flex flex-row items-center gap-[1.5cqw] z-20 drop-shadow-md">
-                          <div className="bg-black/60 rounded flex items-center justify-center px-[2cqw] py-[1cqw]">
-                            <span className="text-[10cqw] font-black text-white leading-none">
-                              {idx + 1}
-                            </span>
-                          </div>
-                          <div className={`text-[8cqw] px-[2cqw] py-[1cqw] font-bold text-white rounded-sm drop-shadow-md ${getPositionColor(player.position)}`}>
-                            {getPositionLabel(player.position)}
-                          </div>
+                        {/* Posición */}
+                        <div className="absolute top-[6cqw] left-[5cqw] z-20 flex items-center gap-[2cqw] rounded-full bg-white/80 backdrop-blur-sm ring-1 ring-slate-900/10 shadow-sm pl-[2.5cqw] pr-[3.5cqw] py-[1.2cqw]">
+                          <span className={`w-[3.5cqw] h-[3.5cqw] rounded-full ${posDot}`} />
+                          <span className="text-[8cqw] font-extrabold tracking-wider leading-none text-slate-800">{posLabel}</span>
                         </div>
 
-                        <div className="absolute inset-x-0 bottom-[20%] top-[10%] px-1 flex justify-center items-end z-10 pointer-events-none">
+                        {/* Foto */}
+                        <div className="absolute inset-x-0 bottom-[24%] top-[14%] flex justify-center items-end z-10 pointer-events-none">
                           {player.photo ? (
                             <img
                               src={player.photo}
                               alt={player.short_name || ''}
-                              className="w-full h-full object-contain object-bottom drop-shadow-2xl"
+                              className={`h-full w-full object-contain object-bottom drop-shadow-[0_6px_10px_rgba(15,23,42,0.25)] transition-transform duration-500 ${isLockedPlayer ? 'grayscale opacity-60' : 'group-hover:scale-[1.06]'}`}
                             />
                           ) : (
-                            <div className="h-[50%] aspect-square rounded-full bg-slate-800/80 text-slate-300 flex items-center justify-center text-[25cqw] font-bold shadow-2xl border-2 border-slate-600">
+                            <div className="mb-[8cqw] h-[55%] aspect-square rounded-full bg-slate-100 ring-1 ring-slate-200 text-slate-500 flex items-center justify-center text-[22cqw] font-black">
                               {player.shirt_number || '?'}
                             </div>
                           )}
                         </div>
 
-                        <div className="absolute inset-x-0 bottom-[2cqw] flex flex-col items-center z-20 px-[2cqw] w-full">
-                          <div className="w-full bg-black/95 rounded-lg py-[2cqw] px-[2cqw] flex flex-col items-center shadow-2xl">
-                            <p className={`font-black text-amber-50 uppercase text-center w-full leading-tight truncate tracking-tight drop-shadow-lg ${
-                                displayName.length > 14
-                                  ? 'text-[9cqw]'
-                                  : displayName.length > 10
-                                  ? 'text-[11cqw]'
-                                  : 'text-[13cqw]'
-                              }`}
-                              style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.9)' }}
-                            >
-                              {displayName}
-                            </p>
-                            
-                            <div className="w-11/12 h-[1px] bg-amber-500/40 my-[1cqw]" />
-
-                            <div className="w-full flex justify-between items-center px-[1cqw]">
-                              <div className="flex-1 flex justify-start">
-                                <span className="font-black text-emerald-400 text-[14cqw] drop-shadow-md">
-                                  {player.precio ? `${player.precio}M` : '-'}
-                                </span>
-                              </div>
-                              <div className="flex-1 flex justify-end">
-                                {player.team?.logo_url ? (
-                                  <img
-                                    src={player.team.logo_url}
-                                    alt={player.team?.name || ''}
-                                    className="w-[14cqw] h-[14cqw] object-contain drop-shadow-lg"
-                                  />
-                                ) : <div className="w-[14cqw] h-[14cqw]" />}
-                              </div>
-                            </div>
+                        {/* Pie: nombre, precio y club */}
+                        <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-white via-white/95 to-transparent z-10 pointer-events-none" />
+                        <div className="absolute inset-x-0 bottom-0 z-20 px-[5cqw] pb-[5cqw] flex flex-col gap-[2.5cqw]">
+                          <p className={`font-black text-slate-900 uppercase tracking-tight leading-none truncate ${
+                              displayName.length > 14 ? 'text-[9cqw]' : displayName.length > 10 ? 'text-[10.5cqw]' : 'text-[12cqw]'
+                            }`}
+                          >
+                            {displayName}
+                          </p>
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-baseline gap-[0.5cqw] rounded-md bg-emerald-50 ring-1 ring-emerald-500/30 px-[2.5cqw] py-[1cqw] font-black text-emerald-700 text-[10cqw] leading-none tabular-nums">
+                              {player.precio ?? '-'}
+                              {player.precio ? <span className="text-[7cqw] font-bold text-emerald-600/80">M</span> : null}
+                            </span>
+                            {player.team?.logo_url ? (
+                              <img
+                                src={player.team.logo_url}
+                                alt={player.team?.name || ''}
+                                title={player.team?.name || ''}
+                                className="w-[13cqw] h-[13cqw] object-contain drop-shadow"
+                              />
+                            ) : <div className="w-[13cqw] h-[13cqw]" />}
                           </div>
                         </div>
+
+                        {/* Brillo al pasar el ratón */}
+                        {!isUnlockWindowOpen && !isLockedPlayer && (
+                          <div className="absolute inset-0 z-30 pointer-events-none bg-gradient-to-tr from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                        )}
                       </div>
+
+                      {isChanged && !isLockedPlayer && (
+                        <span className="absolute -top-[4cqw] left-1/2 -translate-x-1/2 z-40 rounded-full bg-emerald-500 px-[3cqw] py-[1cqw] text-[6.5cqw] font-black tracking-wider text-white shadow-lg shadow-emerald-900/50 ring-2 ring-slate-950">
+                          NUEVO
+                        </span>
+                      )}
 
                       <div className="absolute -top-[5cqw] -right-[5cqw] z-40 flex items-center gap-[1cqw]">
                         {isLockedPlayer && (
-                          <div className="w-[16cqw] h-[16cqw] bg-gradient-to-br from-red-600 to-rose-700 rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(225,29,72,0.6)] border-2 border-white" title="Jugador bloqueado: partido fuera de jornada">
-                            <Lock className="w-[9cqw] h-[9cqw] text-white stroke-[2.5]" />
+                          <div className="w-[16cqw] h-[16cqw] bg-gradient-to-br from-red-600 to-rose-700 rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(225,29,72,0.6)] ring-2 ring-slate-950" title="Jugador bloqueado: partido fuera de jornada">
+                            <Lock className="w-[8cqw] h-[8cqw] text-white stroke-[2.5]" />
                           </div>
                         )}
                         {isChanged && !isLockedPlayer && (
                           <button
                             onClick={e => { e.stopPropagation(); setCancelConfirmUniqueKey(player._uniqueKey) }}
-                            className="w-[17cqw] h-[17cqw] bg-gradient-to-br from-rose-500 via-red-600 to-rose-700 hover:from-rose-400 hover:to-red-500 rounded-full flex items-center justify-center shadow-[0_4px_14px_rgba(225,29,72,0.75)] border-2 border-white transition-all duration-300 hover:scale-115 hover:rotate-90 active:scale-95 group/cancelbtn"
+                            className="w-[16cqw] h-[16cqw] bg-slate-950/90 hover:bg-rose-600 ring-1 ring-white/20 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 hover:rotate-90 active:scale-95"
                             title="Cancelar cambio"
                           >
-                            <X className="w-[10cqw] h-[10cqw] text-white stroke-[3.5] filter drop-shadow-sm" />
+                            <X className="w-[9cqw] h-[9cqw] text-white stroke-[3]" />
                           </button>
                         )}
                       </div>
-
-
                     </div>
                   )
                 })}
@@ -2195,20 +2198,19 @@ export default function DashboardPage() {
                     <div
                       key={`empty-${emptyIdx}`}
                       onClick={() => openPlayerSelector('', emptyIdx)}
-                      className="@container relative z-10 w-full aspect-[5/7] transition-all duration-300 group cursor-pointer hover:scale-105 hover:-translate-y-2 hover:z-50"
-                      style={{
-                        filter: 'drop-shadow(0 25px 25px rgba(0,0,0,0.9)) drop-shadow(0 10px 10px rgba(0,0,0,0.7))'
-                      }}
+                      className="@container relative z-10 w-full aspect-[5/7] transition-all duration-300 group cursor-pointer hover:-translate-y-1.5 hover:z-50"
                     >
-                      <div className="absolute inset-0 overflow-hidden rounded-xl border bg-slate-800/50 border-slate-700 border-dashed flex flex-col items-center justify-center gap-[2cqw] group-hover:bg-slate-700/50 group-hover:border-emerald-500/50 transition-colors">
-                        <div className="w-[15cqw] h-[15cqw] rounded-full bg-slate-700/60 flex items-center justify-center text-slate-400 group-hover:bg-emerald-500/20 group-hover:text-emerald-400 transition-colors">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="50%" height="50%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                      <div className="absolute inset-0 overflow-hidden rounded-2xl border-2 border-dashed border-white/15 bg-white/[0.03] backdrop-blur-sm flex flex-col items-center justify-center gap-[4cqw] group-hover:border-emerald-400/60 group-hover:bg-emerald-400/[0.06] transition-colors">
+                        <span className="absolute top-[4cqw] right-[5cqw] font-black text-[22cqw] leading-none text-white/10 tabular-nums">{emptyIdx + 1}</span>
+                        <div className="w-[22cqw] h-[22cqw] rounded-full bg-white/5 ring-1 ring-white/15 flex items-center justify-center text-white/50 group-hover:bg-emerald-400/20 group-hover:text-emerald-300 group-hover:ring-emerald-400/40 transition-colors">
+                          <UserPlus className="w-1/2 h-1/2" />
                         </div>
-                        <span className="text-[9cqw] font-black text-slate-400 group-hover:text-emerald-400 transition-colors uppercase tracking-wider">Fichar</span>
+                        <span className="text-[8.5cqw] font-black text-white/50 group-hover:text-emerald-300 transition-colors uppercase tracking-[0.2em]">Fichar</span>
                       </div>
                     </div>
                   )
                 })}
+                </div>
               </div>
             )}
           </CardContent>
