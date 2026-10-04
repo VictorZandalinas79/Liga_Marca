@@ -12,6 +12,7 @@ import { ScoringConfigPanel } from './ScoringConfigPanel'
 import { UnmatchedPlayersPanel } from './UnmatchedPlayersPanel'
 import { PrizesPanel } from './PrizesPanel'
 import { RestartLeaguePanel } from './RestartLeaguePanel'
+import { UsagePanel } from './UsagePanel'
 import { useLeagueConfig } from '@/lib/league-config'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -441,6 +442,9 @@ export default function AdminPage() {
           </button>
         </div>
       </div>
+
+      {/* Consumo frente a los límites del plan Free de Supabase */}
+      <UsagePanel />
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

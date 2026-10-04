@@ -34,3 +34,15 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SANCTION_MATCHDAY: ${{ github.event.inputs.matchday }}
         run: python "3. calcular_sanciones_y_pagos.py"
+
+      # Vigilante de consumo del plan Free: solo manda email si hay avisos.
+      # Va en este workflow para no añadir otro cron; si falla no afecta a las
+      # sanciones, que ya se han procesado en el paso anterior.
+      - name: Vigilar consumo Supabase
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: python vigilar_consumo_supabase.py
