@@ -16,6 +16,7 @@ type NotificationType =
   | 'photo_changed'
   | 'transfer'
   | 'unmatched'
+  | 'match_postponed'
   | 'provisional_player'
   | 'player_promoted'
 

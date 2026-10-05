@@ -1580,7 +1580,7 @@ export default function DashboardPage() {
   const uniqueTeams = useMemo(() => {
     const map = new Map<string, { id: string; name: string; logo_url?: string }>()
     for (const p of players) {
-      if (p.team?.name && p.team_id && isInMarket(p)) {
+      if (p.team?.name && p.team_id) {
         if (!map.has(p.team_id)) {
           map.set(p.team_id, {
             id: p.team_id,
@@ -2902,39 +2902,39 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Modal de selector de jugador con filtros (Ultra Moderno, Profesional & Atractivo) */}
+      {/* Modal de selector de jugador con filtros (Ultra Moderno, Profesional, Compacto & Mobile-First) */}
       {playerToSwap && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 sm:p-4 md:p-6 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col border border-slate-200/90 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-2 sm:p-4 md:p-6 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-5xl h-[94vh] sm:h-[88vh] bg-white rounded-2xl sm:rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col border border-slate-200/90 animate-in zoom-in-95 duration-200">
             {/* Barra superior de acento gradiente */}
-            <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 shrink-0" />
+            <div className="h-1 sm:h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 shrink-0" />
 
             {/* Cabecera del modal */}
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-white shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center shrink-0 shadow-xs">
-                  <ArrowLeftRight className="w-5 h-5" />
+            <div className="px-3.5 py-2.5 sm:px-5 sm:py-3 border-b border-slate-100 flex items-center justify-between gap-2 sm:gap-3 bg-white shrink-0">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center shrink-0 shadow-xs">
+                  <ArrowLeftRight className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
+                  <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-tight">
                     Mercado de Fichajes
                   </h3>
                   {(() => {
                     const outP = players.find(p => p.id === playerToSwap.id)
                     if (outP) {
                       return (
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500 truncate mt-0.5">
-                          <span className="font-medium">Sustituyendo a:</span>
-                          <span className="font-bold text-slate-800">{outP.short_name || outP.first_name}</span>
-                          <span className={`text-[9px] font-black text-white px-1.5 py-0.2 rounded ${getPositionColor(outP.position)}`}>
+                        <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-500 truncate mt-0.5">
+                          <span className="font-medium text-slate-400">Sustituyendo a:</span>
+                          <span className="font-bold text-slate-800 truncate">{outP.short_name || outP.first_name}</span>
+                          <span className={`text-[8px] sm:text-[9px] font-black text-white px-1.5 py-0.2 rounded ${getPositionColor(outP.position)}`}>
                             {getPositionLabel(outP.position)}
                           </span>
-                          <span className="font-semibold text-emerald-600">{outP.precio ? `${outP.precio}M` : '-'}</span>
+                          <span className="font-bold text-emerald-600">{outP.precio ? `${outP.precio}M` : '-'}</span>
                         </div>
                       )
                     }
                     return (
-                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                      <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
                         Selecciona un jugador para completar tu 11
                       </p>
                     )
@@ -2944,120 +2944,139 @@ export default function DashboardPage() {
 
               <button 
                 onClick={closePlayerSelector} 
-                className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 flex items-center justify-center transition-all duration-300 hover:rotate-90 shrink-0 cursor-pointer"
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 flex items-center justify-center transition-all duration-200 shrink-0 cursor-pointer"
                 title="Cerrar ventana"
               >
-                <X className="w-5 h-5 stroke-[2.5]" />
+                <X className="w-4 h-4 stroke-[2.5]" />
               </button>
             </div>
 
-            {/* Barra de Filtros y Búsqueda */}
-            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 space-y-3 shrink-0">
-              {/* Buscador */}
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre, apellido o equipo..."
-                  value={searchFilter}
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200/90 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 text-sm font-medium text-slate-900 placeholder:text-slate-400 shadow-2xs transition-all"
-                  autoFocus
-                />
-                {searchFilter && (
-                  <button
-                    onClick={() => setSearchFilter('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
-              {/* Filtro de Posición: Pills Segmentadas */}
-              <div className="flex gap-1.5 sm:gap-2 flex-wrap items-center">
-                {(['ALL', 'GK', 'DEF', 'MID', 'FWD'] as const).map(pos => {
-                  const isActive = positionFilter === pos
-                  const posLabels: Record<string, string> = { ALL: 'Todos', GK: 'Porteros', DEF: 'Defensas', MID: 'Medios', FWD: 'Delanteros' }
-                  const activeClass = 
-                    pos === 'ALL' ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20' :
-                    pos === 'GK' ? 'bg-amber-500 text-white shadow-md shadow-amber-500/25' :
-                    pos === 'DEF' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' :
-                    pos === 'MID' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25' :
-                    'bg-rose-600 text-white shadow-md shadow-rose-600/25'
-
-                  return (
+            {/* Barra de Filtros Compacta y Completa */}
+            <div className="px-3 py-2 sm:px-5 sm:py-2.5 border-b border-slate-100 bg-slate-50/80 shrink-0 space-y-2">
+              {/* Fila 1: Buscador + Filtro Precio + Contador */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {/* Input de Búsqueda */}
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-emerald-600 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar jugador o club..."
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                    className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-200 rounded-lg sm:rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 shadow-2xs transition-all"
+                  />
+                  {searchFilter && (
                     <button
-                      key={pos}
-                      onClick={() => setPositionFilter(pos)}
-                      className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        isActive
-                          ? activeClass
-                          : 'bg-white text-slate-650 hover:text-slate-900 hover:bg-slate-100/80 border border-slate-200/80 shadow-2xs'
-                      }`}
+                      onClick={() => setSearchFilter('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
-                      {posLabels[pos]}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Filtro de Equipos con Escudos (Multiselección Moderna en Carrusel) */}
-              <div className="flex flex-col gap-1.5 pt-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      Equipos
-                    </span>
-                    {selectedTeamIds.length > 0 && (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black shadow-2xs">
-                        <span>{selectedTeamIds.length} seleccionado{selectedTeamIds.length > 1 ? 's' : ''}</span>
-                        <button
-                          onClick={clearTeamFilter}
-                          className="hover:text-rose-600 transition-colors font-bold cursor-pointer"
-                          title="Quitar todos los filtros de equipo"
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    )}
-                  </div>
-                  {selectedTeamIds.length > 0 && (
-                    <button
-                      onClick={clearTeamFilter}
-                      className="text-[10px] font-bold text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                    >
-                      Restablecer todos
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
 
-                {/* Tira horizontal interactiva con los escudos */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar">
-                  {/* Botón TODOS */}
+                {/* Filtro de Precios Min - Max (Ultra compacto) */}
+                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg sm:rounded-xl px-1.5 sm:px-2 py-1 shadow-2xs shrink-0">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:inline">Precio:</span>
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={priceMinFilter}
+                    onChange={(e) => setPriceMinFilter(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="w-9 sm:w-11 px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[11px] font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    min="0"
+                    step="0.1"
+                  />
+                  <span className="text-slate-300 text-xs">-</span>
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={priceMaxFilter}
+                    onChange={(e) => setPriceMaxFilter(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="w-9 sm:w-11 px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[11px] font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    min="0"
+                    step="0.1"
+                  />
+                  <span className="text-[11px] font-bold text-emerald-600">M</span>
+                  {(priceMinFilter !== '' || priceMaxFilter !== '') && (
+                    <button
+                      onClick={() => { setPriceMinFilter(''); setPriceMaxFilter('') }}
+                      className="text-[10px] text-rose-500 hover:text-rose-700 font-bold ml-0.5 cursor-pointer"
+                      title="Limpiar filtro de precio"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Badge Contador de Jugadores */}
+                <div className="flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black shrink-0 shadow-2xs whitespace-nowrap">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{filteredAvailablePlayers.length} <span className="hidden md:inline">disponibles</span></span>
+                </div>
+              </div>
+
+              {/* Fila 2: Posiciones + Reset Clubes */}
+              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                {/* Botones de Posición */}
+                <div className="flex items-center gap-1 sm:gap-1.5">
+                  {(['ALL', 'GK', 'DEF', 'MID', 'FWD'] as const).map(pos => {
+                    const isActive = positionFilter === pos
+                    const posShort: Record<string, string> = { ALL: 'Todos', GK: 'POR', DEF: 'DEF', MID: 'MED', FWD: 'DEL' }
+                    const posFull: Record<string, string> = { ALL: 'Todos', GK: 'Porteros', DEF: 'Defensas', MID: 'Medios', FWD: 'Delanteros' }
+                    const activeClass = 
+                      pos === 'ALL' ? 'bg-slate-900 text-white shadow-xs' :
+                      pos === 'GK' ? 'bg-amber-500 text-white shadow-xs' :
+                      pos === 'DEF' ? 'bg-blue-600 text-white shadow-xs' :
+                      pos === 'MID' ? 'bg-emerald-600 text-white shadow-xs' :
+                      'bg-rose-600 text-white shadow-xs'
+
+                    return (
+                      <button
+                        key={pos}
+                        onClick={() => setPositionFilter(pos)}
+                        className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                          isActive
+                            ? activeClass
+                            : 'bg-white text-slate-650 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/80 shadow-2xs'
+                        }`}
+                      >
+                        <span className="sm:hidden">{posShort[pos]}</span>
+                        <span className="hidden sm:inline">{posFull[pos]}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Botón de limpiar filtro si hay equipos seleccionados */}
+                {selectedTeamIds.length > 0 && (
                   <button
                     onClick={clearTeamFilter}
-                    className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      selectedTeamIds.length === 0
-                        ? 'bg-slate-900 text-white shadow-md shadow-slate-900/25 ring-2 ring-slate-900'
-                        : 'bg-white text-slate-600 hover:bg-slate-100/80 border border-slate-200/90 hover:text-slate-900 shadow-2xs'
-                    }`}
+                    className="text-[10px] sm:text-xs font-bold text-emerald-800 bg-emerald-100/90 hover:bg-emerald-200/90 px-2 sm:px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                    title="Mostrar todos los clubes"
                   >
-                    <Users className="w-3.5 h-3.5" />
-                    <span>Todos</span>
+                    <span>Mostrar todos los clubes ({selectedTeamIds.length} selec.)</span>
+                    <X className="w-3 h-3" />
                   </button>
+                )}
+              </div>
 
-                  {/* Badges de cada Equipo */}
+              {/* Fila 3: Escudos de Todos los Clubes (Grandes, solo escudo, todos visibles sin scroll) */}
+              <div className="pt-1.5 border-t border-slate-200/60">
+                <div className="flex flex-wrap items-center justify-between sm:justify-start gap-1 sm:gap-1.5 w-full">
                   {uniqueTeams.map((team) => {
                     const isSelected = selectedTeamIds.includes(team.id)
+                    const hasFilter = selectedTeamIds.length > 0
                     return (
                       <button
                         key={team.id}
                         onClick={() => toggleTeamFilter(team.id)}
-                        className={`group relative shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`group relative flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 p-1 sm:p-1.5 rounded-xl transition-all duration-150 cursor-pointer shrink-0 ${
                           isSelected
-                            ? 'bg-emerald-50 text-emerald-950 border-2 border-emerald-500 ring-2 ring-emerald-500/25 shadow-md scale-[1.03]'
-                            : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/80 shadow-2xs'
+                            ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm ring-2 ring-emerald-500/25 scale-110 z-10'
+                            : hasFilter
+                            ? 'bg-white/60 border border-slate-200/60 opacity-35 grayscale hover:grayscale-0 hover:opacity-100 hover:scale-105'
+                            : 'bg-white hover:bg-slate-50 border border-slate-200/90 hover:border-slate-300 shadow-2xs hover:scale-110'
                         }`}
                         title={team.name}
                       >
@@ -3065,20 +3084,17 @@ export default function DashboardPage() {
                           <img
                             src={team.logo_url}
                             alt={team.name}
-                            className={`w-5 h-5 object-contain transition-transform duration-200 ${
-                              isSelected ? 'scale-110 drop-shadow' : 'opacity-80 group-hover:opacity-100'
+                            className={`w-full h-full object-contain transition-transform duration-150 ${
+                              isSelected ? 'drop-shadow scale-105' : 'group-hover:scale-110'
                             }`}
                           />
                         ) : (
-                          <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-black">
+                          <div className="w-full h-full rounded-lg bg-slate-200 flex items-center justify-center text-[9px] font-black text-slate-700">
                             {team.name.slice(0, 2).toUpperCase()}
                           </div>
                         )}
-                        <span className="whitespace-nowrap max-w-[85px] sm:max-w-[110px] truncate text-[11px] sm:text-xs">
-                          {team.name}
-                        </span>
                         {isSelected && (
-                          <span className="w-3.5 h-3.5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[9px] shrink-0 font-black">
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[8px] font-black shadow-xs ring-1 ring-white">
                             ✓
                           </span>
                         )}
@@ -3087,64 +3103,20 @@ export default function DashboardPage() {
                   })}
                 </div>
               </div>
-
-              {/* Filtros secundarios: Precios y Contador */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {/* Rango de Precios */}
-                  <div className="flex items-center gap-1.5 bg-white border border-slate-200/90 rounded-xl px-2.5 py-1 shadow-2xs">
-                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Precio:</span>
-                    <input
-                      type="number"
-                      placeholder="Min"
-                      value={priceMinFilter}
-                      onChange={(e) => setPriceMinFilter(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                      className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                      min="0"
-                      step="0.1"
-                    />
-                    <span className="text-slate-300">-</span>
-                    <input
-                      type="number"
-                      placeholder="Max"
-                      value={priceMaxFilter}
-                      onChange={(e) => setPriceMaxFilter(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                      className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                      min="0"
-                      step="0.1"
-                    />
-                    <span className="text-xs font-bold text-emerald-600">M</span>
-                    {(priceMinFilter !== '' || priceMaxFilter !== '') && (
-                      <button
-                        onClick={() => { setPriceMinFilter(''); setPriceMaxFilter('') }}
-                        className="text-[11px] text-rose-500 hover:text-rose-700 font-bold ml-1"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Contador de jugadores */}
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-xl text-xs font-black self-start sm:self-auto shadow-2xs">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>{filteredAvailablePlayers.length} disponibles</span>
-                </div>
-              </div>
             </div>
 
-            {/* Listado de Jugadores / Cromos */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100/50">
+            {/* Listado de Jugadores / Cromos (Compacto y Optimizado) */}
+            <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 md:p-5 bg-slate-100/60">
               {filteredAvailablePlayers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
-                    <Search className="w-6 h-6" />
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
+                    <Search className="w-5 h-5" />
                   </div>
-                  <p className="text-base font-bold text-slate-800">No se encontraron jugadores</p>
-                  <p className="text-xs text-slate-500 mt-1">Prueba ajustando los filtros de precio, equipo o posición.</p>
+                  <p className="text-sm font-bold text-slate-800">No se encontraron jugadores</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Prueba ajustando los filtros de precio, equipo o posición.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
                   {filteredAvailablePlayers.map((player) => {
                     const lockedPlayer = isTeamLocked(player.team_id)
                     const posLabel = getPositionLabel(player.position)
@@ -3155,135 +3127,108 @@ export default function DashboardPage() {
                       <div
                         key={player.id}
                         onClick={() => !lockedPlayer && swapPlayer(player.id)}
-                        className={`group relative overflow-hidden rounded-2xl bg-white border transition-all duration-300 flex flex-col justify-between ${
+                        className={`group relative overflow-hidden rounded-xl sm:rounded-2xl bg-white border transition-all duration-200 flex flex-col justify-between p-2 sm:p-2.5 ${
                           lockedPlayer
                             ? 'border-red-200 bg-red-50/40 opacity-65 cursor-not-allowed'
-                            : 'border-slate-200/90 hover:border-emerald-500 hover:shadow-xl hover:-translate-y-1 cursor-pointer shadow-xs'
+                            : 'border-slate-200/90 hover:border-emerald-500 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer shadow-2xs'
                         }`}
                       >
                         {/* Halo sutil de color del club */}
                         <div 
-                          className="absolute inset-0 pointer-events-none opacity-40 group-hover:opacity-75 transition-opacity"
+                          className="absolute inset-0 pointer-events-none opacity-35 group-hover:opacity-70 transition-opacity"
                           style={{
                             background: `radial-gradient(100% 60% at 50% 0%, ${tc.primary}25, transparent 70%)`
                           }}
                         />
 
-                        {/* Contenido Principal de la Tarjeta */}
-                        <div className="relative z-10 p-3.5 sm:p-4 flex flex-col items-center">
-                          {/* Fila Superior: Posición + Escudo */}
-                          <div className="w-full flex items-center justify-between mb-2">
-                            <span className={`text-[10px] font-black text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs ${getPositionColor(player.position)}`}>
-                              {posLabel}
-                            </span>
-                            {player.team?.logo_url ? (
-                              <img
-                                src={player.team.logo_url}
-                                alt={player.team?.name || ''}
-                                title={player.team?.name || ''}
-                                className="w-6 h-6 object-contain drop-shadow-xs"
-                              />
-                            ) : null}
-                          </div>
+                        {/* Cabecera de la Tarjeta: Posición + Escudo */}
+                        <div className="relative z-10 w-full flex items-center justify-between">
+                          <span className={`text-[9px] sm:text-[10px] font-black text-white px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-2xs ${getPositionColor(player.position)}`}>
+                            {posLabel}
+                          </span>
+                          {player.team?.logo_url ? (
+                            <img
+                              src={player.team.logo_url}
+                              alt={player.team?.name || ''}
+                              title={player.team?.name || ''}
+                              className="w-4.5 h-4.5 sm:w-5 sm:h-5 object-contain drop-shadow-2xs"
+                            />
+                          ) : null}
+                        </div>
 
-                          {/* Foto del Jugador */}
-                          <div className="relative my-1">
-                            {lockedPlayer && (
-                              <div className="absolute -top-1 -left-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md z-20" title="Jugador bloqueado: partido fuera de jornada">
-                                <Lock className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                              </div>
-                            )}
-                            {player.photo ? (
-                              <img
-                                src={player.photo}
-                                alt={player.short_name || ''}
-                                className="w-20 h-20 sm:w-22 sm:h-22 rounded-full object-cover border-3 border-white shadow-md group-hover:scale-105 transition-transform duration-300 bg-slate-50"
-                              />
-                            ) : (
-                              <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full bg-slate-800 text-white flex items-center justify-center text-xl font-black border-3 border-white shadow-md">
-                                {player.shirt_number || '?'}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Nombre del Jugador */}
-                          <p className="text-sm sm:text-base font-extrabold text-slate-900 truncate w-full text-center mt-2 group-hover:text-emerald-700 transition-colors">
-                            {player.short_name || `${player.first_name} ${player.last_name}`}
-                          </p>
-
-                          {/* Nombre del Equipo */}
-                          <p className="text-xs text-slate-500 font-medium truncate w-full text-center">
-                            {player.team?.name || 'LaLiga'}
-                          </p>
-
-                          {/* Precio */}
-                          <div className="mt-2 inline-flex items-baseline gap-0.5 bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-xl text-emerald-700 shadow-2xs">
-                            <span className="text-base sm:text-lg font-black tracking-tight tabular-nums">
-                              {player.precio ? `${player.precio}` : '-'}
-                            </span>
-                            {player.precio && <span className="text-xs font-black text-emerald-600">M</span>}
-                          </div>
-
-                          {/* Panel de Estadísticas y Mini Gráfico Sparkline */}
-                          {stats && (
-                            <div className="w-full mt-3 bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex flex-col gap-1.5 shadow-2xs">
-                              <div className="grid grid-cols-2 text-center divide-x divide-slate-200">
-                                <div>
-                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Total</span>
-                                  <span className="text-xs font-black text-slate-800 tabular-nums">
-                                    {(Math.round(stats.total * 10) / 10).toFixed(1)}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Media</span>
-                                  <span className="text-xs font-black text-slate-800 tabular-nums">
-                                    {(Math.round(stats.avg * 10) / 10).toFixed(1)}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Mini Gráfico Curva Sparkline */}
-                              {stats.history && stats.history.length > 1 && (
-                                <div className="w-full pt-1">
-                                  {(() => {
-                                    const pts = stats.history.map(d => d.pts)
-                                    const min = Math.min(...pts)
-                                    const max = Math.max(...pts)
-                                    const range = max - min || 1
-                                    const width = 140
-                                    const height = 26
-                                    const points = pts.map((val, i) => {
-                                      const x = (i / (pts.length - 1)) * width
-                                      const y = height - ((val - min) / range) * (height - 6) - 3
-                                      return `${x.toFixed(1)},${y.toFixed(1)}`
-                                    }).join(' ')
-
-                                    return (
-                                      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-6 overflow-visible">
-                                        <polyline
-                                          fill="none"
-                                          stroke="#10b981"
-                                          strokeWidth="2.2"
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          points={points}
-                                        />
-                                      </svg>
-                                    )
-                                  })()}
-                                </div>
-                              )}
+                        {/* Foto del Jugador (Protagonista / Proporcionalmente mucho más grande) */}
+                        <div className="relative z-10 my-1 flex justify-center">
+                          {lockedPlayer && (
+                            <div className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-md z-20" title="Jugador bloqueado: partido fuera de jornada">
+                              <Lock className="w-3 h-3 text-white stroke-[2.5]" />
+                            </div>
+                          )}
+                          {player.photo ? (
+                            <img
+                              src={player.photo}
+                              alt={player.short_name || ''}
+                              className="w-18 h-18 sm:w-20 sm:h-20 md:w-22 md:h-22 rounded-full object-cover border-2 border-white shadow-sm group-hover:scale-105 transition-transform duration-200 bg-slate-50"
+                            />
+                          ) : (
+                            <div className="w-18 h-18 sm:w-20 sm:h-20 md:w-22 md:h-22 rounded-full bg-slate-800 text-white flex items-center justify-center text-lg font-black border-2 border-white shadow-sm">
+                              {player.shirt_number || '?'}
                             </div>
                           )}
                         </div>
 
-                        {/* Botón de acción al pasar el ratón */}
-                        {!lockedPlayer && (
-                          <div className="w-full bg-emerald-600 group-hover:bg-emerald-700 text-white text-xs font-black py-2 px-3 flex items-center justify-center gap-1.5 transition-colors">
-                            <span>Fichar jugador</span>
-                            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                        {/* Información del Jugador */}
+                        <div className="relative z-10 flex flex-col items-center w-full min-w-0">
+                          {/* Nombre */}
+                          <p className="text-xs sm:text-sm font-extrabold text-slate-900 truncate w-full text-center group-hover:text-emerald-700 transition-colors leading-tight">
+                            {player.short_name || `${player.first_name} ${player.last_name}`}
+                          </p>
+
+                          {/* Equipo */}
+                          <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate w-full text-center mt-0.5 leading-tight">
+                            {player.team?.name || 'LaLiga'}
+                          </p>
+
+                          {/* Precio */}
+                          <div className="mt-1 inline-flex items-baseline gap-0.5 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg text-emerald-700 shadow-2xs">
+                            <span className="text-xs sm:text-sm font-black tracking-tight tabular-nums">
+                              {player.precio ? `${player.precio}` : '-'}
+                            </span>
+                            {player.precio && <span className="text-[10px] font-black text-emerald-600">M</span>}
                           </div>
-                        )}
+
+                          {/* Resumen de Estadísticas (Compacto) */}
+                          {stats && (
+                            <div className="w-full mt-1.5 py-0.5 px-1.5 bg-slate-50 border border-slate-100/90 rounded-lg flex items-center justify-around text-center text-[10px]">
+                              <div>
+                                <span className="text-[8px] font-bold text-slate-400 uppercase mr-1">Tot</span>
+                                <span className="font-extrabold text-slate-800 tabular-nums">
+                                  {(Math.round(stats.total * 10) / 10).toFixed(1)}
+                                </span>
+                              </div>
+                              <div className="w-px h-2.5 bg-slate-200" />
+                              <div>
+                                <span className="text-[8px] font-bold text-slate-400 uppercase mr-1">Med</span>
+                                <span className="font-extrabold text-slate-800 tabular-nums">
+                                  {(Math.round(stats.avg * 10) / 10).toFixed(1)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Botón de acción */}
+                        <div className="relative z-10 w-full mt-1.5">
+                          {!lockedPlayer ? (
+                            <div className="w-full bg-emerald-600 group-hover:bg-emerald-700 text-white text-[11px] sm:text-xs font-bold py-1 px-2 rounded-lg flex items-center justify-center gap-1 shadow-2xs transition-colors">
+                              <span>Fichar</span>
+                              <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          ) : (
+                            <div className="w-full bg-red-50 text-red-600 text-[10px] font-bold py-0.5 rounded-lg text-center border border-red-200/60">
+                              Bloqueado
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
