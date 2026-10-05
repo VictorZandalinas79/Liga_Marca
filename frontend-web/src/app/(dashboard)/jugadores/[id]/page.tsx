@@ -2597,12 +2597,26 @@ export default function JugadorDetallePage() {
                 </div>
                 <div className="text-right flex flex-col items-end gap-1 shrink-0">
                   <div className="flex items-center gap-2">
-                    {Number(score.relevo_points) < 0 && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">
-                        R: {score.relevo_points}
-                      </span>
+                    {score.relevo_points !== undefined && score.relevo_points !== null && (
+                      score.minutes_played > 0 || Number(score.relevo_points) !== 0 ? (
+                        Number(score.relevo_points) < 0 ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-black shadow-2xs" title="Relevo: -1 punto (Negativo)">
+                            R: -1
+                          </span>
+                        ) : Number(score.relevo_points) > 0 ? (
+                          <div className="inline-flex items-center gap-0.5 text-amber-400 text-sm leading-none drop-shadow-xs" title={`Relevo: ${score.relevo_points} estrella${Number(score.relevo_points) > 1 ? 's' : ''}`}>
+                            {Array.from({ length: Math.min(4, Math.max(1, Number(score.relevo_points))) }).map((_, i) => (
+                              <span key={i} className="text-amber-400">★</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 text-[10px] font-bold" title="Relevo: 0 estrellas">
+                            0★
+                          </span>
+                        )
+                      ) : null
                     )}
-                    <p className="text-xl font-bold text-emerald-600">{Math.round((score.total_points || 0) * 10) / 10}</p>
+                    <p className="text-xl font-bold text-emerald-600 tabular-nums">{Math.round((score.total_points || 0) * 10) / 10}</p>
                   </div>
                   <p className="text-xs text-slate-500">
                     {score.minutes_played > 0 ? `${score.minutes_played}' ${score.is_starter ? '(T)' : '(S)'}` : <span className="text-red-500 font-semibold text-[11px]">Sin minutos</span>}

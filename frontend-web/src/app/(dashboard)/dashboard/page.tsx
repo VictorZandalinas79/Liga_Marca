@@ -228,10 +228,11 @@ export default function DashboardPage() {
   const [showSwapConfirm, setShowSwapConfirm] = useState(false)
   const [pendingSwap, setPendingSwap] = useState<{ outId: string; inId: string; index: number } | null>(null)
   const [currentMatchday, setCurrentMatchday] = useState<number>(1)
+  const [animatingCardKey, setAnimatingCardKey] = useState<string | null>(null)
   const [playerToSwap, setPlayerToSwap] = useState<{ id: string; index: number } | null>(null)
   const [searchFilter, setSearchFilter] = useState('')
   const [positionFilter, setPositionFilter] = useState<string>('ALL')
-  const [teamFilter, setTeamFilter] = useState<string>('')
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([])
   const [priceMinFilter, setPriceMinFilter] = useState<number | ''>('')
   const [priceMaxFilter, setPriceMaxFilter] = useState<number | ''>('')
   const [playerPoints, setPlayerPoints] = useState<Map<string, number>>(new Map())
@@ -1337,7 +1338,7 @@ export default function DashboardPage() {
     setShowSwapConfirm(false)
   }
 
-  const openPlayerSelector = async (playerId: string, playerIndex: number, playerTeamId?: string) => {
+  const openPlayerSelector = async (playerId: string, playerIndex: number, playerTeamId?: string, uniqueKey?: string) => {
     if (isUnlockWindowOpen) {
       if (playerTeamId) {
         const fixtureId = teamFixtureMap.get(String(playerTeamId))
@@ -1369,17 +1370,35 @@ export default function DashboardPage() {
       alert('Este jugador está bloqueado: su equipo tiene un partido fuera de la jornada y no puede cambiarse hasta que se resuelva.')
       return
     }
-    setPlayerToSwap({ id: playerId, index: playerIndex })
-    setSearchFilter('')
-    setPositionFilter('ALL')
-    setTeamFilter('')
+    if (uniqueKey) {
+      setAnimatingCardKey(uniqueKey)
+    }
+    setTimeout(() => {
+      setPlayerToSwap({ id: playerId, index: playerIndex })
+      setSearchFilter('')
+      setPositionFilter('ALL')
+      setSelectedTeamIds([])
+      setPriceMinFilter('')
+      setPriceMaxFilter('')
+    }, 320)
+  }
+
+  const toggleTeamFilter = (teamId: string) => {
+    setSelectedTeamIds(prev =>
+      prev.includes(teamId) ? prev.filter(id => id !== teamId) : [...prev, teamId]
+    )
+  }
+
+  const clearTeamFilter = () => {
+    setSelectedTeamIds([])
   }
 
   const closePlayerSelector = () => {
+    setAnimatingCardKey(null)
     setPlayerToSwap(null)
     setSearchFilter('')
     setPositionFilter('ALL')
-    setTeamFilter('')
+    setSelectedTeamIds([])
   }
 
   const undoLastChange = async () => {
@@ -1396,7 +1415,7 @@ export default function DashboardPage() {
     setPlayerToSwap(null)
     setSearchFilter('')
     setPositionFilter('ALL')
-    setTeamFilter('')
+    setSelectedTeamIds([])
     setPriceMinFilter('')
     setPriceMaxFilter('')
 
@@ -1557,12 +1576,22 @@ export default function DashboardPage() {
 
   const availablePlayers = players
 
-  // Obtener lista única de equipos para el filtro. Solo cuentan los equipos con
-  // alguien fichable: si no, el desplegable ofrece equipos que no devuelven ni
-  // un jugador.
-  const uniqueTeams = Array.from(
-    new Map(players.filter(isInMarket).map(p => p.team?.name ? [p.team.name, p.team_id] : null).filter(Boolean) as [string, string][])
-  ).map(([name, id]) => ({ name, id })).sort((a, b) => a.name.localeCompare(b.name))
+  // Obtener lista única de equipos para el filtro con sus logos oficiales
+  const uniqueTeams = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; logo_url?: string }>()
+    for (const p of players) {
+      if (p.team?.name && p.team_id && isInMarket(p)) {
+        if (!map.has(p.team_id)) {
+          map.set(p.team_id, {
+            id: p.team_id,
+            name: p.team.name,
+            logo_url: p.team.logo_url,
+          })
+        }
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [players])
 
   // Filtrar jugadores disponibles
   const filteredAvailablePlayers = useMemo(() => {
@@ -1575,7 +1604,7 @@ export default function DashboardPage() {
       if (!isInMarket(p)) return false
       const matchesPosition = positionFilter === 'ALL' || getPositionCode(p.position) === positionFilter
       if (!matchesPosition) return false
-      const matchesTeam = teamFilter === '' || p.team_id === teamFilter
+      const matchesTeam = selectedTeamIds.length === 0 || selectedTeamIds.includes(p.team_id)
       if (!matchesTeam) return false
       const matchesPriceMin = priceMinFilter === '' || (p.precio ?? 0) >= priceMinFilter
       if (!matchesPriceMin) return false
@@ -1600,7 +1629,7 @@ export default function DashboardPage() {
       }
       return (b.precio || 0) - (a.precio || 0)
     })
-  }, [availablePlayers, searchFilter, positionFilter, teamFilter, priceMinFilter, priceMaxFilter])
+  }, [availablePlayers, searchFilter, positionFilter, selectedTeamIds, priceMinFilter, priceMaxFilter])
 
   const changedCount = changeHistory.length
   const actualChangesCount = selectedPlayers.filter(id => !changesBasePlayers.includes(id)).length
@@ -1977,8 +2006,8 @@ export default function DashboardPage() {
                             {subRow.map((player, idx) => (
                               <div 
                                 key={player._uniqueKey} 
-                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx, 'FWD', fwdCountOnPitch)} z-20 cursor-pointer`}
-                                onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
+                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx, 'FWD', fwdCountOnPitch)} z-20 cursor-pointer ${animatingCardKey === player._uniqueKey ? 'animate-card-magic-pop' : ''}`}
+                                onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id, player._uniqueKey)}
                               >
                                 <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
                               </div>
@@ -2003,8 +2032,8 @@ export default function DashboardPage() {
                             {subRow.map((player, idx) => (
                               <div 
                                 key={player._uniqueKey} 
-                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx, 'MID', fwdCountOnPitch)} z-20 cursor-pointer`}
-                                onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
+                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx, 'MID', fwdCountOnPitch)} z-20 cursor-pointer ${animatingCardKey === player._uniqueKey ? 'animate-card-magic-pop' : ''}`}
+                                onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id, player._uniqueKey)}
                               >
                                 <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
                               </div>
@@ -2029,8 +2058,8 @@ export default function DashboardPage() {
                             {subRow.map((player, idx) => (
                               <div 
                                 key={player._uniqueKey} 
-                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx, 'DEF', fwdCountOnPitch)} z-20 cursor-pointer`}
-                                onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
+                                className={`transition-transform duration-300 ${isSplit ? '' : getStagger(subRow.length, idx, 'DEF', fwdCountOnPitch)} z-20 cursor-pointer ${animatingCardKey === player._uniqueKey ? 'animate-card-magic-pop' : ''}`}
+                                onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id, player._uniqueKey)}
                               >
                                 <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
                               </div>
@@ -2048,8 +2077,8 @@ export default function DashboardPage() {
                       {pitchPlayersData.filter(p => getPositionCode(p.position) === 'GK').map(player => (
                         <div 
                           key={player._uniqueKey} 
-                          className="cursor-pointer" 
-                          onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
+                          className={`cursor-pointer ${animatingCardKey === player._uniqueKey ? 'animate-card-magic-pop' : ''}`} 
+                          onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id, player._uniqueKey)}
                         >
                           <PitchPlayerCard player={player} points={playerPoints.get(player.id)} hasMatchStarted={!!teamMatchStatus.get(String(player.team_id))} getPositionColor={getPositionColor} getPositionLabel={getPositionLabel} isPenalized={sanctionResult.zeroedPlayers.has(player.id)} sanctionReason={sanctionResult.zeroedPlayers.get(player.id)} replacedPlayer={replacedPlayerByUniqueKey.get(player._uniqueKey)} />
                         </div>
@@ -2062,17 +2091,29 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="relative overflow-hidden rounded-3xl bg-slate-950 ring-1 ring-white/10 shadow-[0_20px_50px_-12px_rgba(2,6,23,0.6)]">
-                {/* Fondo: noche de estadio con focos y líneas del campo */}
-                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(16,185,129,0.35),transparent_60%),radial-gradient(ellipse_50%_40%_at_100%_110%,rgba(59,130,246,0.18),transparent_60%),radial-gradient(ellipse_50%_40%_at_0%_110%,rgba(245,158,11,0.12),transparent_60%)]" />
-                <div className="absolute inset-0 pointer-events-none opacity-[0.07] bg-[repeating-linear-gradient(90deg,#fff_0,#fff_1px,transparent_1px,transparent_80px)]" />
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 sm:w-80 sm:h-80 rounded-full border border-white/[0.06] pointer-events-none" />
-                <div className="absolute left-1/2 inset-y-0 w-px bg-white/[0.06] pointer-events-none" />
+              <div 
+                className="relative overflow-hidden rounded-3xl ring-1 ring-white/20 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.85)] bg-[#0d2814]"
+                style={{
+                  backgroundImage: `url('/pitches/grass_turf_3d.jpg')`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              >
+                {/* Iluminación 3D: relieve, focos de estadio nocturno y viñeta perimetral */}
+                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(255,255,255,0.22),transparent_70%),radial-gradient(ellipse_60%_50%_at_50%_100%,rgba(0,0,0,0.4),transparent_80%)]" />
+                <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_90px_rgba(0,0,0,0.85)]" />
+                
+                {/* Líneas de cal del terreno de juego con relieve sutil */}
+                <div className="absolute inset-3 sm:inset-5 rounded-2xl border-2 border-white/30 pointer-events-none shadow-[0_0_6px_rgba(255,255,255,0.2)]" />
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 sm:w-72 sm:h-72 rounded-full border-2 border-white/30 pointer-events-none shadow-[0_0_6px_rgba(255,255,255,0.2)]" />
+                <div className="absolute left-1/2 inset-y-0 w-[2px] bg-white/30 pointer-events-none shadow-[0_0_6px_rgba(255,255,255,0.2)]" />
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white/50 pointer-events-none shadow-[0_0_4px_rgba(255,255,255,0.4)]" />
 
                 <div className="relative grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-5 lg:gap-6 p-4 sm:p-6 md:p-8">
                 {displayedPlayersData.map((player, idx) => {
                   const isChanged = !unchangedKeys.has(player._uniqueKey)
                   const isLockedPlayer = isTeamLocked(player.team_id)
+                  const isPopping = animatingCardKey === player._uniqueKey
                   const displayName = formatPlayerName(player.short_name || player.first_name || '')
                   const posLabel = getPositionLabel(player.position)
                   const posDot = ({ POR: 'bg-amber-400', DEF: 'bg-blue-400', MED: 'bg-emerald-400', DEL: 'bg-rose-400' } as Record<string, string>)[posLabel] ?? 'bg-slate-400'
@@ -2082,15 +2123,26 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={player._uniqueKey}
-                      onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id)}
+                      onClick={() => openPlayerSelector(player.id, player._originalIndex, player.team_id, player._uniqueKey)}
                       className={`@container relative z-10 w-full aspect-[5/7] transition-all duration-300 ease-out group ${
                         isUnlockWindowOpen || isLockedPlayer
                           ? 'cursor-not-allowed'
-                          : 'cursor-pointer hover:-translate-y-1.5 hover:z-50'
+                          : 'cursor-pointer hover:-translate-y-2 hover:z-50'
+                      } ${
+                        isPopping ? 'animate-card-magic-pop' : ''
                       }`}
                       style={{ '--tc': tc.primary } as React.CSSProperties}
                     >
-                      <div className={`absolute inset-0 overflow-hidden rounded-2xl bg-white ring-1 transition-all duration-300 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.6)] group-hover:shadow-[0_18px_40px_-12px_rgba(0,0,0,0.75)] ${
+                      {/* Aura resplandeciente mágica al pulsar */}
+                      {isPopping && (
+                        <div className="absolute -inset-2.5 sm:-inset-3 rounded-3xl bg-emerald-400/30 border-2 border-emerald-300 shadow-[0_0_35px_rgba(16,185,129,0.9)] animate-magic-aura pointer-events-none z-40" />
+                      )}
+
+                      {/* Sombra 3D de apoyo y contacto físico sobre el césped */}
+                      <div className={`absolute -bottom-[9%] inset-x-[5%] h-[18%] bg-black/85 rounded-[100%] blur-[4px] pointer-events-none transition-all duration-300 ${isPopping ? 'scale-125 opacity-30 blur-[10px]' : 'group-hover:scale-90 group-hover:opacity-40 group-hover:blur-[8px]'}`} />
+                      <div className={`absolute -bottom-[4%] inset-x-[12%] h-[10%] bg-black/95 rounded-[100%] blur-[2px] pointer-events-none transition-all duration-300 ${isPopping ? 'opacity-10' : 'group-hover:opacity-25'}`} />
+
+                      <div className={`absolute inset-0 overflow-hidden rounded-2xl bg-white border-b-2 border-slate-300/80 ring-1 transition-all duration-300 shadow-[0_14px_30px_-6px_rgba(0,0,0,0.8),0_6px_12px_-4px_rgba(0,0,0,0.6)] group-hover:shadow-[0_26px_45px_-8px_rgba(0,0,0,0.9)] ${
                         isLockedPlayer
                           ? 'ring-red-500/60'
                           : isChanged
@@ -2139,7 +2191,7 @@ export default function DashboardPage() {
                         {/* Pie: nombre, precio y club */}
                         <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-white via-white/95 to-transparent z-10 pointer-events-none" />
                         <div className="absolute inset-x-0 bottom-0 z-20 px-[5cqw] pb-[5cqw] flex flex-col gap-[2.5cqw]">
-                          <p className={`font-black text-slate-900 uppercase tracking-tight leading-none truncate ${
+                          <p className={`font-black text-slate-900 uppercase tracking-tight leading-none truncate text-center ${
                               displayName.length > 14 ? 'text-[9cqw]' : displayName.length > 10 ? 'text-[10.5cqw]' : 'text-[12cqw]'
                             }`}
                           >
@@ -2194,18 +2246,25 @@ export default function DashboardPage() {
                 })}
                 {Array.from({ length: Math.max(0, 11 - selectedPlayersData.length) }).map((_, i) => {
                   const emptyIdx = selectedPlayersData.length + i
+                  const isPopping = animatingCardKey === `empty-${emptyIdx}`
                   return (
                     <div
                       key={`empty-${emptyIdx}`}
-                      onClick={() => openPlayerSelector('', emptyIdx)}
-                      className="@container relative z-10 w-full aspect-[5/7] transition-all duration-300 group cursor-pointer hover:-translate-y-1.5 hover:z-50"
+                      onClick={() => openPlayerSelector('', emptyIdx, undefined, `empty-${emptyIdx}`)}
+                      className={`@container relative z-10 w-full aspect-[5/7] transition-all duration-300 group cursor-pointer hover:-translate-y-2 hover:z-50 ${
+                        isPopping
+                          ? '!scale-110 !-translate-y-6 !z-50 ring-4 ring-emerald-400 shadow-[0_30px_60px_rgba(16,185,129,0.75)]'
+                          : ''
+                      }`}
                     >
-                      <div className="absolute inset-0 overflow-hidden rounded-2xl border-2 border-dashed border-white/15 bg-white/[0.03] backdrop-blur-sm flex flex-col items-center justify-center gap-[4cqw] group-hover:border-emerald-400/60 group-hover:bg-emerald-400/[0.06] transition-colors">
-                        <span className="absolute top-[4cqw] right-[5cqw] font-black text-[22cqw] leading-none text-white/10 tabular-nums">{emptyIdx + 1}</span>
-                        <div className="w-[22cqw] h-[22cqw] rounded-full bg-white/5 ring-1 ring-white/15 flex items-center justify-center text-white/50 group-hover:bg-emerald-400/20 group-hover:text-emerald-300 group-hover:ring-emerald-400/40 transition-colors">
+                      {/* Sombra 3D de apoyo para slot vacío */}
+                      <div className="absolute -bottom-[7%] inset-x-[8%] h-[14%] bg-black/70 rounded-[100%] blur-[4px] pointer-events-none" />
+                      <div className="absolute inset-0 overflow-hidden rounded-2xl border-2 border-dashed border-white/30 bg-black/35 backdrop-blur-xs flex flex-col items-center justify-center gap-[4cqw] shadow-[inset_0_4px_12px_rgba(0,0,0,0.5)] group-hover:border-emerald-300/80 group-hover:bg-emerald-950/40 transition-colors">
+                        <span className="absolute top-[4cqw] right-[5cqw] font-black text-[22cqw] leading-none text-white/20 tabular-nums">{emptyIdx + 1}</span>
+                        <div className="w-[22cqw] h-[22cqw] rounded-full bg-white/10 ring-1 ring-white/20 flex items-center justify-center text-white/70 group-hover:bg-emerald-400/20 group-hover:text-emerald-300 group-hover:ring-emerald-400/40 transition-colors">
                           <UserPlus className="w-1/2 h-1/2" />
                         </div>
-                        <span className="text-[8.5cqw] font-black text-white/50 group-hover:text-emerald-300 transition-colors uppercase tracking-[0.2em]">Fichar</span>
+                        <span className="text-[8.5cqw] font-black text-white/70 group-hover:text-emerald-300 transition-colors uppercase tracking-[0.2em]">Fichar</span>
                       </div>
                     </div>
                   )
@@ -2843,192 +2902,392 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Modal de selector de jugador con filtros */}
+      {/* Modal de selector de jugador con filtros (Ultra Moderno, Profesional & Atractivo) */}
       {playerToSwap && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
-              <h3 className="text-lg font-bold">Cambiar jugador</h3>
-              <button onClick={closePlayerSelector} className="p-2 hover:bg-slate-100 rounded-full">
-                <X className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 sm:p-4 md:p-6 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col border border-slate-200/90 animate-in zoom-in-95 duration-200">
+            {/* Barra superior de acento gradiente */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 shrink-0" />
+
+            {/* Cabecera del modal */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-white shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center shrink-0 shadow-xs">
+                  <ArrowLeftRight className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
+                    Mercado de Fichajes
+                  </h3>
+                  {(() => {
+                    const outP = players.find(p => p.id === playerToSwap.id)
+                    if (outP) {
+                      return (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 truncate mt-0.5">
+                          <span className="font-medium">Sustituyendo a:</span>
+                          <span className="font-bold text-slate-800">{outP.short_name || outP.first_name}</span>
+                          <span className={`text-[9px] font-black text-white px-1.5 py-0.2 rounded ${getPositionColor(outP.position)}`}>
+                            {getPositionLabel(outP.position)}
+                          </span>
+                          <span className="font-semibold text-emerald-600">{outP.precio ? `${outP.precio}M` : '-'}</span>
+                        </div>
+                      )
+                    }
+                    return (
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        Selecciona un jugador para completar tu 11
+                      </p>
+                    )
+                  })()}
+                </div>
+              </div>
+
+              <button 
+                onClick={closePlayerSelector} 
+                className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 flex items-center justify-center transition-all duration-300 hover:rotate-90 shrink-0 cursor-pointer"
+                title="Cerrar ventana"
+              >
+                <X className="w-5 h-5 stroke-[2.5]" />
               </button>
             </div>
 
-            {/* Filtros */}
-            <div className="p-4 border-b space-y-3">
+            {/* Barra de Filtros y Búsqueda */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 space-y-3 shrink-0">
+              {/* Buscador */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
                 <input
                   type="text"
-                  placeholder="Buscar por nombre o equipo..."
+                  placeholder="Buscar por nombre, apellido o equipo..."
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
+                  className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200/90 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 text-sm font-medium text-slate-900 placeholder:text-slate-400 shadow-2xs transition-all"
                   autoFocus
                 />
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                {(['ALL', 'GK', 'DEF', 'MID', 'FWD'] as const).map(pos => (
+                {searchFilter && (
                   <button
-                    key={pos}
-                    onClick={() => setPositionFilter(pos)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      positionFilter === pos
-                        ? getPositionColor(pos)
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
+                    onClick={() => setSearchFilter('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
-                    {pos === 'ALL' ? 'Todos' : getPositionLabel(pos)}
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <select
-                  value={teamFilter}
-                  onChange={(e) => setTeamFilter(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="">Todos los equipos</option>
-                  {uniqueTeams.map(team => (
-                    <option key={team.id} value={team.id}>{team.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex gap-2 items-center">
-                <span className="text-xs text-slate-500 font-medium">Precio:</span>
-                <input
-                  type="number"
-                  placeholder="Min"
-                  value={priceMinFilter}
-                  onChange={(e) => setPriceMinFilter(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                  className="w-20 px-2 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                  min="0"
-                  step="0.1"
-                />
-                <span className="text-slate-400">-</span>
-                <input
-                  type="number"
-                  placeholder="Max"
-                  value={priceMaxFilter}
-                  onChange={(e) => setPriceMaxFilter(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                  className="w-20 px-2 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                  min="0"
-                  step="0.1"
-                />
-                <span className="text-xs text-slate-500">M</span>
-                {(priceMinFilter !== '' || priceMaxFilter !== '') && (
-                  <button
-                    onClick={() => { setPriceMinFilter(''); setPriceMaxFilter('') }}
-                    className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-                  >
-                    Limpiar
+                    <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
-              <p className="text-xs text-slate-500">
-                {filteredAvailablePlayers.length} jugadores disponibles
-              </p>
-            </div>
 
-            {/* Lista de jugadores */}
-            <div className="p-4">
-              {filteredAvailablePlayers.length === 0 ? (
-                <p className="text-center text-slate-500 py-8">No hay jugadores disponibles</p>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {filteredAvailablePlayers.map((player) => {
-                    const lockedPlayer = isTeamLocked(player.team_id)
-                    return (
-                    <div
-                      key={player.id}
-                      onClick={() => swapPlayer(player.id)}
-                      className={`p-3 rounded-xl transition-colors ${
-                        lockedPlayer
-                          ? 'bg-red-50 border border-red-200 opacity-60 cursor-not-allowed'
-                          : 'bg-slate-50 hover:bg-emerald-50 cursor-pointer'
+              {/* Filtro de Posición: Pills Segmentadas */}
+              <div className="flex gap-1.5 sm:gap-2 flex-wrap items-center">
+                {(['ALL', 'GK', 'DEF', 'MID', 'FWD'] as const).map(pos => {
+                  const isActive = positionFilter === pos
+                  const posLabels: Record<string, string> = { ALL: 'Todos', GK: 'Porteros', DEF: 'Defensas', MID: 'Medios', FWD: 'Delanteros' }
+                  const activeClass = 
+                    pos === 'ALL' ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20' :
+                    pos === 'GK' ? 'bg-amber-500 text-white shadow-md shadow-amber-500/25' :
+                    pos === 'DEF' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' :
+                    pos === 'MID' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25' :
+                    'bg-rose-600 text-white shadow-md shadow-rose-600/25'
+
+                  return (
+                    <button
+                      key={pos}
+                      onClick={() => setPositionFilter(pos)}
+                      className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        isActive
+                          ? activeClass
+                          : 'bg-white text-slate-650 hover:text-slate-900 hover:bg-slate-100/80 border border-slate-200/80 shadow-2xs'
                       }`}
                     >
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="relative">
-                          {lockedPlayer && (
-                            <div className="absolute -top-1 -left-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md z-10" title="Jugador bloqueado: partido fuera de jornada">
-                              <Lock className="w-3.5 h-3.5 text-white" />
-                            </div>
-                          )}
-                          {player.photo ? (
-                            <img
-                              src={player.photo}
-                              alt={player.short_name || ''}
-                              className="w-16 h-16 rounded-full object-cover shadow-md"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center text-lg font-bold shadow-md">
-                              {player.shirt_number || '?'}
-                            </div>
-                          )}
-                          {player.team?.logo_url && (
-                            <img
-                              src={player.team.logo_url}
-                              alt={player.team?.name || ''}
-                              className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-white border-2 border-black shadow-md"
-                            />
-                          )}
-                        </div>
-                        <Badge className={`${getPositionColor(player.position)} !text-black text-sm px-3 py-1 w-full text-center font-semibold`}>
-                          {getPositionLabel(player.position)}
-                        </Badge>
-                        <p className="text-sm font-bold text-slate-900 truncate w-full text-center">
-                          {player.short_name || player.first_name}
-                        </p>
-                        <p className="text-xs text-slate-500 truncate w-full text-center">
-                          {player.team?.name}
-                        </p>
-                        <p className="text-lg font-bold text-emerald-600">
-                          {player.precio ? `${player.precio}M` : '-'}
-                        </p>
-                        {(() => {
-                          const stats = allPlayerStats.get(player.id)
-                          if (!stats) return null
-                          
-                          return (
-                            <div className="w-full mt-2 flex flex-col gap-2 bg-white rounded-lg p-2 border border-slate-100 shadow-sm">
-                              <div className="flex justify-between items-center text-xs">
-                                <div className="flex flex-col items-center flex-1 border-r border-slate-100">
-                                  <span className="text-slate-400 font-medium text-[10px] uppercase tracking-wider">Total</span>
-                                  <span className="font-black text-slate-800">{Math.round(stats.total * 10) / 10}</span>
-                                </div>
-                                <div className="flex flex-col items-center flex-1">
-                                  <span className="text-slate-400 font-medium text-[10px] uppercase tracking-wider">Media</span>
-                                  <span className="font-black text-slate-800">{Math.round(stats.avg * 10) / 10}</span>
-                                </div>
-                              </div>
-                              {stats.history.length > 0 && (
-                                <div className="h-8 w-full mt-1">
-                                  <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={stats.history}>
-                                      <YAxis domain={['dataMin', 'dataMax']} hide />
-                                      <Line 
-                                        type="monotone" 
-                                        dataKey="pts" 
-                                        stroke="#10b981" 
-                                        strokeWidth={2}
-                                        dot={false}
-                                        isAnimationActive={false}
-                                      />
-                                    </LineChart>
-                                  </ResponsiveContainer>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })()}
-                      </div>
-                    </div>
+                      {posLabels[pos]}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Filtro de Equipos con Escudos (Multiselección Moderna en Carrusel) */}
+              <div className="flex flex-col gap-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Equipos
+                    </span>
+                    {selectedTeamIds.length > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black shadow-2xs">
+                        <span>{selectedTeamIds.length} seleccionado{selectedTeamIds.length > 1 ? 's' : ''}</span>
+                        <button
+                          onClick={clearTeamFilter}
+                          className="hover:text-rose-600 transition-colors font-bold cursor-pointer"
+                          title="Quitar todos los filtros de equipo"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                  {selectedTeamIds.length > 0 && (
+                    <button
+                      onClick={clearTeamFilter}
+                      className="text-[10px] font-bold text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                    >
+                      Restablecer todos
+                    </button>
+                  )}
+                </div>
+
+                {/* Tira horizontal interactiva con los escudos */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar">
+                  {/* Botón TODOS */}
+                  <button
+                    onClick={clearTeamFilter}
+                    className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      selectedTeamIds.length === 0
+                        ? 'bg-slate-900 text-white shadow-md shadow-slate-900/25 ring-2 ring-slate-900'
+                        : 'bg-white text-slate-600 hover:bg-slate-100/80 border border-slate-200/90 hover:text-slate-900 shadow-2xs'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Todos</span>
+                  </button>
+
+                  {/* Badges de cada Equipo */}
+                  {uniqueTeams.map((team) => {
+                    const isSelected = selectedTeamIds.includes(team.id)
+                    return (
+                      <button
+                        key={team.id}
+                        onClick={() => toggleTeamFilter(team.id)}
+                        className={`group relative shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-50 text-emerald-950 border-2 border-emerald-500 ring-2 ring-emerald-500/25 shadow-md scale-[1.03]'
+                            : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/80 shadow-2xs'
+                        }`}
+                        title={team.name}
+                      >
+                        {team.logo_url ? (
+                          <img
+                            src={team.logo_url}
+                            alt={team.name}
+                            className={`w-5 h-5 object-contain transition-transform duration-200 ${
+                              isSelected ? 'scale-110 drop-shadow' : 'opacity-80 group-hover:opacity-100'
+                            }`}
+                          />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-black">
+                            {team.name.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="whitespace-nowrap max-w-[85px] sm:max-w-[110px] truncate text-[11px] sm:text-xs">
+                          {team.name}
+                        </span>
+                        {isSelected && (
+                          <span className="w-3.5 h-3.5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[9px] shrink-0 font-black">
+                            ✓
+                          </span>
+                        )}
+                      </button>
                     )
                   })}
                 </div>
-                </>
+              </div>
+
+              {/* Filtros secundarios: Precios y Contador */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Rango de Precios */}
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-200/90 rounded-xl px-2.5 py-1 shadow-2xs">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Precio:</span>
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      value={priceMinFilter}
+                      onChange={(e) => setPriceMinFilter(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      min="0"
+                      step="0.1"
+                    />
+                    <span className="text-slate-300">-</span>
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      value={priceMaxFilter}
+                      onChange={(e) => setPriceMaxFilter(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      className="w-14 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-800 text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      min="0"
+                      step="0.1"
+                    />
+                    <span className="text-xs font-bold text-emerald-600">M</span>
+                    {(priceMinFilter !== '' || priceMaxFilter !== '') && (
+                      <button
+                        onClick={() => { setPriceMinFilter(''); setPriceMaxFilter('') }}
+                        className="text-[11px] text-rose-500 hover:text-rose-700 font-bold ml-1"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Contador de jugadores */}
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-xl text-xs font-black self-start sm:self-auto shadow-2xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{filteredAvailablePlayers.length} disponibles</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Listado de Jugadores / Cromos */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100/50">
+              {filteredAvailablePlayers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+                    <Search className="w-6 h-6" />
+                  </div>
+                  <p className="text-base font-bold text-slate-800">No se encontraron jugadores</p>
+                  <p className="text-xs text-slate-500 mt-1">Prueba ajustando los filtros de precio, equipo o posición.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-4">
+                  {filteredAvailablePlayers.map((player) => {
+                    const lockedPlayer = isTeamLocked(player.team_id)
+                    const posLabel = getPositionLabel(player.position)
+                    const stats = allPlayerStats.get(player.id)
+                    const tc = getTeamColors(player.team?.name)
+
+                    return (
+                      <div
+                        key={player.id}
+                        onClick={() => !lockedPlayer && swapPlayer(player.id)}
+                        className={`group relative overflow-hidden rounded-2xl bg-white border transition-all duration-300 flex flex-col justify-between ${
+                          lockedPlayer
+                            ? 'border-red-200 bg-red-50/40 opacity-65 cursor-not-allowed'
+                            : 'border-slate-200/90 hover:border-emerald-500 hover:shadow-xl hover:-translate-y-1 cursor-pointer shadow-xs'
+                        }`}
+                      >
+                        {/* Halo sutil de color del club */}
+                        <div 
+                          className="absolute inset-0 pointer-events-none opacity-40 group-hover:opacity-75 transition-opacity"
+                          style={{
+                            background: `radial-gradient(100% 60% at 50% 0%, ${tc.primary}25, transparent 70%)`
+                          }}
+                        />
+
+                        {/* Contenido Principal de la Tarjeta */}
+                        <div className="relative z-10 p-3.5 sm:p-4 flex flex-col items-center">
+                          {/* Fila Superior: Posición + Escudo */}
+                          <div className="w-full flex items-center justify-between mb-2">
+                            <span className={`text-[10px] font-black text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs ${getPositionColor(player.position)}`}>
+                              {posLabel}
+                            </span>
+                            {player.team?.logo_url ? (
+                              <img
+                                src={player.team.logo_url}
+                                alt={player.team?.name || ''}
+                                title={player.team?.name || ''}
+                                className="w-6 h-6 object-contain drop-shadow-xs"
+                              />
+                            ) : null}
+                          </div>
+
+                          {/* Foto del Jugador */}
+                          <div className="relative my-1">
+                            {lockedPlayer && (
+                              <div className="absolute -top-1 -left-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-md z-20" title="Jugador bloqueado: partido fuera de jornada">
+                                <Lock className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+                              </div>
+                            )}
+                            {player.photo ? (
+                              <img
+                                src={player.photo}
+                                alt={player.short_name || ''}
+                                className="w-20 h-20 sm:w-22 sm:h-22 rounded-full object-cover border-3 border-white shadow-md group-hover:scale-105 transition-transform duration-300 bg-slate-50"
+                              />
+                            ) : (
+                              <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full bg-slate-800 text-white flex items-center justify-center text-xl font-black border-3 border-white shadow-md">
+                                {player.shirt_number || '?'}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Nombre del Jugador */}
+                          <p className="text-sm sm:text-base font-extrabold text-slate-900 truncate w-full text-center mt-2 group-hover:text-emerald-700 transition-colors">
+                            {player.short_name || `${player.first_name} ${player.last_name}`}
+                          </p>
+
+                          {/* Nombre del Equipo */}
+                          <p className="text-xs text-slate-500 font-medium truncate w-full text-center">
+                            {player.team?.name || 'LaLiga'}
+                          </p>
+
+                          {/* Precio */}
+                          <div className="mt-2 inline-flex items-baseline gap-0.5 bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-xl text-emerald-700 shadow-2xs">
+                            <span className="text-base sm:text-lg font-black tracking-tight tabular-nums">
+                              {player.precio ? `${player.precio}` : '-'}
+                            </span>
+                            {player.precio && <span className="text-xs font-black text-emerald-600">M</span>}
+                          </div>
+
+                          {/* Panel de Estadísticas y Mini Gráfico Sparkline */}
+                          {stats && (
+                            <div className="w-full mt-3 bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex flex-col gap-1.5 shadow-2xs">
+                              <div className="grid grid-cols-2 text-center divide-x divide-slate-200">
+                                <div>
+                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Total</span>
+                                  <span className="text-xs font-black text-slate-800 tabular-nums">
+                                    {(Math.round(stats.total * 10) / 10).toFixed(1)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Media</span>
+                                  <span className="text-xs font-black text-slate-800 tabular-nums">
+                                    {(Math.round(stats.avg * 10) / 10).toFixed(1)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Mini Gráfico Curva Sparkline */}
+                              {stats.history && stats.history.length > 1 && (
+                                <div className="w-full pt-1">
+                                  {(() => {
+                                    const pts = stats.history.map(d => d.pts)
+                                    const min = Math.min(...pts)
+                                    const max = Math.max(...pts)
+                                    const range = max - min || 1
+                                    const width = 140
+                                    const height = 26
+                                    const points = pts.map((val, i) => {
+                                      const x = (i / (pts.length - 1)) * width
+                                      const y = height - ((val - min) / range) * (height - 6) - 3
+                                      return `${x.toFixed(1)},${y.toFixed(1)}`
+                                    }).join(' ')
+
+                                    return (
+                                      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-6 overflow-visible">
+                                        <polyline
+                                          fill="none"
+                                          stroke="#10b981"
+                                          strokeWidth="2.2"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          points={points}
+                                        />
+                                      </svg>
+                                    )
+                                  })()}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Botón de acción al pasar el ratón */}
+                        {!lockedPlayer && (
+                          <div className="w-full bg-emerald-600 group-hover:bg-emerald-700 text-white text-xs font-black py-2 px-3 flex items-center justify-center gap-1.5 transition-colors">
+                            <span>Fichar jugador</span>
+                            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               )}
             </div>
           </div>
