@@ -235,6 +235,7 @@ export default function DashboardPage() {
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([])
   const [priceMinFilter, setPriceMinFilter] = useState<number | ''>('')
   const [priceMaxFilter, setPriceMaxFilter] = useState<number | ''>('')
+  const [marketRenderLimit, setMarketRenderLimit] = useState<number>(40)
   const [playerPoints, setPlayerPoints] = useState<Map<string, number>>(new Map())
   const [teamMatchStatus, setTeamMatchStatus] = useState<Map<string, boolean>>(new Map())
   const [teamFixtureMap, setTeamFixtureMap] = useState<Map<string, string>>(new Map())
@@ -1380,6 +1381,7 @@ export default function DashboardPage() {
       setSelectedTeamIds([])
       setPriceMinFilter('')
       setPriceMaxFilter('')
+      setMarketRenderLimit(40)
     }, 320)
   }
 
@@ -1399,6 +1401,17 @@ export default function DashboardPage() {
     setSearchFilter('')
     setPositionFilter('ALL')
     setSelectedTeamIds([])
+    setMarketRenderLimit(40)
+  }
+
+  const handleMarketScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
+    if (scrollHeight - scrollTop - clientHeight < 500) {
+      setMarketRenderLimit(prev => {
+        if (prev >= filteredAvailablePlayers.length) return prev
+        return Math.min(prev + 40, filteredAvailablePlayers.length)
+      })
+    }
   }
 
   const undoLastChange = async () => {
@@ -1630,6 +1643,14 @@ export default function DashboardPage() {
       return (b.precio || 0) - (a.precio || 0)
     })
   }, [availablePlayers, searchFilter, positionFilter, selectedTeamIds, priceMinFilter, priceMaxFilter])
+
+  useEffect(() => {
+    setMarketRenderLimit(40)
+  }, [searchFilter, positionFilter, selectedTeamIds, priceMinFilter, priceMaxFilter, playerToSwap])
+
+  const visibleAvailablePlayers = useMemo(() => {
+    return filteredAvailablePlayers.slice(0, marketRenderLimit)
+  }, [filteredAvailablePlayers, marketRenderLimit])
 
   const changedCount = changeHistory.length
   const actualChangesCount = selectedPlayers.filter(id => !changesBasePlayers.includes(id)).length
@@ -3084,6 +3105,8 @@ export default function DashboardPage() {
                           <img
                             src={team.logo_url}
                             alt={team.name}
+                            loading="lazy"
+                            decoding="async"
                             className={`w-full h-full object-contain transition-transform duration-150 ${
                               isSelected ? 'drop-shadow scale-105' : 'group-hover:scale-110'
                             }`}
@@ -3105,8 +3128,11 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Listado de Jugadores / Cromos (Compacto y Optimizado) */}
-            <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 md:p-5 bg-slate-100/60">
+            {/* Listado de Jugadores / Cromos (Compacto y Optimizado con scroll infinito progresivo y lazy loading) */}
+            <div
+              onScroll={handleMarketScroll}
+              className="flex-1 overflow-y-auto p-2.5 sm:p-4 md:p-5 bg-slate-100/60"
+            >
               {filteredAvailablePlayers.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
@@ -3116,123 +3142,142 @@ export default function DashboardPage() {
                   <p className="text-xs text-slate-500 mt-0.5">Prueba ajustando los filtros de precio, equipo o posición.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
-                  {filteredAvailablePlayers.map((player) => {
-                    const lockedPlayer = isTeamLocked(player.team_id)
-                    const posLabel = getPositionLabel(player.position)
-                    const stats = allPlayerStats.get(player.id)
-                    const tc = getTeamColors(player.team?.name)
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
+                    {visibleAvailablePlayers.map((player) => {
+                      const lockedPlayer = isTeamLocked(player.team_id)
+                      const posLabel = getPositionLabel(player.position)
+                      const stats = allPlayerStats.get(player.id)
+                      const tc = getTeamColors(player.team?.name)
 
-                    return (
-                      <div
-                        key={player.id}
-                        onClick={() => !lockedPlayer && swapPlayer(player.id)}
-                        className={`group relative overflow-hidden rounded-xl sm:rounded-2xl bg-white border transition-all duration-200 flex flex-col justify-between p-2 sm:p-2.5 ${
-                          lockedPlayer
-                            ? 'border-red-200 bg-red-50/40 opacity-65 cursor-not-allowed'
-                            : 'border-slate-200/90 hover:border-emerald-500 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer shadow-2xs'
-                        }`}
-                      >
-                        {/* Halo sutil de color del club */}
-                        <div 
-                          className="absolute inset-0 pointer-events-none opacity-35 group-hover:opacity-70 transition-opacity"
-                          style={{
-                            background: `radial-gradient(100% 60% at 50% 0%, ${tc.primary}25, transparent 70%)`
-                          }}
-                        />
+                      return (
+                        <div
+                          key={player.id}
+                          onClick={() => !lockedPlayer && swapPlayer(player.id)}
+                          className={`group relative overflow-hidden rounded-xl sm:rounded-2xl bg-white border transition-all duration-200 flex flex-col justify-between p-2 sm:p-2.5 ${
+                            lockedPlayer
+                              ? 'border-red-200 bg-red-50/40 opacity-65 cursor-not-allowed'
+                              : 'border-slate-200/90 hover:border-emerald-500 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer shadow-2xs'
+                          }`}
+                        >
+                          {/* Halo sutil de color del club */}
+                          <div 
+                            className="absolute inset-0 pointer-events-none opacity-35 group-hover:opacity-70 transition-opacity"
+                            style={{
+                              background: `radial-gradient(100% 60% at 50% 0%, ${tc.primary}25, transparent 70%)`
+                            }}
+                          />
 
-                        {/* Cabecera de la Tarjeta: Posición + Escudo */}
-                        <div className="relative z-10 w-full flex items-center justify-between">
-                          <span className={`text-[9px] sm:text-[10px] font-black text-white px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-2xs ${getPositionColor(player.position)}`}>
-                            {posLabel}
-                          </span>
-                          {player.team?.logo_url ? (
-                            <img
-                              src={player.team.logo_url}
-                              alt={player.team?.name || ''}
-                              title={player.team?.name || ''}
-                              className="w-4.5 h-4.5 sm:w-5 sm:h-5 object-contain drop-shadow-2xs"
-                            />
-                          ) : null}
-                        </div>
-
-                        {/* Foto del Jugador (Protagonista / Proporcionalmente mucho más grande) */}
-                        <div className="relative z-10 my-1 flex justify-center">
-                          {lockedPlayer && (
-                            <div className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-md z-20" title="Jugador bloqueado: partido fuera de jornada">
-                              <Lock className="w-3 h-3 text-white stroke-[2.5]" />
-                            </div>
-                          )}
-                          {player.photo ? (
-                            <img
-                              src={player.photo}
-                              alt={player.short_name || ''}
-                              className="w-18 h-18 sm:w-20 sm:h-20 md:w-22 md:h-22 rounded-full object-cover border-2 border-white shadow-sm group-hover:scale-105 transition-transform duration-200 bg-slate-50"
-                            />
-                          ) : (
-                            <div className="w-18 h-18 sm:w-20 sm:h-20 md:w-22 md:h-22 rounded-full bg-slate-800 text-white flex items-center justify-center text-lg font-black border-2 border-white shadow-sm">
-                              {player.shirt_number || '?'}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Información del Jugador */}
-                        <div className="relative z-10 flex flex-col items-center w-full min-w-0">
-                          {/* Nombre */}
-                          <p className="text-xs sm:text-sm font-extrabold text-slate-900 truncate w-full text-center group-hover:text-emerald-700 transition-colors leading-tight">
-                            {player.short_name || `${player.first_name} ${player.last_name}`}
-                          </p>
-
-                          {/* Equipo */}
-                          <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate w-full text-center mt-0.5 leading-tight">
-                            {player.team?.name || 'LaLiga'}
-                          </p>
-
-                          {/* Precio */}
-                          <div className="mt-1 inline-flex items-baseline gap-0.5 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg text-emerald-700 shadow-2xs">
-                            <span className="text-xs sm:text-sm font-black tracking-tight tabular-nums">
-                              {player.precio ? `${player.precio}` : '-'}
+                          {/* Cabecera de la Tarjeta: Posición + Escudo */}
+                          <div className="relative z-10 w-full flex items-center justify-between">
+                            <span className={`text-[9px] sm:text-[10px] font-black text-white px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-2xs ${getPositionColor(player.position)}`}>
+                              {posLabel}
                             </span>
-                            {player.precio && <span className="text-[10px] font-black text-emerald-600">M</span>}
+                            {player.team?.logo_url ? (
+                              <img
+                                src={player.team.logo_url}
+                                alt={player.team?.name || ''}
+                                title={player.team?.name || ''}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-4.5 h-4.5 sm:w-5 sm:h-5 object-contain drop-shadow-2xs"
+                              />
+                            ) : null}
                           </div>
 
-                          {/* Resumen de Estadísticas (Compacto) */}
-                          {stats && (
-                            <div className="w-full mt-1.5 py-0.5 px-1.5 bg-slate-50 border border-slate-100/90 rounded-lg flex items-center justify-around text-center text-[10px]">
-                              <div>
-                                <span className="text-[8px] font-bold text-slate-400 uppercase mr-1">Tot</span>
-                                <span className="font-extrabold text-slate-800 tabular-nums">
-                                  {(Math.round(stats.total * 10) / 10).toFixed(1)}
-                                </span>
+                          {/* Foto del Jugador (Protagonista / Proporcionalmente mucho más grande) */}
+                          <div className="relative z-10 my-1 flex justify-center">
+                            {lockedPlayer && (
+                              <div className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-md z-20" title="Jugador bloqueado: partido fuera de jornada">
+                                <Lock className="w-3 h-3 text-white stroke-[2.5]" />
                               </div>
-                              <div className="w-px h-2.5 bg-slate-200" />
-                              <div>
-                                <span className="text-[8px] font-bold text-slate-400 uppercase mr-1">Med</span>
-                                <span className="font-extrabold text-slate-800 tabular-nums">
-                                  {(Math.round(stats.avg * 10) / 10).toFixed(1)}
-                                </span>
+                            )}
+                            {player.photo ? (
+                              <img
+                                src={player.photo}
+                                alt={player.short_name || ''}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-18 h-18 sm:w-20 sm:h-20 md:w-22 md:h-22 rounded-full object-cover border-2 border-white shadow-sm group-hover:scale-105 transition-transform duration-200 bg-slate-50"
+                              />
+                            ) : (
+                              <div className="w-18 h-18 sm:w-20 sm:h-20 md:w-22 md:h-22 rounded-full bg-slate-800 text-white flex items-center justify-center text-lg font-black border-2 border-white shadow-sm">
+                                {player.shirt_number || '?'}
                               </div>
-                            </div>
-                          )}
-                        </div>
+                            )}
+                          </div>
 
-                        {/* Botón de acción */}
-                        <div className="relative z-10 w-full mt-1.5">
-                          {!lockedPlayer ? (
-                            <div className="w-full bg-emerald-600 group-hover:bg-emerald-700 text-white text-[11px] sm:text-xs font-bold py-1 px-2 rounded-lg flex items-center justify-center gap-1 shadow-2xs transition-colors">
-                              <span>Fichar</span>
-                              <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                          {/* Información del Jugador */}
+                          <div className="relative z-10 flex flex-col items-center w-full min-w-0">
+                            {/* Nombre */}
+                            <p className="text-xs sm:text-sm font-extrabold text-slate-900 truncate w-full text-center group-hover:text-emerald-700 transition-colors leading-tight">
+                              {player.short_name || `${player.first_name} ${player.last_name}`}
+                            </p>
+
+                            {/* Equipo */}
+                            <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate w-full text-center mt-0.5 leading-tight">
+                              {player.team?.name || 'LaLiga'}
+                            </p>
+
+                            {/* Precio */}
+                            <div className="mt-1 inline-flex items-baseline gap-0.5 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg text-emerald-700 shadow-2xs">
+                              <span className="text-xs sm:text-sm font-black tracking-tight tabular-nums">
+                                {player.precio ? `${player.precio}` : '-'}
+                              </span>
+                              {player.precio && <span className="text-[10px] font-black text-emerald-600">M</span>}
                             </div>
-                          ) : (
-                            <div className="w-full bg-red-50 text-red-600 text-[10px] font-bold py-0.5 rounded-lg text-center border border-red-200/60">
-                              Bloqueado
-                            </div>
-                          )}
+
+                            {/* Resumen de Estadísticas (Compacto) */}
+                            {stats && (
+                              <div className="w-full mt-1.5 py-0.5 px-1.5 bg-slate-50 border border-slate-100/90 rounded-lg flex items-center justify-around text-center text-[10px]">
+                                <div>
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase mr-1">Tot</span>
+                                  <span className="font-extrabold text-slate-800 tabular-nums">
+                                    {(Math.round(stats.total * 10) / 10).toFixed(1)}
+                                  </span>
+                                </div>
+                                <div className="w-px h-2.5 bg-slate-200" />
+                                <div>
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase mr-1">Med</span>
+                                  <span className="font-extrabold text-slate-800 tabular-nums">
+                                    {(Math.round(stats.avg * 10) / 10).toFixed(1)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Botón de acción */}
+                          <div className="relative z-10 w-full mt-1.5">
+                            {!lockedPlayer ? (
+                              <div className="w-full bg-emerald-600 group-hover:bg-emerald-700 text-white text-[11px] sm:text-xs font-bold py-1 px-2 rounded-lg flex items-center justify-center gap-1 shadow-2xs transition-colors">
+                                <span>Fichar</span>
+                                <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                              </div>
+                            ) : (
+                              <div className="w-full bg-red-50 text-red-600 text-[10px] font-bold py-0.5 rounded-lg text-center border border-red-200/60">
+                                Bloqueado
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Botón / Indicador de carga progresiva */}
+                  {visibleAvailablePlayers.length < filteredAvailablePlayers.length && (
+                    <div className="pt-4 pb-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setMarketRenderLimit(prev => Math.min(prev + 40, filteredAvailablePlayers.length))}
+                        className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                      >
+                        <span>Cargar más jugadores ({filteredAvailablePlayers.length - visibleAvailablePlayers.length} restantes)</span>
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
