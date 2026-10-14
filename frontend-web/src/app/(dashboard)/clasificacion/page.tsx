@@ -869,7 +869,14 @@ export default function ClasificacionPage() {
                           </span>
                         </td>
                         <td className="px-0.5 sm:px-1 py-1">
-                          <div className="flex justify-center">
+                          <div
+                            className="flex justify-center cursor-help"
+                            title={standing.trend_positions
+                              ? standing.trend_positions.from === standing.trend_positions.to
+                                ? `Se mantiene ${standing.trend_positions.to}º en las últimas ${standing.trend_positions.window} jornadas`
+                                : `Del ${standing.trend_positions.from}º al ${standing.trend_positions.to}º en las últimas ${standing.trend_positions.window} jornadas`
+                              : 'Aún no hay jornadas suficientes'}
+                          >
                             {getTrendIcon(standing.last_5_trend)}
                           </div>
                         </td>

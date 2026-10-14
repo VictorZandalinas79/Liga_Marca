@@ -7,7 +7,7 @@ import {
   loadDivisionMembership,
   userDisplayName,
 } from '@/lib/divisions'
-import { computeOutOfOrderLocks, advancedOnlyTeamIds, type FixtureLite } from '@/lib/locked-teams-core'
+import { computeOutOfOrderLocks, advancedOnlyTeamIds, resolveStartHoursBefore, type FixtureLite } from '@/lib/locked-teams-core'
 
 export interface UserStanding {
   user_id: string
@@ -22,6 +22,8 @@ export interface UserStanding {
   matches_played: number
   last_3_jornadas_avg: number
   last_5_trend: 'up' | 'down' | 'stable'
+  /** Posición en la clasificación de su división hace `window` jornadas y ahora. */
+  trend_positions?: { from: number; to: number; window: number }
   best_change_score: number
   total_changes: number
   successful_changes: number
@@ -90,6 +92,8 @@ interface SharedData {
   teamPlayersByMatchday: Map<string, Map<number, TeamPlayerRow[]>>
   teamMatchdayLatestChange: Map<string, Map<number, Date>>
   matchdayToDeadline: Map<number, Date>
+  /** Cierre del mercado de cada jornada (cuando ya no se pueden hacer cambios). */
+  matchdayToMarketClose: Map<number, Date>
   sortedPlayedMatchdays: number[]
   maxPlayed: number
   penalties: { user_id: string | null; matchday: any; points: any; description: string | null }[]
@@ -207,6 +211,7 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
     teamPlayersByMatchday: new Map(),
     teamMatchdayLatestChange: new Map(),
     matchdayToDeadline: new Map(),
+    matchdayToMarketClose: new Map(),
     sortedPlayedMatchdays: [],
     maxPlayed: 1,
     penalties: [],
@@ -252,6 +257,33 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
     }
   })
 
+  const lockOffsets = {
+    startHoursBeforeMidweek: configData?.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
+    startHoursBeforeWeekend: configData?.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
+    endHoursAfter: configData?.matchday_end_hours_after ?? 2,
+  }
+  const allFixturesLite = (fixturesData || []) as FixtureLite[]
+  const outOfOrderLocks = computeOutOfOrderLocks(allFixturesLite, lockOffsets, fantasyStart)
+
+  // Cierre del mercado de cada jornada (cuando ya no se pueden realizar cambios en el equipo):
+  // Primer partido EN ORDEN de la jornada menos las horas de antelación (1 hora antes del partido).
+  // Los partidos adelantados/aplazados no cuentan como cierre general de la jornada.
+  const matchdayToMarketClose = new Map<number, Date>()
+  {
+    const outOfOrderIds = new Set(outOfOrderLocks.map(l => l.fixtureId))
+    const firstRegularKickoff = new Map<number, Date>()
+    for (const f of allFixturesLite) {
+      if (!f.matchday || f.matchday <= 0 || !f.start_time || outOfOrderIds.has(f.id)) continue
+      const st = new Date(f.start_time)
+      const cur = firstRegularKickoff.get(f.matchday)
+      if (!cur || st < cur) firstRegularKickoff.set(f.matchday, st)
+    }
+    const hoursBefore = config.matchday_start_hours_before ?? 1
+    for (const [md, kickoff] of firstRegularKickoff) {
+      matchdayToMarketClose.set(md, new Date(kickoff.getTime() - hoursBefore * 60 * 60 * 1000))
+    }
+  }
+
   // Jornadas con un partido adelantado (fuera de orden cronológico) cuyo resto
   // de partidos todavía no se ha jugado: mientras dure, esa jornada solo cuenta
   // para los jugadores de los dos equipos que disputaron el adelantado, porque
@@ -259,14 +291,10 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
   // el resto de partidos de esa jornada terminan.
   const restrictedMatchdayTeams = new Map<number, Set<string>>()
   {
-    const offsets = {
-      startHoursBeforeMidweek: configData?.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
-      startHoursBeforeWeekend: configData?.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,
-      endHoursAfter: configData?.matchday_end_hours_after ?? 2,
-    }
-    const allFixtures = (fixturesData || []) as FixtureLite[]
+    const offsets = lockOffsets
+    const allFixtures = allFixturesLite
     const mdsWithAdvanced = new Set<number>()
-    computeOutOfOrderLocks(allFixtures, offsets, fantasyStart)
+    outOfOrderLocks
       .filter(l => l.type === 'advanced')
       .forEach(l => mdsWithAdvanced.add(l.ownMatchday))
 
@@ -333,11 +361,12 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
     if (!teamPlayersByMatchday.get(tp.team_id)!.has(md)) teamPlayersByMatchday.get(tp.team_id)!.set(md, [])
     teamPlayersByMatchday.get(tp.team_id)!.get(md)!.push(tp)
 
-    // Kamikaze tracking (solo desde la jornada en la que arranca el juego)
+    // Kamikaze: último guardado de la alineación ANTES del cierre del mercado,
+    // solo en jornadas cuyo mercado ya ha cerrado.
     if (tp.created_at && md >= fantasyStart) {
       const created = new Date(tp.created_at)
-      const deadline = matchdayToDeadline.get(md)
-      if (deadline && created < deadline) {
+      const close = matchdayToMarketClose.get(md)
+      if (close && close.getTime() <= Date.now() && created <= close) {
         if (!teamMatchdayLatestChange.has(tp.team_id)) teamMatchdayLatestChange.set(tp.team_id, new Map())
         const currentLatest = teamMatchdayLatestChange.get(tp.team_id)!.get(md)
         if (!currentLatest || created > currentLatest) {
@@ -424,6 +453,7 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
     teamPlayersByMatchday,
     teamMatchdayLatestChange,
     matchdayToDeadline,
+    matchdayToMarketClose,
     sortedPlayedMatchdays,
     maxPlayed,
     penalties: (penaltiesData ?? []) as SharedData['penalties'],
@@ -713,9 +743,9 @@ function computeDivisionStandings(
       const latestChanges = shared.teamMatchdayLatestChange.get(team.teamId)
       if (!latestChanges) continue
       for (const [md, latestCreated] of latestChanges.entries()) {
-        const deadline = shared.matchdayToDeadline.get(md)
-        if (deadline) {
-          const diffMins = Math.max(0, (deadline.getTime() - latestCreated.getTime()) / (1000 * 60))
+        const close = shared.matchdayToMarketClose.get(md)
+        if (close && latestCreated.getTime() <= close.getTime()) {
+          const diffMins = (close.getTime() - latestCreated.getTime()) / (1000 * 60)
           minutesBeforeArr.push(diffMins)
         }
       }
@@ -785,7 +815,7 @@ function computeDivisionStandings(
     }
   }
 
-  return userIds.map(userId => {
+  const result: UserStanding[] = userIds.map(userId => {
     const profile = membership.profilesById.get(userId)
     const pointsMap = userPointsByMatchday.get(userId) || new Map<number, number>()
     const teamPlayerMatchdays = userMatchdaysFromTeamPlayers.get(userId) || new Set<number>()
@@ -804,21 +834,9 @@ function computeDivisionStandings(
     const last3Points = last3Matchdays.reduce((sum, md) => sum + (pointsMap.get(md) || 0), 0)
     const last3Avg = last3Matchdays.length > 0 ? Math.round((last3Points / last3Matchdays.length) * 10) / 10 : 0
 
-    // Tendencia: pendiente (slope) sobre las últimas 5 jornadas de team_players
-    const last5Matchdays = sortedMatchdays.slice(0, 5).reverse()
-    let last5Trend: 'up' | 'down' | 'stable' = 'stable'
-    if (last5Matchdays.length >= 2) {
-      const n = last5Matchdays.length
-      const points5 = last5Matchdays.map(md => pointsMap.get(md) || 0)
-      const sumX = (n * (n - 1)) / 2
-      const sumY = points5.reduce((a, b) => a + b, 0)
-      const sumXY = points5.reduce((acc, y, i) => acc + i * y, 0)
-      const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6
-      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
-
-      if (slope > 2) last5Trend = 'up'
-      else if (slope < -2) last5Trend = 'down'
-    }
+    // La tendencia clasificatoria se calcula al final, cuando ya se conocen
+    // los puntos de todos los usuarios de la división.
+    const last5Trend: 'up' | 'down' | 'stable' = 'stable'
 
     let bestMatchdayPoints = 0
     let bestMatchday = 0
@@ -917,6 +935,52 @@ function computeDivisionStandings(
       matchday_points: Object.fromEntries(Array.from(pointsMap.entries()).map(([k, v]) => [k, Math.round(v * 10) / 10])),
     }
   })
+
+  // ── Tendencia clasificatoria ─────────────────────────────────────────────
+  // Compara la posición del usuario en la clasificación acumulada de SU
+  // división ahora con la que tenía hace TREND_WINDOW jornadas jugadas.
+  // Subir/bajar menos de TREND_THRESHOLD puestos se considera "se mantiene".
+  const TREND_WINDOW = 3
+  const TREND_THRESHOLD = 2
+  const trendMds = shared.sortedPlayedMatchdays.filter(md => md >= fantasyStart)
+
+  if (trendMds.length >= 2) {
+    const positionsAfter = (uptoMd: number): Map<string, number> => {
+      const totals = userIds
+        .map(id => {
+          let t = 0
+          for (const [md, pts] of userPointsByMatchday.get(id) || new Map<number, number>()) {
+            if (md > 0 && md <= uptoMd) t += pts
+          }
+          return { id, t: Math.round(t * 10) / 10 }
+        })
+        .sort((a, b) => b.t - a.t)
+      const pos = new Map<string, number>()
+      totals.forEach((x, i) => {
+        const prev = totals[i - 1]
+        // Empatados comparten puesto
+        pos.set(x.id, i > 0 && prev.t === x.t ? pos.get(prev.id)! : i + 1)
+      })
+      return pos
+    }
+
+    const lastMd = trendMds[trendMds.length - 1]
+    const pastMd = trendMds[Math.max(0, trendMds.length - 1 - TREND_WINDOW)]
+    const windowSize = trendMds.indexOf(lastMd) - trendMds.indexOf(pastMd)
+    const nowPos = positionsAfter(lastMd)
+    const pastPos = positionsAfter(pastMd)
+
+    for (const s of result) {
+      const to = nowPos.get(s.user_id)
+      const from = pastPos.get(s.user_id)
+      if (to == null || from == null) continue
+      const gained = from - to
+      s.last_5_trend = gained >= TREND_THRESHOLD ? 'up' : gained <= -TREND_THRESHOLD ? 'down' : 'stable'
+      s.trend_positions = { from, to, window: windowSize }
+    }
+  }
+
+  return result
 }
 
 /**
