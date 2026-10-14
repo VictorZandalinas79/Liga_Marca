@@ -133,7 +133,46 @@ async function fetchPaginated<T>(
   return { rows, incomplete: false }
 }
 
+let sharedDataCache: {
+  data: SharedData
+  timestamp: number
+} | null = null
+
+let inFlightSharedData: Promise<SharedData> | null = null
+
+const SHARED_DATA_TTL_MS = 45 * 1000 // 45 segundos de caché en memoria
+
+export function invalidateStandingsCache() {
+  sharedDataCache = null
+  inFlightSharedData = null
+}
+
 async function loadSharedData(supabase: any): Promise<SharedData> {
+  const now = Date.now()
+  if (sharedDataCache && now - sharedDataCache.timestamp < SHARED_DATA_TTL_MS) {
+    return sharedDataCache.data
+  }
+
+  if (inFlightSharedData) {
+    return inFlightSharedData
+  }
+
+  inFlightSharedData = (async () => {
+    try {
+      const data = await executeLoadSharedData(supabase)
+      if (!data.incomplete) {
+        sharedDataCache = { data, timestamp: Date.now() }
+      }
+      return data
+    } finally {
+      inFlightSharedData = null
+    }
+  })()
+
+  return inFlightSharedData
+}
+
+async function executeLoadSharedData(supabase: any): Promise<SharedData> {
   const { data: configData } = await supabase.from('league_config').select('*').eq('id', 1).maybeSingle()
   const config: LeagueConfig = {
     budget_limit: configData?.budget_limit ?? 275,
@@ -335,26 +374,8 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
       const prevPlayers = matchdays.get(activeMd) || []
       if (prevPlayers.length === 0) continue
 
-      const rpcPlayers = prevPlayers.map((tp, i) => ({
-        player_id: tp.player_id,
-        is_starter: tp.is_starter,
-        is_captain: tp.is_captain,
-        order: i,
-        replaced_player_id: null
-      }))
-
-      // Insertar en la base de datos (persistir la herencia usando la RPC con lock)
-      supabase.rpc('save_team_lineup', {
-        p_team_id: teamId,
-        p_matchday: playedMd,
-        p_players: rpcPlayers
-      }).then(({ error }: any) => {
-        if (error) {
-          console.log(`[STANDINGS] Auto-herencia J${playedMd} equipo ${teamId}:`, error.message)
-        }
-      })
-
-      // Actualizar el mapa local para que el cálculo de esta carga sea correcto
+      // Actualizar el mapa local para que el cálculo en memoria sea correcto
+      // (La persistencia en base de datos ya la gestiona el cron carry_over_lineups())
       matchdays.set(playedMd, prevPlayers.map(tp => ({ ...tp, matchday: playedMd })))
     }
   }
@@ -369,7 +390,7 @@ async function loadSharedData(supabase: any): Promise<SharedData> {
     firstDeadline && !isNaN(firstDeadline.getTime())
       ? new Date(firstDeadline.getTime() - config.matchday_start_hours_before * 60 * 60 * 1000)
       : // Fallback robusto para evitar contar todas las sesiones históricas si falla el deadline
-        new Date('2026-08-14T00:00:00.000Z')
+      new Date('2026-08-14T00:00:00.000Z')
 
   const { data: sessionsData } = await supabase
     .from('user_sessions')
@@ -663,7 +684,7 @@ function computeDivisionStandings(
     if (maxPoints <= 0) continue
 
     const sorted = [...participants].sort((a, b) => b.points - a.points)
-    
+
     // Contar ganadores (podios)
     const winners = sorted.slice(0, winCount)
     for (const p of winners) {
@@ -725,7 +746,7 @@ function computeDivisionStandings(
 
   for (const md of shared.sortedPlayedMatchdays) {
     const participants: { userId: string; points: number }[] = []
-    
+
     for (const [userId, pointsMap] of userPointsByMatchday.entries()) {
       if (pointsMap.has(md)) {
         const userTeams = userTeamsMap.get(userId) || []
@@ -746,13 +767,13 @@ function computeDivisionStandings(
     if (participants.length === 0) continue
 
     const sorted = [...participants].sort((a, b) => b.points - a.points)
-    
+
     const winners = sorted.slice(0, winCount)
     const losers = sorted.length > winCount ? sorted.slice(winCount).slice(-loseCount) : []
-    
+
     const winnersSet = new Set(winners.map(w => w.userId))
     const losersSet = new Set(losers.map(l => l.userId))
-    
+
     for (const p of sorted) {
       let cost = payRest
       if (winnersSet.has(p.userId)) {

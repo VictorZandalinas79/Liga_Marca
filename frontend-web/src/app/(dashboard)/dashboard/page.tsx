@@ -40,7 +40,7 @@ function formatPlayerName(name: string): string {
 import { Badge } from '@/components/ui/badge'
 import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
-import { getStandings } from '@/lib/standings'
+import { getStandings, invalidateStandingsCache } from '@/lib/standings'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 import { fetchLivePenalties } from '@/lib/live-penalties-client'
 interface Player {
@@ -564,6 +564,7 @@ export default function DashboardPage() {
       if (success) {
         setSavedPlayers(targetSelected)
         setSaveStatus('saved')
+        invalidateStandingsCache()
       } else {
         console.error('[SAVE LINEUP] Error definitivo guardando alineación:', lastError)
         setSaveStatus('error')
@@ -728,6 +729,7 @@ export default function DashboardPage() {
         console.error('[AUTO-GUARDAR] Error:', error)
       } else {
         console.log('[AUTO-GUARDAR] Equipo inicial guardado en matchday', matchdayToSave)
+        invalidateStandingsCache()
       }
     }
   }
@@ -940,7 +942,11 @@ export default function DashboardPage() {
           p_matchday: matchday,
           p_players: rows,
         })
-        if (error) console.error('[CARGAR] Error heredando alineación:', error)
+        if (error) {
+          console.error('[CARGAR] Error heredando alineación:', error)
+        } else {
+          invalidateStandingsCache()
+        }
         if (isMounted) {
           // El once heredado no arrastra sustituciones: si venimos de otra
           // jornada con cambios marcados, hay que limpiar sus badges.
