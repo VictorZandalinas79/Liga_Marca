@@ -2,8 +2,8 @@ name: API Core Sync (Fixtures & Squads)
 
 on:
   schedule:
-    # Cada 2 días a las 06:00 UTC
-    - cron: '0 6 */2 * *'
+    # Una vez por semana: los martes a las 06:00 UTC
+    - cron: '0 6 * * 2'
   workflow_dispatch: {}
 
 jobs:

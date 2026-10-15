@@ -19,7 +19,7 @@ interface CachedNotificationsPayload {
 }
 
 let cachedPayload: CachedNotificationsPayload | null = null
-const CACHE_TTL_MS = 0 // Sin caché en servidor para reflejar cambios al instante
+const CACHE_TTL_MS = 3 * 60 * 1000 // 3 minutos de caché en servidor para proteger Supabase de consultas masivas recurrentes
 
 export async function GET() {
   const supabase = await createServerSupabase()

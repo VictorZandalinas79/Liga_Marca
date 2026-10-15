@@ -49,9 +49,15 @@ export default function DashboardLayout({
 
   useEffect(() => {
     let sessionId: string | null = null
+    let lastActivityUpdate = 0
 
     const updateUserSession = async () => {
       try {
+        const nowMs = Date.now()
+        // Throttle updates: si ya tiene sessionId y se actualizó hace menos de 60s, saltar
+        if (sessionId && nowMs - lastActivityUpdate < 60000) return
+        lastActivityUpdate = nowMs
+
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
@@ -82,12 +88,12 @@ export default function DashboardLayout({
     }
 
     updateUserSession()
-    // Sondeo de presencia a 60s, solo cuando la pestaña está en primer plano
+    // Sondeo de presencia a 180s (3 min), solo cuando la pestaña está en primer plano
     const interval = setInterval(() => {
       if (!document.hidden) {
         updateUserSession()
       }
-    }, 60000)
+    }, 180000)
 
     const onVisible = () => {
       if (!document.hidden) {

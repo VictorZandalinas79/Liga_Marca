@@ -154,8 +154,8 @@ interface PlayerScore {
   fixture?: {
     start_time: string
     matchday?: number
-    home_team?: { name: string }
-    away_team?: { name: string }
+    home_team?: { name: string; logo_url?: string }
+    away_team?: { name: string; logo_url?: string }
     home_score?: number
     away_score?: number
     home_team_id?: string
@@ -345,13 +345,13 @@ export default function JugadorDetallePage() {
             .filter(Boolean)
         )] as string[]
 
-        const teamsMap = new Map<string, string>()
+        const teamsMap = new Map<string, { name: string; logo_url?: string }>()
         if (teamIds.length > 0) {
           const { data: teamsData } = await supabase
             .from('real_teams')
-            .select('id, name')
+            .select('id, name, logo_url')
             .in('id', teamIds)
-          teamsData?.forEach(t => teamsMap.set(t.id, t.name))
+          teamsData?.forEach(t => teamsMap.set(t.id, { name: t.name, logo_url: t.logo_url }))
         }
 
         const mapped = allScores.map(s => ({
@@ -359,8 +359,14 @@ export default function JugadorDetallePage() {
           fixture: s.fixtures ? {
             start_time: s.fixtures.start_time,
             matchday: s.fixtures.matchday,
-            home_team: { name: teamsMap.get(s.fixtures.home_team_id) || 'Local' },
-            away_team: { name: teamsMap.get(s.fixtures.away_team_id) || 'Visitante' },
+            home_team: { 
+              name: teamsMap.get(s.fixtures.home_team_id)?.name || 'Local',
+              logo_url: teamsMap.get(s.fixtures.home_team_id)?.logo_url
+            },
+            away_team: { 
+              name: teamsMap.get(s.fixtures.away_team_id)?.name || 'Visitante',
+              logo_url: teamsMap.get(s.fixtures.away_team_id)?.logo_url
+            },
             home_score: s.fixtures.home_score,
             away_score: s.fixtures.away_score,
             home_team_id: s.fixtures.home_team_id,
@@ -2567,32 +2573,72 @@ export default function JugadorDetallePage() {
             </p>
           ) : (
           <div className="space-y-2">
-            {scores.map((score) => (
+            {scores.map((score) => {
+              const pts = score.total_points ?? 0
+              const barColorClasses = pts >= 6
+                ? 'bg-emerald-50/80 hover:bg-emerald-100/80 border-emerald-200/90 border-l-emerald-500'
+                : pts > 0
+                ? 'bg-amber-50/80 hover:bg-amber-100/80 border-amber-200/90 border-l-amber-500'
+                : 'bg-rose-50/80 hover:bg-rose-100/80 border-rose-200/90 border-l-rose-500'
+
+              return (
               <div
                 key={score.id}
-                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
+                className={`flex items-center justify-between p-3 rounded-xl border border-l-4 cursor-pointer transition-all duration-150 shadow-2xs ${barColorClasses}`}
                 onClick={() => setSelectedMatch(score)}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full ${score.is_starter ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${score.is_starter ? 'bg-emerald-500' : 'bg-amber-500'}`} title={score.is_starter ? 'Titular' : 'Suplente'} />
                   {score.fixture?.matchday !== undefined && score.fixture?.matchday !== null && (
                     <div className="flex flex-col items-center justify-center w-11 shrink-0">
-                      <span className="text-[10px] uppercase text-slate-400 leading-none">Jor.</span>
-                      <span className="text-lg font-bold text-slate-700 leading-none">{score.fixture.matchday}</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-500 leading-none">Jor.</span>
+                      <span className="text-lg font-black text-slate-800 leading-none">{score.fixture.matchday}</span>
                     </div>
                   )}
-                  <div>
-                    <p className="font-medium text-slate-900">
-                      {score.fixture?.home_team?.name || 'Local'} vs {score.fixture?.away_team?.name || 'Visitante'}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {score.fixture?.start_time ? formatDate(score.fixture.start_time) : '-'}
-                      {score.fixture?.home_score !== undefined && score.fixture?.away_score !== undefined && (
-                        <span className="ml-2 font-semibold">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    {/* Escudo Local */}
+                    <div className="flex items-center" title={score.fixture?.home_team?.name || 'Local'}>
+                      {score.fixture?.home_team?.logo_url ? (
+                        <img
+                          src={score.fixture.home_team.logo_url}
+                          alt={score.fixture.home_team.name || 'Local'}
+                          className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0 drop-shadow-xs"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0">
+                          {(score.fixture?.home_team?.name || 'L').slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Marcador central y fecha */}
+                    <div className="flex flex-col items-center justify-center px-1 min-w-[50px]">
+                      {score.fixture?.home_score !== undefined && score.fixture?.away_score !== undefined ? (
+                        <span className="text-sm sm:text-base font-black text-slate-900 tracking-wider tabular-nums">
                           {score.fixture.home_score} - {score.fixture.away_score}
                         </span>
+                      ) : (
+                        <span className="text-xs font-bold text-slate-400">vs</span>
                       )}
-                    </p>
+                      <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+                        {score.fixture?.start_time ? formatDate(score.fixture.start_time) : '-'}
+                      </span>
+                    </div>
+
+                    {/* Escudo Visitante */}
+                    <div className="flex items-center" title={score.fixture?.away_team?.name || 'Visitante'}>
+                      {score.fixture?.away_team?.logo_url ? (
+                        <img
+                          src={score.fixture.away_team.logo_url}
+                          alt={score.fixture.away_team.name || 'Visitante'}
+                          className="w-7 h-7 sm:w-8 sm:h-8 object-contain shrink-0 drop-shadow-xs"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0">
+                          {(score.fixture?.away_team?.name || 'V').slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="text-right flex flex-col items-end gap-1 shrink-0">
@@ -2604,9 +2650,9 @@ export default function JugadorDetallePage() {
                             R: -1
                           </span>
                         ) : Number(score.relevo_points) > 0 ? (
-                          <div className="inline-flex items-center gap-0.5 text-amber-400 text-sm leading-none drop-shadow-xs" title={`Relevo: ${score.relevo_points} estrella${Number(score.relevo_points) > 1 ? 's' : ''}`}>
+                          <div className="inline-flex items-center gap-0.5 text-amber-500 text-sm leading-none drop-shadow-xs" title={`Relevo: ${score.relevo_points} estrella${Number(score.relevo_points) > 1 ? 's' : ''}`}>
                             {Array.from({ length: Math.min(4, Math.max(1, Number(score.relevo_points))) }).map((_, i) => (
-                              <span key={i} className="text-amber-400">★</span>
+                              <span key={i} className="text-amber-500">★</span>
                             ))}
                           </div>
                         ) : (
@@ -2616,14 +2662,16 @@ export default function JugadorDetallePage() {
                         )
                       ) : null
                     )}
-                    <p className="text-xl font-bold text-emerald-600 tabular-nums">{Math.round((score.total_points || 0) * 10) / 10}</p>
+                    <p className="text-xl sm:text-2xl font-black text-slate-900 tabular-nums">
+                      {Math.round((score.total_points || 0) * 10) / 10}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    {score.minutes_played > 0 ? `${score.minutes_played}' ${score.is_starter ? '(T)' : '(S)'}` : <span className="text-red-500 font-semibold text-[11px]">Sin minutos</span>}
+                  <p className="text-xs text-slate-600 font-medium">
+                    {score.minutes_played > 0 ? `${score.minutes_played}' ${score.is_starter ? '(T)' : '(S)'}` : <span className="text-rose-700 font-bold text-[11px]">Sin minutos</span>}
                   </p>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
           )}
         </CardContent>
@@ -2647,9 +2695,17 @@ export default function JugadorDetallePage() {
                     Jornada {selectedMatch.fixture.matchday}
                   </span>
                 )}
-                <h2 className="text-xl font-bold text-slate-900">
-                  {selectedMatch.fixture?.home_team?.name || 'Local'} vs {selectedMatch.fixture?.away_team?.name || 'Visitante'}
-                </h2>
+                <div className="flex items-center gap-2 mb-1">
+                  {selectedMatch.fixture?.home_team?.logo_url && (
+                    <img src={selectedMatch.fixture.home_team.logo_url} alt="" className="w-5 h-5 object-contain" />
+                  )}
+                  <h2 className="text-xl font-bold text-slate-900">
+                    {selectedMatch.fixture?.home_team?.name || 'Local'} vs {selectedMatch.fixture?.away_team?.name || 'Visitante'}
+                  </h2>
+                  {selectedMatch.fixture?.away_team?.logo_url && (
+                    <img src={selectedMatch.fixture.away_team.logo_url} alt="" className="w-5 h-5 object-contain" />
+                  )}
+                </div>
                 <p className="text-sm text-slate-600">
                   {selectedMatch.fixture?.start_time ? new Date(selectedMatch.fixture.start_time).toLocaleDateString('es-ES', {
                     weekday: 'long',

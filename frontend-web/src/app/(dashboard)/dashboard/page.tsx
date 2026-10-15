@@ -317,6 +317,9 @@ export default function DashboardPage() {
   const isSuspendedNonActiveMatchday = postponedMatchdays.has(selectedMatchday) && selectedMatchday !== activeMatchday
   const isUnlockWindowOpen = rawIsUnlockWindowOpen || isSuspendedNonActiveMatchday
   const isLocked = rawIsLocked || isSuspendedNonActiveMatchday
+  const currentViewMatchday = typeof selectedMatchday === 'number' && selectedMatchday > 0
+    ? selectedMatchday
+    : (typeof activeMatchday === 'number' ? activeMatchday : 1)
 
   useEffect(() => {
     // Si isUnlockWindowOpen es FALSE, el mercado está ABIERTO (no hay partidos en juego).
@@ -1064,12 +1067,12 @@ export default function DashboardPage() {
   // jornada previa comprometida y yo no (si yo lo tenía, lo retengo). En J1 no aplica.
   useEffect(() => {
     const fetchOffLimits = async () => {
-      const md = typeof activeMatchday === 'number' ? activeMatchday : 1
+      const md = currentViewMatchday
       // "Jornada previa comprometida" es la del tramo de juego anterior en el
       // calendario, la misma de la que se hereda el once, no md - 1: con un
       // partido adelantado de la J6 jugándose antes que la J4, lo que ata a la
       // J4 es quién tenía a quién en ese partido.
-      const prevMd = (selectedMatchday === md && previousMatchday != null) ? previousMatchday : md - 1
+      const prevMd = (resolvedMatchday === md && previousMatchday != null) ? previousMatchday : md - 1
       if (!userTeamId || prevMd < 1) {
         setOffLimitPlayerIds(new Set())
         return
@@ -1541,7 +1544,9 @@ export default function DashboardPage() {
   const lineupPrevSet = new Set(basePlayers)
   const zeroedPrevSet = new Set<string>()
   
-  const prevMatchdayForSanctions = typeof activeMatchday === 'number' ? activeMatchday - 1 : 1
+  const prevMatchdayForSanctions = (resolvedMatchday === currentViewMatchday && previousMatchday != null)
+    ? previousMatchday
+    : currentViewMatchday - 1
   const prevPenaltiesForSanctions = allPenalties.filter(p => p.user_id === user?.id && p.matchday === prevMatchdayForSanctions)
 
   prevPenaltiesForSanctions.forEach(p => {
@@ -1696,7 +1701,9 @@ export default function DashboardPage() {
   const formationStr = `${defCount}-${midCount}-${fwdCount}`
 
   // Verificar sanciones pendientes de la jornada anterior y límite de cambios
-  const prevMatchday = activeMatchday - 1
+  const prevMatchday = (resolvedMatchday === currentViewMatchday && previousMatchday != null)
+    ? previousMatchday
+    : currentViewMatchday - 1
   const prevPenalties = allPenalties.filter(p => p.user_id === user?.id && p.matchday === prevMatchday)
 
   // Encontrar qué jugadores de basePlayers fueron penalizados
@@ -2747,11 +2754,11 @@ export default function DashboardPage() {
               <CardContent className="p-5 space-y-4">
                 <div className="flex items-center gap-2 pb-2.5 border-b border-red-100">
                   <AlertTriangle className="w-5 h-5 text-red-600 animate-pulse" />
-                  <h3 className="text-base font-bold text-red-900">Sanciones Activas en J{activeMatchday}</h3>
+                  <h3 className="text-base font-bold text-red-900">Sanciones Activas en J{currentViewMatchday}</h3>
                 </div>
                 
-                {allPenalties.filter(p => p.user_id === user?.id && p.matchday === activeMatchday).length === 0 &&
-                 liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday)).length === 0 ? (
+                {allPenalties.filter(p => p.user_id === user?.id && p.matchday === currentViewMatchday).length === 0 &&
+                 liveInfractions.filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === currentViewMatchday)).length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-6 text-center bg-emerald-50/50 rounded-xl border border-emerald-100 p-4">
                     <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center mb-2">
                       <Check className="w-5 h-5 text-emerald-600" />
@@ -2763,7 +2770,7 @@ export default function DashboardPage() {
                   <div className="space-y-2">
                     {/* Sanciones consolidadas en BD */}
                     {allPenalties
-                      .filter(p => p.user_id === user?.id && p.matchday === activeMatchday)
+                      .filter(p => p.user_id === user?.id && p.matchday === currentViewMatchday)
                       .map((p) => (
                         <div key={p.id} className="flex justify-between items-center text-sm bg-white rounded-xl p-3 border border-red-100 shadow-sm">
                           <div className="flex items-center gap-2.5">
@@ -2778,11 +2785,11 @@ export default function DashboardPage() {
 
                     {/* Advertencias dinámicas activas (infracciones actuales del usuario) */}
                     {liveInfractions
-                      .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === activeMatchday))
+                      .filter(inf => inf.user_id === user?.id && !allPenalties.some(p => p.user_id === user?.id && p.matchday === currentViewMatchday))
                       .map((inf) => (
                         <div key={inf.id} className="flex justify-between items-center text-sm bg-white rounded-xl p-3 border border-amber-200 shadow-sm animate-pulse">
                           <div className="flex items-center gap-2.5">
-                            <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{activeMatchday}</span>
+                            <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{currentViewMatchday}</span>
                             <span className="text-slate-800 font-semibold">{inf.description}</span>
                           </div>
                           <span className="font-bold text-amber-600 shrink-0 ml-2 text-xs uppercase">Pendiente</span>
@@ -2802,14 +2809,14 @@ export default function DashboardPage() {
                 <h3 className="text-base font-bold text-slate-900">Historial Completo de Sanciones (Liga)</h3>
               </div>
 
-              {allPenalties.filter(p => p.user_id === user?.id && p.matchday >= (config?.fantasy_starting_matchday ?? 1) && p.matchday < activeMatchday && !openMatchdays.includes(p.matchday)).length === 0 &&
-               liveInfractions.filter(inf => inf.user_id === user?.id && inf.matchday >= (config?.fantasy_starting_matchday ?? 1) && inf.matchday < activeMatchday && !openMatchdays.includes(inf.matchday) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday)).length === 0 ? (
+              {allPenalties.filter(p => p.user_id === user?.id && p.matchday >= (config?.fantasy_starting_matchday ?? 1) && p.matchday < currentViewMatchday && !openMatchdays.includes(p.matchday)).length === 0 &&
+               liveInfractions.filter(inf => inf.user_id === user?.id && inf.matchday >= (config?.fantasy_starting_matchday ?? 1) && inf.matchday < currentViewMatchday && !openMatchdays.includes(inf.matchday) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday)).length === 0 ? (
                 <p className="text-sm text-slate-500 italic text-center py-6">No tienes sanciones registradas en tu historial.</p>
               ) : (
                 <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
                   {/* Sanciones dinámicas activas del usuario */}
                   {liveInfractions
-                    .filter(inf => inf.user_id === user?.id && inf.matchday >= (config?.fantasy_starting_matchday ?? 1) && inf.matchday < activeMatchday && !openMatchdays.includes(inf.matchday) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday))
+                    .filter(inf => inf.user_id === user?.id && inf.matchday >= (config?.fantasy_starting_matchday ?? 1) && inf.matchday < currentViewMatchday && !openMatchdays.includes(inf.matchday) && !allPenalties.some(p => p.user_id === inf.user_id && p.matchday === inf.matchday))
                     .map((inf) => (
                     <div key={inf.id} className="flex justify-between items-center text-sm bg-slate-50 rounded-xl p-3 border border-amber-100 shadow-sm">
                       <div className="flex items-center gap-2">
@@ -2822,7 +2829,7 @@ export default function DashboardPage() {
 
                   {/* Sanciones consolidadas históricas del usuario */}
                   {allPenalties
-                    .filter(p => p.user_id === user?.id && p.matchday >= (config?.fantasy_starting_matchday ?? 1) && p.matchday < activeMatchday && !openMatchdays.includes(p.matchday))
+                    .filter(p => p.user_id === user?.id && p.matchday >= (config?.fantasy_starting_matchday ?? 1) && p.matchday < currentViewMatchday && !openMatchdays.includes(p.matchday))
                     .map((p) => {
                       const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
                       const userName = profileObj?.full_name || 'Tú'
@@ -2832,8 +2839,8 @@ export default function DashboardPage() {
                             <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-md text-xs font-bold font-mono">J{p.matchday}</span>
                             <span className="text-slate-800 font-semibold">{p.description}</span>
                           </div>
-                          <span className={`font-black text-sm shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : p.matchday === activeMatchday ? 'text-amber-600 text-xs uppercase' : 'text-slate-400'}`}>
-                            {p.points > 0 ? `-${p.points} pts` : p.matchday === activeMatchday ? 'Pendiente' : '0 pts'}
+                          <span className={`font-black text-sm shrink-0 ml-2 ${p.points > 0 ? 'text-red-600' : p.matchday === currentViewMatchday ? 'text-amber-600 text-xs uppercase' : 'text-slate-400'}`}>
+                            {p.points > 0 ? `-${p.points} pts` : p.matchday === currentViewMatchday ? 'Pendiente' : '0 pts'}
                           </span>
                         </div>
                       )

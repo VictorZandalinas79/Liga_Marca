@@ -265,7 +265,7 @@ export default function JugadoresPage() {
         const { data: page, error } = await applyMarketFilter(
           supabase
             .from('players')
-            .select('*')
+            .select('id, first_name, last_name, short_name, position, status, team_id, photo, shirt_number, date_of_birth, nationality, height, weight, foot, precio, is_in_biwenger')
         )
           .order('short_name', { ascending: true })
           .range(from, from + PAGE_SIZE - 1)
@@ -292,86 +292,149 @@ export default function JugadoresPage() {
 
       setTeams(computedTeams)
 
-      const allScores: any[] = []
-      let scoresFrom = 0
-      while (true) {
-        const { data: page, error } = await supabase
-          .from('player_scores')
-          .select('player_id, total_points, goals, assists, yellow_cards, red_cards, minutes_played, shots_on_target, passes_completed, passes_attempted, tackles_won, interceptions, saves, clearances, takeons_won, ball_recoveries, key_passes, big_chances_created, aerials_won, penalties_won, dispossessed, bad_touches, takeons_lost, own_goals, forward_passes, box_entries, recoveries_high, recoveries_med, recoveries_low, interceptions_high, interceptions_med, interceptions_low, set_pieces_taken, successful_crosses, long_balls_completed')
-          .range(scoresFrom, scoresFrom + PAGE_SIZE - 1)
-        if (error || !page || page.length === 0) break
-        allScores.push(...page)
-        if (page.length < PAGE_SIZE) break
-        scoresFrom += PAGE_SIZE
+      const zeroStats: PlayerStats = {
+        total_points: 0, goals: 0, assists: 0, yellow_cards: 0, red_cards: 0,
+        minutes_played: 0, matches_played: 0, avg_points: 0,
+        shots_on_target: 0, passes_completed: 0, passes_attempted: 0,
+        tackles_won: 0, interceptions: 0, saves: 0, clearances: 0,
+        takeons_won: 0, ball_recoveries: 0, key_passes: 0,
+        big_chances_created: 0, aerials_won: 0, penalties_won: 0,
+        dispossessed: 0, bad_touches: 0, takeons_lost: 0, own_goals: 0,
+        forward_passes: 0, box_entries: 0, recoveries_high: 0, recoveries_med: 0, recoveries_low: 0,
+        interceptions_high: 0, interceptions_med: 0, interceptions_low: 0,
+        set_pieces_taken: 0, successful_crosses: 0, long_balls_completed: 0,
       }
 
-      const scoresByPlayer = new Map<string, any[]>()
-      for (const score of allScores) {
-        if (!scoresByPlayer.has(score.player_id)) {
-          scoresByPlayer.set(score.player_id, [])
+      // Intentar primero traer las estadísticas acumuladas desde la vista agregada (75 KB vs 4 MB)
+      const statsByPlayer = new Map<string, PlayerStats>()
+      let usedAggregated = false
+
+      try {
+        const { data: aggData, error: aggError } = await supabase
+          .from('player_season_stats')
+          .select('*')
+
+        if (!aggError && aggData && aggData.length > 0) {
+          for (const row of aggData) {
+            const matches = Number(row.matches_played) || 0
+            const pts = Number(row.total_points) || 0
+            statsByPlayer.set(row.player_id, {
+              total_points: pts,
+              goals: Number(row.goals) || 0,
+              assists: Number(row.assists) || 0,
+              yellow_cards: Number(row.yellow_cards) || 0,
+              red_cards: Number(row.red_cards) || 0,
+              minutes_played: Number(row.minutes_played) || 0,
+              matches_played: matches,
+              avg_points: matches > 0 ? Math.round((pts / matches) * 10) / 10 : 0,
+              shots_on_target: Number(row.shots_on_target) || 0,
+              passes_completed: Number(row.passes_completed) || 0,
+              passes_attempted: Number(row.passes_attempted) || 0,
+              tackles_won: Number(row.tackles_won) || 0,
+              interceptions: Number(row.interceptions) || 0,
+              saves: Number(row.saves) || 0,
+              clearances: Number(row.clearances) || 0,
+              takeons_won: Number(row.takeons_won) || 0,
+              ball_recoveries: Number(row.ball_recoveries) || 0,
+              key_passes: Number(row.key_passes) || 0,
+              big_chances_created: Number(row.big_chances_created) || 0,
+              aerials_won: Number(row.aerials_won) || 0,
+              penalties_won: Number(row.penalties_won) || 0,
+              dispossessed: Number(row.dispossessed) || 0,
+              bad_touches: Number(row.bad_touches) || 0,
+              takeons_lost: Number(row.takeons_lost) || 0,
+              own_goals: Number(row.own_goals) || 0,
+              forward_passes: Number(row.forward_passes) || 0,
+              box_entries: Number(row.box_entries) || 0,
+              recoveries_high: Number(row.recoveries_high) || 0,
+              recoveries_med: Number(row.recoveries_med) || 0,
+              recoveries_low: Number(row.recoveries_low) || 0,
+              interceptions_high: Number(row.interceptions_high) || 0,
+              interceptions_med: Number(row.interceptions_med) || 0,
+              interceptions_low: Number(row.interceptions_low) || 0,
+              set_pieces_taken: Number(row.set_pieces_taken) || 0,
+              successful_crosses: Number(row.successful_crosses) || 0,
+              long_balls_completed: Number(row.long_balls_completed) || 0,
+            })
+          }
+          usedAggregated = true
         }
-        scoresByPlayer.get(score.player_id)!.push(score)
+      } catch {
+        // Fallback a paginado si la vista aún no está disponible
+      }
+
+      if (!usedAggregated) {
+        const allScores: any[] = []
+        let scoresFrom = 0
+        while (true) {
+          const { data: page, error } = await supabase
+            .from('player_scores')
+            .select('player_id, total_points, goals, assists, yellow_cards, red_cards, minutes_played, shots_on_target, passes_completed, passes_attempted, tackles_won, interceptions, saves, clearances, takeons_won, ball_recoveries, key_passes, big_chances_created, aerials_won, penalties_won, dispossessed, bad_touches, takeons_lost, own_goals, forward_passes, box_entries, recoveries_high, recoveries_med, recoveries_low, interceptions_high, interceptions_med, interceptions_low, set_pieces_taken, successful_crosses, long_balls_completed')
+            .range(scoresFrom, scoresFrom + PAGE_SIZE - 1)
+          if (error || !page || page.length === 0) break
+          allScores.push(...page)
+          if (page.length < PAGE_SIZE) break
+          scoresFrom += PAGE_SIZE
+        }
+
+        const scoresByPlayer = new Map<string, any[]>()
+        for (const score of allScores) {
+          if (!scoresByPlayer.has(score.player_id)) {
+            scoresByPlayer.set(score.player_id, [])
+          }
+          scoresByPlayer.get(score.player_id)!.push(score)
+        }
+
+        for (const [playerId, scores] of scoresByPlayer) {
+          const stats = scores.reduce((acc, s) => ({
+            total_points: acc.total_points + (s.total_points || 0),
+            goals: acc.goals + (s.goals || 0),
+            assists: acc.assists + (s.assists || 0),
+            yellow_cards: acc.yellow_cards + (s.yellow_cards || 0),
+            red_cards: acc.red_cards + (s.red_cards || 0),
+            minutes_played: acc.minutes_played + (s.minutes_played || 0),
+            matches_played: scores.length,
+            avg_points: 0,
+            shots_on_target: acc.shots_on_target + (s.shots_on_target || 0),
+            passes_completed: acc.passes_completed + (s.passes_completed || 0),
+            passes_attempted: acc.passes_attempted + (s.passes_attempted || 0),
+            tackles_won: acc.tackles_won + (s.tackles_won || 0),
+            interceptions: acc.interceptions + (s.interceptions || 0),
+            saves: acc.saves + (s.saves || 0),
+            clearances: acc.clearances + (s.clearances || 0),
+            takeons_won: acc.takeons_won + (s.takeons_won || 0),
+            ball_recoveries: acc.ball_recoveries + (s.ball_recoveries || 0),
+            key_passes: acc.key_passes + (s.key_passes || 0),
+            big_chances_created: acc.big_chances_created + (s.big_chances_created || 0),
+            aerials_won: acc.aerials_won + (s.aerials_won || 0),
+            penalties_won: acc.penalties_won + (s.penalties_won || 0),
+            dispossessed: acc.dispossessed + (s.dispossessed || 0),
+            bad_touches: acc.bad_touches + (s.bad_touches || 0),
+            takeons_lost: acc.takeons_lost + (s.takeons_lost || 0),
+            own_goals: acc.own_goals + (s.own_goals || 0),
+            forward_passes: acc.forward_passes + (s.forward_passes || 0),
+            box_entries: acc.box_entries + (s.box_entries || 0),
+            recoveries_high: acc.recoveries_high + (s.recoveries_high || 0),
+            recoveries_med: acc.recoveries_med + (s.recoveries_med || 0),
+            recoveries_low: acc.recoveries_low + (s.recoveries_low || 0),
+            interceptions_high: acc.interceptions_high + (s.interceptions_high || 0),
+            interceptions_med: acc.interceptions_med + (s.interceptions_med || 0),
+            interceptions_low: acc.interceptions_low + (s.interceptions_low || 0),
+            set_pieces_taken: acc.set_pieces_taken + (s.set_pieces_taken || 0),
+            successful_crosses: acc.successful_crosses + (s.successful_crosses || 0),
+            long_balls_completed: acc.long_balls_completed + (s.long_balls_completed || 0),
+          }), zeroStats) as PlayerStats || zeroStats
+
+          stats.avg_points = stats.matches_played > 0
+            ? Math.round((stats.total_points / stats.matches_played) * 10) / 10
+            : 0
+
+          statsByPlayer.set(playerId, stats)
+        }
       }
 
       const playersWithStats = playersData.map((player) => {
-        const scores = scoresByPlayer.get(player.id) || []
-
-        const zero: PlayerStats = {
-          total_points: 0, goals: 0, assists: 0, yellow_cards: 0, red_cards: 0,
-          minutes_played: 0, matches_played: 0, avg_points: 0,
-          shots_on_target: 0, passes_completed: 0, passes_attempted: 0,
-          tackles_won: 0, interceptions: 0, saves: 0, clearances: 0,
-          takeons_won: 0, ball_recoveries: 0, key_passes: 0,
-          big_chances_created: 0, aerials_won: 0, penalties_won: 0,
-          dispossessed: 0, bad_touches: 0, takeons_lost: 0, own_goals: 0,
-          forward_passes: 0, box_entries: 0, recoveries_high: 0, recoveries_med: 0, recoveries_low: 0,
-          interceptions_high: 0, interceptions_med: 0, interceptions_low: 0,
-          set_pieces_taken: 0, successful_crosses: 0, long_balls_completed: 0,
-        }
-
-        const stats = scores.reduce((acc, s) => ({
-          total_points: acc.total_points + (s.total_points || 0),
-          goals: acc.goals + (s.goals || 0),
-          assists: acc.assists + (s.assists || 0),
-          yellow_cards: acc.yellow_cards + (s.yellow_cards || 0),
-          red_cards: acc.red_cards + (s.red_cards || 0),
-          minutes_played: acc.minutes_played + (s.minutes_played || 0),
-          matches_played: scores.length,
-          avg_points: 0,
-          shots_on_target: acc.shots_on_target + (s.shots_on_target || 0),
-          passes_completed: acc.passes_completed + (s.passes_completed || 0),
-          passes_attempted: acc.passes_attempted + (s.passes_attempted || 0),
-          tackles_won: acc.tackles_won + (s.tackles_won || 0),
-          interceptions: acc.interceptions + (s.interceptions || 0),
-          saves: acc.saves + (s.saves || 0),
-          clearances: acc.clearances + (s.clearances || 0),
-          takeons_won: acc.takeons_won + (s.takeons_won || 0),
-          ball_recoveries: acc.ball_recoveries + (s.ball_recoveries || 0),
-          key_passes: acc.key_passes + (s.key_passes || 0),
-          big_chances_created: acc.big_chances_created + (s.big_chances_created || 0),
-          aerials_won: acc.aerials_won + (s.aerials_won || 0),
-          penalties_won: acc.penalties_won + (s.penalties_won || 0),
-          dispossessed: acc.dispossessed + (s.dispossessed || 0),
-          bad_touches: acc.bad_touches + (s.bad_touches || 0),
-          takeons_lost: acc.takeons_lost + (s.takeons_lost || 0),
-          own_goals: acc.own_goals + (s.own_goals || 0),
-          forward_passes: acc.forward_passes + (s.forward_passes || 0),
-          box_entries: acc.box_entries + (s.box_entries || 0),
-          recoveries_high: acc.recoveries_high + (s.recoveries_high || 0),
-          recoveries_med: acc.recoveries_med + (s.recoveries_med || 0),
-          recoveries_low: acc.recoveries_low + (s.recoveries_low || 0),
-          interceptions_high: acc.interceptions_high + (s.interceptions_high || 0),
-          interceptions_med: acc.interceptions_med + (s.interceptions_med || 0),
-          interceptions_low: acc.interceptions_low + (s.interceptions_low || 0),
-          set_pieces_taken: acc.set_pieces_taken + (s.set_pieces_taken || 0),
-          successful_crosses: acc.successful_crosses + (s.successful_crosses || 0),
-          long_balls_completed: acc.long_balls_completed + (s.long_balls_completed || 0),
-        }), zero) as PlayerStats || zero
-
-        stats.avg_points = stats.matches_played > 0
-          ? Math.round((stats.total_points / stats.matches_played) * 10) / 10
-          : 0
-
+        const stats = statsByPlayer.get(player.id) || zeroStats
         const team = player.team_id ? teamsMap.get(player.team_id) : null
         return { ...player, stats, team: team || null }
       })

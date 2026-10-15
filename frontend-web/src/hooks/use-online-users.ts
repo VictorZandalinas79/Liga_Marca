@@ -12,9 +12,9 @@ export type OnlineUser = { id: string; full_name: string }
 // 13/09/2026). Era lo que más egress de Supabase gastaba. Ahora el filtro va en
 // la consulta (unos cientos de bytes) y hay un único sondeo por pestaña.
 
-const POLL_MS = 60 * 1000
-// El layout actualiza last_activity_at cada 30 s
-const ACTIVE_WINDOW_MS = 5 * 60 * 1000
+const POLL_MS = 180 * 1000 // 3 minutos de sondeo
+// El layout actualiza last_activity_at cada 3 minutos (ventana de 6 min para margen)
+const ACTIVE_WINDOW_MS = 6 * 60 * 1000
 
 const EMPTY: OnlineUser[] = []
 let current: OnlineUser[] = EMPTY

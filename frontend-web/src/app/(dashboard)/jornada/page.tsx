@@ -105,7 +105,7 @@ export default function JornadaPage() {
   const [modalLoading, setModalLoading] = useState(false)
   const [searchInputValue, setSearchInputValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedRealTeamId, setSelectedRealTeamId] = useState<string>('')
+  const [selectedRealTeamIds, setSelectedRealTeamIds] = useState<string[]>([])
   const [minPrice, setMinPrice] = useState<string>('')
   const [maxPrice, setMaxPrice] = useState<string>('')
   const [searchActiveIndex, setSearchActiveIndex] = useState(0)
@@ -120,6 +120,7 @@ export default function JornadaPage() {
   const supabase = createClient()
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const playerRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const userTeamsCache = useRef<Map<string, { timestamp: number; teams: UserTeam[]; winners: Set<string>; losers: Set<string> }>>(new Map())
 
   const openPlayerStats = async (playerId: string, providedSanctionReason?: string) => {
     setModalLoading(true)
@@ -286,7 +287,21 @@ export default function JornadaPage() {
   }
 
   // Cargar equipos y jugadores de la jornada seleccionada
-  const loadUserTeamsForMatchday = async (matchday: number, silent = false) => {
+  const loadUserTeamsForMatchday = async (matchday: number, silent = false, force = false) => {
+    const cacheKey = `${matchday}-${selectedDivision ?? 'all'}`
+    const nowMs = Date.now()
+    const cached = userTeamsCache.current.get(cacheKey)
+    const isLive = availableMatchdays.find(m => m.matchday === matchday)?.live ?? false
+    const ttl = isLive ? 30_000 : 120_000
+
+    if (!force && cached && nowMs - cached.timestamp < ttl) {
+      setUserTeams(cached.teams)
+      setMatchdayWinners(cached.winners)
+      setMatchdayLosers(cached.losers)
+      if (!silent) setLoading(false)
+      return
+    }
+
     if (!silent) setLoading(true)
 
     const info = availableMatchdays.find(m => m.matchday === matchday)
@@ -768,6 +783,12 @@ export default function JornadaPage() {
     setMatchdayLosers(lSet)
 
     setUserTeams(teams)
+    userTeamsCache.current.set(cacheKey, {
+      timestamp: Date.now(),
+      teams,
+      winners: wSet,
+      losers: lSet
+    })
     setLoading(false)
   }
 
@@ -851,10 +872,25 @@ export default function JornadaPage() {
   useEffect(() => {
     const info = availableMatchdays.find(m => m.matchday === selectedMatchday)
     if (!info?.live || selectedDivision == null) return
+
     const interval = setInterval(() => {
-      loadUserTeamsForMatchday(selectedMatchday, true)
+      // Evitar sondeos en pestañas en segundo plano o minimizadas
+      if (typeof document !== 'undefined' && !document.hidden) {
+        loadUserTeamsForMatchday(selectedMatchday, true, true)
+      }
     }, 45000)
-    return () => clearInterval(interval)
+
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        loadUserTeamsForMatchday(selectedMatchday, true, true)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [selectedMatchday, availableMatchdays, selectedDivision])
 
   const getPositionLabel = (position: string) => {
@@ -946,8 +982,8 @@ export default function JornadaPage() {
     return parseFloat(cleanVal.replace(/[^0-9.]/g, ''))
   }, [])
 
-  const isPlayerMatch = useCallback((p: Player, team: UserTeam, q: string, realTeamId: string, minP: string, maxP: string): boolean => {
-    if (!q && !realTeamId && !minP && !maxP) return false
+  const isPlayerMatch = useCallback((p: Player, team: UserTeam, q: string, realTeamIds: string[], minP: string, maxP: string): boolean => {
+    if (!q && realTeamIds.length === 0 && !minP && !maxP) return false
 
     // 1. Filtro de búsqueda por texto (si está activo)
     if (q) {
@@ -962,8 +998,8 @@ export default function JornadaPage() {
     }
 
     // 2. Filtro de equipo real (si está activo)
-    if (realTeamId) {
-      if (p.team_id !== realTeamId) return false
+    if (realTeamIds.length > 0) {
+      if (!p.team_id || !realTeamIds.includes(p.team_id)) return false
     }
 
     // 3. Filtro de precio mínimo (si está activo)
@@ -983,11 +1019,11 @@ export default function JornadaPage() {
 
   // Obtener los equipos reales disponibles en los planteles cargados para el selector
   const availableRealTeams = useMemo(() => {
-    const teamsMap = new Map<string, { id: string; name: string }>()
+    const teamsMap = new Map<string, { id: string; name: string; logo_url?: string }>()
     userTeams.forEach(ut => {
       ut.jugadores.forEach(p => {
         if (p.team_id && p.team?.name) {
-          teamsMap.set(p.team_id, { id: p.team_id, name: p.team.name })
+          teamsMap.set(p.team_id, { id: p.team_id, name: p.team.name, logo_url: p.team.logo_url })
         }
       })
     })
@@ -995,10 +1031,10 @@ export default function JornadaPage() {
   }, [userTeams])
 
   // Lista plana de coincidencias: { teamId, playerId } para navegar
-  const searchMatches = (searchQuery.trim() || selectedRealTeamId || minPrice || maxPrice)
+  const searchMatches = (searchQuery.trim() || selectedRealTeamIds.length > 0 || minPrice || maxPrice)
     ? sortedTeams.flatMap(team =>
         team.jugadores
-          .filter(p => isPlayerMatch(p, team, normalizeText(searchQuery.trim()), selectedRealTeamId, minPrice, maxPrice))
+          .filter(p => isPlayerMatch(p, team, normalizeText(searchQuery.trim()), selectedRealTeamIds, minPrice, maxPrice))
           .map(p => ({ teamId: team.team_id, playerId: p.id, key: `${team.team_id}-${p.id}` }))
       )
     : []
@@ -1030,7 +1066,7 @@ export default function JornadaPage() {
         }
       }, 100)
     }
-  }, [searchQuery, selectedRealTeamId, minPrice, maxPrice])
+  }, [searchQuery, selectedRealTeamIds, minPrice, maxPrice])
 
   const exportToExcel = () => {
     let csv = '\uFEFFUsuario,Jugador,Posicion,Puntos,Sancion\n'
@@ -1583,7 +1619,7 @@ export default function JornadaPage() {
             />
             
             {/* Resultados y Navegación de coincidencias (si hay algún filtro activo) */}
-            {(searchQuery || selectedRealTeamId || minPrice || maxPrice) && (
+            {(searchQuery || selectedRealTeamIds.length > 0 || minPrice || maxPrice) && (
               <>
                 <span className="text-xs text-slate-500 whitespace-nowrap font-medium px-1">
                   {matchCount > 0 ? `${safeActiveIndex + 1} / ${matchCount}` : '0 resultados'}
@@ -1610,7 +1646,7 @@ export default function JornadaPage() {
                   onClick={() => {
                     setSearchInputValue('')
                     setSearchQuery('')
-                    setSelectedRealTeamId('')
+                    setSelectedRealTeamIds([])
                     setMinPrice('')
                     setMaxPrice('')
                     setSearchActiveIndex(0)
@@ -1624,29 +1660,76 @@ export default function JornadaPage() {
             )}
           </div>
 
-          {/* Fila 2: Selectores de Equipo Real y Rango de Precios */}
-          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-            {/* Selector de Equipo Real */}
-            <div className="flex-1 min-w-0">
-              <select
-                value={selectedRealTeamId}
-                onChange={e => {
-                  setSelectedRealTeamId(e.target.value)
+          {/* Fila 2: Selector de Escudos de Equipos Reales y Rango de Precios */}
+          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between pt-1 border-t border-slate-100">
+            {/* Selector de Escudos de Equipos Reales */}
+            <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden">
+              {/* Botón rápido "Todos" / Deseleccionar */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedRealTeamIds([])
                   setSearchActiveIndex(0)
                 }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg shrink-0 transition-all shadow-sm ${
+                  selectedRealTeamIds.length === 0
+                    ? 'bg-slate-900 text-white shadow-slate-900/20'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200'
+                }`}
+                title="Mostrar todos los equipos"
               >
-                <option value="">Todos los equipos reales</option>
-                {availableRealTeams.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+                Todos
+              </button>
+
+              {/* Contenedor scrolleable horizontalmente con los escudos */}
+              <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 no-scrollbar">
+                {availableRealTeams.map(t => {
+                  const isSelected = selectedRealTeamIds.includes(t.id)
+                  const hasSelection = selectedRealTeamIds.length > 0
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      title={t.name}
+                      onClick={() => {
+                        setSelectedRealTeamIds(prev =>
+                          prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                        )
+                        setSearchActiveIndex(0)
+                      }}
+                      className={`relative group shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                        isSelected
+                          ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm shadow-emerald-500/20 scale-105 ring-2 ring-emerald-400/30'
+                          : hasSelection
+                          ? 'bg-slate-50/70 border border-slate-200/80 opacity-45 hover:opacity-100 hover:border-slate-300 hover:scale-105'
+                          : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm hover:scale-105'
+                      }`}
+                    >
+                      {t.logo_url ? (
+                        <img
+                          src={t.logo_url}
+                          alt={t.name}
+                          className="w-5 h-5 sm:w-6 sm:h-6 object-contain pointer-events-none drop-shadow-sm transition-transform group-hover:scale-110"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-600">
+                          {t.name.slice(0, 3).toUpperCase()}
+                        </span>
+                      )}
+
+                      {/* Pequeño indicador de selección activa */}
+                      {isSelected && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full" />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             {/* Inputs de margen de precio */}
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 self-end md:self-center">
               <input
                 type="text"
                 placeholder="Precio Mín (ej. 10M)"
@@ -1655,9 +1738,9 @@ export default function JornadaPage() {
                   setMinPrice(e.target.value)
                   setSearchActiveIndex(0)
                 }}
-                className="w-full sm:w-36 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-full sm:w-32 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
               />
-              <span className="text-slate-400 text-xs sm:text-sm">—</span>
+              <span className="text-slate-400 text-xs">—</span>
               <input
                 type="text"
                 placeholder="Precio Máx (ej. 50M)"
@@ -1666,7 +1749,7 @@ export default function JornadaPage() {
                   setMaxPrice(e.target.value)
                   setSearchActiveIndex(0)
                 }}
-                className="w-full sm:w-36 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-full sm:w-32 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
           </div>
