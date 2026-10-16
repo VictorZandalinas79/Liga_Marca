@@ -492,30 +492,54 @@ export default function JugadorDetallePage() {
   }, [compareTarget, allPlayers, player?.position])
 
   useEffect(() => {
+    let cancelled = false
     const loadPositionScores = async () => {
       if (!player?.position) return
       const posCode = getPositionLabel(player.position)
-      const { data } = await supabase
-        .from('player_scores')
-        .select(`
-          *,
-          players (
-            short_name,
-            first_name,
-            last_name,
-            real_teams (
-              name,
-              logo_url
-            )
-          )
-        `)
-        .eq('position', posCode)
-      if (data) {
-        setPositionScores(data as any[])
+
+      // Solo las columnas que leen las dos métricas del gráfico. Con select('*')
+      // esto bajaba las 128 columnas de player_scores de toda la posición
+      // (~270 KB de egress por abrir la ficha de un jugador).
+      const columns = new Set(['player_id', 'minutes_played'])
+      for (const key of [xAxisMetric, yAxisMetric]) metricColumns(key).forEach(c => columns.add(c))
+      const join = 'players ( short_name, first_name, last_name, real_teams ( name, logo_url ) )'
+
+      // Paginado: PostgREST corta en 1.000 filas y medios y defensas ya las
+      // superan, así que el gráfico se quedaba sin parte de los partidos.
+      const fetchAll = async (select: string) => {
+        const rows: any[] = []
+        const pageSize = 1000
+        for (let from = 0; ; from += pageSize) {
+          const { data, error } = await supabase
+            .from('player_scores')
+            .select(select)
+            .eq('position', posCode)
+            .order('id', { ascending: true })
+            .range(from, from + pageSize - 1)
+          if (error) return { rows, error }
+          rows.push(...(data || []))
+          if (!data || data.length < pageSize) return { rows, error: null }
+        }
+      }
+
+      // Una métrica puede leer columnas que no existen en la BD (p. ej.
+      // fantasy_assist): se quitan y se reintenta. Si aun así falla, se vuelve
+      // a la consulta completa para no dejar el gráfico vacío.
+      let result = await fetchAll([...columns, join].join(', '))
+      for (let i = 0; i < 5 && result.error; i++) {
+        const missing = /column [\w.]*?\.?(\w+) does not exist/.exec(result.error.message || '')?.[1]
+        if (!missing || !columns.delete(missing)) break
+        result = await fetchAll([...columns, join].join(', '))
+      }
+      if (result.error) result = await fetchAll(`*, ${join}`)
+
+      if (!cancelled && !result.error) {
+        setPositionScores(result.rows as any[])
       }
     }
     loadPositionScores()
-  }, [player?.position])
+    return () => { cancelled = true }
+  }, [player?.position, xAxisMetric, yAxisMetric])
 
   const scatterData = useMemo(() => {
     if (positionScores.length === 0) return []
@@ -1476,6 +1500,24 @@ export default function JugadorDetallePage() {
     { key: 'perdidas', label: 'Balones perdidos', icon: '📉' },
     ...dynamicRelevoMetricsForChart
   ]
+
+  // Columnas de player_scores que lee getMetricValue para una métrica. Se
+  // descubren pasándole una fila "espía" que anota cada propiedad leída; se
+  // prueba con ceros y con valores altos para recorrer las dos ramas de los
+  // mínimos de muestra (`total >= min ? ... : 0`) y de los `a || b`.
+  function metricColumns(key: string): string[] {
+    const cols = new Set<string>()
+    for (const fill of [0, 1e6]) {
+      const spy = new Proxy({}, {
+        get: (_t, prop) => {
+          if (typeof prop === 'string' && /^[a-z][a-z0-9_]*$/.test(prop)) cols.add(prop)
+          return fill
+        },
+      })
+      try { getMetricValue(spy as PlayerScore, key) } catch {}
+    }
+    return [...cols]
+  }
 
   function getMetricValue(score: PlayerScore, key: string): number {
     if (key.startsWith('relevo_')) {

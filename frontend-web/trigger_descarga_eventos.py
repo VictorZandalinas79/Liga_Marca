@@ -19,6 +19,7 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 from supabase import create_client, Client
+from postgrest.types import ReturnMethod
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -1542,8 +1543,12 @@ class MatchEventDownloader:
         for batch, op in ((with_id, 'upsert'), (new, 'insert')):
             while batch:
                 try:
-                    resp = getattr(self.supabase.table('player_scores'), op)(batch).execute()
-                    written.update(r['player_id'] for r in (resp.data or []))
+                    # returning=minimal: sin esto PostgREST devuelve cada fila
+                    # escrita entera (~2,8 KB, 128 columnas) y eso es egress de
+                    # Supabase en cada pasada del sync en vivo. Si la petición
+                    # no falla, se han escrito todas las filas del lote.
+                    getattr(self.supabase.table('player_scores'), op)(batch, returning=ReturnMethod.minimal).execute()
+                    written.update(p['player_id'] for p in batch)
                     break
                 except Exception as e:
                     import re

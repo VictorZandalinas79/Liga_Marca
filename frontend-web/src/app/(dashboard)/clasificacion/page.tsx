@@ -15,7 +15,8 @@ function formatKamikazeTime(totalMinutes: number): string {
   return `${mins} min ${secs} s`
 }
 import { applySanctionsToTeam, getCurrentMatchday } from '@/lib/infractions'
-import { getStandings, type UserStanding } from '@/lib/standings'
+import type { UserStanding } from '@/lib/standings'
+import { fetchStandings as fetchServerStandings } from '@/lib/standings-client'
 import { DIVISION_COMBINED, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
 import { advancedOnlyTeamIds, hideSanctionsForMatchday, type FixtureLite } from '@/lib/locked-teams-core'
@@ -108,7 +109,7 @@ export default function ClasificacionPage() {
       const activeMatchdayToFetch = !isOpen ? md : null
 
       const { standings: standingsData, lastPlayedMatchday: maxPlayed, incomplete } =
-        await getStandings(supabase, selectedDivision, activeMatchdayToFetch)
+        await fetchServerStandings(selectedDivision, activeMatchdayToFetch)
 
       if (isStale()) return
 

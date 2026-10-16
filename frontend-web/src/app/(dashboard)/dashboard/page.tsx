@@ -40,7 +40,7 @@ function formatPlayerName(name: string): string {
 import { Badge } from '@/components/ui/badge'
 import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
-import { getStandings, invalidateStandingsCache } from '@/lib/standings'
+import { fetchStandings, invalidateStandingsCache } from '@/lib/standings-client'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 import { fetchLivePenalties } from '@/lib/live-penalties-client'
 interface Player {
@@ -364,7 +364,7 @@ export default function DashboardPage() {
 
       // Usar el motor oficial de clasificación (getStandings) para obtener exactamente
       // las mismas puntuaciones por jornada calculadas para la liga y división.
-      const { standings: standingsData, lastPlayedMatchday } = await getStandings(supabase, userDivision, null);
+      const { standings: standingsData, lastPlayedMatchday } = await fetchStandings(userDivision, null);
 
       if (!standingsData || standingsData.length === 0) return;
 
@@ -1160,7 +1160,7 @@ export default function DashboardPage() {
           setLoadingRanks(false);
           return;
         }
-        const { standings } = await getStandings(supabase, myDivision);
+        const { standings } = await fetchStandings(myDivision);
         if (!standings || standings.length === 0) {
           setLoadingRanks(false);
           return;

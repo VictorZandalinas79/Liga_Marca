@@ -55,7 +55,11 @@ function subscribe(listener: () => void) {
   listeners.add(listener)
   if (!timer) {
     poll()
-    timer = setInterval(poll, POLL_MS)
+    timer = setInterval(() => {
+      // Sin sondeos en pestañas de fondo: nadie ve la lista
+      if (typeof document !== 'undefined' && document.hidden) return
+      poll()
+    }, POLL_MS)
   }
   return () => {
     listeners.delete(listener)

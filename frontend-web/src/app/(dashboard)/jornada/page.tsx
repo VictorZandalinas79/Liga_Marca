@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback, useMemo, Fragment } from 'rea
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle, Printer, FileSpreadsheet, ArrowLeft, ArrowRight } from 'lucide-react'
+import { Medal, Users, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Radio, X, TrendingUp, Search, AlertTriangle, Printer, FileSpreadsheet, ArrowLeft, ArrowRight, Euro } from 'lucide-react'
 import { MetricBreakdown } from '@/components/metric-breakdown'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
@@ -979,7 +979,11 @@ export default function JornadaPage() {
     if (cleanVal.endsWith('k')) {
       return parseFloat(cleanVal.slice(0, -1)) * 1000
     }
-    return parseFloat(cleanVal.replace(/[^0-9.]/g, ''))
+    const num = parseFloat(cleanVal.replace(/[^0-9.]/g, ''))
+    if (!isNaN(num) && num > 0 && num < 1000) {
+      return num * 1000000
+    }
+    return num
   }, [])
 
   const isPlayerMatch = useCallback((p: Player, team: UserTeam, q: string, realTeamIds: string[], minP: string, maxP: string): boolean => {
@@ -1576,181 +1580,253 @@ export default function JornadaPage() {
         </button>
       </div>
 
-      {/* Buscador tipo Ctrl+F */}
+      {/* Buscador tipo Ctrl+F, Escudos y Precios Adaptables */}
       {showEquipos && userTeams.length > 0 && (
-        <div className="sticky top-16 z-30 bg-white/95 backdrop-blur-sm rounded-xl border border-slate-200 shadow-lg px-4 py-3 flex flex-col gap-3">
-          {/* Fila 1: Texto Buscador + Botones Navegación/Limpieza */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setSearchActiveIndex(0)
-                setSearchQuery(searchInputValue.trim())
-              }}
-              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 transition-colors shrink-0 flex items-center justify-center border border-slate-200"
-              title="Buscar"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-            <input
-              type="text"
-              value={searchInputValue}
-              onChange={e => {
-                const val = e.target.value
-                setSearchInputValue(val)
-                if (!val.trim()) {
-                  setSearchActiveIndex(0)
-                  setSearchQuery('')
-                }
-              }}
-              placeholder="Buscar por jugador, equipo o precio…"
-              className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:bg-white"
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  const trimmedInput = searchInputValue.trim()
-                  if (searchQuery !== trimmedInput) {
+        <div className="sticky top-16 z-30 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-md shadow-slate-200/50 p-3 sm:p-3.5 flex flex-col gap-2.5 transition-all">
+          {/* Fila 1: Texto Buscador + Rango de Precios + Navegación */}
+          <div className="flex flex-col lg:flex-row gap-2.5 items-stretch lg:items-center justify-between">
+            {/* Buscador de texto */}
+            <div className="flex-1 min-w-0 relative flex items-center">
+              <div className="absolute left-3 text-slate-400 pointer-events-none flex items-center justify-center">
+                <Search className="w-4 h-4" />
+              </div>
+              <input
+                type="text"
+                value={searchInputValue}
+                onChange={e => {
+                  const val = e.target.value
+                  setSearchInputValue(val)
+                  if (!val.trim()) {
                     setSearchActiveIndex(0)
-                    setSearchQuery(trimmedInput)
-                  } else {
-                    goToMatch(e.shiftKey ? safeActiveIndex - 1 : safeActiveIndex + 1)
+                    setSearchQuery('')
                   }
-                }
-              }}
-            />
-            
-            {/* Resultados y Navegación de coincidencias (si hay algún filtro activo) */}
-            {(searchQuery || selectedRealTeamIds.length > 0 || minPrice || maxPrice) && (
-              <>
-                <span className="text-xs text-slate-500 whitespace-nowrap font-medium px-1">
-                  {matchCount > 0 ? `${safeActiveIndex + 1} / ${matchCount}` : '0 resultados'}
-                </span>
-                <div className="flex items-center gap-0.5 shrink-0">
-                  <button
-                    onClick={() => goToMatch(safeActiveIndex - 1)}
-                    disabled={matchCount === 0}
-                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title="Anterior"
-                  >
-                    <ChevronUp className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => goToMatch(safeActiveIndex + 1)}
-                    disabled={matchCount === 0}
-                    className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title="Siguiente"
-                  >
-                    <ChevronDown className="w-4 h-4" />
-                  </button>
-                </div>
+                }}
+                placeholder="Buscar por jugador, equipo, usuario…"
+                className="w-full bg-slate-50/90 hover:bg-slate-100/70 focus:bg-white border border-slate-200/90 rounded-xl pl-9 pr-8 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all font-normal"
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    const trimmedInput = searchInputValue.trim()
+                    if (searchQuery !== trimmedInput) {
+                      setSearchActiveIndex(0)
+                      setSearchQuery(trimmedInput)
+                    } else {
+                      goToMatch(e.shiftKey ? safeActiveIndex - 1 : safeActiveIndex + 1)
+                    }
+                  }
+                }}
+              />
+              {searchInputValue && (
                 <button
+                  type="button"
                   onClick={() => {
                     setSearchInputValue('')
                     setSearchQuery('')
-                    setSelectedRealTeamIds([])
-                    setMinPrice('')
-                    setMaxPrice('')
                     setSearchActiveIndex(0)
                   }}
-                  className="p-1.5 rounded-lg border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition-colors shrink-0"
-                  title="Limpiar todos los filtros"
+                  className="absolute right-2.5 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors"
+                  title="Borrar texto"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              </>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* Fila 2: Selector de Escudos de Equipos Reales y Rango de Precios */}
-          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between pt-1 border-t border-slate-100">
-            {/* Selector de Escudos de Equipos Reales */}
-            <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden">
-              {/* Botón rápido "Todos" / Deseleccionar */}
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRealTeamIds([])
-                  setSearchActiveIndex(0)
-                }}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg shrink-0 transition-all shadow-sm ${
-                  selectedRealTeamIds.length === 0
-                    ? 'bg-slate-900 text-white shadow-slate-900/20'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200'
-                }`}
-                title="Mostrar todos los equipos"
-              >
-                Todos
-              </button>
+            {/* Rango de Precios + Presets + Navegación */}
+            <div className="flex flex-wrap items-center gap-2 justify-between lg:justify-end shrink-0">
+              {/* Bloque Precio Min - Max */}
+              <div className="inline-flex items-center bg-slate-100/80 hover:bg-slate-100 border border-slate-200/90 rounded-xl p-1 shadow-2xs transition-colors">
+                <div className="flex items-center gap-1 pl-2 pr-1 text-slate-500">
+                  <Euro className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="text-[11px] font-semibold text-slate-700 hidden sm:inline">Precio</span>
+                </div>
+                
+                <input
+                  type="text"
+                  placeholder="Mín (ej. 10M)"
+                  value={minPrice}
+                  onChange={e => {
+                    setMinPrice(e.target.value)
+                    setSearchActiveIndex(0)
+                  }}
+                  className="w-20 sm:w-24 bg-white border border-slate-200/90 rounded-lg px-2 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all font-medium text-center"
+                />
+                
+                <span className="text-slate-400 text-xs font-semibold px-1">—</span>
+                
+                <input
+                  type="text"
+                  placeholder="Máx (ej. 50M)"
+                  value={maxPrice}
+                  onChange={e => {
+                    setMaxPrice(e.target.value)
+                    setSearchActiveIndex(0)
+                  }}
+                  className="w-20 sm:w-24 bg-white border border-slate-200/90 rounded-lg px-2 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all font-medium text-center"
+                />
 
-              {/* Contenedor scrolleable horizontalmente con los escudos */}
-              <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 no-scrollbar">
-                {availableRealTeams.map(t => {
-                  const isSelected = selectedRealTeamIds.includes(t.id)
-                  const hasSelection = selectedRealTeamIds.length > 0
+                {(minPrice || maxPrice) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMinPrice('')
+                      setMaxPrice('')
+                      setSearchActiveIndex(0)
+                    }}
+                    className="p-1 ml-0.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-white transition-colors"
+                    title="Limpiar precio"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Chips rápidos de precios */}
+              <div className="hidden sm:flex items-center gap-1">
+                {[
+                  { label: '< 5M', min: '', max: '5M' },
+                  { label: '5-15M', min: '5M', max: '15M' },
+                  { label: '15-30M', min: '15M', max: '30M' },
+                  { label: '> 30M', min: '30M', max: '' },
+                ].map(preset => {
+                  const isPresetActive = minPrice === preset.min && maxPrice === preset.max
                   return (
                     <button
-                      key={t.id}
+                      key={preset.label}
                       type="button"
-                      title={t.name}
                       onClick={() => {
-                        setSelectedRealTeamIds(prev =>
-                          prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
-                        )
+                        if (isPresetActive) {
+                          setMinPrice('')
+                          setMaxPrice('')
+                        } else {
+                          setMinPrice(preset.min)
+                          setMaxPrice(preset.max)
+                        }
                         setSearchActiveIndex(0)
                       }}
-                      className={`relative group shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                        isSelected
-                          ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm shadow-emerald-500/20 scale-105 ring-2 ring-emerald-400/30'
-                          : hasSelection
-                          ? 'bg-slate-50/70 border border-slate-200/80 opacity-45 hover:opacity-100 hover:border-slate-300 hover:scale-105'
-                          : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm hover:scale-105'
+                      className={`px-2 py-1 text-[11px] font-medium rounded-lg transition-all ${
+                        isPresetActive
+                          ? 'bg-emerald-600 text-white shadow-xs font-semibold'
+                          : 'bg-slate-100/90 hover:bg-slate-200/80 text-slate-600 border border-slate-200/70 hover:text-slate-900'
                       }`}
                     >
-                      {t.logo_url ? (
-                        <img
-                          src={t.logo_url}
-                          alt={t.name}
-                          className="w-5 h-5 sm:w-6 sm:h-6 object-contain pointer-events-none drop-shadow-sm transition-transform group-hover:scale-110"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span className="text-[10px] font-bold text-slate-600">
-                          {t.name.slice(0, 3).toUpperCase()}
-                        </span>
-                      )}
-
-                      {/* Pequeño indicador de selección activa */}
-                      {isSelected && (
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full" />
-                      )}
+                      {preset.label}
                     </button>
                   )
                 })}
               </div>
-            </div>
 
-            {/* Inputs de margen de precio */}
-            <div className="flex items-center gap-1.5 shrink-0 self-end md:self-center">
-              <input
-                type="text"
-                placeholder="Precio Mín (ej. 10M)"
-                value={minPrice}
-                onChange={e => {
-                  setMinPrice(e.target.value)
-                  setSearchActiveIndex(0)
-                }}
-                className="w-full sm:w-32 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
-              />
-              <span className="text-slate-400 text-xs">—</span>
-              <input
-                type="text"
-                placeholder="Precio Máx (ej. 50M)"
-                value={maxPrice}
-                onChange={e => {
-                  setMaxPrice(e.target.value)
-                  setSearchActiveIndex(0)
-                }}
-                className="w-full sm:w-32 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
-              />
+              {/* Resultados y Navegación de coincidencias (si hay algún filtro activo) */}
+              {(searchQuery || selectedRealTeamIds.length > 0 || minPrice || maxPrice) && (
+                <div className="flex items-center gap-1.5 pl-1 shrink-0">
+                  <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 px-2 py-1 rounded-lg whitespace-nowrap">
+                    {matchCount > 0 ? `${safeActiveIndex + 1} / ${matchCount}` : '0 res.'}
+                  </span>
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      onClick={() => goToMatch(safeActiveIndex - 1)}
+                      disabled={matchCount === 0}
+                      className="p-1 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="Anterior coincidencia"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => goToMatch(safeActiveIndex + 1)}
+                      disabled={matchCount === 0}
+                      className="p-1 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title="Siguiente coincidencia"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSearchInputValue('')
+                      setSearchQuery('')
+                      setSelectedRealTeamIds([])
+                      setMinPrice('')
+                      setMaxPrice('')
+                      setSearchActiveIndex(0)
+                    }}
+                    className="p-1 rounded-lg border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                    title="Limpiar todos los filtros"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Fila 2: Selector de Escudos de Equipos Reales */}
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100/90">
+            {/* Botón rápido "Todos" / Deseleccionar */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRealTeamIds([])
+                setSearchActiveIndex(0)
+              }}
+              className={`px-2.5 py-1 sm:py-1.5 text-xs font-semibold rounded-xl shrink-0 transition-all flex items-center gap-1.5 shadow-2xs ${
+                selectedRealTeamIds.length === 0
+                  ? 'bg-slate-900 text-white shadow-slate-900/20'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-200'
+              }`}
+              title={selectedRealTeamIds.length > 0 ? "Quitar filtro de equipos" : "Mostrando todos los equipos"}
+            >
+              <span>Todos</span>
+              {selectedRealTeamIds.length > 0 && (
+                <span className="w-4 h-4 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {selectedRealTeamIds.length}
+                </span>
+              )}
+            </button>
+
+            {/* Contenedor adaptable de escudos: se ajusta a la pantalla siempre sin salirse */}
+            <div className="flex-1 flex flex-wrap items-center gap-1 sm:gap-1.5">
+              {availableRealTeams.map(t => {
+                const isSelected = selectedRealTeamIds.includes(t.id)
+                const hasSelection = selectedRealTeamIds.length > 0
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    title={t.name}
+                    onClick={() => {
+                      setSelectedRealTeamIds(prev =>
+                        prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                      )
+                      setSearchActiveIndex(0)
+                    }}
+                    className={`relative group shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                      isSelected
+                        ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm shadow-emerald-500/20 scale-105 ring-2 ring-emerald-400/30'
+                        : hasSelection
+                        ? 'bg-slate-50/70 border border-slate-200/80 opacity-40 hover:opacity-100 hover:border-slate-300 hover:scale-105'
+                        : 'bg-white border border-slate-200/90 hover:border-slate-300 hover:shadow-xs hover:scale-105'
+                    }`}
+                  >
+                    {t.logo_url ? (
+                      <img
+                        src={t.logo_url}
+                        alt={t.name}
+                        className="w-4.5 h-4.5 sm:w-5 sm:h-5 object-contain pointer-events-none drop-shadow-2xs transition-transform group-hover:scale-110"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="text-[10px] font-bold text-slate-600">
+                        {t.name.slice(0, 3).toUpperCase()}
+                      </span>
+                    )}
+
+                    {/* Pequeño indicador de selección activa */}
+                    {isSelected && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full shadow-2xs" />
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

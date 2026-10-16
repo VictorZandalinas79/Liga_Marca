@@ -114,15 +114,16 @@ interface SharedData {
 async function fetchPaginated<T>(
   supabase: any,
   table: string,
-  select: string
+  select: string,
+  filter?: (query: any) => any
 ): Promise<{ rows: T[]; incomplete: boolean }> {
   const rows: T[] = []
   const pageSize = 1000
   let from = 0
   while (true) {
-    const { data: page, error } = await supabase
-      .from(table)
-      .select(select)
+    let query = supabase.from(table).select(select)
+    if (filter) query = filter(query)
+    const { data: page, error } = await query
       .order('id', { ascending: true })
       .range(from, from + pageSize - 1)
     if (error) {
@@ -421,10 +422,14 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
       : // Fallback robusto para evitar contar todas las sesiones históricas si falla el deadline
       new Date('2026-08-14T00:00:00.000Z')
 
-  const { data: sessionsData } = await supabase
-    .from('user_sessions')
-    .select('user_id')
-    .gte('started_at', lockTime.toISOString())
+  // Paginado: PostgREST corta cada respuesta en 1.000 filas y la tabla ya las
+  // supera, así que una sola consulta dejaba sin contar parte de las aperturas.
+  const { rows: sessionsData } = await fetchPaginated<{ user_id: string }>(
+    supabase,
+    'user_sessions',
+    'user_id',
+    q => q.gte('started_at', lockTime.toISOString())
+  )
 
   const sessionCounts = new Map<string, number>()
   for (const s of sessionsData ?? []) {

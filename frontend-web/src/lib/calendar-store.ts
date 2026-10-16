@@ -28,15 +28,44 @@ export type Calendar = {
 }
 
 // Algo menos que el minuto de refresco de los hooks, para que el tick de cada
-// minuto vea la caché caducada y la renueve una sola vez.
-const TTL_MS = 55 * 1000
+// minuto vea la caché caducada y la renueve una sola vez. Solo se usa con
+// partidos en juego o a punto de empezar, cuando cambian estado y marcador.
+const LIVE_TTL_MS = 55 * 1000
+// Fuera de esas ventanas el calendario apenas cambia (horarios, aplazamientos):
+// releerlo cada minuto costaba ~18 MB/día de egress por pestaña abierta.
+const IDLE_TTL_MS = 5 * 60 * 1000
+// Ventana "en juego": desde 1 h antes del inicio hasta 4 h después.
+const LIVE_BEFORE_MS = 60 * 60 * 1000
+const LIVE_AFTER_MS = 4 * 60 * 60 * 1000
+
+function hasFixturesInPlay(fixtures: CalendarFixture[] | null, now: number): boolean {
+  return (fixtures || []).some(f => {
+    if ((f.status || '').toLowerCase() === 'live') return true
+    if (!f.start_time) return false
+    const t = new Date(f.start_time).getTime()
+    return now >= t - LIVE_BEFORE_MS && now <= t + LIVE_AFTER_MS
+  })
+}
+
+function isFresh(entry: { at: number; value: Calendar }, now: number): boolean {
+  // Pestaña en segundo plano: nadie mira la cuenta atrás, se sirve lo que hay.
+  // Al volver a primer plano, el siguiente tick de los hooks ya la renueva.
+  if (typeof document !== 'undefined' && document.hidden) return true
+  const ttl = hasFixturesInPlay(entry.value.fixtures, now) ? LIVE_TTL_MS : IDLE_TTL_MS
+  return now - entry.at < ttl
+}
 
 let cached: { at: number; value: Calendar } | null = null
 let inFlight: Promise<Calendar> | null = null
 let teamNames: Map<string, string> | null = null
 
+/** Fuerza la relectura en la siguiente llamada (p. ej. tras cambiar la config de la liga). */
+export function invalidateCalendar() {
+  cached = null
+}
+
 export function loadCalendar(): Promise<Calendar> {
-  if (cached && Date.now() - cached.at < TTL_MS) return Promise.resolve(cached.value)
+  if (cached && isFresh(cached, Date.now())) return Promise.resolve(cached.value)
   if (inFlight) return inFlight
 
   inFlight = (async () => {

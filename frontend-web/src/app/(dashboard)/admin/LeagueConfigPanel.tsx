@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Settings, Plus, X, Save, Check } from 'lucide-react'
 import { DEFAULT_LEAGUE_CONFIG, parseFormation, type LeagueConfig } from '@/lib/league-config'
+import { invalidateCalendar } from '@/lib/calendar-store'
 
 export function LeagueConfigPanel({ onStateChange }: { onStateChange?: (state: any) => void }) {
   const [config, setConfig] = useState<LeagueConfig>(DEFAULT_LEAGUE_CONFIG)
@@ -73,6 +74,8 @@ export function LeagueConfigPanel({ onStateChange }: { onStateChange?: (state: a
         throw new Error(b.error || 'No se pudo guardar')
       }
       const body = await res.json()
+      // Los offsets de bloqueo viven en la caché del calendario (hasta 5 min).
+      invalidateCalendar()
       if (body.config) {
         const updatedConfig = { ...DEFAULT_LEAGUE_CONFIG, ...body.config }
         setConfig(updatedConfig)
