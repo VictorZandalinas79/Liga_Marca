@@ -104,23 +104,27 @@ export default function ClasificacionPage() {
 
     const fetchStandings = async () => {
       if (!isBackgroundRefresh && rawStandings.length === 0) setLoading(true)
-      const { currentMatchday: md, isLeagueOpen: isOpen } = await fetchMatchdays()
+      try {
+        const { currentMatchday: md, isLeagueOpen: isOpen } = await fetchMatchdays()
 
-      const activeMatchdayToFetch = !isOpen ? md : null
+        const activeMatchdayToFetch = !isOpen ? md : null
 
-      const { standings: standingsData, lastPlayedMatchday: maxPlayed, incomplete } =
-        await fetchServerStandings(selectedDivision, activeMatchdayToFetch)
+        const { standings: standingsData, lastPlayedMatchday: maxPlayed, incomplete } =
+          await fetchServerStandings(selectedDivision, activeMatchdayToFetch)
 
-      if (isStale()) return
+        if (isStale() || incomplete) return
 
-      if (incomplete) {
-        if (!isBackgroundRefresh) setLoading(false)
-        return
+        setLastPlayedMatchday(maxPlayed)
+        setRawStandings(standingsData || [])
+      } catch (err) {
+        console.error('[CLASIFICACION] Error cargando la clasificación:', err)
+      } finally {
+        // Siempre se quita el loader del fetch vigente, aunque falle o venga
+        // incompleto. Antes solo se quitaba si no era un refresco "de fondo",
+        // y si la primera carga quedaba obsoleta (otro fetch arrancó mientras
+        // estaba en vuelo) el loader no se quitaba nunca.
+        if (!isStale()) setLoading(false)
       }
-
-      setLastPlayedMatchday(maxPlayed)
-      setRawStandings(standingsData || [])
-      setLoading(false)
     }
 
     fetchStandings()

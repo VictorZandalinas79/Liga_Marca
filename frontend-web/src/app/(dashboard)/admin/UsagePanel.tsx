@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AlertCircle, AlertTriangle, Gauge, RefreshCw } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Gauge, RefreshCw, RotateCcw } from 'lucide-react'
 
 type Alert = { level: 'warning' | 'critical'; area: string; message: string }
 
@@ -14,6 +14,13 @@ type UsageReport = {
   queries: { since: string | null; top: { query: string; calls: number; total_ms: number; mean_ms: number; rows: number }[] }
   logs: { table: string; rows: number; total_bytes: number; oldest: string | null; cleanup_sql: string }[]
   alerts: Alert[]
+}
+
+type QueryStats = {
+  since: string | null
+  generated_at: string
+  api_requests: number
+  top: { tabla: string | null; columnas: string | null; query: string; calls: number; es_api: boolean; escritura: boolean }[]
 }
 
 function formatBytes(bytes: number) {
@@ -45,7 +52,9 @@ function UsageBar({ label, value, limit, display }: { label: string; value: numb
 
 export function UsagePanel() {
   const [report, setReport] = useState<UsageReport | null>(null)
+  const [queryStats, setQueryStats] = useState<QueryStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [resetting, setResetting] = useState(false)
   const [error, setError] = useState('')
 
   const loadReport = async () => {
@@ -56,6 +65,7 @@ export function UsagePanel() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al cargar el consumo')
       setReport(data.report)
+      setQueryStats(data.queryStats)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -66,6 +76,27 @@ export function UsagePanel() {
   useEffect(() => {
     loadReport()
   }, [])
+
+  const resetQueryStats = async () => {
+    if (!confirm('¿Poner a cero el contador de consultas? Se pierde lo acumulado y se empieza a medir desde ahora.')) return
+    setResetting(true)
+    setError('')
+    try {
+      const res = await fetch('/api/admin/usage', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al reiniciar el contador')
+      await loadReport()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  // Días cubiertos por el contador, para dar llamadas por día.
+  const statsDays = queryStats?.since
+    ? Math.max(1 / 24, (new Date(queryStats.generated_at).getTime() - new Date(queryStats.since).getTime()) / 86_400_000)
+    : null
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -141,10 +172,72 @@ export function UsagePanel() {
               limit={report.users.limit}
               display={`${report.users.mau} / 50.000`}
             />
-            <p className="text-xs text-slate-400">
-              El egress (5 GB/mes de datos servidos) no se puede medir desde la base de datos: consúltalo en el
-              dashboard de Supabase → Organization → Usage.
-            </p>
+          </div>
+
+          <div>
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <h3 className="text-sm font-bold text-slate-900">Qué gasta egress: consultas más llamadas</h3>
+              {queryStats && (
+                <button
+                  onClick={resetQueryStats}
+                  disabled={resetting}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 ${resetting ? 'animate-spin' : ''}`} />
+                  Reiniciar contador
+                </button>
+              )}
+            </div>
+            {!queryStats ? (
+              <p className="text-sm text-slate-400">
+                Falta aplicar la migración 040_admin_query_stats.sql en el SQL Editor de Supabase.
+              </p>
+            ) : (
+              <>
+                <p className="text-xs text-slate-400 mb-2">
+                  Desde {formatDate(queryStats.since)}:{' '}
+                  <b className="text-slate-600">{queryStats.api_requests.toLocaleString('es-ES')}</b> peticiones a la API
+                  {statsDays && <> (~{Math.round(queryStats.api_requests / statsDays).toLocaleString('es-ES')} al día)</>}.
+                  Cada llamada de una lectura es una respuesta que sale de Supabase: las de arriba, multiplicadas
+                  por lo que pesa cada una, son las que se comen los 5 GB/mes. Los MB reales por día están en el
+                  dashboard de Supabase → Organization → Usage.
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-slate-500 text-xs uppercase tracking-wide">
+                        <th className="px-3 py-2 font-semibold">Tabla</th>
+                        <th className="px-3 py-2 font-semibold">Columnas / consulta</th>
+                        <th className="px-3 py-2 font-semibold text-right">Llamadas</th>
+                        <th className="px-3 py-2 font-semibold text-right">Al día</th>
+                        <th className="px-3 py-2 font-semibold text-right">%</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {queryStats.top.map((q, i) => (
+                        <tr key={i} className={q.es_api ? '' : 'text-slate-400'}>
+                          <td className="px-3 py-2 font-mono text-xs text-slate-700 whitespace-nowrap">
+                            {q.tabla ?? '—'}
+                            {q.escritura && <span className="ml-1 text-[10px] text-slate-400">(escritura)</span>}
+                            {!q.es_api && <span className="ml-1 text-[10px] text-slate-400">(interna)</span>}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-slate-500 max-w-md">
+                            <span className="line-clamp-2 break-all" title={q.query}>{q.columnas ?? q.query}</span>
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-700 font-medium">{q.calls.toLocaleString('es-ES')}</td>
+                          <td className="px-3 py-2 text-right text-slate-500">
+                            {statsDays ? Math.round(q.calls / statsDays).toLocaleString('es-ES') : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-400">
+                            {queryStats.api_requests > 0 ? ((100 * q.calls) / queryStats.api_requests).toFixed(1) : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
 
           <div>

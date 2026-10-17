@@ -92,6 +92,88 @@ const MATCH_DURATION_MS = 2.5 * 60 * 60 * 1000
 // primer partido. Durante esa hora ya se ven los 11 de cada usuario.
 const LOCK_LEAD_MS = 60 * 60 * 1000
 
+type LineupRow = {
+  team_id: string
+  player_id: string
+  is_starter: boolean
+  is_captain: boolean
+  matchday: number
+  replaced_player_id: string | null
+  position: string | null
+}
+
+const LINEUP_COLUMNS = 'team_id, player_id, is_starter, is_captain, matchday, replaced_player_id, position'
+
+/**
+ * Alineaciones de la jornada `matchday` y de la anterior para cada equipo: la
+ * última guardada con jornada <= matchday (`current`) y la última con jornada
+ * < matchday (`prev`).
+ *
+ * Antes se pedían todas las jornadas de todos los equipos de la división en dos
+ * consultas (~190 KB cada una, y cortadas en 1.000 filas por PostgREST) en cada
+ * refresco de 45 s. carry_over_lineups rellena todas las jornadas, así que casi
+ * siempre basta con las dos últimas; solo un equipo sin filas en esa ventana
+ * baja a buscar más atrás.
+ */
+async function fetchLineupWindow(
+  supabase: ReturnType<typeof createClient>,
+  teamIds: string[],
+  matchday: number
+): Promise<{ current: LineupRow[]; prev: LineupRow[] }> {
+  const fetchAll = async (ids: string[], from: number | null, to: number) => {
+    const rows: LineupRow[] = []
+    const pageSize = 1000
+    for (let offset = 0; ; offset += pageSize) {
+      let query = supabase.from('team_players').select(LINEUP_COLUMNS).in('team_id', ids).lte('matchday', to)
+      if (from !== null) query = query.gte('matchday', from)
+      const { data, error } = await query
+        .order('matchday', { ascending: false })
+        .order('team_id', { ascending: true })
+        .order('player_id', { ascending: true })
+        .range(offset, offset + pageSize - 1)
+      if (error || !data) return rows
+      rows.push(...(data as LineupRow[]))
+      if (data.length < pageSize) return rows
+    }
+  }
+
+  const rows = await fetchAll(teamIds, matchday - 1, matchday)
+
+  const latestMd = (source: LineupRow[], below: number) => {
+    const map = new Map<string, number>()
+    for (const r of source) {
+      if (r.matchday > below) continue
+      const cur = map.get(r.team_id)
+      if (cur === undefined || r.matchday > cur) map.set(r.team_id, r.matchday)
+    }
+    return map
+  }
+
+  // En la ventana [matchday-1, matchday] la actual siempre se resuelve si el
+  // equipo tiene alguna fila; la anterior solo si tiene la de matchday-1.
+  const currentMd = latestMd(rows, matchday)
+  const prevMd = latestMd(rows, matchday - 1)
+  const missing = teamIds.filter(id => !prevMd.has(id))
+
+  let older: LineupRow[] = []
+  if (missing.length > 0) {
+    older = await fetchAll(missing, null, matchday - 2)
+    const olderMd = latestMd(older, matchday - 2)
+    for (const id of missing) {
+      const md = olderMd.get(id)
+      if (md === undefined) continue
+      prevMd.set(id, md)
+      if (!currentMd.has(id)) currentMd.set(id, md)
+    }
+  }
+
+  const all = older.length > 0 ? [...rows, ...older] : rows
+  return {
+    current: all.filter(r => r.matchday === currentMd.get(r.team_id)),
+    prev: all.filter(r => r.matchday === prevMd.get(r.team_id)),
+  }
+}
+
 export default function JornadaPage() {
   const config = useLeagueConfig()
   const [loading, setLoading] = useState(true)
@@ -287,7 +369,7 @@ export default function JornadaPage() {
   }
 
   // Cargar equipos y jugadores de la jornada seleccionada
-  const loadUserTeamsForMatchday = async (matchday: number, silent = false, force = false) => {
+  const loadUserTeamsForMatchdayInner = async (matchday: number, silent = false, force = false) => {
     const cacheKey = `${matchday}-${selectedDivision ?? 'all'}`
     const nowMs = Date.now()
     const cached = userTeamsCache.current.get(cacheKey)
@@ -339,27 +421,11 @@ export default function JornadaPage() {
 
     const teamIdsUser = userTeamsData.map(t => t.id)
 
-    // Cargar todos los team_players hasta la jornada actual
-    const { data: allTeamPlayers } = await supabase
-      .from('team_players')
-      .select('team_id, player_id, is_starter, is_captain, matchday, replaced_player_id, position')
-      .in('team_id', teamIdsUser)
-      .lte('matchday', matchday)
-      .order('matchday', { ascending: false })
+    // Alineación de cada equipo en su última jornada registrada <= matchday, y
+    // la de su última jornada < matchday (para detectar cambios)
+    const { current: teamPlayersData, prev: prevAllData } = await fetchLineupWindow(supabase, teamIdsUser, matchday)
 
-    // Para cada equipo, encontrar su jornada máxima registrada <= matchday
-    const maxMatchdayByTeam = new Map<string, number>()
-    allTeamPlayers?.forEach(p => {
-      const currentMax = maxMatchdayByTeam.get(p.team_id)
-      if (currentMax === undefined || p.matchday > currentMax) {
-        maxMatchdayByTeam.set(p.team_id, p.matchday)
-      }
-    })
-
-    // Filtrar los jugadores de cada equipo correspondientes a su última jornada registrada
-    let teamPlayersData = allTeamPlayers?.filter(p => p.matchday === maxMatchdayByTeam.get(p.team_id)) || []
-
-    if (!teamPlayersData || teamPlayersData.length === 0) {
+    if (teamPlayersData.length === 0) {
       setUserTeams([])
       setLoading(false)
       return
@@ -368,24 +434,9 @@ export default function JornadaPage() {
     const playerIds = [...new Set(teamPlayersData.map(tp => tp.player_id))]
 
     // Lineup de la jornada ANTERIOR por equipo (para detectar cambios)
-    const { data: prevAllData } = await supabase
-      .from('team_players')
-      .select('team_id, player_id, is_starter, matchday')
-      .in('team_id', teamIdsUser)
-      .lt('matchday', matchday)
-      .order('matchday', { ascending: false })
-
-    const latestMdPerTeam = new Map<string, number>()
-    prevAllData?.forEach(tp => {
-      const cur = latestMdPerTeam.get(tp.team_id)
-      if (cur === undefined || tp.matchday > cur) latestMdPerTeam.set(tp.team_id, tp.matchday)
-    })
-
     const prevStartersByTeam = new Map<string, string[]>()
     const prevSquadByTeam = new Map<string, string[]>()
-    prevAllData?.forEach(tp => {
-      if (tp.matchday !== latestMdPerTeam.get(tp.team_id)) return
-      
+    prevAllData.forEach(tp => {
       if (!prevSquadByTeam.has(tp.team_id)) prevSquadByTeam.set(tp.team_id, [])
       prevSquadByTeam.get(tp.team_id)!.push(tp.player_id)
       
@@ -523,7 +574,7 @@ export default function JornadaPage() {
     const playersById = new Map(playersData?.map(p => [p.id, p]) || [])
 
     // Jugadores que salieron o fueron sustituidos
-    const allPrevIds = [...new Set([...(prevAllData || []).map(tp => tp.player_id)])]
+    const allPrevIds = [...new Set(prevAllData.map(tp => tp.player_id))]
     const replacedIds = teamPlayersData.map(tp => tp.replaced_player_id).filter(Boolean) as string[]
     const outPlayerIds = [...new Set([...allPrevIds, ...replacedIds])].filter(id => !playerIds.includes(id))
     const allPlayersById = new Map(playersById)
@@ -792,8 +843,22 @@ export default function JornadaPage() {
     setLoading(false)
   }
 
+  // Envoltorio: si cualquier consulta falla a mitad de la carga, el loader se
+  // quita igualmente (antes la excepción lo dejaba girando para siempre).
+  const loadUserTeamsForMatchday = async (matchday: number, silent = false, force = false) => {
+    try {
+      await loadUserTeamsForMatchdayInner(matchday, silent, force)
+    } catch (err) {
+      console.error('[JORNADA] Error cargando los equipos de la jornada:', err)
+      if (!silent) setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    fetchMatchdays()
+    fetchMatchdays().catch(err => {
+      console.error('[JORNADA] Error cargando las jornadas:', err)
+      setLoading(false)
+    })
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
