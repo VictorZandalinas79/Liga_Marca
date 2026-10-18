@@ -50,7 +50,12 @@ UPCOMING_WINDOW = 30    # empieza dentro de los próximos 30 min (alineaciones)
 # siguen refrescando por la red de seguridad (b) hasta pasar a 'finished'.
 LIVE_WINDOW = 180
 
-TERMINAL_STATUSES = {"finished", "cancelled", "postponed", "suspended"}
+TERMINAL_STATUSES = {"finished", "cancelled"}
+# Un partido aplazado o suspendido a medias NO es terminal: cuando Opta publica
+# la nueva fecha, el sync de calendario mueve su start_time y entra otra vez en
+# la ventana de tiempo, así que se vuelve a sincronizar y el motor lo pasa a
+# 'live' al ver matchStatus = Playing. Mientras no haya fecha nueva, su
+# start_time es el antiguo (pasado) y queda fuera de la ventana.
 
 
 def log(msg: str):

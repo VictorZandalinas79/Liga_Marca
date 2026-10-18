@@ -1456,11 +1456,76 @@ class MatchEventDownloader:
         except Exception as e:
             print(f"      ❌ Fallo promocionando {prov_id} a {real_id}: {e}")
 
+    @staticmethod
+    def resolve_match_status(data, events, saw_collection_end, match_started):
+        """Decide el estado del partido a partir del feed de Opta.
+
+        Devuelve (match_status, match_ended, match_started).
+
+        Lo que dice Opta en liveData.matchDetails:
+          - matchStatus: Fixture / Playing / Played / Suspended / Postponed /
+            Cancelled. Es la fuente de verdad del estado.
+          - period[].suspension[]: cada parada con start/end/reason.
+
+        El typeId 37 (fin de la recogida de datos) NO significa "partido
+        terminado": Opta lo emite también al suspender definitivamente. El
+        10/10/2026 el Rayo-Athletic (J8) se suspendió en el 24', el feed trajo
+        un 37 en el periodId 14 y el motor lo marcó 'finished', con lo que la
+        J8 se cerró y se calcularon pagos y sanciones con 24 minutos jugados.
+        Y al reanudarse otro día ese 37 antiguo seguiría en el feed.
+
+        Suspensión temporal (tormenta, incidente, "clock affecting") frente a
+        definitiva: en la temporal la parada acaba teniendo `end` y no hay 37;
+        en la definitiva queda abierta con reason "early end" o Opta cierra la
+        recogida (37) estando en Suspended. Solo la definitiva pasa a
+        'postponed'; la temporal sigue 'live' para que el cron la refresque.
+        """
+        details = (data.get('liveData') or {}).get('matchDetails') or {}
+        raw = str(details.get('matchStatus') or '').strip().lower()
+
+        open_suspensions = [
+            s for p in (details.get('period') or [])
+            for s in (p.get('suspension') or [])
+            if not s.get('end')
+        ]
+        early_end = any(
+            'early end' in str(s.get('reason') or '').lower() for s in open_suspensions
+        )
+
+        # Respaldo heredado: qualifierId 227 fuera del anuncio de alineación
+        # (typeId 34 usa q227 para listas de ceros, no es suspensión).
+        has_q227 = any(
+            e.get('typeId') != 34 and any(q.get('qualifierId') == 227 for q in e.get('qualifier', []))
+            for e in events
+        )
+
+        if raw == 'cancelled':
+            print("   ❌ Partido cancelado en Opta (matchStatus = Cancelled)")
+            return 'cancelled', False, match_started
+        if raw == 'postponed' or (raw == 'suspended' and (saw_collection_end or early_end)) or has_q227:
+            print(f"   🌧️ Partido suspendido/aplazado (matchStatus = {raw or '-'}, "
+                  f"early end = {early_end}, typeId 37 = {saw_collection_end}, q227 = {has_q227}). "
+                  f"Queda 'postponed' hasta que se reanude.")
+            return 'postponed', False, match_started
+        if raw == 'suspended':
+            print("   ⏸️ Parada temporal (matchStatus = Suspended sin cierre): sigue en vivo")
+            return None, False, match_started
+
+        if raw:
+            # Con matchStatus presente, solo 'Played' (o 'Awarded', resultado
+            # dado en los despachos) cierra el partido. Un
+            # 'Fixture' con eventos es un partido suspendido que ya tiene nueva
+            # fecha pero aún no se ha reanudado: no se toca su estado.
+            return None, raw in ('played', 'awarded'), match_started and raw != 'fixture'
+
+        # Feed sin matchStatus: se mantiene el criterio antiguo (typeId 37).
+        return None, saw_collection_end, match_started
+
     def update_match_score(self, match_ended=False, current_minute=0, match_started=True, match_status=None):
         """Actualiza el marcador del partido en la tabla fixtures.
 
-        match_ended=True solo cuando la API ha emitido el evento de tiempo
-        completo. Mientras el partido sigue en juego dejamos status='live'
+        match_ended=True solo cuando Opta da el partido por jugado (ver
+        resolve_match_status). Mientras el partido sigue en juego dejamos status='live'
         para que el sincronizador automático lo siga refrescando cada pocos
         minutos; al terminar lo marcamos 'finished' y el cron deja de tocarlo.
 
@@ -1876,19 +1941,11 @@ class MatchEventDownloader:
 
             self.upload_to_supabase()
 
-            # Detectar si algún evento contiene qualifierId 227 (partido suspendido que se reanudará otro día)
-            # NOTA: typeId 34 es anuncio de alineación y usa q227 para listas de ceros (no es suspensión)
-            has_q227 = any(
-                e.get('typeId') != 34 and any(q.get('qualifierId') == 227 for q in e.get('qualifier', []))
-                for e in events
+            match_status_to_pass, match_ended, match_started = self.resolve_match_status(
+                data, events, match_ended, match_started
             )
 
-            match_status_to_pass = None
-            if has_q227:
-                match_status_to_pass = 'postponed'
-                print(f"   🌧️ Partido suspendido/aplazado detectado (qualifierId 227 = True)")
-
-            # Actualizar marcador del partido (solo 'finished' si llegó el tiempo completo)
+            # Actualizar marcador del partido (solo 'finished' si Opta lo da por jugado)
             self.update_match_score(
                 match_ended=match_ended,
                 current_minute=current_minute,

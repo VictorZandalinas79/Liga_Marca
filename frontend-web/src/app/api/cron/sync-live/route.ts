@@ -29,7 +29,10 @@ function createReadOnlySupabase() {
 
 const UPCOMING_WINDOW_MIN = 30
 const LIVE_WINDOW_MIN = 180
-const TERMINAL_STATUSES = new Set(['finished', 'cancelled', 'postponed'])
+// 'postponed'/'suspended' no son terminales: al reprogramarse, su nuevo
+// start_time entra en la ventana y hay que volver a sincronizarlos (ver
+// ci/run_live_sync.py).
+const TERMINAL_STATUSES = new Set(['finished', 'cancelled'])
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET
