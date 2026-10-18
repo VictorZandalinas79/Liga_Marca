@@ -837,7 +837,7 @@ export default function PartidoDetallePage() {
               <img src={playerTeam.logo_url} alt={playerTeam.name} className="w-32 h-32 sm:w-40 sm:h-40 object-contain -rotate-12 scale-125 grayscale" />
             </div>
           )}
-          <CardContent className="px-1 pt-2.5 pb-1 sm:p-2.5 flex flex-col gap-3 sm:gap-4">
+          <CardContent className="@container px-1 pt-2.5 pb-1 sm:p-2.5 flex flex-col gap-3 sm:gap-4">
             {/* Fila 1: Nombre completo del jugador (toda la línea para él) */}
             <p className="text-[10.5px] sm:text-xs font-black uppercase tracking-wider text-white leading-tight relative z-20 drop-shadow-md text-center px-6 sm:px-7 w-full -mt-1 sm:mt-0">
               <span className="block sm:hidden">
@@ -849,10 +849,10 @@ export default function PartidoDetallePage() {
             </p>
  
             {/* Fila 2: stats, Foto, y puntos/eventos */}
-            <div className="grid grid-cols-[1fr_auto_1fr] sm:grid-cols-3 items-center gap-1 sm:gap-2 w-full px-0.5 sm:px-0">
+            <div className="grid grid-cols-[1fr_auto_1fr] sm:grid-cols-3 items-center gap-0.5 @[150px]:gap-1 sm:gap-2 w-full px-0.5 sm:px-0">
               
               {/* Col 1: Escudo, Demarcación, Minutos */}
-              <div className="min-w-[65px] sm:min-w-[75px] flex flex-col items-start justify-center justify-self-start gap-1 relative z-20">
+              <div className="min-w-0 @[150px]:min-w-[65px] @[220px]:min-w-[75px] flex flex-col items-start justify-center justify-self-start gap-1 relative z-20">
                 <span className={`inline-flex items-center px-1.5 py-[3px] rounded text-[10px] sm:text-[11px] font-black leading-none uppercase tracking-wider shrink-0 shadow-sm ${getPositionColor(player.position)}`}>
                   {getPositionLabel(player.position)}
                 </span>
@@ -865,9 +865,9 @@ export default function PartidoDetallePage() {
                   {player.is_starter ? 'TIT' : 'SUP'}
                 </span>
  
-                <span className="inline-flex items-center gap-1 bg-slate-900 border border-slate-700 rounded px-1.5 py-[3px] leading-none shadow-md shrink-0">
-                  <Timer className="w-3 h-3 text-slate-400 shrink-0" />
-                  <span className={`text-[11px] sm:text-xs font-mono font-black tracking-wider ${
+                <span className="inline-flex items-center gap-0.5 @[150px]:gap-1 bg-slate-900 border border-slate-700 rounded px-1 @[150px]:px-1.5 py-[3px] leading-none shadow-md shrink-0">
+                  <Timer className="w-2.5 h-2.5 @[150px]:w-3 @[150px]:h-3 text-slate-400 shrink-0" />
+                  <span className={`text-[9px] @[150px]:text-[11px] @[220px]:text-xs font-mono font-black tracking-normal @[150px]:tracking-wider ${
                     (player.minutes_played || 0) >= 59 ? 'text-emerald-400' : 'text-orange-400'
                   }`}>
                     {player.minutes_played || 0}′
@@ -876,7 +876,7 @@ export default function PartidoDetallePage() {
               </div>
 
               {/* Col 2: Foto (contenedor de tamaño fijo) */}
-              <div className="relative w-10 h-10 sm:w-11 sm:h-11 shrink-0 justify-self-center z-0 translate-y-1 sm:translate-y-1.5">
+              <div className="relative w-8 h-8 @[150px]:w-10 @[150px]:h-10 @[220px]:w-11 @[220px]:h-11 shrink-0 justify-self-center z-0 translate-y-1 sm:translate-y-1.5">
                 {player.photo ? (
                   <img
                     src={player.photo}
@@ -891,13 +891,13 @@ export default function PartidoDetallePage() {
                 ) : null}
                 <DorsalBadge
                   number={player.shirt_number || '?'}
-                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-md absolute inset-0 ${player.photo ? 'hidden' : ''}`}
+                  className={`w-full h-full rounded-md absolute inset-0 ${player.photo ? 'hidden' : ''}`}
                 />
               </div>
 
               {/* Col 3: Puntos y Eventos/Iconos (Alineados a la derecha) */}
               <div className="flex flex-col items-end justify-center justify-self-end gap-0.5 relative z-10">
-                <span className={`text-2xl sm:text-3xl font-extrabold leading-none text-right drop-shadow-sm ${
+                <span className={`text-xl @[150px]:text-2xl @[220px]:text-3xl font-extrabold leading-none text-right whitespace-nowrap drop-shadow-sm ${
                   (player.total_points || 0) < 0 ? 'text-red-500' : (player.total_points || 0) >= 0 && (player.total_points || 0) < 6 ? 'text-orange-500' : 'text-emerald-400'
                 }`}>
                   {Number(player.total_points || 0).toFixed(1)}

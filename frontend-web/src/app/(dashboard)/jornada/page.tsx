@@ -1004,7 +1004,8 @@ export default function JornadaPage() {
 
   const fmtValor = (v: number) => v > 0 ? `${v}M` : '-'
 
-  const getJugadoresJugaron = (jugadores: Player[]) => jugadores.filter(p => p.hasPlayed).length
+  // Cuenta tanto los que ya jugaron como los que están jugando ahora mismo.
+  const getJugadoresJugaron = (jugadores: Player[]) => jugadores.filter(p => p.hasPlayed || p.isPlaying).length
 
   const getPromedio = (team: UserTeam) => {
     const jugaron = getJugadoresJugaron(team.jugadores)
