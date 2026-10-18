@@ -1,56 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-import { unstable_cache } from 'next/cache'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSharedReadSupabase, getRequestAuth } from '@/lib/supabase/shared-read'
-import { getLiveInfractions, getCurrentMatchday, canShowInfractionsForMatchday } from '@/lib/infractions'
-import { isDivisionId } from '@/lib/divisions'
+import { canShowInfractionsFrom, currentMatchdayFrom } from '@/lib/infractions'
+import { getDataVersion, getServerCalendar } from '@/lib/data-version'
+import { getCachedLiveInfractions, liveInfractionsForDivision } from '@/lib/live-infractions-cache'
 
 // Sanciones en vivo por (jornada, división).
 //
-// Cada cálculo descarga team_players, players y fixtures (~200 KB de egress de
-// Supabase). La caché en memoria anterior vivía en cada instancia de Vercel y se
-// perdía con cada arranque en frío; la Data Cache se comparte entre instancias.
-// El resultado no depende del usuario: se calcula con el token de quien pida
-// primero y lo reutilizan todos.
-const REVALIDATE_S = 60
-
-async function computeLiveInfractions(supabase: SupabaseClient, matchday: number, division: number | null): Promise<any[]> {
-  // Mientras el proceso de cambios (mercado/alineaciones) está abierto para esta jornada,
-  // no deben mostrarse sanciones en vivo: las alineaciones aún pueden cambiar.
-  // Tampoco se muestran si la jornada tiene un partido descolocado (adelantado
-  // o aplazado) sin resolver: hasta que se complete del todo, sin que otra
-  // jornada distinta se juegue por medio, sus sanciones no son fiables.
-  const canShow = await canShowInfractionsForMatchday(supabase, matchday)
-  if (!canShow) return []
-
-  const infractions = await getLiveInfractions(supabase, matchday, division)
-
-  // Verificar si ya hay sanciones oficiales consolidadas en base de datos para esta jornada.
-  // Si las hay, no mostramos las infracciones en vivo (que son temporales/duplicadas).
-  // La comprobación es por división: cada una se consolida por su cuenta, y que
-  // otra ya tenga sus multas no significa que esta las tenga.
-  let penaltiesQuery = supabase
-    .from('penalties')
-    .select('id')
-    .eq('matchday', matchday)
-    .limit(1)
-  if (isDivisionId(division)) penaltiesQuery = penaltiesQuery.eq('division', division)
-
-  const { data: penalties } = await penaltiesQuery
-  return penalties && penalties.length > 0 ? [] : infractions
-}
-
+// El cálculo (team_players, players, player_scores y fixtures enteros, ~1,5 MB
+// de egress de Supabase) se hace una vez por jornada para todas las divisiones
+// y se reutiliza hasta que cambian los datos (ver live-infractions-cache.ts).
+// No depende del usuario: se calcula con el token de quien pida primero.
 export async function GET(request: NextRequest) {
   const auth = await getRequestAuth()
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const supabase = createSharedReadSupabase(auth.accessToken)
 
+  const version = await getDataVersion(supabase)
+  const calendar = await getServerCalendar(supabase, version)
+
   const matchdayParam = request.nextUrl.searchParams.get('matchday')
   const currentMatchday = matchdayParam
     ? parseInt(matchdayParam, 10)
-    : await getCurrentMatchday(supabase)
+    : currentMatchdayFrom(calendar.fixtures, calendar.config)
 
   const divisionParam = request.nextUrl.searchParams.get('division')
   const division = divisionParam ? parseInt(divisionParam, 10) : null
@@ -59,11 +32,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ infractions: [] })
   }
 
-  const infractions = await unstable_cache(
-    () => computeLiveInfractions(supabase, currentMatchday, division),
-    ['penalties-live', String(currentMatchday), String(division)],
-    { revalidate: REVALIDATE_S, tags: ['penalties-live'] }
-  )()
+  // Mientras el proceso de cambios (mercado/alineaciones) está abierto para esta jornada,
+  // no deben mostrarse sanciones en vivo: las alineaciones aún pueden cambiar.
+  // Tampoco se muestran si la jornada tiene un partido descolocado (adelantado
+  // o aplazado) sin resolver: hasta que se complete del todo, sin que otra
+  // jornada distinta se juegue por medio, sus sanciones no son fiables.
+  // Depende de la hora, así que se evalúa en cada petición (sobre el calendario
+  // cacheado) y no dentro de la caché del cálculo.
+  if (!canShowInfractionsFrom(calendar.fixtures, calendar.config, currentMatchday)) {
+    return NextResponse.json(
+      { infractions: [] },
+      { headers: { 'Cache-Control': 'private, max-age=30' } }
+    )
+  }
+
+  const all = await getCachedLiveInfractions(supabase, currentMatchday, version)
+  const infractions = liveInfractionsForDivision(all, division)
 
   return NextResponse.json(
     { infractions },

@@ -31,6 +31,23 @@ export async function getCurrentMatchday(supabase: SupabaseClient): Promise<numb
     .eq('id', 1)
     .maybeSingle()
 
+  const { data: fixtures } = await supabase
+    .from('fixtures')
+    .select('id, matchday, start_time, status, home_team_id, away_team_id')
+    .order('start_time', { ascending: true })
+
+  return currentMatchdayFrom((fixtures || []) as FixtureLite[], cfg)
+}
+
+type CalendarCfg = {
+  matchday_start_hours_before_midweek?: number | null
+  matchday_start_hours_before_weekend?: number | null
+  matchday_end_hours_after?: number | null
+  fantasy_starting_matchday?: number | null
+} | null | undefined
+
+/** getCurrentMatchday sobre un calendario ya cargado (fixtures en orden de start_time). */
+export function currentMatchdayFrom(fixtures: FixtureLite[], cfg: CalendarCfg): number {
   const lockOffsets = {
     startHoursBeforeMidweek: cfg?.matchday_start_hours_before_midweek != null ? Number(cfg.matchday_start_hours_before_midweek) : 1,
     startHoursBeforeWeekend: cfg?.matchday_start_hours_before_weekend != null ? Number(cfg.matchday_start_hours_before_weekend) : 1,
@@ -39,15 +56,10 @@ export async function getCurrentMatchday(supabase: SupabaseClient): Promise<numb
   const lockOffsetMs = lockOffsets.endHoursAfter * 60 * 60 * 1000
   const fantasyStart = cfg?.fantasy_starting_matchday != null ? Number(cfg.fantasy_starting_matchday) : 1
 
-  const { data: fixtures } = await supabase
-    .from('fixtures')
-    .select('id, matchday, start_time, status, home_team_id, away_team_id')
-    .order('start_time', { ascending: true })
-
   if (!fixtures || fixtures.length === 0) return 1
 
   const outOfOrderIds = new Set(
-    computeOutOfOrderLocks(fixtures as FixtureLite[], lockOffsets, fantasyStart).map(l => l.fixtureId)
+    computeOutOfOrderLocks(fixtures, lockOffsets, fantasyStart).map(l => l.fixtureId)
   )
 
   // Agrupar por jornada
@@ -162,6 +174,32 @@ export async function canShowInfractionsForMatchday(supabase: SupabaseClient, ma
 
   if (!fixtures) return true
   return !hideSanctionsForMatchday(fixtures as FixtureLite[], matchday, offsets, fantasyStart)
+}
+
+/**
+ * canShowInfractionsForMatchday sobre un calendario ya cargado. Mismo criterio:
+ * el mercado de la jornada ya ha cerrado (isMatchdayLockStarted) y
+ * hideSanctionsForMatchday no la oculta.
+ */
+export function canShowInfractionsFrom(fixtures: FixtureLite[], cfg: CalendarCfg, matchday: number): boolean {
+  const offsets = {
+    startHoursBeforeMidweek: cfg?.matchday_start_hours_before_midweek != null ? Number(cfg.matchday_start_hours_before_midweek) : 1,
+    startHoursBeforeWeekend: cfg?.matchday_start_hours_before_weekend != null ? Number(cfg.matchday_start_hours_before_weekend) : 1,
+    endHoursAfter: cfg?.matchday_end_hours_after != null ? Number(cfg.matchday_end_hours_after) : 2,
+  }
+
+  let firstStart: string | null = null
+  for (const f of fixtures) {
+    if (f.matchday !== matchday || !f.start_time) continue
+    if (firstStart === null || f.start_time < firstStart) firstStart = f.start_time
+  }
+  if (!firstStart) return false
+  const firstMatchDate = new Date(firstStart)
+  const unlockTime = firstMatchDate.getTime() - resolveStartHoursBefore(firstMatchDate, offsets) * 60 * 60 * 1000
+  if (Date.now() < unlockTime) return false
+
+  const fantasyStart = Math.max(1, cfg?.fantasy_starting_matchday ?? 1)
+  return !hideSanctionsForMatchday(fixtures, matchday, offsets, fantasyStart)
 }
 
 export async function getLiveInfractions(supabase: SupabaseClient, matchday: number, division?: number | null): Promise<Infraction[]> {

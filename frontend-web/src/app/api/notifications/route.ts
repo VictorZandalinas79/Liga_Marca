@@ -5,7 +5,9 @@ import { unstable_cache } from 'next/cache'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { createSharedReadSupabase } from '@/lib/supabase/shared-read'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getLiveInfractions, getCurrentMatchday, canShowInfractionsForMatchday } from '@/lib/infractions'
+import { canShowInfractionsFrom, currentMatchdayFrom } from '@/lib/infractions'
+import { getDataVersion, getServerCalendar } from '@/lib/data-version'
+import { getCachedLiveInfractions } from '@/lib/live-infractions-cache'
 import { getOutOfOrderMatchNotifications } from '@/lib/matchday-notifications'
 
 // Notificaciones calculadas al vuelo, sin fila en sync_notifications.
@@ -24,77 +26,83 @@ interface CachedNotificationsPayload {
 let cachedPayload: CachedNotificationsPayload | null = null
 const CACHE_TTL_MS = 3 * 60 * 1000 // 3 minutos de caché en servidor para proteger Supabase de consultas masivas recurrentes
 
-// Avisos de partidos intercalados y sanciones (consolidadas y en vivo).
-//
-// Es la parte cara del feed: getLiveInfractions descarga team_players, players y
-// fixtures (~200 KB de egress de Supabase por cálculo). La caché en memoria de
-// abajo se pierde con cada instancia nueva de Vercel; esta va en la Data Cache,
-// compartida entre instancias. No depende del usuario: se calcula con el token
-// de quien pida primero y lo reutilizan todos.
+// Avisos de partidos intercalados. Dependen de la hora (un bloqueo empieza o
+// acaba), así que siguen con caché por tiempo; solo descargan league_config,
+// fixtures y real_teams. Va en la Data Cache, compartida entre instancias, y no
+// depende del usuario: se calcula con el token de quien pida primero.
 const DERIVED_REVALIDATE_S = 180
 
-const getCachedDerivedNotifications = (supabase: SupabaseClient) => unstable_cache(
-  async (): Promise<{ outOfOrderNotifications: any[]; penaltyNotifications: any[] }> => {
-    // Jornada en marcha
-    const currentMatchday = await getCurrentMatchday(supabase)
-
-    // Avisos de partidos intercalados entre jornadas
-    let outOfOrderNotifications: any[] = []
+const getCachedOutOfOrderNotifications = (supabase: SupabaseClient) => unstable_cache(
+  async (): Promise<any[]> => {
     try {
-      outOfOrderNotifications = await getOutOfOrderMatchNotifications(supabase)
+      return await getOutOfOrderMatchNotifications(supabase)
     } catch (e) {
       console.error('Error calculando avisos de partidos intercalados:', e)
+      return []
     }
+  },
+  ['notifications-out-of-order'],
+  { revalidate: DERIVED_REVALIDATE_S, tags: ['notifications'] }
+)()
 
-    // Sanciones consolidadas y en vivo
-    let penaltyNotifications: any[] = []
-    if (currentMatchday) {
-      const { data: actualPenalties } = await supabase
+// Sanciones consolidadas y en vivo de la jornada en marcha.
+//
+// La parte cara (getLiveInfractions: team_players, players y player_scores
+// enteros) es el mismo cálculo que usa /api/penalties/live y se comparte con
+// él (live-infractions-cache.ts); se recalcula solo cuando cambian los datos.
+// La jornada en curso y si ya se pueden mostrar dependen de la hora: se
+// evalúan aquí sobre el calendario cacheado.
+async function getPenaltyNotifications(supabase: SupabaseClient): Promise<any[]> {
+  const version = await getDataVersion(supabase)
+  const calendar = await getServerCalendar(supabase, version)
+  const currentMatchday = currentMatchdayFrom(calendar.fixtures, calendar.config)
+  if (!currentMatchday) return []
+
+  const actualPenalties = await unstable_cache(
+    async () => {
+      const { data } = await supabase
         .from('penalties')
         .select('id, matchday, description, points, user_id, created_at, profiles(full_name, division)')
         .eq('matchday', currentMatchday)
+      return data || []
+    },
+    ['penalties-consolidated', String(currentMatchday), version],
+    { revalidate: 3600, tags: ['notifications'] }
+  )()
 
-      if (actualPenalties && actualPenalties.length > 0) {
-        penaltyNotifications = actualPenalties.map(p => {
-          const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
-          const name = profileObj?.full_name || 'Usuario'
-          const div = profileObj?.division ?? null
-          return {
-            id: `penalty-${p.id}`,
-            type: 'players_locked',
-            title: `Sanción Aplicada J${p.matchday}: ${name}`,
-            body: `${p.description} (Se restaron ${p.points} pts)`,
-            created_at: p.created_at || new Date().toISOString(),
-            read_at: null,
-            division: div
-          }
-        })
-      }
-
-      const consolidatedUserIds = new Set((actualPenalties || []).map(p => p.user_id))
-      const canShowLive = await canShowInfractionsForMatchday(supabase, currentMatchday)
-      if (canShowLive) {
-        const liveInfractions = await getLiveInfractions(supabase, currentMatchday, null)
-        const liveNotifications = liveInfractions
-          .filter(inf => !consolidatedUserIds.has(inf.user_id))
-          .map(inf => ({
-            id: `live-inf-${inf.id}`,
-            type: 'players_locked',
-            title: `Sanción en Juego J${inf.matchday}: ${inf.full_name}`,
-            body: `${inf.description} (Puntuarán 0 pts esta jornada)`,
-            created_at: new Date().toISOString(),
-            read_at: null,
-            division: inf.division
-          }))
-        penaltyNotifications.push(...liveNotifications)
-      }
+  const penaltyNotifications: any[] = actualPenalties.map((p: any) => {
+    const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles
+    const name = profileObj?.full_name || 'Usuario'
+    const div = profileObj?.division ?? null
+    return {
+      id: `penalty-${p.id}`,
+      type: 'players_locked',
+      title: `Sanción Aplicada J${p.matchday}: ${name}`,
+      body: `${p.description} (Se restaron ${p.points} pts)`,
+      created_at: p.created_at || new Date().toISOString(),
+      read_at: null,
+      division: div
     }
+  })
 
-    return { outOfOrderNotifications, penaltyNotifications }
-  },
-  ['notifications-derived'],
-  { revalidate: DERIVED_REVALIDATE_S, tags: ['notifications'] }
-)()
+  if (canShowInfractionsFrom(calendar.fixtures, calendar.config, currentMatchday)) {
+    const consolidatedUserIds = new Set(actualPenalties.map((p: any) => p.user_id))
+    const { infractions } = await getCachedLiveInfractions(supabase, currentMatchday, version)
+    penaltyNotifications.push(...infractions
+      .filter(inf => !consolidatedUserIds.has(inf.user_id))
+      .map(inf => ({
+        id: `live-inf-${inf.id}`,
+        type: 'players_locked',
+        title: `Sanción en Juego J${inf.matchday}: ${inf.full_name}`,
+        body: `${inf.description} (Puntuarán 0 pts esta jornada)`,
+        created_at: new Date().toISOString(),
+        read_at: null,
+        division: inf.division
+      })))
+  }
+
+  return penaltyNotifications
+}
 
 export async function GET() {
   const supabase = await createServerSupabase()
@@ -163,7 +171,10 @@ export async function GET() {
     // 3-5. Avisos de partidos intercalados y sanciones: caché compartida
     const { data: { session } } = await supabase.auth.getSession()
     const sharedClient = session?.access_token ? createSharedReadSupabase(session.access_token) : supabase
-    const { outOfOrderNotifications, penaltyNotifications } = await getCachedDerivedNotifications(sharedClient)
+    const [outOfOrderNotifications, penaltyNotifications] = await Promise.all([
+      getCachedOutOfOrderNotifications(sharedClient),
+      getPenaltyNotifications(sharedClient),
+    ])
 
     cachedPayload = {
       timestamp: now,
