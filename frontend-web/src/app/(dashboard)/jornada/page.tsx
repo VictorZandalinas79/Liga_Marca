@@ -191,6 +191,17 @@ export default function JornadaPage() {
   const [minPrice, setMinPrice] = useState<string>('')
   const [maxPrice, setMaxPrice] = useState<string>('')
   const [searchActiveIndex, setSearchActiveIndex] = useState(0)
+
+  // Búsqueda fluida en tiempo real con debounce (~250ms) para móviles, tablets y teclados virtuales
+  useEffect(() => {
+    const trimmed = searchInputValue.trim()
+    const timer = setTimeout(() => {
+      setSearchQuery(trimmed)
+      setSearchActiveIndex(0)
+    }, 250)
+
+    return () => clearTimeout(timer)
+  }, [searchInputValue])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [matchdayInfractions, setMatchdayInfractions] = useState<any[]>([])
   const [selectedDivision, setSelectedDivision] = useState<number | null>(null)
@@ -1034,8 +1045,8 @@ export default function JornadaPage() {
   })
 
   // Lógica de búsqueda tipo Ctrl+F: resaltar coincidencias y navegar
-  const normalizeText = (text: string) =>
-    text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const normalizeText = useCallback((text?: string | null) =>
+    (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(), [])
 
   const parsePriceInput = useCallback((val: string): number => {
     const cleanVal = val.trim().toLowerCase()
@@ -1057,13 +1068,17 @@ export default function JornadaPage() {
 
     // 1. Filtro de búsqueda por texto (si está activo)
     if (q) {
-      const displayName = p.short_name || ''
-      const nameMatch = normalizeText(displayName).includes(q)
-      const teamMatch = p.team ? normalizeText(p.team.name).includes(q) : false
-      const userTeamMatch = normalizeText(team.team_name || '').includes(q)
-      const userNameMatch = normalizeText(team.user_name || '').includes(q)
+      const shortName = normalizeText(p.short_name)
+      const repShortName = normalizeText(p.replacedPlayer?.short_name)
+      const nameMatch = shortName.includes(q) || (repShortName ? repShortName.includes(q) : false)
+
+      const teamMatch = p.team?.name ? normalizeText(p.team.name).includes(q) : false
+      const repTeamMatch = p.replacedPlayer?.team?.name ? normalizeText(p.replacedPlayer.team.name).includes(q) : false
+      const userTeamMatch = normalizeText(team.team_name).includes(q)
+      const userNameMatch = normalizeText(team.user_name).includes(q)
       const priceMatch = p.valor ? String(p.valor).includes(q) : false
-      const textMatches = nameMatch || teamMatch || userTeamMatch || userNameMatch || priceMatch
+
+      const textMatches = nameMatch || teamMatch || repTeamMatch || userTeamMatch || userNameMatch || priceMatch
       if (!textMatches) return false
     }
 
@@ -1085,7 +1100,7 @@ export default function JornadaPage() {
     }
 
     return true
-  }, [parsePriceInput])
+  }, [normalizeText, parsePriceInput])
 
   // Obtener los equipos reales disponibles en los planteles cargados para el selector
   const availableRealTeams = useMemo(() => {
@@ -1652,22 +1667,46 @@ export default function JornadaPage() {
           {/* Fila 1: Texto Buscador + Rango de Precios + Navegación */}
           <div className="flex flex-col lg:flex-row gap-2.5 items-stretch lg:items-center justify-between">
             {/* Buscador de texto */}
-            <div className="flex-1 min-w-0 relative flex items-center">
-              <div className="absolute left-3 text-slate-400 pointer-events-none flex items-center justify-center">
+            <form
+              onSubmit={e => {
+                e.preventDefault()
+                const trimmedInput = searchInputValue.trim()
+                if (searchQuery !== trimmedInput) {
+                  setSearchActiveIndex(0)
+                  setSearchQuery(trimmedInput)
+                } else if (trimmedInput) {
+                  goToMatch(safeActiveIndex + 1)
+                }
+              }}
+              className="flex-1 min-w-0 relative flex items-center"
+            >
+              <button
+                type="submit"
+                aria-label="Buscar"
+                className="absolute left-2.5 p-1 text-slate-400 hover:text-emerald-600 focus:outline-none transition-colors flex items-center justify-center rounded-md cursor-pointer"
+                title="Buscar o ir al siguiente"
+              >
                 <Search className="w-4 h-4" />
-              </div>
+              </button>
               <input
                 type="text"
                 value={searchInputValue}
                 onChange={e => {
-                  const val = e.target.value
-                  setSearchInputValue(val)
-                  if (!val.trim()) {
+                  setSearchInputValue(e.target.value)
+                }}
+                onBlur={() => {
+                  const trimmed = searchInputValue.trim()
+                  if (searchQuery !== trimmed) {
                     setSearchActiveIndex(0)
-                    setSearchQuery('')
+                    setSearchQuery(trimmed)
                   }
                 }}
                 placeholder="Buscar por jugador, equipo, usuario…"
+                enterKeyHint="search"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 className="w-full bg-slate-50/90 hover:bg-slate-100/70 focus:bg-white border border-slate-200/90 rounded-xl pl-9 pr-8 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all font-normal"
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
@@ -1676,7 +1715,7 @@ export default function JornadaPage() {
                     if (searchQuery !== trimmedInput) {
                       setSearchActiveIndex(0)
                       setSearchQuery(trimmedInput)
-                    } else {
+                    } else if (trimmedInput) {
                       goToMatch(e.shiftKey ? safeActiveIndex - 1 : safeActiveIndex + 1)
                     }
                   }
@@ -1696,7 +1735,7 @@ export default function JornadaPage() {
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
-            </div>
+            </form>
 
             {/* Rango de Precios + Presets + Navegación */}
             <div className="flex flex-wrap items-center gap-2 justify-between lg:justify-end shrink-0">
