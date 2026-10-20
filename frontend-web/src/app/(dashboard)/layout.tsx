@@ -37,8 +37,12 @@ export default function DashboardLayout({
   const isFullWidth = pathname === '/admin'
 
   useEffect(() => {
+    // getSession lee la sesión local; getUser iría al servidor de Auth en cada
+    // carga (cinco consultas internas en Supabase). Aquí solo se pinta el nombre:
+    // la sesión ya la valida AuthGuard.
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
       if (user) {
         setUserName(user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario')
         setIsAdmin(user.email?.toLowerCase() === 'vilafranca.fantasy2026@gmail.com')
@@ -58,7 +62,9 @@ export default function DashboardLayout({
         if (sessionId && nowMs - lastActivityUpdate < 60000) return
         lastActivityUpdate = nowMs
 
-        const { data: { user } } = await supabase.auth.getUser()
+        // Local, sin ir a Auth: RLS de user_sessions ya valida el token.
+        const { data: { session } } = await supabase.auth.getSession()
+        const user = session?.user
         if (!user) return
 
         const now = new Date().toISOString()

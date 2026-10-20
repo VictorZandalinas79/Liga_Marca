@@ -17,9 +17,12 @@ const MEMO_MS = 10 * 1000
 
 let memo: { at: number; value: string } | null = null
 
-export async function getDataVersion(supabase: SupabaseClient): Promise<string> {
+export async function getDataVersion(
+  supabase: SupabaseClient,
+  { skipMemo = false }: { skipMemo?: boolean } = {}
+): Promise<string> {
   const now = Date.now()
-  if (memo && now - memo.at < MEMO_MS) return memo.value
+  if (!skipMemo && memo && now - memo.at < MEMO_MS) return memo.value
 
   let value = `m${Math.floor(now / 60_000)}`
   try {
@@ -39,6 +42,7 @@ export function timeBucket(ms: number): string {
 }
 
 export interface CalendarConfig {
+  matchday_start_hours_before: number | null
   matchday_start_hours_before_midweek: number | null
   matchday_start_hours_before_weekend: number | null
   matchday_end_hours_after: number | null
@@ -61,7 +65,7 @@ export async function getServerCalendar(supabase: SupabaseClient, version: strin
     const [{ data: config }, { data: fixtures, error }] = await Promise.all([
       supabase
         .from('league_config')
-        .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday')
+        .select('matchday_start_hours_before, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday')
         .eq('id', 1)
         .maybeSingle(),
       supabase
