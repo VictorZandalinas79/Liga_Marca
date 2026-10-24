@@ -7,6 +7,7 @@ import {
   loadDivisionMembership,
   userDisplayName,
 } from '@/lib/divisions'
+import { loadSessionCounts, loadTablesByMatchday } from '@/lib/matchday-chunks'
 import { computeOutOfOrderLocks, advancedOnlyTeamIds, resolveStartHoursBefore, type FixtureLite } from '@/lib/locked-teams-core'
 
 export interface UserStanding {
@@ -224,11 +225,17 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
     restrictedMatchdayTeams: new Map(),
   })
 
-  const { rows: teamPlayers, incomplete: tpIncomplete } = await fetchPaginated<TeamPlayerRow>(
-    supabase,
-    'team_players',
-    'team_id, player_id, is_starter, is_captain, matchday, created_at, position'
-  )
+  // Por jornadas desde la caché (lib/matchday-chunks.ts); sin la migración 044,
+  // descarga completa como antes.
+  const chunks = await loadTablesByMatchday(supabase, ['team_players', 'player_scores'])
+  if (chunks?.incomplete) return empty()
+  const { rows: teamPlayers, incomplete: tpIncomplete } = chunks
+    ? { rows: chunks.rows.team_players as TeamPlayerRow[], incomplete: false }
+    : await fetchPaginated<TeamPlayerRow>(
+        supabase,
+        'team_players',
+        'team_id, player_id, is_starter, is_captain, matchday, created_at, position'
+      )
   if (tpIncomplete) return empty()
   if (teamPlayers.length === 0) return { ...empty(), incomplete: false }
 
@@ -317,13 +324,13 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
     }
   })
 
-  const { rows: allScores, incomplete: scoresIncomplete } = await fetchPaginated<{
-    player_id: string
-    total_points: number
-    fixture_id?: string
-    matchday?: number
-    minutes_played?: number
-  }>(supabase, 'player_scores', 'player_id, total_points, fixture_id, matchday, minutes_played')
+  const { rows: allScores, incomplete: scoresIncomplete } = chunks
+    ? { rows: chunks.rows.player_scores as SharedData['allScores'], incomplete: false }
+    : await fetchPaginated<SharedData['allScores'][number]>(
+        supabase,
+        'player_scores',
+        'player_id, total_points, fixture_id, matchday, minutes_played'
+      )
   if (scoresIncomplete) return empty()
 
   const playerPointsByMatchday = new Map<string, Map<number, number>>()
@@ -424,16 +431,20 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
 
   // Paginado: PostgREST corta cada respuesta en 1.000 filas y la tabla ya las
   // supera, así que una sola consulta dejaba sin contar parte de las aperturas.
-  const { rows: sessionsData } = await fetchPaginated<{ user_id: string }>(
-    supabase,
-    'user_sessions',
-    'user_id',
-    q => q.gte('started_at', lockTime.toISOString())
-  )
-
-  const sessionCounts = new Map<string, number>()
-  for (const s of sessionsData ?? []) {
-    sessionCounts.set(s.user_id, (sessionCounts.get(s.user_id) || 0) + 1)
+  // Con la migración 044 el conteo se hace en la base de datos (una fila por
+  // usuario en vez de miles de sesiones).
+  let sessionCounts = await loadSessionCounts(supabase, lockTime.toISOString())
+  if (!sessionCounts) {
+    const { rows: sessionsData } = await fetchPaginated<{ user_id: string }>(
+      supabase,
+      'user_sessions',
+      'user_id',
+      q => q.gte('started_at', lockTime.toISOString())
+    )
+    sessionCounts = new Map<string, number>()
+    for (const s of sessionsData ?? []) {
+      sessionCounts.set(s.user_id, (sessionCounts.get(s.user_id) || 0) + 1)
+    }
   }
 
   const { data: financeRows } = await supabase

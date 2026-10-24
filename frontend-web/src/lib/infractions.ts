@@ -202,7 +202,22 @@ export function canShowInfractionsFrom(fixtures: FixtureLite[], cfg: CalendarCfg
   return !hideSanctionsForMatchday(fixtures, matchday, offsets, fantasyStart)
 }
 
-export async function getLiveInfractions(supabase: SupabaseClient, matchday: number, division?: number | null): Promise<Infraction[]> {
+/**
+ * Carga de team_players / player_scores por jornadas con caché (la inyecta el
+ * servidor desde lib/matchday-chunks.ts; este módulo también lo usa el
+ * navegador). Devuelve null si no está disponible.
+ */
+export type ChunkedTableLoader = (
+  table: 'team_players' | 'player_scores',
+  maxChunk?: number
+) => Promise<any[] | null>
+
+export async function getLiveInfractions(
+  supabase: SupabaseClient,
+  matchday: number,
+  division?: number | null,
+  loadChunked?: ChunkedTableLoader
+): Promise<Infraction[]> {
   // 1. Reparto de la liga en divisiones (fuente de verdad única)
   const membership = await loadDivisionMembership(supabase)
   const profileMap = membership.profilesById
@@ -278,7 +293,9 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
   //    la J4 necesita el once guardado para la J6, que va por delante.
   let maxLineupMd = matchday
   for (let m = fantasyStart; m <= matchday; m++) maxLineupMd = Math.max(maxLineupMd, prevLineupMd(m))
-  const allTeamPlayers = await fetchAll<any>('team_players', 'team_id, player_id, is_starter, is_captain, matchday, position', maxLineupMd)
+  const allTeamPlayers =
+    (await loadChunked?.('team_players', maxLineupMd)) ??
+    (await fetchAll<any>('team_players', 'team_id, player_id, is_starter, is_captain, matchday, position', maxLineupMd))
 
   if (!allTeamPlayers || allTeamPlayers.length === 0) return []
 
@@ -335,7 +352,9 @@ export async function getLiveInfractions(supabase: SupabaseClient, matchday: num
   // fuera de su hueco del calendario. `player_scores.matchday` está sin rellenar
   // (siempre NULL), así que filtrar por esa columna dejaba la consulta vacía y
   // todos los jugadores a 0 puntos. Se reutiliza el mapa de `allFixtures`.
-  const allScores = await fetchAll<any>('player_scores', 'player_id, total_points, matchday, fixture_id')
+  const allScores =
+    (await loadChunked?.('player_scores')) ??
+    (await fetchAll<any>('player_scores', 'player_id, total_points, matchday, fixture_id'))
 
   const scoresByMd = new Map<number, Map<string, number>>()
   allScores?.forEach(s => {

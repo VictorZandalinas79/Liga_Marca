@@ -871,7 +871,10 @@ export default function JornadaPage() {
       setLoading(false)
     })
     const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      // Sesión local (ya validada por AuthGuard): getUser iría al servidor de
+      // Auth en cada carga. Solo hace falta el id; la RLS protege los datos.
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
       if (user) {
         setCurrentUserId(user.id)
         const { data: profile } = await supabase

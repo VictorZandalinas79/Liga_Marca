@@ -106,14 +106,17 @@ async function getPenaltyNotifications(supabase: SupabaseClient): Promise<any[]>
 
 export async function GET() {
   const supabase = await createServerSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // getClaims verifica la firma del JWT en local (claves ES256): sin ir al
+  // servidor de Auth en cada sondeo.
+  const { data: auth } = await supabase.auth.getClaims()
+  const userId = auth?.claims.sub
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // 1. División y rol de admin del usuario actual
   const { data: myProfile } = await supabase
     .from('profiles')
     .select('division, is_admin')
-    .eq('id', user.id)
+    .eq('id', userId)
     .maybeSingle()
   const isAdmin = myProfile?.is_admin === true
 
@@ -206,8 +209,11 @@ export async function PATCH(request: NextRequest) {
   // Invalidar caché en memoria al marcar notificaciones como leídas
   cachedPayload = null
   const supabase = await createServerSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // getClaims verifica la firma del JWT en local (claves ES256): sin ir al
+  // servidor de Auth en cada sondeo.
+  const { data: auth } = await supabase.auth.getClaims()
+  const userId = auth?.claims.sub
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json().catch(() => ({}))
   const { id, ids } = body

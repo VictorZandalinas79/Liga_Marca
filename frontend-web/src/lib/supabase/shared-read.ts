@@ -22,14 +22,20 @@ export function createSharedReadSupabase(accessToken: string) {
 }
 
 /**
- * Usuario de la petición (validado con getUser) y su token de acceso.
- * Devuelve null si no hay sesión.
+ * Usuario de la petición y su token de acceso. Devuelve null si no hay sesión.
+ *
+ * getClaims verifica la firma del JWT en local con las claves públicas del
+ * proyecto (ES256, JWKS cacheado): antes getUser iba al servidor de Auth en
+ * cada petición a /api/*, cinco consultas internas en Supabase cada vez (lo que
+ * más llamadas sumaba en el informe de consultas).
  */
 export async function getRequestAuth(): Promise<{ userId: string; accessToken: string } | null> {
   const supabase = await createServerSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  // getSession refresca el token si ha caducado; getClaims verifica ese token.
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.access_token) return null
-  return { userId: user.id, accessToken: session.access_token }
+  const { data: auth } = await supabase.auth.getClaims(session.access_token)
+  const userId = auth?.claims.sub
+  if (!userId) return null
+  return { userId, accessToken: session.access_token }
 }

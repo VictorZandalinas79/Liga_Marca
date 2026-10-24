@@ -2,6 +2,7 @@ import { unstable_cache } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getLiveInfractions, type Infraction } from '@/lib/infractions'
 import { isDivisionId } from '@/lib/divisions'
+import { loadTablesByMatchday } from '@/lib/matchday-chunks'
 
 // Sanciones en vivo de una jornada, calculadas UNA vez para todas las divisiones.
 //
@@ -30,7 +31,14 @@ export async function getCachedLiveInfractions(
   return unstable_cache(
     async (): Promise<LiveInfractionsAll> => {
       const [infractions, { data: penalties }] = await Promise.all([
-        getLiveInfractions(supabase, matchday, null),
+        getLiveInfractions(supabase, matchday, null, async (table, maxChunk) => {
+          const r = await loadTablesByMatchday(supabase, [table], { maxChunk })
+          if (!r) return null
+          // Una jornada que no se ha podido cargar no debe acabar en la caché.
+          if (r.incomplete) throw new Error('live infractions: jornadas incompletas')
+          // Como el .lte('matchday') de la descarga directa: sin filas sin jornada.
+          return maxChunk === undefined ? r.rows[table] : r.rows[table].filter(row => row.matchday != null)
+        }),
         supabase.from('penalties').select('division').eq('matchday', matchday),
       ])
       const consolidatedDivisions = [...new Set((penalties || []).map(p => (p.division ?? null) as number | null))]
