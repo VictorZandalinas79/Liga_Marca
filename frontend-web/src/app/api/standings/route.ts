@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { unstable_cache } from 'next/cache'
+import { unnestedCache } from '@/lib/unnested-cache'
 export const dynamic = 'force-dynamic'
 import { createSharedReadSupabase, getRequestAuth } from '@/lib/supabase/shared-read'
 import { getStandings, invalidateStandingsCache, type StandingsResult } from '@/lib/standings'
@@ -75,17 +75,19 @@ export async function GET(request: NextRequest) {
     invalidateStandingsCache()
     return getStandings(supabase, null, activeMatchday)
   }
-  const all = await unstable_cache(
+  // Sin anidar: dentro de un unstable_cache la caché por jornadas de
+  // getStandings no se consultaría (lib/unnested-cache.ts).
+  const all = await unnestedCache(
     async () => {
       const r = await computeAll()
       // Un cálculo incompleto (fallo de paginación) no debe quedarse en la
-      // caché: se lanza para que unstable_cache no lo guarde.
+      // caché: se lanza para que no se guarde.
       if (r.incomplete) throw new Error('standings incomplete')
       return r
     },
     ['standings-all', String(activeMatchday), version, closedMarketsKey(calendar), timeBucket(TIME_BUCKET_MS)],
     { revalidate: 3600, tags: ['standings'] }
-  )().catch(() => computeAll())
+  ).catch(() => computeAll())
   const result = forDivision(all, division)
 
   const { standings, lastPlayedMatchday, incomplete } = result

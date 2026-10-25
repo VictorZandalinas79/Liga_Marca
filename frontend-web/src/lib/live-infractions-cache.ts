@@ -1,4 +1,4 @@
-import { unstable_cache } from 'next/cache'
+import { unnestedCache } from '@/lib/unnested-cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getLiveInfractions, type Infraction } from '@/lib/infractions'
 import { isDivisionId } from '@/lib/divisions'
@@ -28,7 +28,9 @@ export async function getCachedLiveInfractions(
   matchday: number,
   version: string
 ): Promise<LiveInfractionsAll> {
-  return unstable_cache(
+  // Sin anidar: dentro de un unstable_cache la caché por jornadas no se
+  // consultaría (lib/unnested-cache.ts).
+  return unnestedCache(
     async (): Promise<LiveInfractionsAll> => {
       const [infractions, { data: penalties }] = await Promise.all([
         getLiveInfractions(supabase, matchday, null, async (table, maxChunk) => {
@@ -46,7 +48,7 @@ export async function getCachedLiveInfractions(
     },
     ['live-infractions-all', String(matchday), version],
     { revalidate: 3600, tags: ['penalties-live'] }
-  )()
+  )
 }
 
 /**
