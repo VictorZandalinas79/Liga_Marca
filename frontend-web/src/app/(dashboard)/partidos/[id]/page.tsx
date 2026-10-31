@@ -10,6 +10,7 @@ import { MetricBreakdown } from '@/components/metric-breakdown'
 import { evaluateRelevoBlocks, resolveRates, type Position } from '@/lib/scoring-config'
 import { useScoringRules } from '@/hooks/use-scoring-rules'
 import { getVenueInfo, getStadiumSatelliteUrl } from '@/lib/venues'
+import { getStadiumPhotos } from '@/lib/stadium-photos'
 
 interface Player {
   id: string
@@ -295,6 +296,9 @@ export default function PartidoDetallePage() {
   // Cuándo escribió el motor los datos que estamos viendo (no cuándo los leímos)
   const [dataTimestamp, setDataTimestamp] = useState<Date | null>(null)
   const [syncing, setSyncing] = useState(false)
+  // Semilla fija por visita: la foto del estadio es aleatoria pero no cambia en cada refresco en vivo
+  const [photoSeed] = useState(() => Math.random())
+  const [photoFailed, setPhotoFailed] = useState(false)
   const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [matchMinute, setMatchMinute] = useState<number>(0)
   const supabase = createClient()
@@ -995,6 +999,10 @@ export default function PartidoDetallePage() {
 
   const dateTime = fixture?.start_time ? formatDateTime(fixture.start_time) : null
   const venueInfo = getVenueInfo(fixture?.id, fixture?.home_team_id, homeTeam?.name)
+  const stadiumPhotos = getStadiumPhotos(venueInfo?.name || fixture?.venue)
+  const stadiumPhoto = !photoFailed && stadiumPhotos.length > 0
+    ? stadiumPhotos[Math.floor(photoSeed * stadiumPhotos.length)]
+    : null
 
   return (
     <div className="space-y-6">
@@ -1007,16 +1015,25 @@ export default function PartidoDetallePage() {
         Volver
       </button>
 
-      {/* Cabecera del partido compacta con foto de satélite de fondo semitransparente */}
+      {/* Cabecera del partido compacta con foto del estadio de fondo (satélite si no hay foto) */}
       <div className="relative overflow-hidden rounded-2xl bg-slate-950 border border-slate-800 shadow-2xl">
-        {/* Foto de satélite del campo como fondo semitransparente bien visible */}
-        {venueInfo && (
+        {(stadiumPhoto || venueInfo) && (
           <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-            <img
-              src={getStadiumSatelliteUrl(venueInfo.lat, venueInfo.lon, 1000, 500)}
-              alt=""
-              className="w-full h-full object-cover object-center opacity-65 scale-105"
-            />
+            {stadiumPhoto ? (
+              <img
+                src={stadiumPhoto}
+                alt=""
+                referrerPolicy="no-referrer"
+                onError={() => setPhotoFailed(true)}
+                className="w-full h-full object-cover object-center opacity-65 scale-105"
+              />
+            ) : venueInfo && (
+              <img
+                src={getStadiumSatelliteUrl(venueInfo.lat, venueInfo.lon, 1000, 500)}
+                alt=""
+                className="w-full h-full object-cover object-center opacity-65 scale-105"
+              />
+            )}
             {/* Gradiente oscuro suave para mantener legibilidad perfecta sin tapar el campo */}
             <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/45 to-slate-950/80" />
           </div>
