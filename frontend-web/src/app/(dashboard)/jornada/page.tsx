@@ -13,6 +13,27 @@ import { advancedOnlyTeamIds, hideSanctionsForMatchday, type FixtureLite } from 
 import { fetchLivePenalties } from '@/lib/live-penalties-client'
 import { PrintView } from './PrintView'
 
+// Puntos redondeados a 1 decimal en décimas enteras (evita errores de coma flotante)
+const toTenths = (n?: number | null) => Math.round((n || 0) * 10)
+
+/**
+ * Orden de la jornada: más puntos primero. En caso de empate gana quien tenga
+ * el jugador con más puntos; si persiste, el segundo que más puntúa, y así
+ * sucesivamente.
+ */
+function compareTeamsByPoints(a: UserTeam, b: UserTeam): number {
+  const diff = toTenths(b.puntos_totales) - toTenths(a.puntos_totales)
+  if (diff !== 0) return diff
+  const pa = a.jugadores.map(p => toTenths(p.puntos)).sort((x, y) => y - x)
+  const pb = b.jugadores.map(p => toTenths(p.puntos)).sort((x, y) => y - x)
+  const len = Math.max(pa.length, pb.length)
+  for (let i = 0; i < len; i++) {
+    const d = (pb[i] ?? 0) - (pa[i] ?? 0)
+    if (d !== 0) return d
+  }
+  return 0
+}
+
 function formatPlayerName(name: string | undefined | null) {
   if (!name) return ''
   const trimmed = name.trim()
@@ -815,7 +836,7 @@ export default function JornadaPage() {
     }
 
     // Ordenar por puntos y asignar posición
-    teams.sort((a, b) => b.puntos_totales - a.puntos_totales)
+    teams.sort(compareTeamsByPoints)
     teams.forEach((team, index) => { team.posicion = index + 1 })
 
     // Determinar ganadores y perdedores visualmente para el reparto de pagos por división
@@ -1044,7 +1065,7 @@ export default function JornadaPage() {
     }
     if (sortBy === 'valor') return b.valor_total - a.valor_total
     if (sortBy === 'promedio') return getPromedio(b) - getPromedio(a)
-    return b.puntos_totales - a.puntos_totales
+    return compareTeamsByPoints(a, b)
   })
 
   // Lógica de búsqueda tipo Ctrl+F: resaltar coincidencias y navegar
