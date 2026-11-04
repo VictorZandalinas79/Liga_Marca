@@ -532,8 +532,11 @@ export default function PartidosPage() {
       )
     }
 
-    // 3) Terminado: no depende de las puntuaciones, solo del estado de la API
-    if (FINISHED_STATUSES.has(s)) {
+    // 3) Terminado: solo si la API lo marca terminado Y la hora de inicio ya ha pasado
+    // (un partido futuro nunca puede estar terminado ni completo).
+    const isFuture = startTime ? new Date(startTime).getTime() > now : false
+
+    if (FINISHED_STATUSES.has(s) && !isFuture) {
       return (
         <Badge className="bg-emerald-600 text-white text-xs flex items-center gap-1">
           <CheckCircle className="w-3 h-3" />
@@ -559,7 +562,7 @@ export default function PartidosPage() {
       )
     }
 
-    if (startTime && new Date(startTime).getTime() > now) {
+    if (isFuture) {
       return (
         <Badge className="bg-slate-600 text-white text-xs flex items-center gap-1">
           <Clock className="w-3 h-3" />
@@ -670,12 +673,11 @@ export default function PartidosPage() {
     return acc
   }, {} as Record<string, Fixture[]>)
 
-  // "Completos" = partidos terminados, no partidos con alineaciones cargadas:
-  // con el flag anterior la cabecera cantaba "3/10 completos" media hora antes
-  // del pitido inicial, solo porque ya habían llegado los onces.
-  const completeCount = fixtures.filter(f =>
-    FINISHED_STATUSES.has((f.status || '').toLowerCase())
-  ).length
+  // "Completos" = partidos terminados (y cuya hora ya pasó), no partidos futuros:
+  const completeCount = fixtures.filter(f => {
+    const isFut = f.start_time ? new Date(f.start_time).getTime() > now : false
+    return !isFut && FINISHED_STATUSES.has((f.status || '').toLowerCase())
+  }).length
 
   // Jornada actual como número (NaN si estamos en modo "momento", p. ej. "Fase Final")
   const currentMatchdayNum = Number(currentMatchday)
@@ -865,8 +867,10 @@ export default function PartidosPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {dateFixtures.map((fixture) => {
               const timeUntil = fixture.start_time ? getTimeUntilMatch(fixture.start_time) : null
-              const startsSoon = timeUntil !== null && !timeUntil.includes('h') && timeUntil.includes('min') && parseInt(timeUntil) <= 30
-              const isLive = isFixtureInPlay(fixture.status, fixture.current_minute)
+              const isFuture = fixture.start_time ? new Date(fixture.start_time).getTime() > now : false
+              const startsSoon = isFuture && timeUntil !== null && !timeUntil.includes('h') && timeUntil.includes('min') && parseInt(timeUntil) <= 30
+              const isLive = !isFuture && isFixtureInPlay(fixture.status, fixture.current_minute)
+              const isComplete = !isFuture && FINISHED_STATUSES.has((fixture.status || '').toLowerCase())
 
               return (
                 <Card
@@ -875,7 +879,7 @@ export default function PartidosPage() {
                     isLive ? 'ring-2 ring-red-500 animate-pulse' :
                     startsSoon ? 'ring-2 ring-blue-500 animate-pulse' : ''
                   } ${
-                    FINISHED_STATUSES.has((fixture.status || '').toLowerCase())
+                    isComplete
                       ? 'border-emerald-600 ring-1 ring-emerald-600'
                       : ''
                   }`}
@@ -920,7 +924,7 @@ export default function PartidosPage() {
                             </span>
                           </div>
                           <span className="text-2xl font-bold text-white">
-                            {fixture.home_score ?? 0}
+                            {isFuture ? '-' : (fixture.home_score ?? 0)}
                           </span>
                         </div>
 
@@ -943,7 +947,7 @@ export default function PartidosPage() {
                             </span>
                           </div>
                           <span className="text-2xl font-bold text-white">
-                            {fixture.away_score ?? 0}
+                            {isFuture ? '-' : (fixture.away_score ?? 0)}
                           </span>
                         </div>
                       </div>

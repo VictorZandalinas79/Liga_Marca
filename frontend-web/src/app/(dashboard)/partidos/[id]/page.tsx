@@ -1041,46 +1041,53 @@ export default function PartidoDetallePage() {
 
         {/* Barra superior compacta en una sola línea */}
         <div className="relative z-10 bg-slate-950/85 backdrop-blur-md px-2.5 py-2 sm:px-4 sm:py-2.5 border-b border-slate-800/80 flex items-center justify-between gap-1.5 sm:gap-2 flex-nowrap">
-          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink">
-            {fixture?.status === 'postponed' || fixture?.status === 'suspended' ? (
-              <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-600 text-white shadow-sm shrink-0">
-                Suspendido
-              </span>
-            ) : fixture?.status === 'live' ? (
-              <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-sm animate-pulse shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                En Juego {matchMinute > 0 && `· ${matchMinute}'`}
-              </span>
-            ) : (
-              <span className={`inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full shadow-sm shrink-0 ${
-                fixture?.status === 'finished' 
-                  ? 'bg-emerald-600 text-white' 
-                  : 'bg-slate-800 text-slate-200 border border-slate-700'
-              }`}>
-                {fixture?.status === 'finished' && <CheckCircle2 className="w-3 h-3 text-white" />}
-                {fixture?.status === 'finished' ? 'Finalizado' : 'Programado'}
-              </span>
-            )}
+          {(() => {
+            const isFuture = fixture?.start_time ? new Date(fixture.start_time).getTime() > Date.now() : false
+            const isFinished = !isFuture && fixture?.status === 'finished'
+            const isLive = !isFuture && fixture?.status === 'live'
+            return (
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink">
+                {fixture?.status === 'postponed' || fixture?.status === 'suspended' ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-600 text-white shadow-sm shrink-0">
+                    Suspendido
+                  </span>
+                ) : isLive ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-sm animate-pulse shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    En Juego {matchMinute > 0 && `· ${matchMinute}'`}
+                  </span>
+                ) : (
+                  <span className={`inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full shadow-sm shrink-0 ${
+                    isFinished 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-slate-800 text-slate-200 border border-slate-700'
+                  }`}>
+                    {isFinished && <CheckCircle2 className="w-3 h-3 text-white" />}
+                    {isFinished ? 'Finalizado' : 'Programado'}
+                  </span>
+                )}
 
-            {fixture?.matchday && (
-              <span className="inline-flex items-center text-[11px] sm:text-xs font-bold px-1.5 py-0.5 rounded bg-slate-800/90 text-slate-200 border border-slate-700 shrink-0">
-                J{fixture.matchday}
-              </span>
-            )}
+                {fixture?.matchday && (
+                  <span className="inline-flex items-center text-[11px] sm:text-xs font-bold px-1.5 py-0.5 rounded bg-slate-800/90 text-slate-200 border border-slate-700 shrink-0">
+                    J{fixture.matchday}
+                  </span>
+                )}
 
-            {dateTime && (
-              <div className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-white truncate min-w-0">
-                <Calendar className="w-3 h-3 text-emerald-400 shrink-0 hidden xs:inline" />
-                <span className="capitalize truncate hidden sm:inline">{dateTime.date}</span>
-                <span className="capitalize truncate sm:hidden">{dateTime.shortDate}</span>
-                <span className="text-emerald-400 font-bold">·</span>
-                <span className="text-emerald-300 font-bold flex items-center gap-0.5 shrink-0">
-                  <Clock className="w-3 h-3 text-emerald-400" />
-                  {dateTime.time}
-                </span>
+                {dateTime && (
+                  <div className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-white truncate min-w-0">
+                    <Calendar className="w-3 h-3 text-emerald-400 shrink-0 hidden xs:inline" />
+                    <span className="capitalize truncate hidden sm:inline">{dateTime.date}</span>
+                    <span className="capitalize truncate sm:hidden">{dateTime.shortDate}</span>
+                    <span className="text-emerald-400 font-bold">·</span>
+                    <span className="text-emerald-300 font-bold flex items-center gap-0.5 shrink-0">
+                      <Clock className="w-3 h-3 text-emerald-400" />
+                      {dateTime.time}
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            )
+          })()}
 
           <button
             onClick={handleSyncMatch}
@@ -1129,21 +1136,28 @@ export default function PartidoDetallePage() {
 
             {/* Marcador Central */}
             <div className="flex flex-col items-center justify-center px-1 sm:px-4">
-              <div className="flex items-center gap-2 sm:gap-3.5 bg-slate-950/85 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 py-1.5 sm:px-5 sm:py-2 shadow-2xl">
-                <span className="text-2xl sm:text-4xl font-black tracking-tight text-white font-mono drop-shadow">
-                  {fixture?.home_score ?? 0}
-                </span>
-                <span className="text-sm sm:text-lg font-bold text-slate-400">-</span>
-                <span className="text-2xl sm:text-4xl font-black tracking-tight text-white font-mono drop-shadow">
-                  {fixture?.away_score ?? 0}
-                </span>
-              </div>
+              {(() => {
+                const isFuture = fixture?.start_time ? new Date(fixture.start_time).getTime() > Date.now() : false
+                return (
+                  <>
+                    <div className="flex items-center gap-2 sm:gap-3.5 bg-slate-950/85 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 py-1.5 sm:px-5 sm:py-2 shadow-2xl">
+                      <span className="text-2xl sm:text-4xl font-black tracking-tight text-white font-mono drop-shadow">
+                        {isFuture ? '-' : (fixture?.home_score ?? 0)}
+                      </span>
+                      <span className="text-sm sm:text-lg font-bold text-slate-400">-</span>
+                      <span className="text-2xl sm:text-4xl font-black tracking-tight text-white font-mono drop-shadow">
+                        {isFuture ? '-' : (fixture?.away_score ?? 0)}
+                      </span>
+                    </div>
 
-              {fixture?.status === 'live' && (
-                <span className="mt-1 text-[10px] sm:text-xs font-bold text-amber-400 bg-amber-950/70 border border-amber-500/30 px-2 py-0.5 rounded-full shadow-sm">
-                  Min {matchMinute}&apos;
-                </span>
-              )}
+                    {!isFuture && fixture?.status === 'live' && (
+                      <span className="mt-1 text-[10px] sm:text-xs font-bold text-amber-400 bg-amber-950/70 border border-amber-500/30 px-2 py-0.5 rounded-full shadow-sm">
+                        Min {matchMinute}&apos;
+                      </span>
+                    )}
+                  </>
+                )
+              })()}
             </div>
 
             {/* Equipo Visitante */}
