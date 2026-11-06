@@ -1,4 +1,5 @@
 import { applySanctionsToTeam } from '@/lib/infractions'
+import { compareStandings } from '@/lib/standings-order'
 import {
   DivisionId,
   DivisionMembership,
@@ -1036,7 +1037,7 @@ export async function getStandings(supabase: any, division?: number | null, acti
     standings.push(...computeDivisionStandings(d, membership.teamsByDivision.get(d) ?? [], membership, shared, activeMatchday))
   }
 
-  standings.sort((a, b) => b.total_points - a.total_points)
+  standings.sort(compareStandings)
   standings.forEach((standing, index) => {
     standing.current_position = index + 1
   })

@@ -20,6 +20,7 @@ function formatKamikazeTime(totalMinutes: number): string {
 import { applySanctionsToTeam, getCurrentMatchday } from '@/lib/infractions'
 import type { UserStanding } from '@/lib/standings'
 import { fetchStandings as fetchServerStandings } from '@/lib/standings-client'
+import { compareStandings } from '@/lib/standings-order'
 import { DIVISION_COMBINED, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
 import { advancedOnlyTeamIds, hideSanctionsForMatchday, type FixtureLite } from '@/lib/locked-teams-core'
@@ -43,6 +44,20 @@ interface MatchdayStatus {
 
 type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_avg' | 'best_change_score' | 'change_impact_points' | 'podium_finishes' | 'bottom_finishes' | 'sanctioned_matchdays' | 'saldo'
 type SortOrder = 'asc' | 'desc'
+
+// Las celdas llevan fondo opaco (--row) para que la columna fija tape lo que
+// pasa por debajo al desplazar y tenga exactamente el tono del resto de la fila.
+const ROW_TONES = {
+  base: '[--row:#1e293b] hover:[--row:#2a3649]',
+  top: '[--row:#133a3b] hover:[--row:#164a45] [&>td:first-child]:shadow-[inset_3px_0_0_0_#10b981]',
+  promo: '[--row:#19303b] hover:[--row:#1c3d40] [&>td:first-child]:shadow-[inset_3px_0_0_0_#34d399]',
+  down: '[--row:#402531] hover:[--row:#4f2630] [&>td:first-child]:shadow-[inset_3px_0_0_0_#ef4444]',
+  expanded: '[--row:#475569]',
+}
+const TH = 'px-1 py-2 text-center text-[10px] sm:text-[11px] font-semibold text-slate-300 whitespace-nowrap bg-slate-800 border-b border-slate-700'
+const TH_SORTABLE = `${TH} cursor-pointer hover:bg-slate-700`
+const TD = 'px-1 py-1.5 text-center whitespace-nowrap tabular-nums bg-(--row) border-b border-slate-700/60 transition-colors'
+const STAT = 'text-[11px] sm:text-[13px] font-semibold'
 
 export default function ClasificacionPage() {
   const config = useLeagueConfig()
@@ -145,7 +160,12 @@ export default function ClasificacionPage() {
     const sorted = [...rawStandings].sort((a, b) => {
       const valA = (a[sortField] as number) ?? 0
       const valB = (b[sortField] as number) ?? 0
-      return sortOrder === 'desc' ? valB - valA : valA - valB
+      if (sortField !== 'total_points' && valA !== valB) {
+        return sortOrder === 'desc' ? valB - valA : valA - valB
+      }
+      // Empates (y orden por puntos): más puntos y después más podios.
+      const official = compareStandings(a, b)
+      return sortField === 'total_points' && sortOrder === 'asc' ? -official : official
     })
 
     sorted.forEach((standing, index) => {
@@ -534,8 +554,8 @@ export default function ClasificacionPage() {
     if (position === 1) return <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500" />
     if (position === 2) return <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
     if (position === 3) return <Medal className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
-    if (isLast) return <span className="text-xl sm:text-4xl leading-none">🐖</span>
-    return <span className="text-xs sm:text-lg font-bold text-slate-600 w-4 sm:w-5 text-center">{position}</span>
+    if (isLast) return <span className="text-base sm:text-xl leading-none">🐖</span>
+    return <span className="text-xs sm:text-base font-bold text-slate-400 tabular-nums">{position}</span>
   }
 
   const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
@@ -783,106 +803,75 @@ export default function ClasificacionPage() {
       <Card className="!bg-slate-800 border-slate-700">
         <CardContent className="p-0">
           <div className="overflow-x-auto w-full">
-            <table className="min-w-max w-full">
+            <table className="w-full min-w-[730px] sm:min-w-[800px] xl:min-w-[930px] table-fixed border-separate border-spacing-0">
               <thead>
-                <tr className="border-b border-slate-700">
-                  <th className="text-left text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap">Pos</th>
-                  <th className="text-left text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap">Jugador</th>
-                  <th
-                    className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('total_points')}
-                  >
-                    <div className="flex items-center justify-end gap-0.5">
-                      <span className="hidden sm:inline">Pts Totales</span>
-                      <span className="sm:hidden">Pts</span>
+                <tr>
+                  <th className={`${TH} !text-left sticky left-0 z-20 w-[148px] sm:w-44 border-r`}>
+                    <span className="pl-1">Pos · Jugador</span>
+                  </th>
+                  <th className={`${TH_SORTABLE} w-16 sm:w-24`} onClick={() => handleSort('total_points')}>
+                    <div className="flex items-center justify-center">
+                      <span className="hidden xl:inline">Pts Totales</span>
+                      <span className="xl:hidden">Pts</span>
                       <SortIcon field="total_points" />
                     </div>
                   </th>
-                  <th
-                    className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('average_points')}
-                  >
-                    <div className="flex items-center justify-end gap-0.5">
-                      <span className="hidden sm:inline">Promedio</span>
-                      <span className="sm:hidden">Prom</span>
+                  <th className={TH_SORTABLE} onClick={() => handleSort('average_points')} title="Puntos por jornada">
+                    <div className="flex items-center justify-center">
+                      <span className="hidden xl:inline">Promedio</span>
+                      <span className="xl:hidden">Prom</span>
                       <SortIcon field="average_points" />
                     </div>
                   </th>
                   {!isLeagueOpen && (
-                    <th
-                      className="text-right text-[9px] sm:text-xs font-semibold text-amber-400 px-0.5 sm:px-1 py-1 whitespace-nowrap"
-                      title={`Jugadores alineados que ya han jugado en la J${currentMatchday}`}
-                    >
-                      <div className="flex items-center justify-end gap-0.5">
-                        <span className="hidden sm:inline">Jugados (J{currentMatchday})</span>
-                        <span className="sm:hidden">Jug. J{currentMatchday}</span>
-                      </div>
+                    <th className={`${TH} !text-amber-400`} title={`Jugadores alineados que ya han jugado en la J${currentMatchday}`}>
+                      <span className="hidden xl:inline">Jugados (J{currentMatchday})</span>
+                      <span className="xl:hidden">Jug. J{currentMatchday}</span>
                     </th>
                   )}
-                  <th
-                    className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('last_3_jornadas_avg')}
-                    title="Promedio de las últimas 3 jornadas"
-                  >
-                    <div className="flex items-center justify-end gap-0.5">
+                  <th className={TH_SORTABLE} onClick={() => handleSort('last_3_jornadas_avg')} title="Promedio de las últimas 3 jornadas">
+                    <div className="flex items-center justify-center">
                       <span>Últ. 3</span>
                       <SortIcon field="last_3_jornadas_avg" />
                     </div>
                   </th>
-                  <th className="text-center text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap" title="Tendencia en las últimas 5 jornadas">
-                    <span className="hidden sm:inline">Tendencia</span>
-                    <span className="sm:hidden">Tend</span>
+                  <th className={TH} title="Tendencia en las últimas 5 jornadas">
+                    <span className="hidden xl:inline">Tendencia</span>
+                    <span className="xl:hidden">Tend</span>
                   </th>
-                  <th
-                    className="text-center text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('sanctioned_matchdays')}
-                    title="Número total de sanciones"
-                  >
-                    <div className="flex items-center justify-center gap-0.5">
-                      <span className="hidden sm:inline">Sanciones</span>
-                      <span className="sm:hidden">Sanc</span>
+                  <th className={TH_SORTABLE} onClick={() => handleSort('sanctioned_matchdays')} title="Número total de sanciones">
+                    <div className="flex items-center justify-center">
+                      <span className="hidden xl:inline">Sanciones</span>
+                      <span className="xl:hidden">Sanc</span>
                       <SortIcon field="sanctioned_matchdays" />
                     </div>
                   </th>
-                  <th
-                    className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('change_impact_points')}
-                    title="Puntos netos ganados o perdidos por cambios"
-                  >
-                    <div className="flex items-center justify-end gap-0.5">
-                      <span>Cambios</span>
+                  <th className={TH_SORTABLE} onClick={() => handleSort('change_impact_points')} title="Puntos netos ganados o perdidos por cambios">
+                    <div className="flex items-center justify-center">
+                      <span className="hidden xl:inline">Cambios</span>
+                      <span className="xl:hidden">Camb</span>
                       <SortIcon field="change_impact_points" />
                     </div>
                   </th>
-                  <th
-                    className="text-right text-[9px] sm:text-xs font-semibold text-slate-300 px-0.5 sm:px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('saldo')}
-                    title="Saldo disponible (Saldo Inicial Virtual - Cuotas - Sanciones)"
-                  >
-                    <div className="flex items-center justify-end gap-0.5 text-emerald-400">
+                  <th className={TH_SORTABLE} onClick={() => handleSort('saldo')} title="Saldo disponible (Saldo Inicial Virtual - Cuotas - Sanciones)">
+                    <div className="flex items-center justify-center text-emerald-400">
                       <span>Saldo</span>
                       <SortIcon field="saldo" />
                     </div>
                   </th>
-                  <th
-                    className="hidden sm:table-cell text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('podium_finishes')}
-                    title="Veces entre los 3 primeros de una jornada"
-                  >
+                  <th className={TH_SORTABLE} onClick={() => handleSort('podium_finishes')} title="Veces entre los 3 primeros de una jornada. Desempata la clasificación">
                     <div className="flex items-center justify-center gap-1">
-                      <Trophy className="w-3 h-3 text-yellow-500" />
-                      Podios
+                      <Trophy className="hidden xl:block w-3 h-3 text-yellow-500" />
+                      <span className="hidden xl:inline">Podios</span>
+                      <span className="xl:hidden">Pod</span>
                       <SortIcon field="podium_finishes" />
                     </div>
                   </th>
-                  <th
-                    className="hidden sm:table-cell text-center text-xs font-semibold text-slate-300 px-1 py-1 whitespace-nowrap cursor-pointer hover:bg-slate-700"
-                    onClick={() => handleSort('bottom_finishes')}
-                    title="Veces entre los 3 últimos de una jornada"
-                  >
+                  <th className={TH_SORTABLE} onClick={() => handleSort('bottom_finishes')} title="Veces entre los 3 últimos de una jornada">
                     <div className="flex items-center justify-center gap-1">
-                      <TrendingDown className="w-3 h-3 text-red-500" />
-                      Colistas
+                      <TrendingDown className="hidden xl:block w-3 h-3 text-red-500" />
+                      <span className="hidden xl:inline">Colistas</span>
+                      <span className="xl:hidden">Col</span>
                       <SortIcon field="bottom_finishes" />
                     </div>
                   </th>
@@ -894,8 +883,7 @@ export default function ClasificacionPage() {
                   const isExpanded = expandedUser === standing.user_id
                   const isCurrentUser = currentUserId === standing.user_id
 
-                  let bgClass = 'hover:bg-slate-700/50'
-                  let borderClass = 'border-slate-700'
+                  let tone: keyof typeof ROW_TONES = 'base'
                   let descCount = 0
 
                   if (selectedDivision !== DIVISION_COMBINED && selectedDivision !== null) {
@@ -903,44 +891,30 @@ export default function ClasificacionPage() {
                     const totalGreenRows = (selectedDivision === 2 || selectedDivision === 3) ? 5 : (selectedDivision === 1 ? (config.div1_win_percent || 3) : 0);
 
                     if (index < totalGreenRows) {
-                      if (index >= 3) {
-                        // Filas 4ª y 5ª: verde más claro que las 3 primeras
-                        bgClass = 'bg-gradient-to-r from-emerald-950/40 via-emerald-900/10 to-transparent hover:from-emerald-900/50 [&>td:first-child]:shadow-[inset_3px_0_0_0_#34d399]'
-                        borderClass = 'border-emerald-800/30'
-                      } else {
-                        // Filas 1ª, 2ª y 3ª: verde principal
-                        bgClass = 'bg-gradient-to-r from-emerald-900/60 via-emerald-900/10 to-transparent hover:from-emerald-800/60 [&>td:first-child]:shadow-[inset_3px_0_0_0_#10b981]'
-                        borderClass = 'border-emerald-800/40'
-                      }
+                      // Filas 4ª y 5ª: verde más claro que las 3 primeras
+                      tone = index >= 3 ? 'promo' : 'top'
                     } else if (index >= standings.length - descCount) {
-                      bgClass = 'bg-gradient-to-r from-red-950/70 via-red-900/20 to-transparent hover:from-red-900/70 [&>td:first-child]:shadow-[inset_3px_0_0_0_#ef4444]'
-                      borderClass = 'border-red-900/40'
+                      tone = 'down'
                     }
                   }
 
                   const showGreenArrow = (selectedDivision === 2 || selectedDivision === 3) && index < 5
                   const showRedArrow = (selectedDivision === 1 || selectedDivision === 2) && descCount > 0 && index >= standings.length - descCount
 
-                  if (isExpanded) {
-                    bgClass = 'bg-slate-600'
-                  } else if (isCurrentUser) {
-                    if (bgClass === 'hover:bg-slate-700/50') {
-                      bgClass = 'bg-slate-800/60 hover:bg-slate-700/60'
-                    }
-                    bgClass += ' animate-pulse ring-1 ring-inset ring-slate-500/50'
-                  }
+                  if (isExpanded) tone = 'expanded'
+                  const highlight = isCurrentUser && !isExpanded ? 'animate-pulse [&>td]:border-y [&>td]:border-slate-400/60' : ''
 
                   return (
                     <Fragment key={standing.user_id}>
                       <tr
-                        className={`border-b transition-colors cursor-pointer ${borderClass} ${bgClass}`}
+                        className={`cursor-pointer ${ROW_TONES[tone]} ${highlight}`}
                         onClick={() => handleUserClick(standing.user_id)}
                       >
-                        <td className="px-0.5 sm:px-1 py-1">
-                          {getPositionMedal(standing.current_position, isLast)}
-                        </td>
-                        <td className="px-0.5 sm:px-1 py-1">
-                          <div className="flex items-center gap-1 min-w-0">
+                        <td className={`${TD} !text-left sticky left-0 z-10 border-r`}>
+                          <div className="flex items-center gap-1 pl-1">
+                            <span className="w-5 sm:w-6 flex items-center justify-center shrink-0">
+                              {getPositionMedal(standing.current_position, isLast)}
+                            </span>
                             <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex items-center justify-center shrink-0">
                               {showGreenArrow && (
                                 <ArrowUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 stroke-[2.5]" />
@@ -950,44 +924,40 @@ export default function ClasificacionPage() {
                               )}
                             </span>
                             <div className="min-w-0">
-                              <p className="font-semibold text-white text-[9px] min-[360px]:text-[10px] sm:text-[11px] whitespace-nowrap uppercase">{standing.user_name}</p>
+                              <p className="font-semibold text-white text-[10px] sm:text-xs uppercase whitespace-normal break-words leading-tight">{standing.user_name}</p>
                               {standing.best_matchday_points > 0 && (
-                                <p className="hidden sm:block text-[10px] text-amber-400 font-medium whitespace-nowrap">
-                                  Mejor: {Math.round(standing.best_matchday_points * 10) / 10} pts (J{standing.best_matchday})
+                                <p className="text-[8px] sm:text-[10px] text-amber-400 font-medium truncate">
+                                  Mejor: {Math.round(standing.best_matchday_points * 10) / 10}<span className="hidden sm:inline"> pts</span> (J{standing.best_matchday})
                                 </p>
                               )}
                             </div>
                           </div>
                         </td>
-                        <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap tabular-nums">
-                          <span className="text-base sm:text-xl font-bold text-emerald-400">
+                        <td className={TD}>
+                          <span className="text-sm sm:text-lg font-bold text-emerald-400">
                             {(Math.round(standing.total_points * 10) / 10).toFixed(1)}
                           </span>
-                          <span className="hidden sm:inline text-[10px] text-slate-400 ml-0.5">pts</span>
                         </td>
-                        <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
-                          <span className="text-[9px] sm:text-xs font-semibold text-slate-200">
-                            {Number(standing.average_points).toFixed(1)}
-                          </span>
-                          <span className="hidden sm:inline text-[10px] text-slate-400 ml-0.5">pts/j</span>
+                        <td className={TD}>
+                          <span className={`${STAT} text-slate-200`}>{Number(standing.average_points).toFixed(1)}</span>
                         </td>
                         {!isLeagueOpen && (
-                          <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
+                          <td className={TD}>
                             {standing.active_matchday_points !== null ? (
-                              <span className="text-[10px] sm:text-xs font-bold text-amber-400">
+                              <span className={`${STAT} text-amber-400`}>
                                 {standing.active_matchday_played}/{standing.active_matchday_total || 11}
                               </span>
                             ) : (
-                              <span className="text-[9px] sm:text-xs text-slate-500">-</span>
+                              <span className={`${STAT} text-slate-500`}>-</span>
                             )}
                           </td>
                         )}
-                        <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
-                          <span className="text-[9px] sm:text-xs font-semibold text-blue-400">
+                        <td className={TD}>
+                          <span className={`${STAT} text-blue-400`}>
                             {(Math.round(standing.last_3_jornadas_avg * 10) / 10).toFixed(1)}
                           </span>
                         </td>
-                        <td className="px-0.5 sm:px-1 py-1">
+                        <td className={TD}>
                           <div
                             className="flex justify-center cursor-help"
                             title={standing.trend_positions
@@ -999,38 +969,35 @@ export default function ClasificacionPage() {
                             {getTrendIcon(standing.last_5_trend)}
                           </div>
                         </td>
-                        <td className="px-0.5 sm:px-1 py-1 text-center whitespace-nowrap">
-                          <span className={`text-[10px] sm:text-sm font-bold ${standing.sanctioned_matchdays > 0 ? 'text-red-400' : 'text-slate-400'
-                            }`}>
+                        <td className={TD}>
+                          <span className={`${STAT} ${standing.sanctioned_matchdays > 0 ? 'text-red-400' : 'text-slate-400'}`}>
                             {standing.sanctioned_matchdays}
                           </span>
                         </td>
-                        <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
-                          <div className="flex flex-col items-end">
-                            <span className={`text-[9px] sm:text-xs font-bold leading-none ${standing.change_impact_points > 0 ? 'text-emerald-400' : standing.change_impact_points < 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                              {standing.change_impact_points > 0 ? '+' : ''}{Math.round(standing.change_impact_points * 10) / 10}
+                        <td className={TD}>
+                          <div className="flex flex-col items-center">
+                            <span className={`${STAT} leading-tight ${standing.change_impact_points > 0 ? 'text-emerald-400' : standing.change_impact_points < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                              {standing.change_impact_points > 0 ? '+' : ''}{(Math.round(standing.change_impact_points * 10) / 10).toFixed(1)}
                             </span>
-                            <span className="hidden sm:inline text-[9px] text-slate-500">{standing.total_changes} cambios</span>
-                            <span className="sm:hidden text-[7px] text-slate-500 leading-none mt-0.5">{standing.total_changes} c.</span>
+                            <span className="text-[8px] sm:text-[9px] text-slate-500 leading-tight">{standing.total_changes} cambios</span>
                           </div>
                         </td>
-                        <td className="px-0.5 sm:px-1 py-1 text-right whitespace-nowrap">
-                          <span className={`font-bold text-[10px] sm:text-sm ${((standing.saldo || 0) < 0) ? 'text-red-400' : 'text-emerald-400'}`}>
-                            <span className="hidden sm:inline">{standing.saldo?.toFixed(2)}€</span>
-                            <span className="sm:hidden">{standing.saldo?.toFixed(0)}€</span>
+                        <td className={TD}>
+                          <span className={`${STAT} font-bold ${((standing.saldo || 0) < 0) ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {standing.saldo?.toFixed(2)}€
                           </span>
                         </td>
-                        <td className="hidden sm:table-cell px-1 py-1 text-center whitespace-nowrap">
-                          <span className="text-[11px] font-bold text-yellow-500">{standing.podium_finishes}</span>
+                        <td className={TD}>
+                          <span className={`${STAT} font-bold text-yellow-500`}>{standing.podium_finishes}</span>
                         </td>
-                        <td className="hidden sm:table-cell px-1 py-1 text-center whitespace-nowrap">
-                          <span className="text-[11px] font-bold text-red-500">{standing.bottom_finishes}</span>
+                        <td className={TD}>
+                          <span className={`${STAT} font-bold text-red-500`}>{standing.bottom_finishes}</span>
                         </td>
                       </tr>
                       {/* Equipo desplegable */}
                       {isExpanded && userTeamData[standing.user_id] && (
                         <tr>
-                          <td colSpan={!isLeagueOpen ? 12 : 11} className="p-0">
+                          <td colSpan={!isLeagueOpen ? 11 : 10} className="p-0">
                             <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 px-3 py-2.5 sticky left-0 w-[calc(100vw-3.5rem)] sm:w-[400px] max-w-full shadow-lg border-r border-slate-600/50">
                               {/* Cabecera equipo */}
                               <div className="flex items-center gap-2 mb-2 flex-wrap">

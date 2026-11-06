@@ -42,7 +42,7 @@ function parseNullableInt(value: string | null): number | null {
 /**
  * La clasificación de una división sacada del cálculo conjunto. getStandings
  * calcula cada división por separado y después las mezcla con una ordenación
- * estable por puntos, así que filtrar y renumerar da lo mismo que pedirla sola.
+ * estable por puntos y podios, así que filtrar y renumerar da lo mismo que pedirla sola.
  */
 function forDivision(all: StandingsResult, division: number | null): StandingsResult {
   if (!isDivisionId(division)) return all
