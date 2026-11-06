@@ -3,8 +3,11 @@
 import { useEffect, useState, useRef, useMemo, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
+import { RankingCard, RANKING_THEMES } from './RankingCard'
 import { Badge } from '@/components/ui/badge'
 import { Medal, Trophy, Star, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Minus, Search, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, MousePointerClick, History, Target, Users, AlertTriangle, ArrowUpDown, CheckCircle, X, ArrowUp, ArrowDown, Flame, Shield, Zap } from 'lucide-react'
+
+const TOP_RANKING_SIZE = 5
 
 function formatKamikazeTime(totalMinutes: number): string {
   if (totalMinutes === Infinity || totalMinutes === 999999) return '-'
@@ -572,17 +575,113 @@ export default function ClasificacionPage() {
     return <div className="text-center py-8 text-slate-500">Cargando clasificación...</div>
   }
 
-  const topEvolution = [...standings].filter(u => u.last_3_jornadas_avg > 0).sort((a, b) => b.last_3_jornadas_avg - a.last_3_jornadas_avg).slice(0, 3)
-  const topChanges = [...standings].filter(u => u.change_impact_points !== 0).sort((a, b) => b.change_impact_points - a.change_impact_points).slice(0, 3)
-  const topTotalChanges = [...standings].filter(u => u.total_changes > 0).sort((a, b) => b.total_changes - a.total_changes).slice(0, 3)
+  const topEvolution = [...standings].filter(u => u.last_3_jornadas_avg > 0).sort((a, b) => b.last_3_jornadas_avg - a.last_3_jornadas_avg).slice(0, TOP_RANKING_SIZE)
+  const topChanges = [...standings].filter(u => u.change_impact_points !== 0).sort((a, b) => b.change_impact_points - a.change_impact_points).slice(0, TOP_RANKING_SIZE)
+  const topTotalChanges = [...standings].filter(u => u.total_changes > 0).sort((a, b) => b.total_changes - a.total_changes).slice(0, TOP_RANKING_SIZE)
   const kamikazes = [...standings].filter(s => (s.kamikaze_score ?? 999999) < 999999)
   kamikazes.sort((a, b) => (a.kamikaze_score || 0) - (b.kamikaze_score || 0))
-  const topKamikaze = kamikazes.slice(0, 3)
-  const topOpens = [...standings].filter(u => (u.app_opens || 0) > 0).sort((a, b) => (b.app_opens || 0) - (a.app_opens || 0)).slice(0, 3)
-  const topBacona = [...standings].filter(u => (u.last_place_finishes || 0) > 0).sort((a, b) => (b.last_place_finishes || 0) - (a.last_place_finishes || 0)).slice(0, 3)
-  const topRecord = [...standings].filter(u => (u.best_matchday_points || 0) > 0).sort((a, b) => (b.best_matchday_points || 0) - (a.best_matchday_points || 0)).slice(0, 3)
-  const topBus = [...standings].filter(u => (u.total_defenders || 0) > 0).sort((a, b) => (b.total_defenders || 0) - (a.total_defenders || 0)).slice(0, 3)
-  const topOffensive = [...standings].filter(u => (u.total_forwards || 0) > 0).sort((a, b) => (b.total_forwards || 0) - (a.total_forwards || 0)).slice(0, 3)
+  const topKamikaze = kamikazes.slice(0, TOP_RANKING_SIZE)
+  const topOpens = [...standings].filter(u => (u.app_opens || 0) > 0).sort((a, b) => (b.app_opens || 0) - (a.app_opens || 0)).slice(0, TOP_RANKING_SIZE)
+  const topBacona = [...standings].filter(u => (u.last_place_finishes || 0) > 0).sort((a, b) => (b.last_place_finishes || 0) - (a.last_place_finishes || 0)).slice(0, TOP_RANKING_SIZE)
+  const topRecord = [...standings].filter(u => (u.best_matchday_points || 0) > 0).sort((a, b) => (b.best_matchday_points || 0) - (a.best_matchday_points || 0)).slice(0, TOP_RANKING_SIZE)
+  const topBus = [...standings].filter(u => (u.total_defenders || 0) > 0).sort((a, b) => (b.total_defenders || 0) - (a.total_defenders || 0)).slice(0, TOP_RANKING_SIZE)
+  const topOffensive = [...standings].filter(u => (u.total_forwards || 0) > 0).sort((a, b) => (b.total_forwards || 0) - (a.total_forwards || 0)).slice(0, TOP_RANKING_SIZE)
+
+  const formatPoints = (points: number) => String(Math.round(points * 10) / 10)
+  const iconClass = 'h-5 w-5'
+  const imageClass = 'h-full w-full object-contain'
+  const rankingCards = [
+    {
+      key: 'record',
+      title: 'Puntuación récord jornada',
+      icon: <Flame className={`${iconClass} text-amber-500`} />,
+      theme: RANKING_THEMES.record,
+      entries: topRecord,
+      metric: (u: UserStanding) => u.best_matchday_points || 0,
+      formatValue: (u: UserStanding) => formatPoints(u.best_matchday_points || 0),
+      leaderUnit: (u: UserStanding) => `pts en J${u.best_matchday}`,
+    },
+    {
+      key: 'bus',
+      title: 'Autobusero',
+      icon: <img src="/autobus.svg" alt="" className={imageClass} />,
+      theme: RANKING_THEMES.bus,
+      entries: topBus,
+      metric: (u: UserStanding) => u.total_defenders || 0,
+      formatValue: (u: UserStanding) => String(u.total_defenders || 0),
+      leaderUnit: () => 'defensas',
+    },
+    {
+      key: 'offensive',
+      title: 'El más ofensivo',
+      icon: <img src="/pizarra_ofensiva.svg" alt="" className={imageClass} />,
+      theme: RANKING_THEMES.offensive,
+      entries: topOffensive,
+      metric: (u: UserStanding) => u.total_forwards || 0,
+      formatValue: (u: UserStanding) => String(u.total_forwards || 0),
+      leaderUnit: () => 'delanteros',
+    },
+    {
+      key: 'avg3',
+      title: 'Mayor promedio (últ. 3)',
+      icon: <TrendingUp className={`${iconClass} text-emerald-700`} />,
+      theme: RANKING_THEMES.average,
+      entries: topEvolution,
+      metric: (u: UserStanding) => u.last_3_jornadas_avg,
+      formatValue: (u: UserStanding) => formatPoints(u.last_3_jornadas_avg),
+      leaderUnit: () => 'pts',
+    },
+    {
+      key: 'impact',
+      title: 'Mejor impacto cambios',
+      icon: <Target className={`${iconClass} text-blue-700`} />,
+      theme: RANKING_THEMES.impact,
+      entries: topChanges,
+      metric: (u: UserStanding) => u.change_impact_points,
+      formatValue: (u: UserStanding) => `${u.change_impact_points > 0 ? '+' : ''}${formatPoints(u.change_impact_points)}`,
+      leaderUnit: () => 'pts',
+    },
+    {
+      key: 'changes',
+      title: 'Más cambios en total',
+      icon: <ArrowUpDown className={`${iconClass} text-purple-700`} />,
+      theme: RANKING_THEMES.changes,
+      entries: topTotalChanges,
+      metric: (u: UserStanding) => u.total_changes,
+      formatValue: (u: UserStanding) => String(u.total_changes),
+      leaderUnit: (u: UserStanding) => (u.total_changes === 1 ? 'cambio' : 'cambios'),
+    },
+    {
+      key: 'kamikaze',
+      title: 'Premio Kamikaze',
+      icon: <AlertTriangle className={`${iconClass} text-rose-700`} />,
+      theme: RANKING_THEMES.kamikaze,
+      entries: topKamikaze,
+      metric: (u: UserStanding) => u.kamikaze_score || 0,
+      formatValue: (u: UserStanding) => formatKamikazeTime(u.kamikaze_score || 0),
+      lowerIsBetter: true,
+    },
+    {
+      key: 'appOpens',
+      title: 'Adictos a la app',
+      icon: <Users className={`${iconClass} text-indigo-900`} />,
+      theme: RANKING_THEMES.opens,
+      entries: topOpens,
+      metric: (u: UserStanding) => u.app_opens || 0,
+      formatValue: (u: UserStanding) => String(u.app_opens || 0),
+      leaderUnit: (u: UserStanding) => (u.app_opens === 1 ? 'acceso' : 'accesos'),
+    },
+    {
+      key: 'bacona',
+      title: 'Bacona más gorda',
+      icon: <img src="/bacona.png" alt="" className="h-full w-full rounded-full object-cover" />,
+      theme: RANKING_THEMES.bacona,
+      entries: topBacona,
+      metric: (u: UserStanding) => u.last_place_finishes || 0,
+      formatValue: (u: UserStanding) => String(u.last_place_finishes || 0),
+      leaderUnit: (u: UserStanding) => (u.last_place_finishes === 1 ? 'vez colista' : 'veces colista'),
+    },
+  ]
 
   return (
     <div className="space-y-3 max-w-5xl mx-auto">
@@ -666,7 +765,7 @@ export default function ClasificacionPage() {
                       {selectedRanking === 'changes' && u.total_changes}
                       {selectedRanking === 'kamikaze' && formatKamikazeTime(u.kamikaze_score ?? 0)}
                       {selectedRanking === 'appOpens' && `${u.app_opens ?? 0} accesos`}
-                      {selectedRanking === 'bacona' && `${u.last_place_finishes ?? 0} veces colista`}
+                      {selectedRanking === 'bacona' && `${u.last_place_finishes ?? 0} ${u.last_place_finishes === 1 ? 'vez' : 'veces'} colista`}
                       {selectedRanking === 'record' && `${Math.round((u.best_matchday_points ?? 0) * 10) / 10} pts (J${u.best_matchday})`}
                       {selectedRanking === 'bus' && `${u.total_defenders ?? 0} defensas`}
                       {selectedRanking === 'offensive' && `${u.total_forwards ?? 0} delanteros`}
@@ -1129,231 +1228,16 @@ export default function ClasificacionPage() {
       </Card>
 
       {/* Estadísticas destacadas - MOVIDAS ABAJO DE LA TABLA */}
-      {(topEvolution.length > 0 || topChanges.length > 0 || topTotalChanges.length > 0 || topKamikaze.length > 0 || topOpens.length > 0 || topBacona.length > 0 || topRecord.length > 0 || topBus.length > 0 || topOffensive.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {topRecord.length > 0 && (
-            <div onClick={() => setSelectedRanking('record')}>
-              <Card className="!bg-amber-50 border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                      <Flame className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-amber-700 uppercase mb-2">Puntuación récord jornada</p>
-                      {topRecord.map((u, i) => (
-                        <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-amber-200/50 pb-2 last:border-0 last:pb-0">
-                          <p className="text-sm font-bold text-amber-900 uppercase pr-2 leading-tight">
-                            {i + 1}. {u.user_name}
-                          </p>
-                          <p className="text-xs text-amber-700 font-medium whitespace-nowrap pt-0.5">{Math.round((u.best_matchday_points || 0) * 10) / 10} pts</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {topBus.length > 0 && (
-            <div onClick={() => setSelectedRanking('bus')}>
-              <Card className="!bg-sky-50 border-sky-200 cursor-pointer hover:bg-sky-100 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center shrink-0 mt-0.5 overflow-hidden shadow-sm border border-sky-200 p-0.5">
-                      <img src="/autobus.svg" alt="Autobusero" className="w-full h-full object-contain" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-sky-700 uppercase mb-2">Autobusero (+ defensas)</p>
-                      {topBus.map((u, i) => (
-                        <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-sky-200/50 pb-2 last:border-0 last:pb-0">
-                          <p className="text-sm font-bold text-sky-900 uppercase pr-2 leading-tight">
-                            {i + 1}. {u.user_name}
-                          </p>
-                          <p className="text-xs text-sky-700 font-medium whitespace-nowrap pt-0.5">{u.total_defenders} defensas</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {topOffensive.length > 0 && (
-            <div onClick={() => setSelectedRanking('offensive')}>
-              <Card className="!bg-orange-50 border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center shrink-0 mt-0.5 overflow-hidden shadow-sm border border-orange-200 p-0.5">
-                      <img src="/pizarra_ofensiva.svg" alt="Pizarra Ofensiva" className="w-full h-full object-contain" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-orange-700 uppercase mb-2">El más ofensivo (+ delanteros)</p>
-                      {topOffensive.map((u, i) => (
-                        <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-orange-200/50 pb-2 last:border-0 last:pb-0">
-                          <p className="text-sm font-bold text-orange-900 uppercase pr-2 leading-tight">
-                            {i + 1}. {u.user_name}
-                          </p>
-                          <p className="text-xs text-orange-700 font-medium whitespace-nowrap pt-0.5">{u.total_forwards} delanteros</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-          {topEvolution.length > 0 && (
-            <div onClick={() => setSelectedRanking('avg3')}>
-              <Card className="!bg-emerald-50 border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center shrink-0 mt-1">
-                      <TrendingUp className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-emerald-700 uppercase mb-2">Mayor promedio (últ. 3)</p>
-                      {topEvolution.map((u, i) => (
-                        <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-emerald-200/50 pb-2 last:border-0 last:pb-0">
-                          <p className="text-sm font-bold text-emerald-900 uppercase pr-2 leading-tight">
-                            {i + 1}. {u.user_name}
-                          </p>
-                          <p className="text-xs text-emerald-700 font-medium whitespace-nowrap pt-0.5">{Math.round(u.last_3_jornadas_avg * 10) / 10} pts</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {topChanges.length > 0 && (
-            <div onClick={() => setSelectedRanking('impact')}>
-              <Card className="!bg-blue-50 border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-1">
-                      <Target className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-blue-700 uppercase mb-2">Mejor impacto cambios</p>
-                      {topChanges.map((u, i) => (
-                        <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-blue-200/50 pb-2 last:border-0 last:pb-0">
-                          <p className="text-sm font-bold text-blue-900 uppercase pr-2 leading-tight">
-                            {i + 1}. {u.user_name}
-                          </p>
-                          <p className="text-xs text-blue-700 font-medium whitespace-nowrap pt-0.5">{u.change_impact_points > 0 ? `+${Math.round(u.change_impact_points * 10) / 10}` : Math.round(u.change_impact_points * 10) / 10} pts</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {topTotalChanges.length > 0 && (
-            <div onClick={() => setSelectedRanking('changes')}>
-              <Card className="!bg-purple-50 border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center shrink-0 mt-1">
-                      <ArrowUpDown className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-purple-700 uppercase mb-2">Más cambios en total</p>
-                      {topTotalChanges.map((u, i) => (
-                        <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-purple-200/50 pb-2 last:border-0 last:pb-0">
-                          <p className="text-sm font-bold text-purple-900 uppercase pr-2 leading-tight">
-                            {i + 1}. {u.user_name}
-                          </p>
-                          <p className="text-xs text-purple-700 font-medium whitespace-nowrap pt-0.5">{u.total_changes}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {topKamikaze.length > 0 && (
-            <div onClick={() => setSelectedRanking('kamikaze')}>
-              <Card className="!bg-rose-50 border-rose-200 cursor-pointer hover:bg-rose-100 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-rose-600 flex items-center justify-center shrink-0 mt-1">
-                      <AlertTriangle className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-rose-700 uppercase mb-2">Premio Kamikaze</p>
-                      {topKamikaze.map((u, i) => (
-                        <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-rose-200/50 pb-2 last:border-0 last:pb-0">
-                          <p className="text-sm font-bold text-rose-900 uppercase pr-2 leading-tight">
-                            {i + 1}. {u.user_name}
-                          </p>
-                          <p className="text-xs text-rose-700 font-medium whitespace-nowrap pt-0.5">{formatKamikazeTime(u.kamikaze_score || 0)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {topOpens.length > 0 && (
-            <div onClick={() => setSelectedRanking('appOpens')}>
-              <Card className="!bg-indigo-50 border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-1">
-                      <Users className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-indigo-700 uppercase mb-2">Adictos a la app</p>
-                      {topOpens.map((u, i) => (
-                        <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-indigo-200/50 pb-2 last:border-0 last:pb-0">
-                          <p className="text-sm font-bold text-indigo-900 uppercase pr-2 leading-tight">
-                            {i + 1}. {u.user_name}
-                          </p>
-                          <p className="text-xs text-indigo-700 font-medium whitespace-nowrap pt-0.5">{u.app_opens} accesos</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {topBacona.length > 0 && (
-            <div onClick={() => setSelectedRanking('bacona')}>
-              <Card className="!bg-pink-50 border-pink-200 cursor-pointer hover:bg-pink-100 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center shrink-0 mt-1 overflow-hidden shadow-sm border border-pink-200">
-                      <img src="/bacona.png" alt="Bacona" className="w-7 h-7 object-cover" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-pink-700 uppercase mb-2">Bacona más gorda</p>
-                      {topBacona.map((u, i) => (
-                        <div key={u.user_id} className="flex justify-between items-start mb-2 border-b border-pink-200/50 pb-2 last:border-0 last:pb-0">
-                          <p className="text-sm font-bold text-pink-900 uppercase pr-2 leading-tight">
-                            {i + 1}. {u.user_name}
-                          </p>
-                          <p className="text-xs text-pink-700 font-medium whitespace-nowrap pt-0.5">{u.last_place_finishes} veces colista</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+      {rankingCards.some(card => card.entries.length > 0) && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {rankingCards.map(({ key, ...card }) => (
+            <RankingCard
+              key={key}
+              {...card}
+              currentUserId={currentUserId}
+              onOpen={() => setSelectedRanking(key)}
+            />
+          ))}
         </div>
       )}
 
