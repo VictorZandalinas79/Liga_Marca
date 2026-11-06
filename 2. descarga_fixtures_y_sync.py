@@ -578,16 +578,18 @@ def upload_fixtures_to_supabase(matches):
     # marcado 'live' o 'finished' perdían el estado y la página Partidos no
     # llegaba a ver nunca un partido en juego.
     # REGLA: Un partido cuya fecha de inicio es futura (start_time > now) NUNCA
-    # puede quedar como 'finished' ni 'live', siempre debe ser 'scheduled'.
+    # puede quedar como 'finished' ni 'live'. Sí conserva 'postponed'/'suspended'
+    # (suspendido con fecha nueva) y 'cancelled': el motor lo saca de ese estado
+    # al reanudarse (migración 041).
     now_utc_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
     for f in fixtures_payload:
-        st = f.get('start_time') or ''
-        if st > now_utc_str:
+        is_future = (f.get('start_time') or '') > now_utc_str
+        if is_future and f['status'] in ('live', 'finished'):
             f['status'] = 'scheduled'
-            continue
 
         prev = existing_status.get(f.get('id'))
-        if prev in PROTECTED_STATUSES and f['status'] == 'scheduled':
+        keep = {'postponed', 'suspended'} if is_future else PROTECTED_STATUSES
+        if prev in keep and f['status'] == 'scheduled':
             f['status'] = prev
 
     # Partidos que quedan fuera del orden de su jornada (aplazados/adelantados).

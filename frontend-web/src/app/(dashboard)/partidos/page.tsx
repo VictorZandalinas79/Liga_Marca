@@ -314,7 +314,9 @@ export default function PartidosPage() {
     const [{ data: fresh }, nextScores] = await Promise.all([
       supabase
         .from('fixtures')
-        .select('id, status, home_score, away_score, current_minute, updated_at')
+        // Sin `updated_at`: esa columna no existe en fixtures y pedirla hacía
+        // fallar la consulta entera, con lo que estado y marcador no se refrescaban.
+        .select('id, status, home_score, away_score, current_minute')
         .in('id', ids),
       fetchScores(supabase, ids)
     ])

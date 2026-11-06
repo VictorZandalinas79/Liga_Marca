@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <!-- Fondo blanco del círculo -->
+  <rect width="100" height="100" fill="#ffffff" rx="50" />
+
+  <!-- Pizarra táctica de fútbol (cancha verde con líneas) -->
+  <rect x="14" y="14" width="72" height="72" rx="10" fill="#15803d" stroke="#14532d" stroke-width="2.5" />
+  
+  <!-- Líneas de la pizarra táctica -->
+  <line x1="14" y1="50" x2="86" y2="50" stroke="#86efac" stroke-width="1.5" stroke-dasharray="2,2" opacity="0.6" />
+  <circle cx="50" cy="50" r="12" fill="none" stroke="#86efac" stroke-width="1.5" stroke-dasharray="2,2" opacity="0.6" />
+  <!-- Área rival arriba -->
+  <rect x="32" y="14" width="36" height="16" fill="none" stroke="#86efac" stroke-width="1.5" opacity="0.7" />
+
+  <!-- Flechas hacia arriba saliendo de las 3 fichas -->
+  <!-- Flecha Izquierda -->
+  <path d="M 30 52 L 30 36 M 26 40 L 30 34 L 34 40" fill="none" stroke="#facc15" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Flecha Central -->
+  <path d="M 50 48 L 50 28 M 46 32 L 50 26 L 54 32" fill="none" stroke="#facc15" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Flecha Derecha -->
+  <path d="M 70 52 L 70 36 M 66 40 L 70 34 L 74 40" fill="none" stroke="#facc15" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- 3 Fichas de ataque (rojas / doradas) -->
+  <!-- Ficha 1 (Extremo izquierdo) -->
+  <circle cx="30" cy="58" r="7" fill="#dc2626" stroke="#ffffff" stroke-width="1.5" />
+  <text x="30" y="60.5" fill="#ffffff" font-size="7" font-weight="900" font-family="sans-serif" text-anchor="middle">11</text>
+
+  <!-- Ficha 2 (Delantero centro con el balón en la bota) -->
+  <circle cx="50" cy="54" r="8" fill="#ef4444" stroke="#ffffff" stroke-width="2" />
+  <text x="50" y="57" fill="#ffffff" font-size="8.5" font-weight="900" font-family="sans-serif" text-anchor="middle">9</text>
+
+  <!-- Ficha 3 (Extremo derecho) -->
+  <circle cx="70" cy="58" r="7" fill="#dc2626" stroke="#ffffff" stroke-width="1.5" />
+  <text x="70" y="60.5" fill="#ffffff" font-size="7" font-weight="900" font-family="sans-serif" text-anchor="middle">7</text>
+
+  <!-- Balón de fútbol clásico en ataque junto al 9 -->
+  <g transform="translate(56, 40) scale(0.65)">
+    <!-- Base balón -->
+    <circle cx="12" cy="12" r="11" fill="#ffffff" stroke="#0f172a" stroke-width="2" />
+    <!-- Pentágonos y costuras del balón -->
+    <polygon points="12,7 16,10 14,14 10,14 8,10" fill="#0f172a" />
+    <line x1="12" y1="7" x2="12" y2="1" stroke="#0f172a" stroke-width="1.5" />
+    <line x1="16" y1="10" x2="22" y2="8" stroke="#0f172a" stroke-width="1.5" />
+    <line x1="14" y1="14" x2="18" y2="20" stroke="#0f172a" stroke-width="1.5" />
+    <line x1="10" y1="14" x2="6" y2="20" stroke="#0f172a" stroke-width="1.5" />
+    <line x1="8" y1="10" x2="2" y2="8" stroke="#0f172a" stroke-width="1.5" />
+  </g>
+</svg>
+

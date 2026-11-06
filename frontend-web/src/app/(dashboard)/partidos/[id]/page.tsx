@@ -958,8 +958,8 @@ export default function PartidoDetallePage() {
 
   // Banquillo: suplentes convocados que no llegaron a saltar al campo
   const renderBenchSection = (players: Player[]) => (
-    <div>
-      <h4 className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase mb-2">
+    <div className="rounded-xl bg-slate-900 border border-slate-800 p-1.5 pt-2">
+      <h4 className="flex items-center gap-1.5 px-1 mb-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
         <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 19V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13" />
           <path d="M2 19h20" />
@@ -967,28 +967,46 @@ export default function PartidoDetallePage() {
           <path d="M16 19v-5" />
         </svg>
         Banquillo
+        <span className="ml-auto text-[10px] font-bold text-slate-300 bg-slate-800 rounded-full px-1.5 py-px tabular-nums">
+          {players.length}
+        </span>
       </h4>
-      <div className="flex flex-wrap gap-1.5">
-        {players
+      {/* Rejilla sin scroll: siempre se ven todos los jugadores y el nombre entero */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(116px,1fr))] gap-0.5">
+        {[...players]
           .sort((a, b) => getPositionOrder(a.calc_position || a.position) - getPositionOrder(b.calc_position || b.position))
-          .map(player => (
-            <button
-              key={player.id}
-              onClick={() => setSelectedPlayer(player)}
-              className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 hover:border-emerald-500 rounded-full pl-1 pr-2.5 py-1 transition-colors"
-            >
-              {player.photo ? (
-                <img src={player.photo} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
-              ) : (
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 ${getPositionColor(player.calc_position || player.position)}`}>
-                  {getPositionLabel(player.calc_position || player.position)[0]}
+          .map(player => {
+            const position = player.calc_position || player.position
+            return (
+              <button
+                key={player.id}
+                onClick={() => setSelectedPlayer(player)}
+                title={getMobilePlayerName(player)}
+                className="group min-w-0 flex items-center gap-1.5 rounded-lg px-1 py-0.5 text-left hover:bg-slate-800 transition-colors"
+              >
+                <span className="relative shrink-0">
+                  {player.photo ? (
+                    <img
+                      src={player.photo}
+                      alt=""
+                      loading="lazy"
+                      className="w-7 h-7 rounded-full object-cover object-top bg-slate-800 ring-1 ring-slate-700 group-hover:ring-emerald-500 transition-shadow"
+                    />
+                  ) : (
+                    <span className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-800 ring-1 ring-slate-700 group-hover:ring-emerald-500 text-[9px] font-bold text-slate-300 transition-shadow">
+                      {getPositionLabel(position)}
+                    </span>
+                  )}
+                  <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[6px] font-black ring-1 ring-slate-900 ${getPositionColor(position)}`}>
+                    {getPositionLabel(position)[0]}
+                  </span>
                 </span>
-              )}
-              <span className="text-[10.5px] font-semibold text-slate-200 truncate max-w-[90px]">
-                {getMobilePlayerName(player)}
-              </span>
-            </button>
-          ))}
+                <span className="min-w-0 text-[10.5px] leading-tight font-medium text-slate-200 [overflow-wrap:anywhere]">
+                  {getMobilePlayerName(player)}
+                </span>
+              </button>
+            )
+          })}
       </div>
     </div>
   )
@@ -1047,9 +1065,9 @@ export default function PartidoDetallePage() {
             const isLive = !isFuture && fixture?.status === 'live'
             return (
               <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink">
-                {fixture?.status === 'postponed' || fixture?.status === 'suspended' ? (
+                {fixture?.status === 'postponed' || fixture?.status === 'suspended' || fixture?.status === 'cancelled' ? (
                   <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-600 text-white shadow-sm shrink-0">
-                    Suspendido
+                    {fixture?.status === 'cancelled' ? 'Cancelado' : 'Suspendido'}
                   </span>
                 ) : isLive ? (
                   <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-sm animate-pulse shrink-0">

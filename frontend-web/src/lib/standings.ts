@@ -38,6 +38,8 @@ export interface UserStanding {
   kamikaze_score?: number
   app_opens?: number
   saldo?: number
+  total_defenders?: number
+  total_forwards?: number
   active_matchday_points?: number | null
   active_matchday_played?: number
   active_matchday_total?: number
@@ -530,6 +532,8 @@ function computeDivisionStandings(
   const userChangesPointsDiff = new Map<string, number>()
   const userSanctionCount = new Map<string, number>()
   const userMatchdaysFromTeamPlayers = new Map<string, Set<number>>()
+  const userDefendersCount = new Map<string, number>()
+  const userForwardsCount = new Map<string, number>()
 
   const mdHasDbPenalties = new Set(shared.penalties.map(p => {
     return typeof p.matchday === 'string' ? parseInt(p.matchday, 10) : (p.matchday as number)
@@ -596,7 +600,15 @@ function computeDivisionStandings(
             is_starter: tp.is_starter,
           }
 
-          if (tp.is_starter) startersList.push(playerObj)
+          if (tp.is_starter) {
+            startersList.push(playerObj)
+            const posCode = (playerObj.position || '').toLowerCase()
+            if (posCode.includes('defender') || posCode === 'def') {
+              userDefendersCount.set(userId, (userDefendersCount.get(userId) || 0) + 1)
+            } else if (posCode.includes('forward') || posCode === 'fwd' || posCode.includes('del')) {
+              userForwardsCount.set(userId, (userForwardsCount.get(userId) || 0) + 1)
+            }
+          }
         }
 
         currentStartersByTeam.set(team.teamId, startersList.map(s => s.id))
@@ -944,6 +956,8 @@ function computeDivisionStandings(
       sanctioned_matchdays: userSanctionCount.get(userId) ?? 0,
       kamikaze_score: minMinutes === Infinity ? 999999 : minMinutes,
       app_opens: shared.sessionCounts.get(userId) || 0,
+      total_defenders: userDefendersCount.get(userId) || 0,
+      total_forwards: userForwardsCount.get(userId) || 0,
       saldo,
       active_matchday_points: activeMatchdayPoints !== null ? Math.round(activeMatchdayPoints * 10) / 10 : null,
       active_matchday_played: activeMatchdayPlayed,

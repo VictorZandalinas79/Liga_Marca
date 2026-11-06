@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       if (r.incomplete) throw new Error('standings incomplete')
       return r
     },
-    ['standings-all', String(activeMatchday), version, closedMarketsKey(calendar), timeBucket(TIME_BUCKET_MS)],
+    ['standings-all-v2', String(activeMatchday), version, closedMarketsKey(calendar), timeBucket(TIME_BUCKET_MS)],
     { revalidate: 3600, tags: ['standings'] }
   ).catch(() => computeAll())
   const result = forDivision(all, division)
