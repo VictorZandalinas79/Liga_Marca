@@ -129,9 +129,7 @@ export default function ClasificacionPage() {
 
     fetchStandings()
 
-    console.log('Top Bus count:', topBus.length, 'Top Offensive count:', topOffensive.length, 'Sample:', standings.slice(0, 2).map(s => ({ name: s.user_name, def: s.total_defenders, fwd: s.total_forwards })))
-
-  return () => { fetchIdRef.current++ }
+    return () => { fetchIdRef.current++ }
   }, [tick, selectedDivision])
 
   // Ordenación puramente local en el navegador: ordenar por columna no gasta peticiones ni egress.
@@ -184,9 +182,7 @@ export default function ClasificacionPage() {
       if (typeof document !== 'undefined' && document.hidden) return
       setTick(t => t + 1)
     }, 60 * 1000)
-    console.log('Top Bus count:', topBus.length, 'Top Offensive count:', topOffensive.length, 'Sample:', standings.slice(0, 2).map(s => ({ name: s.user_name, def: s.total_defenders, fwd: s.total_forwards })))
-
-  return () => clearInterval(interval)
+    return () => clearInterval(interval)
   }, [isLeagueOpen])
 
   const handleSort = (field: SortField) => {
@@ -511,9 +507,7 @@ export default function ClasificacionPage() {
         const orderA = positionOrder[getPositionLabel(a.position)] ?? 99
         const orderB = positionOrder[getPositionLabel(b.position)] ?? 99
         if (orderA !== orderB) return orderA - orderB
-        console.log('Top Bus count:', topBus.length, 'Top Offensive count:', topOffensive.length, 'Sample:', standings.slice(0, 2).map(s => ({ name: s.user_name, def: s.total_defenders, fwd: s.total_forwards })))
-
-  return (b.puntos || 0) - (a.puntos || 0)
+        return (b.puntos || 0) - (a.puntos || 0)
       })
     }
     sortPlayersByPosition(startersAfterSanctions)
@@ -589,8 +583,6 @@ export default function ClasificacionPage() {
   const topRecord = [...standings].filter(u => (u.best_matchday_points || 0) > 0).sort((a, b) => (b.best_matchday_points || 0) - (a.best_matchday_points || 0)).slice(0, 3)
   const topBus = [...standings].filter(u => (u.total_defenders || 0) > 0).sort((a, b) => (b.total_defenders || 0) - (a.total_defenders || 0)).slice(0, 3)
   const topOffensive = [...standings].filter(u => (u.total_forwards || 0) > 0).sort((a, b) => (b.total_forwards || 0) - (a.total_forwards || 0)).slice(0, 3)
-
-  console.log('Top Bus count:', topBus.length, 'Top Offensive count:', topOffensive.length, 'Sample:', standings.slice(0, 2).map(s => ({ name: s.user_name, def: s.total_defenders, fwd: s.total_forwards })))
 
   return (
     <div className="space-y-3 max-w-5xl mx-auto">
@@ -839,9 +831,7 @@ export default function ClasificacionPage() {
                     bgClass += ' animate-pulse ring-1 ring-inset ring-slate-500/50'
                   }
 
-                  console.log('Top Bus count:', topBus.length, 'Top Offensive count:', topOffensive.length, 'Sample:', standings.slice(0, 2).map(s => ({ name: s.user_name, def: s.total_defenders, fwd: s.total_forwards })))
-
-  return (
+                  return (
                     <Fragment key={standing.user_id}>
                       <tr
                         className={`border-b transition-colors cursor-pointer ${borderClass} ${bgClass}`}
