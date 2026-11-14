@@ -20,6 +20,8 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMatchdayLock } from '@/hooks/use-matchday-lock'
+import { getVenueInfo, getStadiumSatelliteUrl } from '@/lib/venues'
+import { getStadiumPhotos } from '@/lib/stadium-photos'
 
 interface Team {
   id: string
@@ -730,7 +732,7 @@ export default function PartidosPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Partidos</h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Partidos</h1>
             <p className="text-slate-600 mt-1 text-sm sm:text-base">
               {availableMatchdays.length === 0
                 ? `${currentMomento}`
@@ -741,7 +743,7 @@ export default function PartidosPage() {
                     : `Jornada ${currentMatchday} de ${Math.max(...availableMatchdays)}`
               }
               {completeCount > 0 && (
-                <span className="ml-2 text-emerald-600 text-sm">
+                <span className="ml-2 text-emerald-600 font-semibold text-sm">
                   ({completeCount}/{fixtures.length} completos)
                 </span>
               )}
@@ -847,19 +849,19 @@ export default function PartidosPage() {
         return (
         <div
           key={date}
-          className={isToday ? 'rounded-2xl border-2 border-emerald-500 bg-emerald-50/60 shadow-lg shadow-emerald-500/20 p-4' : ''}
+          className={isToday ? 'rounded-2xl border-2 border-emerald-500 bg-emerald-50/70 shadow-lg shadow-emerald-500/10 p-4' : ''}
         >
           {/* Fecha */}
           <div className="flex items-center gap-2 mb-4">
             <div className={`flex-1 h-px ${isToday ? 'bg-emerald-400' : 'bg-slate-200'}`}></div>
-            <span className={`text-sm font-semibold capitalize ${isToday ? 'text-emerald-700' : 'text-slate-600'}`}>
+            <span className={`text-sm font-bold tracking-wide capitalize ${isToday ? 'text-emerald-700' : 'text-slate-600'}`}>
               {new Date(date).toLocaleDateString('es-ES', {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long'
               })}
               {isToday && (
-                <span className="ml-2 text-emerald-600 font-bold animate-pulse">(Hoy)</span>
+                <span className="ml-2 text-emerald-600 font-extrabold animate-pulse">(Hoy)</span>
               )}
             </span>
             <div className={`flex-1 h-px ${isToday ? 'bg-emerald-400' : 'bg-slate-200'}`}></div>
@@ -873,34 +875,68 @@ export default function PartidosPage() {
               const startsSoon = isFuture && timeUntil !== null && !timeUntil.includes('h') && timeUntil.includes('min') && parseInt(timeUntil) <= 30
               const isLive = !isFuture && isFixtureInPlay(fixture.status, fixture.current_minute)
               const isComplete = !isFuture && FINISHED_STATUSES.has((fixture.status || '').toLowerCase())
+              const venueInfo = getVenueInfo(fixture.id, fixture.home_team_id, fixture.home_team?.name)
+              const stadiumPhotos = getStadiumPhotos(venueInfo?.name || fixture.venue)
+              const stadiumPhoto = stadiumPhotos.length > 0 ? stadiumPhotos[0] : null
+              const venueName = venueInfo?.name || fixture.venue
 
               return (
                 <Card
                   key={fixture.id}
-                  className={`!bg-slate-800 border-slate-700 hover:shadow-lg transition-all cursor-pointer ${
+                  onClick={() => handleMatchClick(fixture)}
+                  className={`!bg-slate-950 border-slate-700/80 hover:border-slate-600 hover:shadow-xl transition-all cursor-pointer relative overflow-hidden group ${
                     isLive ? 'ring-2 ring-red-500 animate-pulse' :
                     startsSoon ? 'ring-2 ring-blue-500 animate-pulse' : ''
                   } ${
                     isComplete
-                      ? 'border-emerald-600 ring-1 ring-emerald-600'
+                      ? 'border-emerald-600/80 ring-1 ring-emerald-600/40'
                       : ''
                   }`}
                 >
-                  <CardContent className="p-4 relative overflow-hidden">
-                    {/* Fondo semitransparente del icono de la liga */}
-                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 opacity-10 pointer-events-none z-0">
+                  {/* Foto de fondo del estadio con degradado estilo HerScout */}
+                  <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+                    {stadiumPhoto ? (
+                      <img
+                        src={stadiumPhoto}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover object-center opacity-65 group-hover:opacity-80 group-hover:scale-105 transition-all duration-500"
+                      />
+                    ) : venueInfo ? (
+                      <img
+                        src={getStadiumSatelliteUrl(venueInfo.lat, venueInfo.lon, 600, 350)}
+                        alt=""
+                        className="w-full h-full object-cover object-center opacity-60 group-hover:opacity-75 group-hover:scale-105 transition-all duration-500"
+                      />
+                    ) : (
+                      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 opacity-10 pointer-events-none">
+                        <img
+                          src="/icono_lliga.png"
+                          alt="Fondo Liga"
+                          className="w-full h-full object-contain grayscale"
+                        />
+                      </div>
+                    )}
+                    {/* Gradiente oscuro suave para garantizar contraste sin tapar el estadio */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/45 to-slate-950/80" />
+                  </div>
+
+                  <CardContent className="p-4 relative z-10">
+                    {/* Logo de la app en la esquina inferior derecha */}
+                    <div className="absolute bottom-2.5 right-2.5 pointer-events-none z-10">
                       <img
                         src="/icono_lliga.png"
-                        alt="Fondo Liga"
-                        className="w-full h-full object-contain grayscale"
+                        alt="Logo Liga"
+                        className="w-14 h-14 object-contain opacity-40 group-hover:opacity-75 transition-all duration-300 drop-shadow-md"
                       />
                     </div>
-                    <div className="w-full h-full relative z-10" onClick={() => handleMatchClick(fixture)}>
+
+                    <div className="w-full h-full">
                       {/* Estado y hora */}
                       <div className="flex items-center justify-between mb-4">
                         {getStatusBadge(fixture.has_lineups, fixture.status, fixture.current_minute, fixture.start_time)}
-                        <div className="flex items-center gap-1 text-sm text-slate-300">
-                          <Clock className="w-4 h-4" />
+                        <div className="flex items-center gap-1 text-sm font-semibold text-slate-200 bg-slate-900/80 backdrop-blur-sm border border-slate-700/60 rounded-md px-2 py-0.5">
+                          <Clock className="w-3.5 h-3.5 text-emerald-400" />
                           {formatTime(fixture.start_time)}
                         </div>
                       </div>
@@ -909,62 +945,64 @@ export default function PartidosPage() {
                       <div className="space-y-3">
                         {/* Local */}
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 min-w-0 pr-2">
                             {fixture.home_team?.logo_url ? (
                               <img
                                 src={fixture.home_team.logo_url}
                                 alt={fixture.home_team.name}
-                                className="w-8 h-8 object-contain"
+                                className="w-8 h-8 object-contain shrink-0 drop-shadow"
                               />
                             ) : (
-                              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                              <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center shrink-0 border border-slate-700">
                                 <Trophy className="w-4 h-4 text-slate-400" />
                               </div>
                             )}
-                            <span className="font-semibold text-white">
+                            <span className="font-bold text-white truncate text-sm sm:text-base drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                               {fixture.home_team?.name || 'Local'}
                             </span>
                           </div>
-                          <span className="text-2xl font-bold text-white">
+                          <span className="text-2xl font-black text-white font-mono drop-shadow shrink-0">
                             {isFuture ? '-' : (fixture.home_score ?? 0)}
                           </span>
                         </div>
 
                         {/* Visitante */}
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 min-w-0 pr-2">
                             {fixture.away_team?.logo_url ? (
                               <img
                                 src={fixture.away_team.logo_url}
                                 alt={fixture.away_team.name}
-                                className="w-8 h-8 object-contain"
+                                className="w-8 h-8 object-contain shrink-0 drop-shadow"
                               />
                             ) : (
-                              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                              <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center shrink-0 border border-slate-700">
                                 <Trophy className="w-4 h-4 text-slate-400" />
                               </div>
                             )}
-                            <span className="font-semibold text-white">
+                            <span className="font-bold text-white truncate text-sm sm:text-base drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                               {fixture.away_team?.name || 'Visitante'}
                             </span>
                           </div>
-                          <span className="text-2xl font-bold text-white">
+                          <span className="text-2xl font-black text-white font-mono drop-shadow shrink-0">
                             {isFuture ? '-' : (fixture.away_score ?? 0)}
                           </span>
                         </div>
                       </div>
 
                       {/* Estadio y tiempo restante */}
-                      <div className="mt-4 pt-3 border-t border-slate-700">
-                        <div className="flex items-center justify-between">
-                          {fixture.venue && (
-                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                              <MapPin className="w-3 h-3" />
-                              {fixture.venue}
+                      <div className="mt-4 pt-3 border-t border-slate-800/80">
+                        <div className="flex items-center justify-between gap-2 pr-12">
+                          {venueName ? (
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 truncate drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] pr-1">
+                              <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                              <span className="truncate">{venueName}</span>
                             </div>
+                          ) : (
+                            <div />
                           )}
                           {timeUntil && !fixture.status && (
-                            <div className="flex items-center gap-1 text-xs text-green-400 ml-auto">
+                            <div className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-500/30 px-1.5 py-0.5 rounded ml-auto shrink-0">
                               <Play className="w-3 h-3" />
                               En {timeUntil}
                             </div>

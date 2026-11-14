@@ -27,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`${inter.className} min-h-full flex flex-col bg-slate-50`}>{children}</body>
+      <body className={`${inter.className} min-h-full flex flex-col text-slate-800 antialiased selection:bg-emerald-500/20 selection:text-emerald-900`}>{children}</body>
     </html>
   );
 }
