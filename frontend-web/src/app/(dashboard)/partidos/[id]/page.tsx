@@ -11,6 +11,7 @@ import { evaluateRelevoBlocks, resolveRates, type Position } from '@/lib/scoring
 import { useScoringRules } from '@/hooks/use-scoring-rules'
 import { getVenueInfo, getStadiumSatelliteUrl } from '@/lib/venues'
 import { getStadiumPhotos } from '@/lib/stadium-photos'
+import { getTeamColors } from '@/lib/team-colors'
 
 interface Player {
   id: string
@@ -790,6 +791,8 @@ export default function PartidoDetallePage() {
     const isHome = player.team_id === homeTeam?.id
     const teamPlayers = isHome ? homePlayers : awayPlayers
     const isFinished = fixture?.status === 'finished'
+    const isBenchSub = !player.is_starter
+    const teamColors = getTeamColors(playerTeam?.name)
     const wasSubstituted = !!(player.is_starter && (
       teamPlayers.some(p => p.replaced_player_id === player.id) ||
       (isFinished && player.minutes_played && player.minutes_played < 90 && !(player.red_cards && player.red_cards > 0) && !(player.second_yellow_cards && player.second_yellow_cards > 0))
@@ -799,15 +802,26 @@ export default function PartidoDetallePage() {
       <div
         key={player.id}
         onClick={() => setSelectedPlayer(player)}
-        className="cursor-pointer"
+        className="cursor-pointer group"
       >
-        <Card className={`relative overflow-hidden hover:shadow-lg transition-all !bg-slate-800 border-slate-700 hover:border-emerald-500 ${
-          !player.is_starter ? 'opacity-75' : ''
-        }`}>
+        <Card
+          style={{
+            background: `linear-gradient(115deg, ${teamColors.primary}55 0%, rgba(15, 23, 42, 0.92) 52%, rgba(9, 13, 24, 0.98) 100%)`,
+            borderColor: isBenchSub ? '#f59e0b99' : `${teamColors.primary}77`,
+          }}
+          className={`relative overflow-hidden hover:shadow-xl transition-all duration-300 border ${
+            isBenchSub ? 'ring-1 ring-amber-400/50 shadow-md shadow-amber-500/10' : 'hover:brightness-110'
+          }`}
+        >
+          {/* Franja superior sutil de resalte para jugadores que salen del banquillo */}
+          {isBenchSub && (
+            <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 z-20" />
+          )}
+
           {player.shirt_number !== undefined && player.shirt_number !== null && player.photo && (
             <DorsalBadge
               number={player.shirt_number}
-              className={`absolute top-0 z-10 w-5 h-5 sm:w-6 sm:h-6 ${
+              className={`absolute top-0 z-20 w-5 h-5 sm:w-6 sm:h-6 ${
                 isHome 
                   ? 'left-0 rounded-br-md border-r border-b' 
                   : 'right-0 rounded-bl-md border-l border-b'
@@ -816,7 +830,7 @@ export default function PartidoDetallePage() {
           )}
           {wasSubstituted && (
             <div
-              className={`absolute top-0 z-10 w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 border-blue-500/50 flex items-center justify-center ${
+              className={`absolute top-0 z-20 w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 border-blue-500/50 flex items-center justify-center ${
                 isHome 
                   ? 'right-0 rounded-bl-md border-l border-b' 
                   : 'left-0 rounded-br-md border-r border-b'
@@ -836,14 +850,21 @@ export default function PartidoDetallePage() {
               </svg>
             </div>
           )}
+
+          {/* Aura del color principal del club y escudo desplazados hacia la izquierda */}
+          <div
+            className="absolute left-6 sm:left-10 top-1/2 -translate-y-1/2 w-32 h-32 sm:w-44 sm:h-44 rounded-full blur-2xl opacity-35 pointer-events-none z-0"
+            style={{ background: teamColors.primary }}
+          />
           {playerTeam?.logo_url && (
-            <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.12] pointer-events-none overflow-hidden">
-              <img src={playerTeam.logo_url} alt={playerTeam.name} className="w-32 h-32 sm:w-40 sm:h-40 object-contain -rotate-12 scale-125 grayscale" />
+            <div className="absolute inset-y-0 left-0 z-0 flex items-center justify-start -translate-x-3 sm:-translate-x-2 opacity-30 group-hover:opacity-40 transition-opacity pointer-events-none overflow-hidden">
+              <img src={playerTeam.logo_url} alt={playerTeam.name} className="w-28 h-28 sm:w-40 sm:h-40 object-contain -rotate-12 scale-125 drop-shadow-lg" />
             </div>
           )}
-          <CardContent className="@container px-1 pt-2.5 pb-1 sm:p-2.5 flex flex-col gap-3 sm:gap-4">
+
+          <CardContent className="@container px-1.5 pt-2.5 pb-0 sm:px-3 sm:pt-3 sm:pb-0 flex flex-col gap-1 sm:gap-1.5 relative z-10">
             {/* Fila 1: Nombre completo del jugador (toda la línea para él) */}
-            <p className="text-[10.5px] sm:text-xs font-black uppercase tracking-wider text-white leading-tight relative z-20 drop-shadow-md text-center px-6 sm:px-7 w-full -mt-1 sm:mt-0">
+            <p className="text-[10.5px] sm:text-xs font-black uppercase tracking-wider text-white leading-tight relative z-20 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] text-center px-6 sm:px-7 w-full -mt-0.5 sm:mt-0 truncate">
               <span className="block sm:hidden">
                 {getMobilePlayerName(player)}
               </span>
@@ -852,25 +873,25 @@ export default function PartidoDetallePage() {
               </span>
             </p>
  
-            {/* Fila 2: stats, Foto, y puntos/eventos */}
-            <div className="grid grid-cols-[1fr_auto_1fr] sm:grid-cols-3 items-center gap-0.5 @[150px]:gap-1 sm:gap-2 w-full px-0.5 sm:px-0">
+            {/* Fila 2: stats, Foto grande anclada abajo, y puntos/eventos */}
+            <div className="grid grid-cols-[1fr_auto_1fr] sm:grid-cols-3 items-end gap-0.5 @[150px]:gap-1 sm:gap-2 w-full px-0.5 sm:px-0">
               
-              {/* Col 1: Escudo, Demarcación, Minutos */}
-              <div className="min-w-0 @[150px]:min-w-[65px] @[220px]:min-w-[75px] flex flex-col items-start justify-center justify-self-start gap-1 relative z-20">
-                <span className={`inline-flex items-center px-1.5 py-[3px] rounded text-[10px] sm:text-[11px] font-black leading-none uppercase tracking-wider shrink-0 shadow-sm ${getPositionColor(player.position)}`}>
+              {/* Col 1: Demarcación, Titular/Suplente, Minutos */}
+              <div className="min-w-0 @[150px]:min-w-[58px] @[220px]:min-w-[75px] flex flex-col items-start justify-center justify-self-start self-center gap-1 pb-2 sm:pb-3 relative z-20">
+                <span className={`inline-flex items-center px-1.5 py-[3px] rounded text-[9.5px] sm:text-[11px] font-black leading-none uppercase tracking-wider shrink-0 shadow-sm ${getPositionColor(player.position)}`}>
                   {getPositionLabel(player.position)}
                 </span>
                 
-                <span className={`rounded px-1.5 py-[3px] leading-none font-extrabold text-[10px] sm:text-[11px] uppercase tracking-wide border shrink-0 shadow-sm ${
+                <span className={`inline-flex items-center gap-0.5 rounded px-1.5 py-[3px] leading-none font-extrabold text-[9.5px] sm:text-[11px] uppercase tracking-wide border shrink-0 shadow-sm ${
                   player.is_starter
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                    : 'bg-slate-700/80 text-slate-300 border-slate-600/50'
+                    ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400/50'
+                    : 'bg-amber-500/25 text-amber-300 border-amber-400/60'
                 }`}>
                   {player.is_starter ? 'TIT' : 'SUP'}
                 </span>
  
-                <span className="inline-flex items-center gap-0.5 @[150px]:gap-1 bg-slate-900 border border-slate-700 rounded px-1 @[150px]:px-1.5 py-[3px] leading-none shadow-md shrink-0">
-                  <Timer className="w-2.5 h-2.5 @[150px]:w-3 @[150px]:h-3 text-slate-400 shrink-0" />
+                <span className="inline-flex items-center gap-0.5 @[150px]:gap-1 bg-slate-950/85 border border-white/15 rounded px-1 @[150px]:px-1.5 py-[3px] leading-none shadow-md shrink-0">
+                  <Timer className="w-2.5 h-2.5 @[150px]:w-3 @[150px]:h-3 text-slate-300 shrink-0" />
                   <span className={`text-[9px] @[150px]:text-[11px] @[220px]:text-xs font-mono font-black tracking-normal @[150px]:tracking-wider ${
                     (player.minutes_played || 0) >= 59 ? 'text-emerald-400' : 'text-orange-400'
                   }`}>
@@ -879,14 +900,13 @@ export default function PartidoDetallePage() {
                 </span>
               </div>
 
-              {/* Col 2: Foto (contenedor de tamaño fijo) */}
-              <div className="relative w-8 h-8 @[150px]:w-10 @[150px]:h-10 @[220px]:w-11 @[220px]:h-11 shrink-0 justify-self-center z-0 translate-y-1 sm:translate-y-1.5">
+              {/* Col 2: Foto más grande sin fondo ni marco, empezando desde el límite inferior */}
+              <div className="relative w-14 h-16 @[150px]:w-16 @[150px]:h-[72px] @[220px]:w-20 @[220px]:h-24 sm:w-24 sm:h-28 shrink-0 justify-self-center self-end z-10 transition-transform duration-300 group-hover:scale-105 origin-bottom">
                 {player.photo ? (
                   <img
                     src={player.photo}
                     alt={player.short_name || ''}
-                    className="w-full h-full object-contain absolute inset-0 scale-[1.5] sm:scale-[1.6] origin-bottom z-0 drop-shadow-md"
-                    style={{ maxWidth: 'none' }}
+                    className="w-full h-full object-contain object-bottom scale-[1.18] origin-bottom z-10 drop-shadow-[0_6px_12px_rgba(0,0,0,0.75)]"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none'
                       ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
@@ -895,14 +915,14 @@ export default function PartidoDetallePage() {
                 ) : null}
                 <DorsalBadge
                   number={player.shirt_number || '?'}
-                  className={`w-full h-full rounded-md absolute inset-0 ${player.photo ? 'hidden' : ''}`}
+                  className={`w-12 h-12 sm:w-16 sm:h-16 rounded-md m-auto mb-2 ${player.photo ? 'hidden' : ''}`}
                 />
               </div>
 
               {/* Col 3: Puntos y Eventos/Iconos (Alineados a la derecha) */}
-              <div className="flex flex-col items-end justify-center justify-self-end gap-0.5 relative z-10">
-                <span className={`text-xl @[150px]:text-2xl @[220px]:text-3xl font-extrabold leading-none text-right whitespace-nowrap drop-shadow-sm ${
-                  (player.total_points || 0) < 0 ? 'text-red-500' : (player.total_points || 0) >= 0 && (player.total_points || 0) < 6 ? 'text-orange-500' : 'text-emerald-400'
+              <div className="flex flex-col items-end justify-center justify-self-end self-center gap-0.5 pb-2 sm:pb-3 relative z-20">
+                <span className={`text-xl @[150px]:text-2xl @[220px]:text-3xl font-black leading-none text-right whitespace-nowrap drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] ${
+                  (player.total_points || 0) < 0 ? 'text-red-400' : (player.total_points || 0) >= 0 && (player.total_points || 0) < 6 ? 'text-orange-400' : 'text-emerald-400'
                 }`}>
                   {Number(player.total_points || 0).toFixed(1)}
                 </span>
@@ -957,59 +977,79 @@ export default function PartidoDetallePage() {
   }
 
   // Banquillo: suplentes convocados que no llegaron a saltar al campo
-  const renderBenchSection = (players: Player[]) => (
-    <div className="rounded-xl bg-slate-900 border border-slate-800 p-1.5 pt-2">
-      <h4 className="flex items-center gap-1.5 px-1 mb-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 19V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13" />
-          <path d="M2 19h20" />
-          <path d="M8 19v-5" />
-          <path d="M16 19v-5" />
-        </svg>
-        Banquillo
-        <span className="ml-auto text-[10px] font-bold text-slate-300 bg-slate-800 rounded-full px-1.5 py-px tabular-nums">
-          {players.length}
-        </span>
-      </h4>
-      {/* Rejilla sin scroll: siempre se ven todos los jugadores y el nombre entero */}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(116px,1fr))] gap-0.5">
-        {[...players]
-          .sort((a, b) => getPositionOrder(a.calc_position || a.position) - getPositionOrder(b.calc_position || b.position))
-          .map(player => {
-            const position = player.calc_position || player.position
-            return (
-              <button
-                key={player.id}
-                onClick={() => setSelectedPlayer(player)}
-                title={getMobilePlayerName(player)}
-                className="group min-w-0 flex items-center gap-1.5 rounded-lg px-1 py-0.5 text-left hover:bg-slate-800 transition-colors"
-              >
-                <span className="relative shrink-0">
-                  {player.photo ? (
-                    <img
-                      src={player.photo}
-                      alt=""
-                      loading="lazy"
-                      className="w-7 h-7 rounded-full object-cover object-top bg-slate-800 ring-1 ring-slate-700 group-hover:ring-emerald-500 transition-shadow"
-                    />
-                  ) : (
-                    <span className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-800 ring-1 ring-slate-700 group-hover:ring-emerald-500 text-[9px] font-bold text-slate-300 transition-shadow">
-                      {getPositionLabel(position)}
+  const renderBenchSection = (players: Player[], team: Team | null) => {
+    const teamColors = getTeamColors(team?.name)
+    return (
+      <div
+        style={{
+          background: `linear-gradient(125deg, ${teamColors.primary}45 0%, rgba(15, 23, 42, 0.93) 55%, rgba(9, 13, 24, 0.98) 100%)`,
+          borderColor: `${teamColors.primary}66`,
+        }}
+        className="relative overflow-hidden rounded-xl border p-1.5 pt-2 shadow-md"
+      >
+        {/* Aura y escudo del club a todo color en el fondo del banquillo */}
+        <div
+          className="absolute left-4 top-1/2 -translate-y-1/2 w-28 h-28 rounded-full blur-2xl opacity-30 pointer-events-none z-0"
+          style={{ background: teamColors.primary }}
+        />
+        {team?.logo_url && (
+          <div className="absolute inset-y-0 left-0 z-0 flex items-center justify-start -translate-x-2 opacity-20 pointer-events-none overflow-hidden">
+            <img src={team.logo_url} alt={team.name} className="w-24 h-24 sm:w-32 sm:h-32 object-contain -rotate-12 scale-110 drop-shadow-lg" />
+          </div>
+        )}
+
+        <h4 className="relative z-10 flex items-center gap-1.5 px-1 mb-1.5 text-[11px] font-semibold text-slate-200 uppercase tracking-wide drop-shadow">
+          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13" />
+            <path d="M2 19h20" />
+            <path d="M8 19v-5" />
+            <path d="M16 19v-5" />
+          </svg>
+          Banquillo
+          <span className="ml-auto text-[10px] font-bold text-slate-200 bg-slate-950/70 border border-white/10 rounded-full px-1.5 py-px tabular-nums">
+            {players.length}
+          </span>
+        </h4>
+        {/* Rejilla sin scroll: siempre se ven todos los jugadores y el nombre entero */}
+        <div className="relative z-10 grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(116px,1fr))] gap-0.5">
+          {[...players]
+            .sort((a, b) => getPositionOrder(a.calc_position || a.position) - getPositionOrder(b.calc_position || b.position))
+            .map(player => {
+              const position = player.calc_position || player.position
+              return (
+                <button
+                  key={player.id}
+                  onClick={() => setSelectedPlayer(player)}
+                  title={getMobilePlayerName(player)}
+                  className="group min-w-0 flex items-center gap-1.5 rounded-lg px-1 py-0.5 text-left hover:bg-white/10 transition-colors"
+                >
+                  <span className="relative shrink-0">
+                    {player.photo ? (
+                      <img
+                        src={player.photo}
+                        alt=""
+                        loading="lazy"
+                        className="w-7 h-7 rounded-full object-cover object-top bg-slate-900/80 ring-1 ring-white/20 group-hover:ring-emerald-400 transition-shadow"
+                      />
+                    ) : (
+                      <span className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-900/80 ring-1 ring-white/20 group-hover:ring-emerald-400 text-[9px] font-bold text-slate-300 transition-shadow">
+                        {getPositionLabel(position)}
+                      </span>
+                    )}
+                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[6px] font-black ring-1 ring-slate-900 ${getPositionColor(position)}`}>
+                      {getPositionLabel(position)[0]}
                     </span>
-                  )}
-                  <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center text-[6px] font-black ring-1 ring-slate-900 ${getPositionColor(position)}`}>
-                    {getPositionLabel(position)[0]}
                   </span>
-                </span>
-                <span className="min-w-0 text-[10.5px] leading-tight font-medium text-slate-200 [overflow-wrap:anywhere]">
-                  {getMobilePlayerName(player)}
-                </span>
-              </button>
-            )
-          })}
+                  <span className="min-w-0 text-[10.5px] leading-tight font-medium text-slate-100 drop-shadow-xs [overflow-wrap:anywhere]">
+                    {getMobilePlayerName(player)}
+                  </span>
+                </button>
+              )
+            })}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando partido...</div>
@@ -1287,7 +1327,7 @@ export default function PartidoDetallePage() {
               </div>
             )}
             {/* Banquillo */}
-            {homePlayers.filter(isUnusedSub).length > 0 && renderBenchSection(homePlayers.filter(isUnusedSub))}
+            {homePlayers.filter(isUnusedSub).length > 0 && renderBenchSection(homePlayers.filter(isUnusedSub), homeTeam)}
           </div>
         </div>
 
@@ -1354,7 +1394,7 @@ export default function PartidoDetallePage() {
               </div>
             )}
             {/* Banquillo */}
-            {awayPlayers.filter(isUnusedSub).length > 0 && renderBenchSection(awayPlayers.filter(isUnusedSub))}
+            {awayPlayers.filter(isUnusedSub).length > 0 && renderBenchSection(awayPlayers.filter(isUnusedSub), awayTeam)}
           </div>
         </div>
       </div>
@@ -1367,57 +1407,72 @@ export default function PartidoDetallePage() {
           onClick={() => setSelectedPlayer(null)}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden border border-slate-200/80"
             onClick={e => e.stopPropagation()}
           >
-            {/* Cabecera compacta con resumen en la misma línea */}
-            <div className="bg-white border-b border-slate-100 px-3 py-3 sm:px-4 sm:py-3.5 flex justify-between items-center z-10 shrink-0">
-              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                {selectedPlayer.photo ? (
-                  <img
-                    src={selectedPlayer.photo}
-                    alt={selectedPlayer.short_name || ''}
-                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-slate-200 shrink-0"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none'
-                      ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
-                    }}
-                  />
-                ) : null}
-                <DorsalBadge
-                  number={selectedPlayer.shirt_number || '?'}
-                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-md border-2 border-slate-200 shrink-0 ${selectedPlayer.photo ? 'hidden' : ''}`}
-                />
+            {/* Cabecera moderna con foto grande */}
+            <div className="relative bg-gradient-to-r from-slate-50 via-white to-emerald-50/40 border-b border-slate-200/80 px-3.5 py-3.5 sm:px-5 sm:py-4 flex justify-between items-center z-10 shrink-0">
+              <div className="flex items-center gap-3.5 sm:gap-5 min-w-0 flex-1">
+                <div className="relative shrink-0 p-[2.5px] rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-500 to-slate-800 shadow-lg shadow-emerald-500/15">
+                  <div className="w-20 h-24 sm:w-24 sm:h-28 rounded-[14px] overflow-hidden bg-gradient-to-b from-slate-100 to-slate-200/80 relative flex items-center justify-center">
+                    {selectedPlayer.photo ? (
+                      <img
+                        src={selectedPlayer.photo}
+                        alt={selectedPlayer.short_name || ''}
+                        className="w-full h-full object-cover object-top scale-105"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none'
+                          ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
+                        }}
+                      />
+                    ) : null}
+                    <DorsalBadge
+                      number={selectedPlayer.shirt_number || '?'}
+                      className={`w-full h-full rounded-[14px] ${selectedPlayer.photo ? 'hidden' : ''}`}
+                    />
+                  </div>
+                  <span className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase shadow-md ring-2 ring-white ${getPositionColor(selectedPlayer.position)}`}>
+                    {getPositionLabel(selectedPlayer.position)}
+                  </span>
+                </div>
                 
-                <div className="min-w-0 flex-1 flex flex-col justify-center gap-1">
+                <div className="min-w-0 flex-1 flex flex-col justify-center gap-2">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h2 className="text-base sm:text-lg font-extrabold text-slate-900 truncate max-w-[150px] sm:max-w-[250px] leading-tight">
+                    <h2 className="text-lg sm:text-xl font-black text-slate-900 truncate max-w-[180px] sm:max-w-[300px] leading-tight tracking-tight">
                       {formatPlayerName(selectedPlayer)}
                     </h2>
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-bold leading-none ${getPositionColor(selectedPlayer.position)}`}>
-                      {getPositionLabel(selectedPlayer.position)}
-                    </span>
-                    <span className="text-xs sm:text-sm text-slate-500 font-medium">
-                      ({selectedPlayer.is_starter ? 'Titular' : 'Suplente'})
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold leading-none border ${
+                      selectedPlayer.is_starter
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}>
+                      {selectedPlayer.is_starter ? 'Titular' : 'Suplente'}
                     </span>
                   </div>
 
-                  {/* Resumen al lado del nombre en más pequeño para moviles */}
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 text-xs sm:text-sm text-slate-600 leading-none mt-0.5">
-                    <span className="flex items-center gap-1">
-                      <strong className={`font-extrabold text-sm sm:text-base ${
-                        (selectedPlayer.total_points || 0) < 0 ? 'text-red-600' : (selectedPlayer.total_points || 0) >= 0 && (selectedPlayer.total_points || 0) < 6 ? 'text-orange-600' : 'text-emerald-600'
-                      }`}>{Number(selectedPlayer.total_points || 0).toFixed(1)}</strong> pts
+                  {/* Chips modernos de resumen */}
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs leading-none">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-extrabold border shadow-2xs ${
+                      (selectedPlayer.total_points || 0) < 0
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : (selectedPlayer.total_points || 0) < 6
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    }`}>
+                      <span className="text-sm sm:text-base tabular-nums">{Number(selectedPlayer.total_points || 0).toFixed(1)}</span>
+                      <span className="text-[10px] uppercase opacity-75">pts</span>
                     </span>
-                    <span className="text-slate-300">•</span>
-                    <span><strong className="text-slate-800">{selectedPlayer.minutes_played || 0}</strong> min</span>
-                    <span className="text-slate-300">•</span>
-                    <span className="flex items-center gap-1">
-                      ⚽ <strong className="text-slate-800">{selectedPlayer.goals || 0}</strong>
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100/90 text-slate-700 border border-slate-200/80 font-bold">
+                      <span className="tabular-nums">{selectedPlayer.minutes_played || 0}&prime;</span>
+                      <span className="text-[10px] text-slate-500 font-semibold">min</span>
                     </span>
-                    <span className="text-slate-300">•</span>
-                    <span className="flex items-center gap-1">
-                      🅰️ <strong className="text-slate-800">{selectedPlayer.assists || 0}</strong>
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100/90 text-slate-800 border border-slate-200/80 font-bold">
+                      <span>⚽</span>
+                      <span className="tabular-nums">{selectedPlayer.goals || 0}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100/90 text-slate-800 border border-slate-200/80 font-bold">
+                      <span>🅰️</span>
+                      <span className="tabular-nums">{selectedPlayer.assists || 0}</span>
                     </span>
                   </div>
                 </div>
@@ -1425,9 +1480,9 @@ export default function PartidoDetallePage() {
               
               <button
                 onClick={() => setSelectedPlayer(null)}
-                className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-500 shrink-0 ml-2 border border-slate-200/50"
+                className="p-2 bg-white hover:bg-slate-100 rounded-full text-slate-500 hover:text-slate-800 shrink-0 ml-2 border border-slate-200 shadow-2xs transition-colors self-start"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 

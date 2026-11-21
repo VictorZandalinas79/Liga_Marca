@@ -363,6 +363,8 @@ export function MetricBreakdown({
   })
 
   const total = n(player.total_points)
+  const relevoBlockSum = r2(relevoCardRows.reduce((sum, b) => sum + n(b.points), 0))
+  const totalRelevo = min <= 0 ? 0 : (relevoBlockSum === 0 ? -1 : relevoBlockSum)
   const maxAbsPoints = Math.max(
     ...filteredStandardRows.map(r => Math.abs(r.points)),
     ...relevoCardRows.map(r => Math.abs(r.points)),
@@ -475,6 +477,29 @@ export function MetricBreakdown({
               })
             )}
           </tbody>
+          <tfoot className="bg-gradient-to-r from-violet-50/90 via-violet-50/50 to-white border-t-2 border-violet-200/80">
+            <tr>
+              <td className="px-1.5 sm:px-2 py-2.5 font-bold text-[9px]">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border font-extrabold uppercase tracking-wider bg-violet-100 text-violet-800 border-violet-200">
+                  <Sparkles className="w-2.5 h-2.5" />
+                  RELEVO
+                </span>
+              </td>
+              <td className="px-1.5 sm:px-2 py-2.5 font-bold text-violet-950 text-[11px] leading-snug">
+                <span>Total Puntos RELEVO</span>
+                <span className="block text-[9px] font-medium text-violet-600/80">
+                  Sumatorio de bloques de rendimiento
+                </span>
+              </td>
+              <td className="px-1.5 sm:px-2 py-2.5 text-right">
+                <span className={`tabular-nums leading-none font-black text-xs sm:text-sm ${
+                  totalRelevo > 0 ? 'text-emerald-600' : totalRelevo < 0 ? 'text-rose-600' : 'text-violet-700'
+                }`}>
+                  {totalRelevo > 0 ? `+${fmtPts(totalRelevo)}` : fmtPts(totalRelevo)}
+                </span>
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>

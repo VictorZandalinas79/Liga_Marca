@@ -39,7 +39,7 @@ function formatPlayerName(name: string): string {
 }
 import { Badge } from '@/components/ui/badge'
 import { Save, X, Check, Search, Lock, Unlock, UserPlus, Trophy, TrendingUp, Users, AlertTriangle, ChevronDown, Bell, Calendar, ArrowLeftRight, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
+import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts'
 import { fetchStandings, invalidateStandingsCache } from '@/lib/standings-client'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 import { fetchLivePenalties } from '@/lib/live-penalties-client'
@@ -349,7 +349,7 @@ export default function DashboardPage() {
     is_pending: boolean
   }
   const [liveInfractions, setLiveInfractions] = useState<LiveInfraction[]>([])
-  const [historicalPoints, setHistoricalPoints] = useState<{ matchday: number, name: string, points: number, avgPoints: number, hasPenalty: boolean }[]>([])
+  const [historicalPoints, setHistoricalPoints] = useState<{ matchday: number, name: string, points: number, avgPoints: number, aboveRange: [number, number], belowRange: [number, number], hasPenalty: boolean }[]>([])
   
   const warnings = useMemo(() => {
     if (!upcomingLocks || upcomingLocks.length === 0 || !lockTime) return []
@@ -362,57 +362,66 @@ export default function DashboardPage() {
 
       const fantasyStart = Math.max(1, config.fantasy_starting_matchday);
 
-      // Usar el motor oficial de clasificación (getStandings) para obtener exactamente
-      // las mismas puntuaciones por jornada calculadas para la liga y división.
-      const { standings: standingsData, lastPlayedMatchday } = await fetchStandings(userDivision, null);
+      try {
+        // Usar el motor oficial de clasificación (getStandings) para obtener exactamente
+        // las mismas puntuaciones por jornada calculadas para la liga y división.
+        const { standings: standingsData, lastPlayedMatchday } = await fetchStandings(userDivision, null);
 
-      if (!standingsData || standingsData.length === 0) return;
+        if (!standingsData || standingsData.length === 0) return;
 
-      const myStanding = standingsData.find(s => s.user_id === user.id);
-      const myMatchdayPoints = myStanding?.matchday_points || {};
+        const myStanding = standingsData.find(s => s.user_id === user.id);
+        const myMatchdayPoints = myStanding?.matchday_points || {};
 
-      // Obtener las sanciones registradas por jornada para marcar los puntos rojos
-      const { data: penaltiesData } = await supabase
-        .from('penalties')
-        .select('matchday, points')
-        .eq('user_id', user.id);
+        // Obtener las sanciones registradas por jornada para marcar los puntos rojos
+        const { data: penaltiesData } = await supabase
+          .from('penalties')
+          .select('matchday, points')
+          .eq('user_id', user.id);
 
-      const penaltyMatchdays = new Set<number>();
-      (penaltiesData || []).forEach(p => {
-        const md = typeof p.matchday === 'string' ? parseInt(p.matchday, 10) : p.matchday;
-        if (md) penaltyMatchdays.add(md);
-      });
-
-      const history = [];
-      const maxMd = lastPlayedMatchday || 1;
-
-      for (let md = fantasyStart; md <= maxMd; md++) {
-        if (openMatchdays.includes(md)) continue;
-
-        // Mis puntos en esta jornada exactamente como los calcula Clasificación / Jornada
-        const myPoints = myMatchdayPoints[md] ?? 0;
-
-        // Calcular la media de la liga/división en esa jornada
-        let sum = 0;
-        let count = 0;
-        for (const s of standingsData) {
-          if (s.matchday_points && s.matchday_points[md] !== undefined) {
-            sum += s.matchday_points[md];
-            count++;
-          }
-        }
-        const avg = count > 0 ? sum / count : 0;
-
-        history.push({
-          matchday: md,
-          name: `J${md}`,
-          points: Math.round(myPoints * 10) / 10,
-          avgPoints: Math.round(avg * 10) / 10,
-          hasPenalty: penaltyMatchdays.has(md)
+        const penaltyMatchdays = new Set<number>();
+        (penaltiesData || []).forEach(p => {
+          const md = typeof p.matchday === 'string' ? parseInt(p.matchday, 10) : p.matchday;
+          if (md) penaltyMatchdays.add(md);
         });
-      }
 
-      setHistoricalPoints(history);
+        const history = [];
+        const maxMd = lastPlayedMatchday || 1;
+
+        for (let md = fantasyStart; md <= maxMd; md++) {
+          if (openMatchdays.includes(md)) continue;
+
+          // Mis puntos en esta jornada exactamente como los calcula Clasificación / Jornada
+          const myPoints = myMatchdayPoints[md] ?? 0;
+
+          // Calcular la media de la liga/división en esa jornada
+          let sum = 0;
+          let count = 0;
+          for (const s of standingsData) {
+            if (s.matchday_points && s.matchday_points[md] !== undefined) {
+              sum += s.matchday_points[md];
+              count++;
+            }
+          }
+          const avg = count > 0 ? sum / count : 0;
+
+          const roundedPts = Math.round(myPoints * 10) / 10;
+          const roundedAvg = Math.round(avg * 10) / 10;
+
+          history.push({
+            matchday: md,
+            name: `J${md}`,
+            points: roundedPts,
+            avgPoints: roundedAvg,
+            aboveRange: (roundedPts >= roundedAvg ? [roundedAvg, roundedPts] : [roundedAvg, roundedAvg]) as [number, number],
+            belowRange: (roundedPts < roundedAvg ? [roundedPts, roundedAvg] : [roundedAvg, roundedAvg]) as [number, number],
+            hasPenalty: penaltyMatchdays.has(md)
+          });
+        }
+
+        setHistoricalPoints(history);
+      } catch (err) {
+        console.error('Error cargando evolución de puntos:', err);
+      }
     }
     
     fetchHistory();
@@ -2866,10 +2875,20 @@ export default function DashboardPage() {
             </h3>
             <div className="w-full h-[250px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart
+                <ComposedChart
                   data={historicalPoints}
                   margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                 >
+                  <defs>
+                    <linearGradient id="aboveAvgGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.1} />
+                    </linearGradient>
+                    <linearGradient id="belowAvgGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1} />
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0.35} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis 
                     dataKey="name" 
@@ -2886,10 +2905,25 @@ export default function DashboardPage() {
                   <RechartsTooltip 
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     formatter={(value: any, name: any) => {
+                      if (name === 'aboveRange' || name === 'belowRange') return [null, null] as any
                       if (name === 'avgPoints') return [`${value} pts`, 'Media Liga']
                       return [`${value} pts`, 'Mis Puntos']
                     }}
                     labelStyle={{ color: '#64748b', fontWeight: 'bold', marginBottom: '4px' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="aboveRange"
+                    stroke="none"
+                    fill="url(#aboveAvgGrad)"
+                    isAnimationActive={false}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="belowRange"
+                    stroke="none"
+                    fill="url(#belowAvgGrad)"
+                    isAnimationActive={false}
                   />
                   <Line 
                     type="monotone" 
@@ -2911,11 +2945,12 @@ export default function DashboardPage() {
                       if (payload.hasPenalty) {
                         return <circle key={`dot-${payload.name}`} cx={cx} cy={cy} r={6} stroke="#ef4444" strokeWidth={2} fill="#ef4444" className="animate-pulse" />;
                       }
-                      return <circle key={`dot-${payload.name}`} cx={cx} cy={cy} r={4} stroke="#10b981" strokeWidth={2} fill="white" />;
+                      const isBelow = payload.points < payload.avgPoints;
+                      return <circle key={`dot-${payload.name}`} cx={cx} cy={cy} r={4} stroke={isBelow ? '#ef4444' : '#10b981'} strokeWidth={2} fill="white" />;
                     }}
                     activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2, fill: 'white' }}
                   />
-                </LineChart>
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
             <div className="flex justify-center items-center gap-4 mt-4 text-xs text-slate-500">
@@ -3479,57 +3514,72 @@ export default function DashboardPage() {
           onClick={() => setStatsModalPlayer(null)}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden border border-slate-200/80"
             onClick={e => e.stopPropagation()}
           >
-            {/* Cabecera compacta con resumen en la misma línea */}
-            <div className="bg-white border-b border-slate-100 px-3 py-3 sm:px-4 sm:py-3.5 flex justify-between items-center z-10 shrink-0">
-              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                {statsModalPlayer.photo ? (
-                  <img
-                    src={statsModalPlayer.photo}
-                    alt={statsModalPlayer.short_name || ''}
-                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-slate-200 shrink-0"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none'
-                      ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
-                    }}
-                  />
-                ) : null}
-                <DorsalBadge
-                  number={statsModalPlayer.shirt_number || '?'}
-                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-md border-2 border-slate-200 shrink-0 ${statsModalPlayer.photo ? 'hidden' : ''}`}
-                />
+            {/* Cabecera moderna con foto grande */}
+            <div className="relative bg-gradient-to-r from-slate-50 via-white to-emerald-50/40 border-b border-slate-200/80 px-3.5 py-3.5 sm:px-5 sm:py-4 flex justify-between items-center z-10 shrink-0">
+              <div className="flex items-center gap-3.5 sm:gap-5 min-w-0 flex-1">
+                <div className="relative shrink-0 p-[2.5px] rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-500 to-slate-800 shadow-lg shadow-emerald-500/15">
+                  <div className="w-20 h-24 sm:w-24 sm:h-28 rounded-[14px] overflow-hidden bg-gradient-to-b from-slate-100 to-slate-200/80 relative flex items-center justify-center">
+                    {statsModalPlayer.photo ? (
+                      <img
+                        src={statsModalPlayer.photo}
+                        alt={statsModalPlayer.short_name || ''}
+                        className="w-full h-full object-cover object-top scale-105"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none'
+                          ;(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')
+                        }}
+                      />
+                    ) : null}
+                    <DorsalBadge
+                      number={statsModalPlayer.shirt_number || '?'}
+                      className={`w-full h-full rounded-[14px] ${statsModalPlayer.photo ? 'hidden' : ''}`}
+                    />
+                  </div>
+                  <span className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase shadow-md ring-2 ring-white ${getPositionColor(statsModalPlayer.calc_position || statsModalPlayer.position)}`}>
+                    {getPositionLabel(statsModalPlayer.calc_position || statsModalPlayer.position)}
+                  </span>
+                </div>
                 
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 flex flex-col justify-center gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-sm sm:text-lg font-black text-slate-800 truncate" style={{ fontFamily: 'var(--font-outfit)' }}>
+                    <h2 className="text-lg sm:text-xl font-black text-slate-900 truncate" style={{ fontFamily: 'var(--font-outfit)' }}>
                       {formatPlayerName(statsModalPlayer.short_name || statsModalPlayer.first_name)}
                     </h2>
-                    <span className={`text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded text-white ${getPositionColor(statsModalPlayer.calc_position || statsModalPlayer.position)}`}>
-                      {getPositionLabel(statsModalPlayer.calc_position || statsModalPlayer.position)}
-                    </span>
-                    <span className="text-xs sm:text-sm text-slate-500 font-medium">
-                      ({statsModalPlayer.is_starter ? 'Titular' : 'Suplente'})
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold leading-none border ${
+                      statsModalPlayer.is_starter
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}>
+                      {statsModalPlayer.is_starter ? 'Titular' : 'Suplente'}
                     </span>
                   </div>
 
-                  {/* Resumen al lado del nombre en más pequeño para moviles */}
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 text-xs sm:text-sm text-slate-600 leading-none mt-0.5">
-                    <span className="flex items-center gap-1">
-                      <strong className={`font-extrabold text-sm sm:text-base ${
-                        (statsModalPlayer.total_points || 0) < 0 ? 'text-red-600' : (statsModalPlayer.total_points || 0) >= 0 && (statsModalPlayer.total_points || 0) < 6 ? 'text-orange-600' : 'text-emerald-600'
-                      }`}>{statsModalPlayer.total_points || 0}</strong> pts
+                  {/* Chips modernos de resumen */}
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs leading-none">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-extrabold border shadow-2xs ${
+                      (statsModalPlayer.total_points || 0) < 0
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : (statsModalPlayer.total_points || 0) < 6
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    }`}>
+                      <span className="text-sm sm:text-base tabular-nums">{statsModalPlayer.total_points || 0}</span>
+                      <span className="text-[10px] uppercase opacity-75">pts</span>
                     </span>
-                    <span className="text-slate-300">•</span>
-                    <span><strong className="text-slate-800">{statsModalPlayer.minutes_played || 0}</strong> min</span>
-                    <span className="text-slate-300">•</span>
-                    <span className="flex items-center gap-1">
-                      ⚽ <strong className="text-slate-800">{statsModalPlayer.goals || 0}</strong>
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100/90 text-slate-700 border border-slate-200/80 font-bold">
+                      <span className="tabular-nums">{statsModalPlayer.minutes_played || 0}&prime;</span>
+                      <span className="text-[10px] text-slate-500 font-semibold">min</span>
                     </span>
-                    <span className="text-slate-300">•</span>
-                    <span className="flex items-center gap-1">
-                      🅰️ <strong className="text-slate-800">{statsModalPlayer.assists || 0}</strong>
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100/90 text-slate-800 border border-slate-200/80 font-bold">
+                      <span>⚽</span>
+                      <span className="tabular-nums">{statsModalPlayer.goals || 0}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100/90 text-slate-800 border border-slate-200/80 font-bold">
+                      <span>🅰️</span>
+                      <span className="tabular-nums">{statsModalPlayer.assists || 0}</span>
                     </span>
                   </div>
                 </div>
@@ -3537,9 +3587,9 @@ export default function DashboardPage() {
               
               <button
                 onClick={() => setStatsModalPlayer(null)}
-                className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-500 shrink-0 ml-2 border border-slate-200/50"
+                className="p-2 bg-white hover:bg-slate-100 rounded-full text-slate-500 hover:text-slate-800 shrink-0 ml-2 border border-slate-200 shadow-2xs transition-colors self-start"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
