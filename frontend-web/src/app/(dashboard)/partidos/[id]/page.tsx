@@ -862,7 +862,7 @@ export default function PartidoDetallePage() {
             </div>
           )}
 
-          <CardContent className="@container px-1.5 pt-2.5 pb-0 sm:px-3 sm:pt-3 sm:pb-0 flex flex-col gap-1 sm:gap-1.5 relative z-10">
+          <CardContent className="@container pl-1 pr-1.5 pt-2.5 pb-0 sm:pl-2 sm:pr-3 sm:pt-3 sm:pb-0 flex flex-col gap-1 sm:gap-1.5 relative z-10">
             {/* Fila 1: Nombre completo del jugador (toda la línea para él) */}
             <p className="text-[10.5px] sm:text-xs font-black uppercase tracking-wider text-white leading-tight relative z-20 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] text-center px-6 sm:px-7 w-full -mt-0.5 sm:mt-0 truncate">
               <span className="block sm:hidden">
@@ -874,10 +874,10 @@ export default function PartidoDetallePage() {
             </p>
  
             {/* Fila 2: stats, Foto grande anclada abajo, y puntos/eventos */}
-            <div className="grid grid-cols-[1fr_auto_1fr] sm:grid-cols-3 items-end gap-0.5 @[150px]:gap-1 sm:gap-2 w-full px-0.5 sm:px-0">
+            <div className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-3 items-end gap-1 sm:gap-2 w-full">
               
               {/* Col 1: Demarcación, Titular/Suplente, Minutos */}
-              <div className="min-w-0 @[150px]:min-w-[58px] @[220px]:min-w-[75px] flex flex-col items-start justify-center justify-self-start self-center gap-1 pb-2 sm:pb-3 relative z-20">
+              <div className="min-w-0 flex flex-col items-start justify-center justify-self-start self-center gap-1 pb-2 sm:pb-3 relative z-20">
                 <span className={`inline-flex items-center px-1.5 py-[3px] rounded text-[9.5px] sm:text-[11px] font-black leading-none uppercase tracking-wider shrink-0 shadow-sm ${getPositionColor(player.position)}`}>
                   {getPositionLabel(player.position)}
                 </span>
@@ -901,7 +901,7 @@ export default function PartidoDetallePage() {
               </div>
 
               {/* Col 2: Foto más grande sin fondo ni marco, empezando desde el límite inferior */}
-              <div className="relative w-14 h-16 @[150px]:w-16 @[150px]:h-[72px] @[220px]:w-20 @[220px]:h-24 sm:w-24 sm:h-28 shrink-0 justify-self-center self-end z-10 transition-transform duration-300 group-hover:scale-105 origin-bottom">
+              <div className="relative w-12 h-14 @[150px]:w-14 @[150px]:h-16 @[220px]:w-16 @[220px]:h-20 sm:w-24 sm:h-28 shrink-0 justify-self-center self-end z-10 transition-transform duration-300 group-hover:scale-105 origin-bottom">
                 {player.photo ? (
                   <img
                     src={player.photo}
@@ -919,17 +919,32 @@ export default function PartidoDetallePage() {
                 />
               </div>
 
-              {/* Col 3: Puntos y Eventos/Iconos (Alineados a la derecha) */}
-              <div className="flex flex-col items-end justify-center justify-self-end self-center gap-0.5 pb-2 sm:pb-3 relative z-20">
-                <span className={`text-xl @[150px]:text-2xl @[220px]:text-3xl font-black leading-none text-right whitespace-nowrap drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] ${
-                  (player.total_points || 0) < 0 ? 'text-red-400' : (player.total_points || 0) >= 0 && (player.total_points || 0) < 6 ? 'text-orange-400' : 'text-emerald-400'
-                }`}>
-                  {Number(player.total_points || 0).toFixed(1)}
-                </span>
+              {/* Col 3: Puntos innovadores y Eventos/Estrellas (centrados hacia dentro en móvil) */}
+              <div className="flex flex-col items-center sm:items-end justify-center justify-self-center sm:justify-self-end self-center gap-1 pb-2 sm:pb-3 pr-1 sm:pr-0 relative z-20">
+                {(() => {
+                  const pts = Number(player.total_points || 0)
+                  const [ptsInt, ptsDec] = pts.toFixed(1).split('.')
+                  const ptsStyle =
+                    pts < 0
+                      ? 'text-rose-400 border-rose-500/40 shadow-rose-500/15'
+                      : pts < 6
+                      ? 'text-amber-400 border-amber-500/40 shadow-amber-500/15'
+                      : 'text-emerald-400 border-emerald-500/45 shadow-emerald-500/20'
+                  return (
+                    <div className={`inline-flex items-baseline px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-xl bg-slate-950/80 backdrop-blur-xs border shadow-lg font-mono leading-none ${ptsStyle}`}>
+                      <span className="text-base @[150px]:text-lg @[220px]:text-2xl sm:text-3xl font-black tracking-tight tabular-nums">
+                        {ptsInt}
+                      </span>
+                      <span className="text-xs @[150px]:text-sm @[220px]:text-base sm:text-xl font-extrabold opacity-90 tabular-nums">
+                        .{ptsDec}
+                      </span>
+                    </div>
+                  )
+                })()}
                 
                 {/* Eventos debajo de la puntuación */}
                 {((player.goals || 0) > 0 || (player.assists || 0) > 0 || (player.yellow_cards || 0) > 0 || (player.red_cards || 0) > 0 || (player.second_yellow_cards || 0) > 0) && (
-                  <div className="flex items-center gap-1 justify-end flex-wrap max-w-[45px] sm:max-w-[55px]">
+                  <div className="flex items-center gap-1 justify-center sm:justify-end flex-wrap max-w-[48px] sm:max-w-[60px]">
                     {(player.goals || 0) > 0 && (
                       <span className="inline-flex items-center gap-0.5 shrink-0" title={`${player.goals} Gol(es)`}>
                         <span className="text-[9.5px] sm:text-xs">⚽</span>
@@ -958,12 +973,12 @@ export default function PartidoDetallePage() {
                 )}
 
                 {player.relevo_points !== undefined && player.relevo_points !== null && Number(player.relevo_points) !== 0 && (
-                  <div className="flex items-center gap-0.5 shrink-0" title={`Relevo: ${player.relevo_points} pt(s)`}>
+                  <div className="flex items-center justify-center sm:justify-end gap-0.5 shrink-0" title={`Relevo: ${player.relevo_points} pt(s)`}>
                     {Number(player.relevo_points) < 0 ? (
-                      <span className="text-[10px] sm:text-[12px] drop-shadow-md" title="Relevo Negativo">❌</span>
+                      <span className="text-[9px] sm:text-[12px] drop-shadow-md" title="Relevo Negativo">❌</span>
                     ) : (
                       Array.from({ length: Math.max(0, Number(player.relevo_points)) }).map((_, i) => (
-                        <span key={i} className="text-yellow-400 drop-shadow-md text-[11px] sm:text-[13px] leading-none">★</span>
+                        <span key={i} className="text-yellow-400 drop-shadow-md text-[9.5px] @[150px]:text-[11px] sm:text-[13px] leading-none">★</span>
                       ))
                     )}
                   </div>
