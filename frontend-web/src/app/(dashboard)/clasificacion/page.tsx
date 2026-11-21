@@ -42,7 +42,7 @@ interface MatchdayStatus {
   is_open: boolean
 }
 
-type SortField = 'total_points' | 'average_points' | 'last_3_jornadas_avg' | 'best_change_score' | 'change_impact_points' | 'podium_finishes' | 'bottom_finishes' | 'sanctioned_matchdays' | 'saldo'
+type SortField = 'total_points' | 'average_points' | 'best_matchday_points' | 'last_3_jornadas_avg' | 'best_change_score' | 'change_impact_points' | 'podium_finishes' | 'bottom_finishes' | 'sanctioned_matchdays' | 'saldo'
 type SortOrder = 'asc' | 'desc'
 
 // Las celdas llevan fondo opaco (--row) para que la columna fija tape lo que
@@ -803,10 +803,10 @@ export default function ClasificacionPage() {
       <Card className="!bg-slate-800 border-slate-700">
         <CardContent className="p-0">
           <div className="overflow-x-auto w-full">
-            <table className="w-full min-w-[730px] sm:min-w-[800px] xl:min-w-[930px] table-fixed border-separate border-spacing-0">
+            <table className="w-full min-w-[820px] sm:min-w-[920px] xl:min-w-[1040px] table-fixed border-separate border-spacing-0">
               <thead>
                 <tr>
-                  <th className={`${TH} !text-left sticky left-0 z-20 w-[148px] sm:w-44 border-r`}>
+                  <th className={`${TH} !text-left sticky left-0 z-20 w-[175px] sm:w-56 border-r`}>
                     <span className="pl-1">Pos · Jugador</span>
                   </th>
                   <th className={`${TH_SORTABLE} w-16 sm:w-24`} onClick={() => handleSort('total_points')}>
@@ -821,6 +821,12 @@ export default function ClasificacionPage() {
                       <span className="hidden xl:inline">Promedio</span>
                       <span className="xl:hidden">Prom</span>
                       <SortIcon field="average_points" />
+                    </div>
+                  </th>
+                  <th className={TH_SORTABLE} onClick={() => handleSort('best_matchday_points')} title="Mejor puntuación en una jornada">
+                    <div className="flex items-center justify-center text-amber-400">
+                      <span>Mejor</span>
+                      <SortIcon field="best_matchday_points" />
                     </div>
                   </th>
                   {!isLeagueOpen && (
@@ -911,25 +917,24 @@ export default function ClasificacionPage() {
                         onClick={() => handleUserClick(standing.user_id)}
                       >
                         <td className={`${TD} !text-left sticky left-0 z-10 border-r`}>
-                          <div className="flex items-center gap-1 pl-1">
-                            <span className="w-5 sm:w-6 flex items-center justify-center shrink-0">
+                          <div className="flex items-center gap-1 pl-0.5 sm:pl-1">
+                            <span className="w-4 sm:w-6 flex items-center justify-center shrink-0">
                               {getPositionMedal(standing.current_position, isLast)}
                             </span>
-                            <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex items-center justify-center shrink-0">
-                              {showGreenArrow && (
-                                <ArrowUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 stroke-[2.5]" />
-                              )}
-                              {showRedArrow && (
-                                <ArrowDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 stroke-[2.5]" />
-                              )}
-                            </span>
-                            <div className="min-w-0">
-                              <p className="font-semibold text-white text-[10px] sm:text-xs uppercase whitespace-normal break-words leading-tight">{standing.user_name}</p>
-                              {standing.best_matchday_points > 0 && (
-                                <p className="text-[8px] sm:text-[10px] text-amber-400 font-medium truncate">
-                                  Mejor: {Math.round(standing.best_matchday_points * 10) / 10}<span className="hidden sm:inline"> pts</span> (J{standing.best_matchday})
-                                </p>
-                              )}
+                            {(showGreenArrow || showRedArrow) && (
+                              <span className="w-3 h-3 sm:w-4 sm:h-4 flex items-center justify-center shrink-0">
+                                {showGreenArrow && (
+                                  <ArrowUp className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400 stroke-[2.5]" />
+                                )}
+                                {showRedArrow && (
+                                  <ArrowDown className="w-3 h-3 sm:w-4 sm:h-4 text-red-500 stroke-[2.5]" />
+                                )}
+                              </span>
+                            )}
+                            <div className="min-w-0 py-0.5">
+                              <p className={`font-bold text-white uppercase whitespace-nowrap sm:tracking-wide ${
+                                (standing.user_name?.length || 0) > 13 ? 'text-[10px] sm:text-sm' : 'text-[11px] sm:text-sm'
+                              }`}>{standing.user_name}</p>
                             </div>
                           </div>
                         </td>
@@ -940,6 +945,18 @@ export default function ClasificacionPage() {
                         </td>
                         <td className={TD}>
                           <span className={`${STAT} text-slate-200`}>{Number(standing.average_points).toFixed(1)}</span>
+                        </td>
+                        <td className={TD}>
+                          {standing.best_matchday_points > 0 ? (
+                            <div className="flex flex-col items-center">
+                              <span className={`${STAT} font-bold text-amber-400 leading-tight`}>
+                                {(Math.round(standing.best_matchday_points * 10) / 10).toFixed(1)}
+                              </span>
+                              <span className="text-[8px] sm:text-[9px] text-slate-400 leading-tight">J{standing.best_matchday}</span>
+                            </div>
+                          ) : (
+                            <span className={`${STAT} text-slate-500`}>-</span>
+                          )}
                         </td>
                         {!isLeagueOpen && (
                           <td className={TD}>
@@ -997,7 +1014,7 @@ export default function ClasificacionPage() {
                       {/* Equipo desplegable */}
                       {isExpanded && userTeamData[standing.user_id] && (
                         <tr>
-                          <td colSpan={!isLeagueOpen ? 11 : 10} className="p-0">
+                          <td colSpan={!isLeagueOpen ? 12 : 11} className="p-0">
                             <div ref={(el) => { teamRefs.current[standing.user_id] = el; }} className="bg-slate-700/50 px-3 py-2.5 sticky left-0 w-[calc(100vw-3.5rem)] sm:w-[400px] max-w-full shadow-lg border-r border-slate-600/50">
                               {/* Cabecera equipo */}
                               <div className="flex items-center gap-2 mb-2 flex-wrap">

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { applyMarketFilter } from '@/lib/market'
 import { Card, CardContent } from '@/components/ui/card'
-import { Search, TrendingUp, Goal, Ticket, Download, Swords, ChevronDown, ChevronUp, X, BarChart2 } from 'lucide-react'
+import { Search, TrendingUp, Goal, Ticket, Download, Swords, ChevronDown, ChevronUp, X, BarChart2, Coins, ArrowUpDown, Shield, Check, SlidersHorizontal } from 'lucide-react'
 
 interface Player {
   id: string
@@ -209,6 +209,90 @@ let cachedPlayersData: {
   timestamp: number
 } | null = null
 
+// Selector de equipo personalizado con escudos de los clubes
+function TeamFilterDropdown({
+  teams,
+  value,
+  onChange,
+}: {
+  teams: Array<{ id: string; name: string; logo_url?: string }>
+  value: string
+  onChange: (val: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const selectedTeam = teams.find(t => t.id === value)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative min-w-[210px]">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3.5 py-2 bg-slate-50/80 hover:bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          {selectedTeam?.logo_url ? (
+            <img src={selectedTeam.logo_url} alt="" className="w-5 h-5 object-contain shrink-0" />
+          ) : (
+            <Shield className="w-4 h-4 text-slate-400 shrink-0" />
+          )}
+          <span className="truncate">{selectedTeam ? selectedTeam.name : 'Todos los equipos'}</span>
+        </span>
+        <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 left-0 mt-1.5 z-50 max-h-72 overflow-y-auto rounded-xl bg-white border border-slate-200 shadow-xl py-1">
+          <button
+            type="button"
+            onClick={() => { onChange('ALL'); setOpen(false) }}
+            className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors ${
+              value === 'ALL' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-slate-400 shrink-0" />
+              <span>Todos los equipos</span>
+            </span>
+            {value === 'ALL' && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
+          </button>
+          {teams.map((team) => {
+            const isSelected = value === team.id
+            return (
+              <button
+                key={team.id}
+                type="button"
+                onClick={() => { onChange(team.id); setOpen(false) }}
+                className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                  isSelected ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <span className="flex items-center gap-2 min-w-0">
+                  {team.logo_url ? (
+                    <img src={team.logo_url} alt="" className="w-5 h-5 object-contain shrink-0" />
+                  ) : (
+                    <Shield className="w-4 h-4 text-slate-300 shrink-0" />
+                  )}
+                  <span className="truncate">{team.name}</span>
+                </span>
+                {isSelected && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function JugadoresPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [filter, setFilter] = useState('')
@@ -223,8 +307,45 @@ export default function JugadoresPage() {
   const [playerAId, setPlayerAId] = useState<string>('')
   const [playerBId, setPlayerBId] = useState<string>('')
   const [per90Mode, setPer90Mode] = useState(false)
+  const [filtersReady, setFiltersReady] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(true)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+
+  // Restaurar filtros guardados al volver de la ficha de un jugador
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('lmv:jugadoresFilters')
+      if (raw) {
+        const saved = JSON.parse(raw)
+        if (typeof saved.filter === 'string') setFilter(saved.filter)
+        if (typeof saved.positionFilter === 'string') setPositionFilter(saved.positionFilter)
+        if (typeof saved.teamFilter === 'string') setTeamFilter(saved.teamFilter)
+        if (typeof saved.minPrice === 'string') setMinPrice(saved.minPrice)
+        if (typeof saved.maxPrice === 'string') setMaxPrice(saved.maxPrice)
+        if (['price', 'points', 'avg_points', 'goals', 'name'].includes(saved.sortBy)) {
+          setSortBy(saved.sortBy)
+        }
+      }
+    } catch {
+      // Ignorar errores de sessionStorage
+    } finally {
+      setFiltersReady(true)
+    }
+  }, [])
+
+  // Memorizar filtros en sessionStorage cuando cambian (solo tras restaurar)
+  useEffect(() => {
+    if (!filtersReady) return
+    try {
+      sessionStorage.setItem(
+        'lmv:jugadoresFilters',
+        JSON.stringify({ filter, positionFilter, teamFilter, minPrice, maxPrice, sortBy })
+      )
+    } catch {
+      // Ignorar errores de sessionStorage
+    }
+  }, [filtersReady, filter, positionFilter, teamFilter, minPrice, maxPrice, sortBy])
 
   const exportToExcel = () => {
     const headers = ['Nombre', 'Equipo', 'Posición', 'Precio (M)']
@@ -543,91 +664,171 @@ export default function JugadoresPage() {
         </button>
       </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardContent className="p-4 space-y-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Buscar jugador..."
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <select
-              value={teamFilter}
-              onChange={(e) => setTeamFilter(e.target.value)}
-              className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="ALL">Todos los equipos</option>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>{team.name}</option>
-              ))}
-            </select>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'price' | 'points' | 'avg_points' | 'goals' | 'name')}
-              className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="price">Ordenar por Precio</option>
-              <option value="points">Ordenar por Puntos</option>
-              <option value="avg_points">Ordenar por Promedio</option>
-              <option value="goals">Ordenar por Goles</option>
-              <option value="name">Ordenar por Nombre</option>
-            </select>
-          </div>
+      {/* Filtros plegables tipo persiana */}
+      <Card className="!bg-white/95 backdrop-blur-sm border-slate-200/90 shadow-md rounded-2xl overflow-visible">
+        {(() => {
+          const activeCount =
+            (filter.trim() ? 1 : 0) +
+            (positionFilter !== 'ALL' ? 1 : 0) +
+            (teamFilter !== 'ALL' ? 1 : 0) +
+            (minPrice !== '' || maxPrice !== '' ? 1 : 0)
+          const hasAnyFilter = activeCount > 0 || sortBy !== 'price'
 
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pt-2 border-t border-slate-100">
-            <div className="flex gap-2 flex-wrap w-full md:w-auto">
-              {positions.map((pos) => (
-                <button
-                  key={pos}
-                  onClick={() => setPositionFilter(pos)}
-                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors text-white ${
-                    positionFilter === pos
-                      ? getPositionFilterColor(pos)
-                      : 'bg-slate-300 text-slate-600 hover:bg-slate-400'
-                  }`}
+          const clearAllFilters = (e: React.MouseEvent) => {
+            e.stopPropagation()
+            setFilter('')
+            setPositionFilter('ALL')
+            setTeamFilter('ALL')
+            setMinPrice('')
+            setMaxPrice('')
+            setSortBy('price')
+          }
+
+          return (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setFiltersOpen(o => !o)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFiltersOpen(o => !o) } }}
+              className="w-full px-4 py-3 flex items-center justify-between gap-2 text-left hover:bg-slate-50/70 transition-colors rounded-2xl cursor-pointer select-none"
+            >
+              <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-wrap">
+                <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200/70 shrink-0">
+                  <SlidersHorizontal className="w-4 h-4" />
+                </span>
+                <span className="text-sm font-bold text-slate-800">Filtros y Ordenación</span>
+                {activeCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 shrink-0">
+                    {activeCount} {activeCount === 1 ? 'activo' : 'activos'}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {hasAnyFilter && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 transition-colors"
+                    title="Restablecer todos los filtros"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Quitar filtros</span>
+                  </button>
+                )}
+                <span className="p-1 rounded-lg text-slate-400">
+                  {filtersOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </span>
+              </div>
+            </div>
+          )
+        })()}
+
+        {filtersOpen && (
+          <CardContent className="px-4 pb-4 pt-2 border-t border-slate-100 space-y-3.5">
+            <div className="flex flex-col md:flex-row gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar jugador..."
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  className="w-full pl-10 pr-8 py-2 bg-slate-50/80 focus:bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
+                />
+                {filter && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200/60"
+                    title="Limpiar búsqueda"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <TeamFilterDropdown
+                teams={teams}
+                value={teamFilter}
+                onChange={setTeamFilter}
+              />
+
+              <div className="relative">
+                <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'price' | 'points' | 'avg_points' | 'goals' | 'name')}
+                  className="w-full md:w-auto pl-9 pr-8 py-2 bg-slate-50/80 focus:bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
                 >
-                  {pos === 'ALL' ? 'Todos' : getPositionLabel(pos)}
-                </button>
-              ))}
+                  <option value="price">Ordenar por Precio</option>
+                  <option value="points">Ordenar por Puntos</option>
+                  <option value="avg_points">Ordenar por Promedio</option>
+                  <option value="goals">Ordenar por Goles</option>
+                  <option value="name">Ordenar por Nombre</option>
+                </select>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-              <span className="text-sm font-medium text-slate-600 shrink-0">Precio (M):</span>
-              <input
-                type="number"
-                step="0.1"
-                placeholder="Mín"
-                value={minPrice}
-                onChange={(e) => setMinPrice(e.target.value)}
-                className="w-20 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
-              />
-              <span className="text-slate-400 text-sm">-</span>
-              <input
-                type="number"
-                step="0.1"
-                placeholder="Máx"
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
-                className="w-20 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
-              />
-              {(minPrice !== '' || maxPrice !== '') && (
-                <button
-                  onClick={() => { setMinPrice(''); setMaxPrice('') }}
-                  className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
-                  title="Limpiar precios"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+              <div className="flex gap-1.5 flex-wrap w-full md:w-auto">
+                {positions.map((pos) => (
+                  <button
+                    key={pos}
+                    onClick={() => setPositionFilter(pos)}
+                    className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                      positionFilter === pos
+                        ? `${getPositionFilterColor(pos)} text-white shadow-sm`
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 border border-slate-200/60'
+                    }`}
+                  >
+                    {pos === 'ALL' ? 'Todos' : getPositionLabel(pos)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1.5 sm:gap-2 w-full md:w-auto">
+                <div className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200/70 text-emerald-700 shrink-0">
+                  <Coins className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="text-xs font-bold whitespace-nowrap">Precio</span>
+                </div>
+                <div className="relative flex-1 sm:flex-none sm:w-20 min-w-0">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    placeholder="Mín"
+                    value={minPrice}
+                    onChange={(e) => setMinPrice(e.target.value)}
+                    className="w-full pl-2.5 pr-6 py-1.5 bg-slate-50/80 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 pointer-events-none">M</span>
+                </div>
+                <span className="text-slate-300 font-bold text-sm shrink-0">—</span>
+                <div className="relative flex-1 sm:flex-none sm:w-20 min-w-0">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    placeholder="Máx"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value)}
+                    className="w-full pl-2.5 pr-6 py-1.5 bg-slate-50/80 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 pointer-events-none">M</span>
+                </div>
+                {(minPrice !== '' || maxPrice !== '') && (
+                  <button
+                    onClick={() => { setMinPrice(''); setMaxPrice('') }}
+                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors shrink-0"
+                    title="Limpiar precios"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        </CardContent>
+          </CardContent>
+        )}
       </Card>
 
       {/* COMPARADOR DE JUGADORES */}
@@ -881,33 +1082,34 @@ export default function JugadoresPage() {
       </div>
 
       {/* Lista de jugadores */}
-      <div className="grid gap-2 -mx-4 sm:mx-0">
+      <div className="grid gap-2 -mx-2 sm:mx-0">
         {filteredPlayers.map((player) => (
           <div key={player.id} onClick={() => router.push(`/jugadores/${player.id}`)} className="cursor-pointer">
-            <Card className="!bg-white hover:shadow-md transition-all border-slate-200 hover:border-emerald-500 rounded-none sm:rounded-lg overflow-hidden">
-              <div className="flex items-center justify-between gap-2 p-2 sm:p-3">
-                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <Card className="!bg-white hover:shadow-md transition-all border-slate-200/90 hover:border-emerald-400 rounded-xl overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2.5 sm:p-3">
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                   {player.photo ? (
                     <img
                       src={player.photo}
                       alt={player.short_name || ''}
-                      className="w-9 h-9 sm:w-11 sm:h-11 rounded-full object-cover border border-slate-200 shrink-0"
+                      className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover object-top border border-slate-200 shrink-0 shadow-2xs"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                     />
                   ) : (
-                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-slate-100 flex items-center justify-center text-xs sm:text-sm font-bold text-slate-400 border border-slate-200 shrink-0">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-100 flex items-center justify-center text-sm sm:text-base font-bold text-slate-400 border border-slate-200 shrink-0">
                       {player.shirt_number || '?'}
                     </div>
                   )}
 
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-1.5 flex-wrap">
-                      <h3 className="text-xs sm:text-sm font-bold !text-slate-900 truncate">{player.short_name || `${player.first_name} ${player.last_name}`}</h3>
-                      <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] sm:text-[10px] font-bold shrink-0 ${getPositionColor(player.position)}`}>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="text-sm font-bold !text-slate-900 truncate max-w-[160px] sm:max-w-none">{player.short_name || `${player.first_name} ${player.last_name}`}</h3>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-bold shrink-0 ${getPositionColor(player.position)}`}>
                         {getPositionLabel(player.position)}
                       </span>
                       {player.precio && (
-                        <span className="text-xs sm:text-base font-black text-emerald-600 shrink-0">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200/80 text-xs sm:text-sm font-black text-emerald-700 shrink-0">
+                          <Coins className="w-3 h-3 text-emerald-500 shrink-0" />
                           {player.precio}M
                         </span>
                       )}
@@ -926,52 +1128,52 @@ export default function JugadoresPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                  <div className="text-center min-w-[32px] sm:min-w-[44px]">
+                <div className="grid grid-cols-6 sm:flex sm:items-center gap-1 sm:gap-4 w-full sm:w-auto pt-1.5 sm:pt-0 border-t border-slate-100 sm:border-t-0 shrink-0">
+                  <div className="text-center sm:min-w-[44px]">
                     <div className="flex items-center justify-center gap-0.5 text-emerald-600 leading-none">
-                      <TrendingUp className="h-3 w-3" />
-                      <span className="text-xs sm:text-sm font-bold">
+                      <TrendingUp className="h-3 w-3 shrink-0" />
+                      <span className="text-xs sm:text-sm font-bold tabular-nums">
                         {player.stats ? Math.round(player.stats.total_points * 10) / 10 : 0}
                       </span>
                     </div>
-                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Puntos</p>
+                    <p className="text-[9px] sm:text-[10px] !text-slate-400 mt-0.5">Pts</p>
                   </div>
-                  <div className="text-center min-w-[32px] sm:min-w-[44px]">
+                  <div className="text-center sm:min-w-[44px]">
                     <div className="flex items-center justify-center gap-0.5 text-blue-600 leading-none">
-                      <BarChart2 className="h-3 w-3" />
-                      <span className="text-xs sm:text-sm font-bold">
+                      <BarChart2 className="h-3 w-3 shrink-0" />
+                      <span className="text-xs sm:text-sm font-bold tabular-nums">
                         {player.stats ? Math.round(player.stats.avg_points * 10) / 10 : 0}
                       </span>
                     </div>
-                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Promedio</p>
+                    <p className="text-[9px] sm:text-[10px] !text-slate-400 mt-0.5">Prom</p>
                   </div>
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-0.5 !text-slate-700 leading-none">
-                      <Goal className="h-3 w-3" />
-                      <span className="text-xs sm:text-sm font-semibold">{player.stats?.goals || 0}</span>
+                      <Goal className="h-3 w-3 shrink-0" />
+                      <span className="text-xs sm:text-sm font-semibold tabular-nums">{player.stats?.goals || 0}</span>
                     </div>
-                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Goles</p>
+                    <p className="text-[9px] sm:text-[10px] !text-slate-400 mt-0.5">Goles</p>
                   </div>
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-0.5 !text-slate-700 leading-none">
                       <span className="text-[10px] sm:text-[11px]">🅰️</span>
-                      <span className="text-xs sm:text-sm font-semibold">{player.stats?.assists || 0}</span>
+                      <span className="text-xs sm:text-sm font-semibold tabular-nums">{player.stats?.assists || 0}</span>
                     </div>
-                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Asist.</p>
+                    <p className="text-[9px] sm:text-[10px] !text-slate-400 mt-0.5">Asist</p>
                   </div>
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-0.5 !text-amber-600 leading-none">
-                      <Ticket className="h-3 w-3" />
-                      <span className="text-xs sm:text-sm font-semibold">{player.stats?.yellow_cards || 0}</span>
+                      <Ticket className="h-3 w-3 shrink-0" />
+                      <span className="text-xs sm:text-sm font-semibold tabular-nums">{player.stats?.yellow_cards || 0}</span>
                     </div>
-                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">Amarillas</p>
+                    <p className="text-[9px] sm:text-[10px] !text-slate-400 mt-0.5">Amar</p>
                   </div>
-                  <div className="text-center min-w-[28px] sm:min-w-[52px]">
-                    <span className="block text-xs sm:text-sm font-semibold !text-slate-700 leading-none">
+                  <div className="text-center sm:min-w-[52px]">
+                    <span className="block text-xs sm:text-sm font-semibold !text-slate-700 leading-none tabular-nums">
                       {player.stats?.matches_played || 0}
                     </span>
-                    <p className="hidden sm:block text-[10px] !text-slate-400 mt-0.5">
-                      Partidos
+                    <p className="text-[9px] sm:text-[10px] !text-slate-400 mt-0.5">
+                      Part.
                     </p>
                   </div>
                 </div>
