@@ -51,6 +51,34 @@ UPCOMING_WINDOW = 30    # empieza dentro de los próximos 30 min (alineaciones)
 LIVE_WINDOW = 180
 
 TERMINAL_STATUSES = {"finished", "cancelled"}
+
+# Re-sync post-partido (migración 046): Opta corrige eventos después del pitido
+# final (p.ej. la roja a Fermín López en el Barça-Villarreal de la J13, metida
+# horas después). Cada partido 'finished' se vuelve a sincronizar UNA vez
+# cuando su start_time tiene entre POST_MATCH_DELAY y POST_MATCH_MAX_AGE de
+# antigüedad (4 h desde el inicio ≈ 2 h desde el final). Al terminar bien se
+# rellena fixtures.post_match_resynced_at y no vuelve a entrar.
+POST_MATCH_DELAY = timedelta(hours=4)
+POST_MATCH_MAX_AGE = timedelta(hours=24)
+
+
+def post_match_due(fixture, now=None):
+    """¿Le toca a este fixture su re-sync post-partido?"""
+    if (fixture.get("status") or "").lower() != "finished":
+        return False
+    if fixture.get("post_match_resynced_at"):
+        return False
+    start = fixture.get("start_time")
+    if not start:
+        return False
+    try:
+        st = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if st.tzinfo is None:
+        st = st.replace(tzinfo=timezone.utc)
+    age = (now or datetime.now(timezone.utc)) - st
+    return POST_MATCH_DELAY <= age <= POST_MATCH_MAX_AGE
 # Un partido aplazado o suspendido a medias NO es terminal: cuando Opta publica
 # la nueva fecha, el sync de calendario mueve su start_time y entra otra vez en
 # la ventana de tiempo, así que se vuelve a sincronizar y el motor lo pasa a
@@ -141,9 +169,48 @@ def fixtures_to_sync(sb):
         if status in TERMINAL_STATUSES:
             continue
         selected[f["id"]] = f
+
+    # (c) Re-sync post-partido. Si la migración 046 no está aplicada la consulta
+    # falla: se avisa y se sigue con el sync en vivo, que es lo importante.
+    try:
+        res_post = execute_with_retry(
+            sb.table("fixtures")
+            .select("*")
+            .eq("status", "finished")
+            .is_("post_match_resynced_at", "null")
+            .gte("start_time", (now - POST_MATCH_MAX_AGE).isoformat())
+            .lte("start_time", (now - POST_MATCH_DELAY).isoformat())
+        )
+        post = [f for f in (res_post.data or []) if post_match_due(f, now)]
+        for f in post:
+            selected[f["id"]] = f
+        if post:
+            log(f"🔁 Re-sync post-partido: {[f['id'] for f in post]}")
+    except Exception as e:
+        log(f"⚠️ No se pudo consultar el re-sync post-partido (¿falta la migración 046?): {e}")
+
     selected = list(selected.values())
-    log(f"🔎 Cron: {len(selected)} partido(s) próximos/en vivo seleccionados")
+    log(f"🔎 Cron: {len(selected)} partido(s) seleccionados")
     return selected
+
+
+def mark_post_match_resynced(sb, fixture):
+    """Rellena post_match_resynced_at para que no vuelva a entrar."""
+    try:
+        execute_with_retry(
+            sb.table("fixtures")
+            .update({"post_match_resynced_at": datetime.now(timezone.utc).isoformat()})
+            .eq("id", fixture["id"])
+        )
+        log(f"🔁 Re-sync post-partido hecho: fixture={fixture['id']}")
+    except Exception as e:
+        log(f"⚠️ No se pudo marcar el re-sync post-partido de {fixture['id']}: {e}")
+
+
+# Ids de fixtures cuyo motor llegó al final ("Descarga completada"). El motor
+# sale con código 0 aunque falle la descarga de Opta (captura la excepción),
+# así que el código de salida no basta para dar por hecho el re-sync post-partido.
+COMPLETED = set()
 
 
 def sync_one(fixture):
@@ -163,6 +230,8 @@ def sync_one(fixture):
             capture_output=True, text=True, timeout=300, env=child_env,
         )
         if result.returncode == 0:
+            if "Descarga completada" in result.stdout:
+                COMPLETED.add(fixture_id)
             log(f"✅ OK fixture={fixture_id}")
             tail = [l for l in result.stdout.splitlines() if any(k in l for k in ("✅", "🏁", "status="))]
             for l in tail[-6:]:
@@ -192,7 +261,15 @@ def main():
         log("ℹ️ Nada que sincronizar ahora mismo")
         return
 
-    ok = sum(1 for f in matches if sync_one(f))
+    ok = 0
+    for f in matches:
+        # Se evalúa antes del sync: el motor no cambia start_time ni el estado
+        # de un partido ya terminado.
+        due = post_match_due(f)
+        if sync_one(f):
+            ok += 1
+            if due and f["id"] in COMPLETED:
+                mark_post_match_resynced(sb, f)
     log("=" * 60)
     log(f"📊 Resumen: {ok}/{len(matches)} sincronizados correctamente")
 

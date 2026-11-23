@@ -22,9 +22,27 @@ export type DispatchResult =
   // Ya había un sync en marcha y no se ha lanzado otro
   | { dispatched: false; activeRunId: number }
 
-import { exec } from 'child_process'
+import { exec, execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+
+// Solo desarrollo local: módulos que necesitan run_live_sync.py y el motor.
+const REQUIRED_PY_MODULES = 'import requests, httpx, dotenv, supabase'
+
+function pickLocalPython(): string {
+  const candidates = ['../sync_venv/bin/python', '../venv/bin/python', '../test_venv/bin/python']
+    .filter(p => fs.existsSync(path.resolve(process.cwd(), p)))
+  candidates.push('python3')
+  for (const py of candidates) {
+    try {
+      execFileSync(py, ['-c', REQUIRED_PY_MODULES], { stdio: 'ignore', timeout: 15000 })
+      return py
+    } catch {
+      console.warn(`[dispatchLiveSync] ${py} no sirve (falta o le faltan dependencias)`)
+    }
+  }
+  throw new Error('Ningún Python local tiene las dependencias (pip install -r requirements.txt)')
+}
 
 // ── Límite global de disparos ──────────────────────────────────────────────
 // sync-live.yml tiene `cancel-in-progress: true`: cada disparo nuevo mata al
@@ -82,22 +100,11 @@ export async function dispatchLiveSync(inputs: DispatchInputs): Promise<Dispatch
         SYNC_MATCHDAY: inputs.matchday || '' 
       }
       
-      // Intentar usar sync_venv (para arm64 de Mac) o test_venv si existen, de lo contrario venv
-      let pythonPath = '../venv/bin/python'
-      if (fs.existsSync(path.resolve(process.cwd(), '../sync_venv/bin/python'))) {
-        pythonPath = '../sync_venv/bin/python'
-      } else if (fs.existsSync(path.resolve(process.cwd(), '../test_venv/bin/python'))) {
-        pythonPath = '../test_venv/bin/python'
-      } else {
-        // Red de seguridad: si no existen, usar python3 global
-        try {
-          if (!fs.existsSync(path.resolve(process.cwd(), '../venv/bin/python'))) {
-            pythonPath = 'python3'
-          }
-        } catch (e) {
-          pythonPath = 'python3'
-        }
-      }
+      // Elegir el primer intérprete que EXISTA y tenga las dependencias del
+      // motor. Antes bastaba con que existiera: test_venv no tiene `requests`,
+      // trigger_descarga_eventos.py moría al importar y, como esto es fuego y
+      // olvida, el botón decía "sincronizado" sin escribir nada en Supabase.
+      const pythonPath = pickLocalPython()
       
       console.log(`[dispatchLiveSync] Ejecutando con Python: ${pythonPath}`)
       // Ejecutar en segundo plano, sin esperar (fuego y olvida, igual que GitHub Actions)

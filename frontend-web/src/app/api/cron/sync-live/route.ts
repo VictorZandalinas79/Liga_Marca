@@ -33,6 +33,12 @@ const LIVE_WINDOW_MIN = 180
 // start_time entra en la ventana y hay que volver a sincronizarlos (ver
 // ci/run_live_sync.py).
 const TERMINAL_STATUSES = new Set(['finished', 'cancelled'])
+// Re-sync post-partido (migración 046): cada partido 'finished' se vuelve a
+// sincronizar UNA vez entre 4 h y 24 h después de su inicio (≈2 h tras el
+// final) para recoger correcciones tardías de Opta. ci/run_live_sync.py
+// rellena post_match_resynced_at al terminar.
+const POST_MATCH_DELAY_MIN = 4 * 60
+const POST_MATCH_MAX_AGE_MIN = 24 * 60
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET
@@ -54,11 +60,23 @@ export async function GET(request: NextRequest) {
     const upcomingTo = new Date(now + UPCOMING_WINDOW_MIN * 60_000).toISOString()
     const liveFrom = new Date(now - LIVE_WINDOW_MIN * 60_000).toISOString()
 
-    const [{ data: windowRows, error: windowErr }, { data: liveRows, error: liveErr }] =
+    const postFrom = new Date(now - POST_MATCH_MAX_AGE_MIN * 60_000).toISOString()
+    const postTo = new Date(now - POST_MATCH_DELAY_MIN * 60_000).toISOString()
+
+    const [{ data: windowRows, error: windowErr }, { data: liveRows, error: liveErr }, { data: postRows, error: postErr }] =
       await Promise.all([
         sb.from('fixtures').select('id, status, start_time').gte('start_time', liveFrom).lte('start_time', upcomingTo),
         sb.from('fixtures').select('id, status, start_time').eq('status', 'live'),
+        sb.from('fixtures').select('id, status, start_time')
+          .eq('status', 'finished')
+          .is('post_match_resynced_at', null)
+          .gte('start_time', postFrom)
+          .lte('start_time', postTo),
       ])
+
+    // Sin la migración 046 la consulta post-partido falla: se avisa y se sigue
+    // con el sync en vivo.
+    if (postErr) console.warn('[cron/sync-live] Re-sync post-partido no disponible:', postErr.message)
 
     if (windowErr || liveErr) {
       throw windowErr || liveErr
@@ -70,6 +88,7 @@ export async function GET(request: NextRequest) {
       if (TERMINAL_STATUSES.has(status)) continue
       byId.set(f.id, f)
     }
+    for (const f of postRows || []) byId.set(f.id, f)
 
     const fixtureIds = [...byId.keys()]
 
