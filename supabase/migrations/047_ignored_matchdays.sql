@@ -3,7 +3,7 @@
 -- Desde Admin → Jornadas ignoradas se marcan jornadas cuyos puntos no cuentan
 -- para el juego (ni clasificación, ni pagos, ni podios/colistas, ni sanciones).
 -- Cada una lleva el texto del aviso que ven los usuarios arriba de la pantalla
--- y en la campana, desde 5 días antes del primer partido de la jornada hasta
+-- y en la campana, desde 7 días antes del primer partido de la jornada hasta
 -- que terminan todos sus partidos.
 --
 -- Se guarda en league_config (una lista JSON) para que ya la cubran el trigger

@@ -38,7 +38,7 @@ function formatDateTime(iso: string): string {
 /**
  * Admin → Jornadas ignoradas. Cada fila es una jornada cuyos puntos no cuentan
  * para el juego, con el aviso que verán los usuarios (banner superior y
- * campana) desde 5 días antes de su primer partido hasta que acaben todos.
+ * campana) desde 7 días antes de su primer partido hasta que acaben todos.
  */
 export function IgnoredMatchdaysPanel({
   onStateChange,

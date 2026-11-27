@@ -15,7 +15,7 @@ export interface IgnoredMatchday {
 }
 
 /** Días antes del primer partido de la jornada en los que empieza el aviso. */
-export const NOTICE_DAYS_BEFORE = 5
+export const NOTICE_DAYS_BEFORE = 7
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -46,7 +46,7 @@ type FixtureForNotice = { matchday: number | null; start_time: string | null; st
 const DONE_STATUSES = new Set(['finished', 'cancelled'])
 
 export interface IgnoredMatchdayNotice extends IgnoredMatchday {
-  /** Inicio del aviso: 5 días antes del primer partido de la jornada. */
+  /** Inicio del aviso: 7 días antes del primer partido de la jornada. */
   from: string
   firstKickoff: string
 }

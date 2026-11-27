@@ -5,7 +5,7 @@ import { useNotificationsFeed } from '@/hooks/use-notifications-feed'
 
 /**
  * Aviso superior de jornada ignorada en el juego. Sale del mismo feed que la
- * campana (/api/notifications), que ya decide la ventana: desde 5 días antes
+ * campana (/api/notifications), que ya decide la ventana: desde 7 días antes
  * del primer partido de la jornada hasta que terminan todos sus partidos.
  */
 export function IgnoredMatchdayBanner() {

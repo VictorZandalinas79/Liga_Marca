@@ -47,7 +47,7 @@ const getCachedOutOfOrderNotifications = (supabase: SupabaseClient) => unstable_
   { revalidate: DERIVED_REVALIDATE_S, tags: ['notifications'] }
 )()
 
-// Aviso de jornada ignorada: desde 5 días antes de su primer partido hasta que
+// Aviso de jornada ignorada: desde 7 días antes de su primer partido hasta que
 // terminan todos. La ventana depende de la hora, así que se evalúa en cada
 // recálculo sobre el calendario cacheado.
 async function getIgnoredMatchdayNotifications(supabase: SupabaseClient): Promise<any[]> {
