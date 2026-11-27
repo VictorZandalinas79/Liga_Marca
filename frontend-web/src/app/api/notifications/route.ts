@@ -6,7 +6,7 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { createSharedReadSupabase } from '@/lib/supabase/shared-read'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { canShowInfractionsFrom, currentMatchdayFrom } from '@/lib/infractions'
-import { getDataVersion, getServerCalendar, getServerIgnoredMatchdays } from '@/lib/data-version'
+import { getDataVersion, getServerCalendar } from '@/lib/data-version'
 import { getCachedLiveInfractions } from '@/lib/live-infractions-cache'
 import { getOutOfOrderMatchNotifications } from '@/lib/matchday-notifications'
 import { activeIgnoredNotices, defaultNoticeMessage } from '@/lib/ignored-matchdays'
@@ -52,11 +52,8 @@ const getCachedOutOfOrderNotifications = (supabase: SupabaseClient) => unstable_
 // recálculo sobre el calendario cacheado.
 async function getIgnoredMatchdayNotifications(supabase: SupabaseClient): Promise<any[]> {
   const version = await getDataVersion(supabase)
-  const [calendar, ignored] = await Promise.all([
-    getServerCalendar(supabase, version),
-    getServerIgnoredMatchdays(supabase, version),
-  ])
-  return activeIgnoredNotices(ignored, calendar.fixtures).map(n => ({
+  const calendar = await getServerCalendar(supabase, version)
+  return activeIgnoredNotices(calendar.ignored, calendar.ignoredFixtures).map(n => ({
     // El texto va en el id: si el admin lo cambia, vuelve a salir como no leído.
     id: `ignored-md-${n.matchday}-${hashText(n.message)}`,
     type: 'matchday_ignored',
@@ -87,9 +84,6 @@ async function getPenaltyNotifications(supabase: SupabaseClient): Promise<any[]>
   const calendar = await getServerCalendar(supabase, version)
   const currentMatchday = currentMatchdayFrom(calendar.fixtures, calendar.config)
   if (!currentMatchday) return []
-  // En una jornada ignorada no hay sanciones que avisar.
-  const ignored = await getServerIgnoredMatchdays(supabase, version)
-  if (ignored.some(i => i.matchday === currentMatchday)) return []
 
   const actualPenalties = await unstable_cache(
     async () => {

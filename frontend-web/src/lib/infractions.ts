@@ -5,6 +5,7 @@ import {
   loadDivisionMembership,
   userDisplayName,
 } from '@/lib/divisions'
+import { ignoredMatchdaySet, withoutIgnoredFixtures } from '@/lib/ignored-matchdays'
 import { chronologicalPredecessors, computeOutOfOrderLocks, hideSanctionsForMatchday, resolveStartHoursBefore, type FixtureLite } from '@/lib/locked-teams-core'
 
 export interface Infraction {
@@ -27,7 +28,7 @@ export async function getCurrentMatchday(supabase: SupabaseClient): Promise<numb
   // los huecos de las jornadas intermedias.
   const { data: cfg } = await supabase
     .from('league_config')
-    .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday')
+    .select('matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday, ignored_matchdays')
     .eq('id', 1)
     .maybeSingle()
 
@@ -36,7 +37,8 @@ export async function getCurrentMatchday(supabase: SupabaseClient): Promise<numb
     .select('id, matchday, start_time, status, home_team_id, away_team_id')
     .order('start_time', { ascending: true })
 
-  return currentMatchdayFrom((fixtures || []) as FixtureLite[], cfg)
+  // Las jornadas ignoradas no existen para el juego (Admin → Jornadas ignoradas).
+  return currentMatchdayFrom(withoutIgnoredFixtures((fixtures || []) as FixtureLite[], cfg?.ignored_matchdays), cfg)
 }
 
 type CalendarCfg = {
@@ -158,7 +160,7 @@ export async function canShowInfractionsForMatchday(supabase: SupabaseClient, ma
 
   const { data: configData } = await supabase
     .from('league_config')
-    .select('fantasy_starting_matchday, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after')
+    .select('fantasy_starting_matchday, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, ignored_matchdays')
     .eq('id', 1)
     .maybeSingle()
   const fantasyStart = Math.max(1, configData?.fantasy_starting_matchday ?? 1)
@@ -173,7 +175,7 @@ export async function canShowInfractionsForMatchday(supabase: SupabaseClient, ma
     .select('id, matchday, start_time, status, home_team_id, away_team_id')
 
   if (!fixtures) return true
-  return !hideSanctionsForMatchday(fixtures as FixtureLite[], matchday, offsets, fantasyStart)
+  return !hideSanctionsForMatchday(withoutIgnoredFixtures(fixtures as FixtureLite[], configData?.ignored_matchdays), matchday, offsets, fantasyStart)
 }
 
 /**
@@ -238,6 +240,9 @@ export async function getLiveInfractions(
   // plantilla previa.
   const fantasyStart = Math.max(1, configData?.fantasy_starting_matchday ?? 1)
   if (matchday < fantasyStart) return []
+  // Jornada ignorada (Admin): no existe para el juego, no hay sanciones.
+  const ignoredSet = ignoredMatchdaySet(configData?.ignored_matchdays)
+  if (ignoredSet.has(matchday)) return []
 
   // Función helper para paginación
   async function fetchAll<T>(table: string, select: string, matchdayFilter?: number): Promise<T[]> {
@@ -260,9 +265,11 @@ export async function getLiveInfractions(
 
   // Calendario: hace falta antes que las alineaciones, porque de él sale de qué
   // jornada viene cada jornada.
-  const { data: allFixtures } = await supabase
+  const { data: allFixturesRaw } = await supabase
     .from('fixtures')
     .select('id, matchday, start_time, status, home_team_id, away_team_id')
+  // Sin las jornadas ignoradas: sus partidos no puntúan ni ordenan el calendario.
+  const allFixtures = allFixturesRaw ? withoutIgnoredFixtures(allFixturesRaw, ignoredSet) : allFixturesRaw
   const fixtureToMatchday = new Map<string, number>()
   allFixtures?.forEach(f => {
     if (f.id && f.matchday && f.matchday > 0) fixtureToMatchday.set(f.id, f.matchday)
@@ -293,9 +300,11 @@ export async function getLiveInfractions(
   //    la J4 necesita el once guardado para la J6, que va por delante.
   let maxLineupMd = matchday
   for (let m = fantasyStart; m <= matchday; m++) maxLineupMd = Math.max(maxLineupMd, prevLineupMd(m))
-  const allTeamPlayers =
+  const allTeamPlayersRaw =
     (await loadChunked?.('team_players', maxLineupMd)) ??
     (await fetchAll<any>('team_players', 'team_id, player_id, is_starter, is_captain, matchday, position', maxLineupMd))
+  // Lo guardado para una jornada ignorada no cuenta como alineación.
+  const allTeamPlayers = allTeamPlayersRaw?.filter((tp: any) => !ignoredSet.has(tp.matchday))
 
   if (!allTeamPlayers || allTeamPlayers.length === 0) return []
 
@@ -390,6 +399,14 @@ export async function getLiveInfractions(
 
   // 6. Calcular secuencialmente desde el arranque del juego hasta la jornada actual
   for (let m = fantasyStart; m <= matchday; m++) {
+    // Jornada ignorada (Admin): no existe para el juego. Se arrastra el estado
+    // de la anterior para que la siguiente compare con la última jugada.
+    if (ignoredSet.has(m) && m > fantasyStart) {
+      lineupHistory[m] = lineupHistory[m - 1]
+      zeroedHistory[m] = zeroedHistory[m - 1]
+      penaltiesHistory[m] = penaltiesHistory[m - 1]
+      continue
+    }
     lineupHistory[m] = {}
     zeroedHistory[m] = {}
     penaltiesHistory[m] = {}

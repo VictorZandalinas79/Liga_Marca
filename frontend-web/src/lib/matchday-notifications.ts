@@ -1,3 +1,4 @@
+import { withoutIgnoredFixtures } from '@/lib/ignored-matchdays'
 import { SupabaseClient } from '@supabase/supabase-js'
 import {
   computeOutOfOrderLocks,
@@ -71,7 +72,7 @@ export async function getOutOfOrderMatchNotifications(
 ): Promise<BellNotification[]> {
   const [offsets, { data: leagueData }, { data: fixtures }] = await Promise.all([
     fetchLockOffsets(supabase),
-    supabase.from('league_config').select('fantasy_starting_matchday').eq('id', 1).maybeSingle(),
+    supabase.from('league_config').select('fantasy_starting_matchday, ignored_matchdays').eq('id', 1).maybeSingle(),
     supabase
       .from('fixtures')
       .select('id,matchday,start_time,status,home_team_id,away_team_id'),
@@ -80,7 +81,8 @@ export async function getOutOfOrderMatchNotifications(
   if (!fixtures || fixtures.length === 0) return []
 
   const fantasyStart = leagueData?.fantasy_starting_matchday ?? 1
-  const locks = computeOutOfOrderLocks(fixtures as FixtureLite[], offsets, fantasyStart)
+  // Los partidos de jornadas ignoradas no bloquean a nadie: no se avisa de ellos.
+  const locks = computeOutOfOrderLocks(withoutIgnoredFixtures(fixtures as FixtureLite[], leagueData?.ignored_matchdays), offsets, fantasyStart)
 
   // Nos quedamos con los bloqueos vigentes y con los que empiezan pronto
   const relevant = locks.filter(l => {

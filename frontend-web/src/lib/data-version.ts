@@ -1,4 +1,4 @@
-import { parseIgnoredMatchdays, type IgnoredMatchday } from '@/lib/ignored-matchdays'
+import { parseIgnoredMatchdays, withoutIgnoredFixtures, type IgnoredMatchday } from '@/lib/ignored-matchdays'
 import { unstable_cache } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FixtureLite } from '@/lib/locked-teams-core'
@@ -51,8 +51,12 @@ export interface CalendarConfig {
 }
 
 export interface ServerCalendar {
+  /** Calendario del JUEGO: sin los partidos de las jornadas ignoradas. */
   fixtures: FixtureLite[]
   config: CalendarConfig | null
+  /** Jornadas ignoradas (Admin, migración 047) y sus partidos, para los avisos. */
+  ignored: IgnoredMatchday[]
+  ignoredFixtures: FixtureLite[]
 }
 
 /**
@@ -66,7 +70,7 @@ export async function getServerCalendar(supabase: SupabaseClient, version: strin
     const [{ data: config }, { data: fixtures, error }] = await Promise.all([
       supabase
         .from('league_config')
-        .select('matchday_start_hours_before, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday')
+        .select('matchday_start_hours_before, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday, ignored_matchdays')
         .eq('id', 1)
         .maybeSingle(),
       supabase
@@ -76,28 +80,20 @@ export async function getServerCalendar(supabase: SupabaseClient, version: strin
     ])
     // Un fallo no debe quedarse cacheado hasta el siguiente cambio de datos.
     if (error || !fixtures) throw new Error('calendar unavailable')
-    return { fixtures: fixtures as FixtureLite[], config: (config as CalendarConfig) ?? null }
+    const ignored = parseIgnoredMatchdays((config as { ignored_matchdays?: unknown } | null)?.ignored_matchdays)
+    const ignoredSet = new Set(ignored.map(i => i.matchday))
+    const all = fixtures as FixtureLite[]
+    return {
+      fixtures: withoutIgnoredFixtures(all, ignoredSet),
+      config: (config as CalendarConfig) ?? null,
+      ignored,
+      ignoredFixtures: all.filter(f => f.matchday != null && ignoredSet.has(f.matchday)),
+    }
   }
 
   return unstable_cache(load, ['server-calendar', version], { revalidate: 3600, tags: ['calendar'] })()
     // Sin calendario, los llamadores se comportan como cuando la consulta de
     // fixtures fallaba antes: jornada 1 y sanciones en vivo ocultas.
-    .catch(() => ({ fixtures: [], config: null }))
+    .catch(() => ({ fixtures: [], config: null, ignored: [], ignoredFixtures: [] }))
 }
 
-/**
- * Jornadas ignoradas en el juego (league_config.ignored_matchdays, migración
- * 047), cacheadas por versión de datos. Sin la migración aplicada no hay
- * ninguna.
- */
-export async function getServerIgnoredMatchdays(supabase: SupabaseClient, version: string): Promise<IgnoredMatchday[]> {
-  return unstable_cache(
-    async () => {
-      const { data, error } = await supabase.from('league_config').select('ignored_matchdays').eq('id', 1).maybeSingle()
-      if (error) return []
-      return parseIgnoredMatchdays(data?.ignored_matchdays)
-    },
-    ['ignored-matchdays', version],
-    { revalidate: 3600, tags: ['notifications'] }
-  )().catch(() => [])
-}

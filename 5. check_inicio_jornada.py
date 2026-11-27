@@ -73,22 +73,38 @@ def _is_unresolved_out_of_order_matchday(fixtures, matchday):
     all_finished = all((f.get("status") or "").lower() == "finished" for f in by_md[matchday])
     return not all_finished
 
+def _ignored_matchdays(cfg_row):
+    """Jornadas de Admin → Jornadas ignoradas (league_config.ignored_matchdays, migración 047)."""
+    out = set()
+    for item in cfg_row.get("ignored_matchdays") or []:
+        try:
+            out.add(int((item or {}).get("matchday")))
+        except (TypeError, ValueError, AttributeError):
+            continue
+    return out
+
+
 def main():
     sb = get_client()
     now = datetime.now(timezone.utc)
     
     # 0. Obtener la jornada inicial configurada para la liga (fantasy_starting_matchday)
     try:
-        cfg_resp = sb.table("league_config").select("fantasy_starting_matchday").eq("id", 1).limit(1).execute()
-        fantasy_start = (cfg_resp.data[0].get("fantasy_starting_matchday") or 1) if cfg_resp.data else 1
+        cfg_resp = sb.table("league_config").select("*").eq("id", 1).limit(1).execute()
+        cfg_row = cfg_resp.data[0] if cfg_resp.data else {}
+        fantasy_start = cfg_row.get("fantasy_starting_matchday") or 1
+        ignored = _ignored_matchdays(cfg_row)
     except Exception as e:
         print(f"⚠️ Error al obtener league_config: {e}")
         fantasy_start = 1
+        ignored = set()
 
     # 1. Obtener todos los partidos para encontrar el inicio de cada jornada
     try:
         resp = sb.table("fixtures").select("id, matchday, start_time, status").execute()
-        fixtures = resp.data or []
+        # Las jornadas ignoradas (Admin) no existen para el juego: ni "empiezan",
+        # ni se manda su email, ni ordenan el calendario de las demás.
+        fixtures = [f for f in (resp.data or []) if f.get("matchday") not in ignored]
     except Exception as e:
         print(f"⚠️ Error al obtener fixtures: {e}")
         return

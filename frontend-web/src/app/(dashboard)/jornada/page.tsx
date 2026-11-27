@@ -9,6 +9,7 @@ import { MetricBreakdown } from '@/components/metric-breakdown'
 import { applySanctionsToTeam } from '@/lib/infractions'
 import { isDivisionId, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
+import { withoutIgnoredFixtures } from '@/lib/ignored-matchdays'
 import { advancedOnlyTeamIds, hideSanctionsForMatchday, type FixtureLite } from '@/lib/locked-teams-core'
 import { fetchLivePenalties } from '@/lib/live-penalties-client'
 import { PrintView } from './PrintView'
@@ -262,15 +263,18 @@ export default function JornadaPage() {
   // Obtener todas las jornadas disponibles (ya empezadas: en directo o finalizadas)
   const fetchMatchdays = async () => {
     if (!config._isLoaded) return
-    const { data: fixtures } = await supabase
+    const { data: fixturesRaw } = await supabase
       .from('fixtures')
       .select('id, matchday, momento, start_time, status, home_team_id, away_team_id')
       .order('start_time', { ascending: true })
 
-    if (!fixtures) {
+    if (!fixturesRaw) {
       setLoading(false)
       return
     }
+    // Las jornadas ignoradas (Admin) no existen para el juego: ni se listan ni
+    // cuentan en el orden del calendario.
+    const fixtures = withoutIgnoredFixtures(fixturesRaw, config.ignored_matchdays)
 
     setAllFixturesLite(fixtures as unknown as FixtureLite[])
 

@@ -1,4 +1,6 @@
 export interface LeagueConfig {
+  /** Admin → Jornadas ignoradas (migración 047): `[{ matchday, message }]`. */
+  ignored_matchdays?: unknown
   budget_limit: number
   max_players_per_team: number
   formations: string[]

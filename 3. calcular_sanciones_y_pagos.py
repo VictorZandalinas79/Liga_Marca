@@ -120,13 +120,13 @@ def fetch_all(sb, table, columns, eq=None):
     return rows
 
 
-def detect_matchday(sb):
-    """Última jornada con todos sus partidos finalizados."""
+def detect_matchday(sb, ignored=frozenset()):
+    """Última jornada con todos sus partidos finalizados (sin contar las ignoradas)."""
     fixtures = fetch_all(sb, "fixtures", "matchday,status")
     by_md = {}
     for f in fixtures:
         md = f.get("matchday")
-        if md and md > 0:
+        if md and md > 0 and md not in ignored:
             by_md.setdefault(md, []).append((f.get("status") or "").lower())
     finished = [md for md, st in by_md.items() if all(s == "finished" for s in st)]
     return max(finished) if finished else None
@@ -139,10 +139,12 @@ def chronological_predecessors(fixtures, cfg, fantasy_start):
         if md and md >= fantasy_start:
             by_md.add(md)
             
+    # La anterior que existe en el calendario (sin jornadas ignoradas): J24 ← J22.
     prev = {}
-    for md in sorted(list(by_md)):
+    ordered = sorted(by_md)
+    for i, md in enumerate(ordered):
         if md > fantasy_start:
-            prev[md] = md - 1
+            prev[md] = ordered[i - 1] if i > 0 else md - 1
             
     return prev
 
@@ -426,7 +428,12 @@ def run_matchday(sb, matchday):
     # juegan fuera de su hueco del calendario. `player_scores.matchday` está sin
     # rellenar (siempre NULL), así que fiarse de esa columna dejaba `scores_by_md`
     # vacío y todos los equipos a 0 puntos.
-    all_fixtures = fetch_all(sb, "fixtures", "id,matchday,start_time,status")
+    # Las jornadas ignoradas (Admin) no existen para el juego: sus partidos no
+    # puntúan y la jornada siguiente viene de la anterior (J24 ← J22).
+    ignored = ignored_matchdays(cfg)
+    all_fixtures = [f for f in fetch_all(sb, "fixtures", "id,matchday,start_time,status")
+                    if f.get("matchday") not in ignored]
+    all_tp = [r for r in all_tp if r.get("matchday") not in ignored]
     fixture_md = {
         f["id"]: f["matchday"]
         for f in all_fixtures
@@ -495,6 +502,16 @@ def run_matchday(sb, matchday):
             penalties_history[start_md - 1][tid] = []
 
         for m in range(start_md, matchday + 1):
+            if m in ignored:
+                # Jornada ignorada: se arrastra el estado de la anterior tal
+                # cual, así la siguiente compara (cambios, exclusividad, multas
+                # arrastradas) con la última jornada que sí se jugó.
+                for tid in division_team_ids:
+                    lineup_history[m][tid] = lineup_history[m - 1][tid]
+                    zeroed_history[m][tid] = zeroed_history[m - 1][tid]
+                    penalties_history[m][tid] = penalties_history[m - 1][tid]
+                continue
+
             for tid in division_team_ids:
                 lineup_history[m][tid] = get_lineup_for_matchday(all_tp, tid, m)
 
@@ -766,7 +783,7 @@ def main():
     sb = get_client()
     cfg = load_config(sb)
     env_md = os.environ.get("SANCTION_MATCHDAY", "").strip()
-    matchday = int(env_md) if env_md.isdigit() else detect_matchday(sb)
+    matchday = int(env_md) if env_md.isdigit() else detect_matchday(sb, ignored_matchdays(cfg))
     if not matchday:
         log("ℹ️ No hay ninguna jornada finalizada que procesar")
         return

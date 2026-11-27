@@ -422,8 +422,11 @@ export function chronologicalPredecessors(
   const prev = new Map<number, number>()
   const sorted = Array.from(byMatchday).sort((a, b) => a - b)
   
-  for (const md of sorted) {
-    if (md > fantasyStart) prev.set(md, md - 1)
+  // La anterior que EXISTE en el calendario: normalmente md - 1, pero si se
+  // han quitado las jornadas ignoradas (Admin) la J24 viene de la J22.
+  for (let i = 0; i < sorted.length; i++) {
+    const md = sorted[i]
+    if (md > fantasyStart) prev.set(md, i > 0 ? sorted[i - 1] : md - 1)
   }
   
   return prev

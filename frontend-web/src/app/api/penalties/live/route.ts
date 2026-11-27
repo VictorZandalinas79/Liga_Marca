@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { createSharedReadSupabase, getRequestAuth } from '@/lib/supabase/shared-read'
 import { canShowInfractionsFrom, currentMatchdayFrom } from '@/lib/infractions'
-import { getDataVersion, getServerCalendar, getServerIgnoredMatchdays } from '@/lib/data-version'
+import { getDataVersion, getServerCalendar } from '@/lib/data-version'
 import { getCachedLiveInfractions, liveInfractionsForDivision } from '@/lib/live-infractions-cache'
 
 // Sanciones en vivo por (jornada, división).
@@ -32,9 +32,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ infractions: [] })
   }
 
-  // Jornada ignorada (Admin): no cuenta para el juego, no hay sanciones.
-  const ignored = await getServerIgnoredMatchdays(supabase, version)
-  if (ignored.some(i => i.matchday === currentMatchday)) {
+  // Jornada ignorada (Admin): no cuenta para el juego, no hay sanciones. (Solo
+  // puede llegar aquí pedida a mano con ?matchday=: el calendario ya no la trae.)
+  if (calendar.ignored.some(i => i.matchday === currentMatchday)) {
     return NextResponse.json({ infractions: [] }, { headers: { 'Cache-Control': 'private, max-age=30' } })
   }
 

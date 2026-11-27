@@ -23,6 +23,7 @@ import { fetchStandings as fetchServerStandings } from '@/lib/standings-client'
 import { compareStandings } from '@/lib/standings-order'
 import { DIVISION_COMBINED, loadDivisionMembership } from '@/lib/divisions'
 import { useLeagueConfig } from '@/lib/league-config'
+import { withoutIgnoredFixtures } from '@/lib/ignored-matchdays'
 import { advancedOnlyTeamIds, hideSanctionsForMatchday, type FixtureLite } from '@/lib/locked-teams-core'
 
 function formatPlayerName(name: string | undefined | null) {
@@ -299,7 +300,7 @@ export default function ClasificacionPage() {
       const { data: allFixturesRaw } = await supabase
         .from('fixtures')
         .select('id, matchday, momento, start_time, status, home_team_id, away_team_id')
-      const allFixturesLite = (allFixturesRaw || []) as FixtureLite[]
+      const allFixturesLite = withoutIgnoredFixtures((allFixturesRaw || []) as FixtureLite[], config.ignored_matchdays)
       const offsets = {
         startHoursBeforeMidweek: config.matchday_start_hours_before_midweek ?? config.matchday_start_hours_before ?? 1,
         startHoursBeforeWeekend: config.matchday_start_hours_before_weekend ?? config.matchday_start_hours_before ?? 1,

@@ -80,3 +80,18 @@ export function activeIgnoredNotices(
   }
   return result
 }
+
+/**
+ * Quita del calendario los partidos de las jornadas ignoradas: para el juego
+ * es como si no se jugasen (no cierran el mercado, no bloquean jugadores, no
+ * cuentan como jornada en curso ni rompen la cadena de exclusividad). Todo lo
+ * que calcule bloqueos, jornada en curso o sanciones debe pasar por aquí.
+ */
+export function withoutIgnoredFixtures<T extends { matchday?: number | null }>(
+  fixtures: T[],
+  ignored: unknown
+): T[] {
+  const set = ignored instanceof Set ? (ignored as Set<number>) : ignoredMatchdaySet(ignored)
+  if (set.size === 0) return fixtures
+  return fixtures.filter(f => !(f.matchday != null && set.has(f.matchday)))
+}

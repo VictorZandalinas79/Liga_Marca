@@ -1,5 +1,5 @@
 import { applySanctionsToTeam } from '@/lib/infractions'
-import { ignoredMatchdaySet } from '@/lib/ignored-matchdays'
+import { ignoredMatchdaySet, withoutIgnoredFixtures } from '@/lib/ignored-matchdays'
 import { compareStandings } from '@/lib/standings-order'
 import {
   DivisionId,
@@ -250,11 +250,16 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
   const playerIds = [...new Set(teamPlayers.map(tp => tp.player_id))]
   const playerIdSet = new Set(playerIds)
 
-  const [{ data: playersData }, { data: realTeams }, { data: fixturesData }] = await Promise.all([
+  const [{ data: playersData }, { data: realTeams }, { data: fixturesRaw }] = await Promise.all([
     supabase.from('players').select('id, position, team_id, precio, short_name, first_name').in('id', playerIds),
     supabase.from('real_teams').select('id, name'),
     supabase.from('fixtures').select('id, matchday, status, start_time, home_team_id, away_team_id'),
   ])
+
+  // Jornadas ignoradas (Admin): sus partidos no existen para el juego. Sin
+  // ellos, sus puntuaciones no se asignan a ninguna jornada, no ordenan el
+  // calendario y la jornada siguiente viene de la anterior (J24 ← J22).
+  const fixturesData = fixturesRaw ? withoutIgnoredFixtures(fixturesRaw as { matchday?: number | null }[], ignoredMatchdays) as any[] : fixturesRaw
 
   const playersInfoMap = new Map<string, any>(playersData?.map((p: any) => [p.id, p]) || [])
   const realTeamNames = new Map<string, string>(realTeams?.map((rt: any) => [rt.id, rt.name]) || [])
@@ -396,12 +401,21 @@ async function executeLoadSharedData(supabase: any): Promise<SharedData> {
   const playedMatchdays = new Set<number>()
   for (const playerMds of playerPointsByMatchday.values()) {
     for (const md of playerMds.keys()) {
-      if (md > 0) playedMatchdays.add(md)
+      if (md > 0 && !ignoredMatchdays.has(md)) playedMatchdays.add(md)
     }
   }
   const sortedPlayedMatchdays = Array.from(playedMatchdays).sort((a, b) => a - b)
   const maxPlayed =
     sortedPlayedMatchdays.length > 0 ? sortedPlayedMatchdays[sortedPlayedMatchdays.length - 1] : 1
+
+  // Alineaciones guardadas para una jornada ignorada no cuentan: ni puntúan ni
+  // sirven de once "anterior" para la siguiente.
+  for (const matchdays of teamPlayersByMatchday.values()) {
+    for (const md of ignoredMatchdays) matchdays.delete(md)
+  }
+  for (const changes of teamMatchdayLatestChange.values()) {
+    for (const md of ignoredMatchdays) changes.delete(md)
+  }
 
   // Auto-duplicar alineaciones para jornadas jugadas donde un equipo no tiene entradas.
   // Así los usuarios que no hicieron cambios tendrán sus 11 jugadores persistidos.
@@ -574,13 +588,6 @@ function computeDivisionStandings(
     // sus claves) qué jornadas están en ese estado.
     const mdUnresolved = shared.restrictedMatchdayTeams.has(md)
 
-    // Jornada ignorada (Admin): no suma puntos, ni partidos jugados, ni
-    // cambios, ni sanciones, y tampoco entra en pagos ni podios. Las
-    // alineaciones sí se recorren para que la exclusividad de la jornada
-    // siguiente compare con lo que se alineó en ella, igual que el script de
-    // sanciones.
-    const mdIgnored = shared.ignoredMatchdays.has(md)
-
     for (const [userId, userTeams] of userTeamsMap.entries()) {
       if (!userPointsByMatchday.has(userId)) userPointsByMatchday.set(userId, new Map())
       if (!userMatchdaysFromTeamPlayers.has(userId)) userMatchdaysFromTeamPlayers.set(userId, new Set())
@@ -594,10 +601,8 @@ function computeDivisionStandings(
         const players = teamMatchdays.get(md) || []
         if (players.length === 0) continue
 
-        if (!mdIgnored) {
-          userMatchdaysFromTeamPlayers.get(userId)!.add(md)
-          if (!userPointsByMatchday.get(userId)!.has(md)) userPointsByMatchday.get(userId)!.set(md, 0)
-        }
+        userMatchdaysFromTeamPlayers.get(userId)!.add(md)
+        if (!userPointsByMatchday.get(userId)!.has(md)) userPointsByMatchday.get(userId)!.set(md, 0)
 
         const startersList: any[] = []
 
@@ -618,7 +623,6 @@ function computeDivisionStandings(
 
           if (tp.is_starter) {
             startersList.push(playerObj)
-            if (mdIgnored) continue
             const posCode = (playerObj.position || '').toLowerCase()
             if (posCode.includes('defender') || posCode === 'def') {
               userDefendersCount.set(userId, (userDefendersCount.get(userId) || 0) + 1)
@@ -656,7 +660,7 @@ function computeDivisionStandings(
           if (sanctionResult.zeroedPlayers.has(s.id)) s.puntos = 0
         })
 
-        if (!mdIgnored && !mdHasDbPenalties.has(md) && sanctionResult.zeroedPlayers.size > 0) {
+        if (!mdHasDbPenalties.has(md) && sanctionResult.zeroedPlayers.size > 0) {
           const uniqueReasons = new Set(sanctionResult.zeroedPlayers.values())
           userSanctionCount.set(userId, (userSanctionCount.get(userId) || 0) + uniqueReasons.size)
         }
@@ -681,14 +685,13 @@ function computeDivisionStandings(
               outPoints += playerPointsByMatchday.get(outIds[i])?.get(md) ?? 0
             }
 
-            if (md > fantasyStart && !mdIgnored) {
+            if (md > fantasyStart) {
               userChangesPointsDiff.set(userId, (userChangesPointsDiff.get(userId) || 0) + (inPoints - outPoints))
               userChangesCount.set(userId, (userChangesCount.get(userId) || 0) + numChanges)
             }
           }
         }
 
-        if (mdIgnored) continue
         const mdPoints = startersList.reduce((sum, s) => sum + s.puntos, 0)
         userPointsByMatchday.get(userId)!.set(md, userPointsByMatchday.get(userId)!.get(md)! + mdPoints)
       }
@@ -992,7 +995,7 @@ function computeDivisionStandings(
   // Subir/bajar menos de TREND_THRESHOLD puestos se considera "se mantiene".
   const TREND_WINDOW = 3
   const TREND_THRESHOLD = 2
-  const trendMds = shared.sortedPlayedMatchdays.filter(md => md >= fantasyStart && !shared.ignoredMatchdays.has(md))
+  const trendMds = shared.sortedPlayedMatchdays.filter(md => md >= fantasyStart)
 
   if (trendMds.length >= 2) {
     const positionsAfter = (uptoMd: number): Map<string, number> => {

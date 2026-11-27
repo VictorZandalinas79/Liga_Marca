@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import type { FixtureLite } from '@/lib/locked-teams-core'
+import { withoutIgnoredFixtures } from '@/lib/ignored-matchdays'
 
 // Calendario (fixtures + league_config) compartido por todos los hooks del
 // cliente que calculan bloqueos y jornadas.
@@ -20,6 +21,8 @@ export type LeagueConfigRow = {
   matchday_start_hours_before_weekend: number | null
   matchday_end_hours_after: number | null
   fantasy_starting_matchday: number | null
+  /** Admin → Jornadas ignoradas (migración 047). Sus partidos ya vienen quitados de `fixtures`. */
+  ignored_matchdays?: unknown
 }
 
 export type Calendar = {
@@ -77,7 +80,7 @@ export function loadCalendar(): Promise<Calendar> {
         .order('start_time', { ascending: true }),
       supabase
         .from('league_config')
-        .select('matchday_start_hours_before, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday')
+        .select('matchday_start_hours_before, matchday_start_hours_before_midweek, matchday_start_hours_before_weekend, matchday_end_hours_after, fantasy_starting_matchday, ignored_matchdays')
         .eq('id', 1)
         .maybeSingle(),
       teamNames ? null : supabase.from('real_teams').select('id, name'),
@@ -92,8 +95,10 @@ export function loadCalendar(): Promise<Calendar> {
       return name ? { name } : undefined
     }
 
+    // Las jornadas ignoradas no existen para el juego: sus partidos no cierran
+    // el mercado, no bloquean jugadores ni cuentan como jornada en curso.
     const fixtures = fixturesRes.data
-      ? fixturesRes.data.map(f => ({
+      ? withoutIgnoredFixtures(fixturesRes.data, configRes.data?.ignored_matchdays).map(f => ({
           ...f,
           home_team: nameOf(f.home_team_id),
           away_team: nameOf(f.away_team_id),
