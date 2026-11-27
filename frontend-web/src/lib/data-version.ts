@@ -1,3 +1,4 @@
+import { parseIgnoredMatchdays, type IgnoredMatchday } from '@/lib/ignored-matchdays'
 import { unstable_cache } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FixtureLite } from '@/lib/locked-teams-core'
@@ -82,4 +83,21 @@ export async function getServerCalendar(supabase: SupabaseClient, version: strin
     // Sin calendario, los llamadores se comportan como cuando la consulta de
     // fixtures fallaba antes: jornada 1 y sanciones en vivo ocultas.
     .catch(() => ({ fixtures: [], config: null }))
+}
+
+/**
+ * Jornadas ignoradas en el juego (league_config.ignored_matchdays, migración
+ * 047), cacheadas por versión de datos. Sin la migración aplicada no hay
+ * ninguna.
+ */
+export async function getServerIgnoredMatchdays(supabase: SupabaseClient, version: string): Promise<IgnoredMatchday[]> {
+  return unstable_cache(
+    async () => {
+      const { data, error } = await supabase.from('league_config').select('ignored_matchdays').eq('id', 1).maybeSingle()
+      if (error) return []
+      return parseIgnoredMatchdays(data?.ignored_matchdays)
+    },
+    ['ignored-matchdays', version],
+    { revalidate: 3600, tags: ['notifications'] }
+  )().catch(() => [])
 }

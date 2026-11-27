@@ -6,13 +6,14 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { createSharedReadSupabase } from '@/lib/supabase/shared-read'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { canShowInfractionsFrom, currentMatchdayFrom } from '@/lib/infractions'
-import { getDataVersion, getServerCalendar } from '@/lib/data-version'
+import { getDataVersion, getServerCalendar, getServerIgnoredMatchdays } from '@/lib/data-version'
 import { getCachedLiveInfractions } from '@/lib/live-infractions-cache'
 import { getOutOfOrderMatchNotifications } from '@/lib/matchday-notifications'
+import { activeIgnoredNotices, defaultNoticeMessage } from '@/lib/ignored-matchdays'
 
 // Notificaciones calculadas al vuelo, sin fila en sync_notifications.
 // (No se exporta: en un route.ts solo valen los exports que Next reconoce.)
-const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-', 'postponed-fx-']
+const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-', 'postponed-fx-', 'ignored-md-']
 
 // Caché en memoria para evitar llamadas masivas a la base de datos y
 // recálculos pesados de sanciones en vivo con cada usuario conectado.
@@ -21,6 +22,7 @@ interface CachedNotificationsPayload {
   allStandard: any[]
   outOfOrderNotifications: any[]
   penaltyNotifications: any[]
+  ignoredMatchdayNotifications: any[]
 }
 
 let cachedPayload: CachedNotificationsPayload | null = null
@@ -45,6 +47,34 @@ const getCachedOutOfOrderNotifications = (supabase: SupabaseClient) => unstable_
   { revalidate: DERIVED_REVALIDATE_S, tags: ['notifications'] }
 )()
 
+// Aviso de jornada ignorada: desde 5 días antes de su primer partido hasta que
+// terminan todos. La ventana depende de la hora, así que se evalúa en cada
+// recálculo sobre el calendario cacheado.
+async function getIgnoredMatchdayNotifications(supabase: SupabaseClient): Promise<any[]> {
+  const version = await getDataVersion(supabase)
+  const [calendar, ignored] = await Promise.all([
+    getServerCalendar(supabase, version),
+    getServerIgnoredMatchdays(supabase, version),
+  ])
+  return activeIgnoredNotices(ignored, calendar.fixtures).map(n => ({
+    // El texto va en el id: si el admin lo cambia, vuelve a salir como no leído.
+    id: `ignored-md-${n.matchday}-${hashText(n.message)}`,
+    type: 'matchday_ignored',
+    title: `Jornada ${n.matchday} ignorada en el juego`,
+    body: n.message || defaultNoticeMessage(n.matchday),
+    matchday: n.matchday,
+    created_at: n.from,
+    read_at: null,
+    division: null,
+  }))
+}
+
+function hashText(text: string): string {
+  let h = 0
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
+
 // Sanciones consolidadas y en vivo de la jornada en marcha.
 //
 // La parte cara (getLiveInfractions: team_players, players y player_scores
@@ -57,6 +87,9 @@ async function getPenaltyNotifications(supabase: SupabaseClient): Promise<any[]>
   const calendar = await getServerCalendar(supabase, version)
   const currentMatchday = currentMatchdayFrom(calendar.fixtures, calendar.config)
   if (!currentMatchday) return []
+  // En una jornada ignorada no hay sanciones que avisar.
+  const ignored = await getServerIgnoredMatchdays(supabase, version)
+  if (ignored.some(i => i.matchday === currentMatchday)) return []
 
   const actualPenalties = await unstable_cache(
     async () => {
@@ -174,9 +207,13 @@ export async function GET() {
     // 3-5. Avisos de partidos intercalados y sanciones: caché compartida
     const { data: { session } } = await supabase.auth.getSession()
     const sharedClient = session?.access_token ? createSharedReadSupabase(session.access_token) : supabase
-    const [outOfOrderNotifications, penaltyNotifications] = await Promise.all([
+    const [outOfOrderNotifications, penaltyNotifications, ignoredMatchdayNotifications] = await Promise.all([
       getCachedOutOfOrderNotifications(sharedClient),
       getPenaltyNotifications(sharedClient),
+      getIgnoredMatchdayNotifications(sharedClient).catch(e => {
+        console.error('Error calculando avisos de jornadas ignoradas:', e)
+        return []
+      }),
     ])
 
     cachedPayload = {
@@ -184,6 +221,7 @@ export async function GET() {
       allStandard: visibleStandard,
       outOfOrderNotifications,
       penaltyNotifications,
+      ignoredMatchdayNotifications,
     }
   }
 
@@ -193,7 +231,7 @@ export async function GET() {
     userStandard = userStandard.filter(n => n.type !== 'unmatched')
   }
 
-  const combined = [...cachedPayload.penaltyNotifications, ...cachedPayload.outOfOrderNotifications, ...userStandard]
+  const combined = [...cachedPayload.ignoredMatchdayNotifications, ...cachedPayload.penaltyNotifications, ...cachedPayload.outOfOrderNotifications, ...userStandard]
 
   return NextResponse.json(
     { notifications: combined },

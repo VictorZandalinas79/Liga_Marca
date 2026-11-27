@@ -711,6 +711,57 @@ def run_matchday(sb, matchday):
 
 
 
+def ignored_matchdays(cfg):
+    """Jornadas marcadas en Admin → Jornadas ignoradas (league_config.ignored_matchdays,
+    migración 047). No cuentan para el juego: ni sanciones ni pagos."""
+    out = set()
+    for item in cfg.get("ignored_matchdays") or []:
+        try:
+            md = int((item or {}).get("matchday"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if md > 0:
+            out.add(md)
+    return out
+
+
+def clear_ignored_matchday(sb, cfg, matchday):
+    """Deshace lo cobrado en una jornada ignorada: devuelve multas y pagos y borra
+    sus filas. Idempotente: si no hay filas no hace nada."""
+    infraction_cost = float(cfg.get("infraction_penalty_cost", 3))
+
+    pen = sb.table("penalties").select("user_id").eq("matchday", matchday).execute().data or []
+    pen_counts = {}
+    for row in pen:
+        uid = row.get("user_id")
+        if uid:
+            pen_counts[uid] = pen_counts.get(uid, 0) + 1
+    for uid, count in pen_counts.items():
+        prof = sb.table("profiles").select("infraction_penalties").eq("id", uid).limit(1).execute()
+        base = float(prof.data[0]["infraction_penalties"] or 0) if prof.data else 0
+        sb.table("profiles").update({"infraction_penalties": base - count * infraction_cost}).eq("id", uid).execute()
+    if pen:
+        sb.table("penalties").delete().eq("matchday", matchday).execute()
+
+    pays = sb.table("matchday_payments").select("team_id,user_id,amount").eq("matchday", matchday).execute().data or []
+    paid_by_user = {}
+    for row in pays:
+        uid = row.get("user_id")
+        if uid:
+            paid_by_user[uid] = paid_by_user.get(uid, 0.0) + float(row.get("amount") or 0)
+    for uid, amount in paid_by_user.items():
+        if amount == 0:
+            continue
+        prof = sb.table("profiles").select("amount_paid").eq("id", uid).limit(1).execute()
+        base = float(prof.data[0]["amount_paid"] or 0) if prof.data else 0
+        sb.table("profiles").update({"amount_paid": base - amount}).eq("id", uid).execute()
+    if pays:
+        sb.table("matchday_payments").delete().eq("matchday", matchday).execute()
+
+    if pen or pays:
+        log(f"🚫 Jornada {matchday} ignorada: devueltas {len(pen)} multa(s) y {len(pays)} pago(s)")
+
+
 def main():
     sb = get_client()
     cfg = load_config(sb)
@@ -720,6 +771,15 @@ def main():
         log("ℹ️ No hay ninguna jornada finalizada que procesar")
         return
         
+    # Jornadas ignoradas: se limpian siempre (también las ya procesadas antes de
+    # marcarlas), y si la que toca procesar es una de ellas no se cobra nada.
+    ignored = ignored_matchdays(cfg)
+    for md in sorted(ignored):
+        clear_ignored_matchday(sb, cfg, md)
+    if matchday in ignored:
+        log(f"🚫 La jornada {matchday} está ignorada en el juego. No se calculan sanciones ni pagos.")
+        return
+
     fantasy_starting_matchday = cfg.get("fantasy_starting_matchday", 1)
     if matchday < fantasy_starting_matchday:
         log(f"ℹ️ La jornada {matchday} es anterior al inicio de la liga ({fantasy_starting_matchday}). No se calculan sanciones ni pagos.")

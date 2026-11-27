@@ -12,7 +12,7 @@ import { ScoringConfigPanel } from './ScoringConfigPanel'
 import { UnmatchedPlayersPanel } from './UnmatchedPlayersPanel'
 import { PrizesPanel } from './PrizesPanel'
 import { RestartLeaguePanel } from './RestartLeaguePanel'
-import { UsagePanel } from './UsagePanel'
+import { IgnoredMatchdaysPanel } from './IgnoredMatchdaysPanel'
 import { useLeagueConfig } from '@/lib/league-config'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -443,9 +443,6 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Consumo frente a los límites del plan Free de Supabase */}
-      <UsagePanel />
-
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={<Users className="w-5 h-5" />} label="Total" value={String(stats.total)} color="slate" />
@@ -844,6 +841,9 @@ export default function AdminPage() {
 
       {/* Configuración de las reglas del juego */}
       <LeagueConfigPanel onStateChange={(state) => handlePanelStateChange('league', state)} />
+
+      {/* Jornadas cuyos puntos no cuentan para el juego, con su aviso */}
+      <IgnoredMatchdaysPanel onStateChange={(state) => handlePanelStateChange('ignored-matchdays', state)} />
 
       {/* Configuración del sistema de premios */}
       <PrizesPanel users={users} onStateChange={(state) => handlePanelStateChange('prizes', state)} />

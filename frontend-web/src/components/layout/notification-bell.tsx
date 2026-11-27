@@ -19,6 +19,7 @@ type NotificationType =
   | 'match_postponed'
   | 'provisional_player'
   | 'player_promoted'
+  | 'matchday_ignored'
 
 interface Notification {
   id: string
@@ -38,7 +39,7 @@ type Tab = 'partidos' | 'jugadores' | 'sanciones'
  * partido intercalado): no tienen fila en base de datos, así que su estado de
  * leído se guarda en localStorage.
  */
-const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-', 'postponed-fx-']
+const DERIVED_ID_PREFIXES = ['penalty-', 'live-inf-', 'locked-fx-', 'postponed-fx-', 'ignored-md-']
 const isDerived = (id: string | number) => DERIVED_ID_PREFIXES.some(p => String(id).startsWith(p))
 
 export function NotificationBell() {
@@ -56,6 +57,7 @@ export function NotificationBell() {
       n.type === 'fixture_changed' ||
       n.type === 'players_locked' ||
       n.type === 'match_postponed' ||
+      n.type === 'matchday_ignored' ||
       String(n.id).startsWith('locked-fx-') ||
       String(n.id).startsWith('postponed-fx-')
     )
@@ -296,6 +298,7 @@ export function NotificationBell() {
     unmatched: '⚠️',
     provisional_player: '🕓',
     player_promoted: '✅',
+    matchday_ignored: '🚫',
   }
 
   return (
@@ -395,7 +398,7 @@ export function NotificationBell() {
                 }
 
                 const renderNotificationCard = (n: Notification) => {
-                  const isWarning = n.type.includes('lock') || n.type === 'unmatched' || n.body.includes('multa') || n.body.includes('sanción')
+                  const isWarning = n.type.includes('lock') || n.type === 'unmatched' || n.type === 'matchday_ignored' || n.body.includes('multa') || n.body.includes('sanción')
                   return (
                     <div
                       key={n.id}

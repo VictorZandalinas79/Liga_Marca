@@ -10,6 +10,7 @@ import { useMatchdayLock } from '@/hooks/use-matchday-lock'
 import { AuthGuard } from '@/components/layout/auth-guard'
 import { NotificationBell } from '@/components/layout/notification-bell'
 import { OnlineUsersMenu } from '@/components/layout/online-users-menu'
+import { IgnoredMatchdayBanner } from '@/components/layout/ignored-matchday-banner'
 
 const navigation = [
   { name: 'Mi Equipo', href: '/dashboard', icon: Home },
@@ -132,6 +133,9 @@ export default function DashboardLayout({
   return (
     <AuthGuard>
     <div className="min-h-screen flex flex-col">
+      {/* Aviso de jornada ignorada en el juego (Admin → Jornadas ignoradas) */}
+      <IgnoredMatchdayBanner />
+
       {/* Aviso de tramo de jornada */}
       {isUnlockWindowOpen && (
         <div className="bg-amber-400 border-b border-amber-500 py-2 px-4">
